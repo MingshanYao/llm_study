@@ -1,0 +1,18 @@
+[
+  {
+    "slug": "deepseek-v4-attention",
+    "title": "DeepSeek-V4 Attention 设计解读：压缩稀疏注意力（CSA）与重压缩注意力（HCA）",
+    "date": "2026-09-14",
+    "paper": "DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence (paper/deepseek_v4.pdf)",
+    "arxiv": "https://arxiv.org/abs/2606.19348",
+    "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
+  },
+  {
+    "slug": "deepseek-mhc",
+    "title": "DeepSeek mHC 解读：流形约束超连接（Manifold-Constrained Hyper-Connections）",
+    "date": "2026-09-14",
+    "paper": "mHC: Manifold-Constrained Hyper-Connections (paper/mhc.pdf)",
+    "arxiv": "https://arxiv.org/abs/2512.24880",
+    "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
+  }
+]

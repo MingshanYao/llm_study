@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek-V4 Attention 设计解读：CSA 与 HCA</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DeepSeek-V4 Attention 设计解读：压缩稀疏注意力（CSA）与重压缩注意力（HCA）</h1>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>日期：</b>2026-09-14　<b>论文：</b><i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i></p>
+  <p style="margin:4px 0"><b>arXiv：</b><a href="https://arxiv.org/abs/2606.19348">arxiv.org/abs/2606.19348</a>　<b>官方代码：</b><a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro（<code>inference/</code> 目录）</a></p>
+  <p style="margin:4px 0"><b>本地文件：</b><code>paper/deepseek_v4.pdf</code>（主论文，58 页）；<code>paper/deepseek_v32.pdf</code>、<code>paper/deepseek_v41.pdf</code>（演进参考）</p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>DeepSeek-V4 面向 100 万 token 上下文，把注意力瓶颈从「KV cache 太大、二次方算力」两端同时下手：设计<b>压缩稀疏注意力 CSA</b>（先把每 m=4 个 token 的 KV 压成 1 条 entry，再用 Lightning Indexer 做 DSA 式 top-k 稀疏选择）与<b>重压缩注意力 HCA</b>（每 m'=128 个 token 压成 1 条，不做稀疏），两种层交错堆叠。压缩后的 KV entry 同时充当 attention 的 key 和 value（SKV-MQA，单 KV「头」），配合低秩 query、分组输出投影、部分 RoPE、滑窗分支与 attention sink。效果：1M 上下文下 V4-Pro 的单 token 推理 FLOPs 只有 V3.2 的 27%、KV cache 只有 10%；相对常用基线 BF16 GQA8（head_dim 128），KV cache 约为其 2%。官方推理实现在 HF 仓库 <code>inference/model.py</code> 与 <code>inference/kernel.py</code>（TileLang 稀疏注意力内核）。</p>
+</div>
+
+<h2>1. 解决什么问题</h2>
+
+<p>V4 论文引言开门见山：推理模型把「测试时扩展」推到前台，但这一范式被<b>vanilla attention 的二次方计算复杂度</b>卡死，超长上下文和长链条推理因此变得不可行（论文 §1，p.4）。对 1M 级上下文，痛点具体落在三处：</p>
+<ul>
+  <li><b>KV cache 体积</b>：每个 token 都要缓存 K、V，上下文越长占用越大，直接限制并发与上下文长度；</li>
+  <li><b>注意力算力</b>：解码时每个新 token 要与全部历史 KV 做点积，长上下文下注意力成为主导瓶颈（论文 §2.3 开头："the attention mechanism emerges as the dominant computational bottleneck"，p.9）；</li>
+  <li><b>训练/推理精度与稳定</b>：稀疏化、低精度（FP8/FP4）会带来 attention logits 爆炸、位置编码失真等次生问题。</li>
+</ul>
+
+<p>DeepSeek 自己的注意力架构有一条清晰的演进线：</p>
+
+<table>
+  <tr><th>版本</th><th>注意力方案</th><th>思路</th><th>量化效果</th></tr>
+  <tr>
+    <td>V2 / V3</td><td>MLA（多头潜在注意力）</td>
+    <td>K、V 联合低秩压缩进一个 latent 向量，只缓存 latent + 解耦 RoPE 键；每 head RoPE 64 维</td>
+    <td>KV cache 相比 MHA 减少 93.3%；压缩维度 c=512，每 token 缓存 576 个元素（512 latent + 64 RoPE）（DeepSeek-V2 论文，arXiv:2405.04434）</td>
+  </tr>
+  <tr>
+    <td>V3.2</td><td>DSA（DeepSeek Sparse Attention）</td>
+    <td>在 MLA 之上加 Lightning Indexer（轻量索引头算每对 token 的索引分）+ top-k 精细 token 选择</td>
+    <td>核心注意力复杂度从 O(L²) 降到 O(Lk)，k≪L；indexer 本身仍是 O(L²) 但计算量远小于主注意力（V3.2 论文 §2.3）</td>
+  </tr>
+  <tr>
+    <td><b>V4</b></td><td><b>CSA + HCA 混合</b></td>
+    <td>在 DSA 之前再增加「序列维压缩」：每 m=4 个 token 的 KV 压成 1 条 entry 再做 top-k 稀疏（CSA）；部分层用 m'=128 的重压缩、保持稠密（HCA）</td>
+    <td>1M 上下文：V4-Pro 为 V3.2 的 27% FLOPs、10% KV cache；V4-Flash 为 10% FLOPs、7% KV cache；相对 BF16 GQA8（head_dim 128）基线 KV cache 约 2%（V4 论文摘要、§2.3.4）</td>
+  </tr>
+</table>
+
+<p class="cap"><b>表 1</b>｜DeepSeek 注意力架构演进。MLA 解决「entry 大小」（KV head 维度），GQA 解决「KV 头数」，而 V4 的 CSA/HCA 首次把「序列长度」也变成了可压缩维度——这一三维框架的表述亦见 V4.1 论文 §2.3（paper/deepseek_v41.pdf）。</p>
+
+<h2>2. 设计是什么</h2>
+
+<h3>2.1 总体结构：CSA 与 HCA 交错混合</h3>
+
+<p>V4 不是单一注意力层，而是两种高效注意力的混合配置。以 DeepSeek-V4-Pro 为例（论文 §4.2.1，p.25；与官方 <code>config.json</code> 完全一致）：</p>
+<ul>
+  <li>共 61 层；<b>前 2 层用 HCA</b>，其后 <b>CSA（压缩率 m=4）与 HCA（压缩率 m'=128）逐层交错</b>，最后 1 层无压缩分支（<code>compress_ratios</code> 以 <code>[128, 128, 4, 128, 4, ... , 4, 0]</code> 收尾）；</li>
+  <li>CSA 负责「稀疏 × 轻压缩」：KV entry 数量压到 1/4，再对压缩 entry 做 top-k=1024 的稀疏选择；</li>
+  <li>HCA 负责「重压缩 × 稠密」：KV entry 数量压到 1/128，但全部参与注意力，不做稀疏选择。</li>
+</ul>
+<p>两者共享同一套「压缩池化 + 共享 KV 的 MQA + 分组输出投影」骨架，差别只在压缩率与是否稀疏。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 142" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs>
+    <pattern id="layerCH" width="27" height="34" patternUnits="userSpaceOnUse">
+      <rect width="13.5" height="34" fill="#2456c4"/>
+      <rect x="13.5" width="13.5" height="34" fill="#8fb3e8"/>
+    </pattern>
+  </defs>
+  <rect x="18" y="26" width="27" height="34" fill="#8fb3e8"/>
+  <rect x="48" y="26" width="778.5" height="34" fill="url(#layerCH)"/>
+  <rect x="829.5" y="26" width="12" height="34" fill="#c9d2e0"/>
+  <text x="24" y="20" font-size="10" fill="#5a6272">层 1</text>
+  <text x="830" y="20" font-size="10" fill="#5a6272">层 61</text>
+  <line x1="31.5" y1="60" x2="31.5" y2="72" stroke="#5a6272" stroke-width="1"/>
+  <text x="6" y="86" text-anchor="start" fill="#1a1f2e">前 2 层 HCA</text>
+  <line x1="437" y1="60" x2="437" y2="72" stroke="#5a6272" stroke-width="1"/>
+  <text x="437" y="86" text-anchor="middle" fill="#1a1f2e">CSA(m=4) ⇄ HCA(m′=128) 逐层交错 ×29</text>
+  <line x1="835.5" y1="60" x2="835.5" y2="72" stroke="#5a6272" stroke-width="1"/>
+  <text x="854" y="86" text-anchor="end" fill="#1a1f2e">末层无压缩分支</text>
+  <rect x="18" y="112" width="14" height="14" fill="#2456c4"/>
+  <text x="38" y="123" fill="#1a1f2e">CSA：压缩 1/4 + top-k 稀疏</text>
+  <rect x="290" y="112" width="14" height="14" fill="#8fb3e8"/>
+  <text x="310" y="123" fill="#1a1f2e">HCA：压缩 1/128 稠密</text>
+  <rect x="560" y="112" width="14" height="14" fill="#c9d2e0"/>
+  <text x="580" y="123" fill="#1a1f2e">无压缩分支</text>
+</svg>
+<p class="cap"><b>图 1</b>｜V4-Pro 的 61 层注意力配置（对应 <code>config.json</code> 的 <code>compress_ratios = [128, 128, 4, 128, 4, …, 4, 0]</code>）。开头两层用重压缩的 HCA「热身」，中段 CSA 与 HCA 逐层交错，最后一层不挂压缩分支。</p>
+</div>
+
+<h3>2.2 CSA：先压缩，后稀疏</h3>
+
+<h4>(a) Token 级压缩器（learned gated pooling）</h4>
+<p>设输入隐状态 \(H \in \mathbb{R}^{n \times d}\)。CSA 先算出两组 KV entry 与对应的压缩权重（式 9–10）：</p>
+<div class="formula">\[ C_a = H \cdot W_a^{KV},\quad C_b = H \cdot W_b^{KV};\qquad Z_a = H \cdot W_a^{Z},\quad Z_b = H \cdot W_b^{Z} \]</div>
+<p>其中 \(C_a, C_b \in \mathbb{R}^{n \times c}\)（c 为 head 维度，V4 中 c=512）。随后每 m 个 token 被压成 1 条 entry，采用<b>重叠双分支</b>设计：第 i 条压缩 entry 用 \(C_a\) 的第 \([mi,\ m(i+1)-1]\) 段和 \(C_b\) 的第 \([m(i-1),\ mi-1]\) 段（式 11–12）：</p>
+<div class="formula">\[ [\,S_a^{mi:m(i+1)-1};\, S_b^{m(i-1):mi-1}\,] = \mathrm{Softmax}_{row}\!\left([\,Z_a^{mi:m(i+1)-1} + B_a;\, Z_b^{m(i-1):mi-1} + B_b\,]\right) \]</div>
+<div class="formula">\[ C_i^{\mathrm{Comp}} = \sum_{j=mi}^{m(i+1)-1} S_j^a \odot C_j^a + \sum_{j=m(i-1)}^{mi-1} S_j^b \odot C_j^b \]</div>
+<p>即对 \(2m\) 个候选做行内 softmax（每个 token 的压缩权重 \(Z\) 加上可学习位置偏置 \(B_a, B_b \in \mathbb{R}^{m \times c}\)），再按权重逐元素加权求和（\(\odot\) 为 Hadamard 积）。因为 \(C_b\) 在第 i 块的取材与 \(C_a\) 在第 i−1 块重叠，<b>相邻压缩 entry 的边界更平滑，等效压缩率为 1/m</b>（论文 p.10）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 258" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="arB" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <!-- token 行：t4..t15，12 块 -->
+  <g>
+    <rect x="86" y="36" width="241" height="40" fill="none" stroke="#c9d2e0" stroke-dasharray="4 3" rx="6"/>
+    <rect x="322" y="36" width="241" height="40" fill="none" stroke="#c9d2e0" stroke-dasharray="4 3" rx="6"/>
+    <rect x="558" y="36" width="241" height="40" fill="none" stroke="#c9d2e0" stroke-dasharray="4 3" rx="6"/>
+    <text x="206" y="30" text-anchor="middle" font-size="11" fill="#5a6272">窗口 i−1 (t4–7)</text>
+    <text x="442" y="30" text-anchor="middle" font-size="11" fill="#5a6272">窗口 i (t8–11)</text>
+    <text x="678" y="30" text-anchor="middle" font-size="11" fill="#5a6272">窗口 i+1 (t12–15)</text>
+    <rect x="90" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="118" y="60" text-anchor="middle">t4</text>
+    <rect x="149" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="177" y="60" text-anchor="middle">t5</text>
+    <rect x="208" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="236" y="60" text-anchor="middle">t6</text>
+    <rect x="267" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="295" y="60" text-anchor="middle">t7</text>
+    <rect x="326" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="354" y="60" text-anchor="middle">t8</text>
+    <rect x="385" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="413" y="60" text-anchor="middle">t9</text>
+    <rect x="444" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="472" y="60" text-anchor="middle">t10</text>
+    <rect x="503" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="531" y="60" text-anchor="middle">t11</text>
+    <rect x="562" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="590" y="60" text-anchor="middle">t12</text>
+    <rect x="621" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="649" y="60" text-anchor="middle">t13</text>
+    <rect x="680" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="708" y="60" text-anchor="middle">t14</text>
+    <rect x="739" y="40" width="56" height="32" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="767" y="60" text-anchor="middle">t15</text>
+  </g>
+  <!-- 轨 A：C_a 分支 -->
+  <text x="80" y="119" text-anchor="end" fill="#1a1f2e">C_a 段</text>
+  <rect x="90" y="104" width="705" height="22" rx="4" fill="#f4f7fd" stroke="#e3e7ee"/>
+  <rect x="326" y="104" width="233" height="22" rx="4" fill="#2456c4" opacity="0.85"/>
+  <rect x="562" y="104" width="233" height="22" rx="4" fill="#2456c4" opacity="0.85"/>
+  <text x="442" y="119" text-anchor="middle" font-size="11" fill="#fff">→ entry i 的 C_a</text>
+  <text x="678" y="119" text-anchor="middle" font-size="11" fill="#fff">→ entry i+1 的 C_a</text>
+  <!-- 轨 B：C_b 分支 -->
+  <text x="80" y="151" text-anchor="end" fill="#1a1f2e">C_b 段</text>
+  <rect x="90" y="136" width="705" height="22" rx="4" fill="#f4f7fd" stroke="#e3e7ee"/>
+  <rect x="90" y="136" width="233" height="22" rx="4" fill="#e8862a" opacity="0.85"/>
+  <rect x="326" y="136" width="233" height="22" rx="4" fill="#e8862a" opacity="0.85"/>
+  <text x="206" y="151" text-anchor="middle" font-size="11" fill="#fff">→ entry i 的 C_b</text>
+  <text x="442" y="151" text-anchor="middle" font-size="11" fill="#fff">→ entry i+1 的 C_b</text>
+  <!-- 重叠标注 -->
+  <text x="442" y="178" text-anchor="middle" font-size="11" fill="#b05e10">窗口 i (t8–11) 同时出现在两条轨上：既是 entry i 的 C_a，又是 entry i+1 的 C_b</text>
+  <!-- entry 行 -->
+  <line x1="442" y1="126" x2="352" y2="196" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arB)"/>
+  <line x1="206" y1="158" x2="308" y2="196" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arB)"/>
+  <line x1="678" y1="126" x2="574" y2="196" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arB)"/>
+  <line x1="442" y1="158" x2="520" y2="196" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arB)"/>
+  <rect x="274" y="198" width="100" height="34" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="324" y="219" text-anchor="middle" fill="#1a1f2e">entry i</text>
+  <rect x="510" y="198" width="100" height="34" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="560" y="219" text-anchor="middle" fill="#1a1f2e">entry i+1</text>
+  <text x="442" y="252" text-anchor="middle" font-size="11" fill="#5a6272">entry i = Softmax_row(Z + B) 对 2m=8 个候选 token 的加权求和（蓝橙各占一个 m=4 窗口）</text>
+</svg>
+<p class="cap"><b>图 2</b>｜重叠双分支压缩（式 11–12，m=4）。每条 entry 由两个分支各取一个窗口拼成：C_a 取「本窗口」、C_b 取「前一窗口」，对 2m=8 个候选做行内 softmax 加权池化。相邻 entry 共享一个窗口（图中 t8–11），使压缩边界平滑、信息无硬切分；HCA（m′=128）则去掉重叠分支，直接单窗口池化。</p>
+</div>
+
+<h4>(b) Lightning Indexer 稀疏选择（DSA 策略作用于压缩 entry）</h4>
+<p>Indexer 的 KV 也用同一压缩器压缩成 \(K^{\mathrm{I,Comp}} \in \mathbb{R}^{\frac{n}{m} \times c_I}\)（\(c_I = 128\)）。对查询 token t，先低秩降维再升维产生索引 query（式 13–14），同时用一条独立投影产生各索引头的权重（式 15–16）：</p>
+<div class="formula">\[ c_t^Q = h_t \cdot W^{DQ},\qquad q_t^{\mathrm{I}} = c_t^Q \cdot W^{IUQ} \]</div>
+<div class="formula">\[ w_t^{\mathrm{I}} = h_t \cdot W^{w};\qquad I_{t,s} = \sum_{h=1}^{n_h^{I}} w_{t,h}^{I} \cdot \mathrm{ReLU}\!\left( q_{t,h}^{\mathrm{I}} \cdot K_s^{\mathrm{I,Comp}} \right) \]</div>
+<p>然后按索引分选 top-k 条压缩 entry（式 17）：\( C_t^{\mathrm{SprsComp}} = \{ C_s^{\mathrm{Comp}} \mid I_{t,s} \in \mathrm{Top\text{-}k}(I_{t,:}) \} \)。注意<b>latent 向量 \(c_t^Q\) 由主注意力和 indexer 共享</b>，这是一次降维、两处受益。</p>
+
+<h4>(c) SKV-MQA：压缩 entry 即 key 即 value</h4>
+<p>核心注意力按 MQA 方式进行：每条压缩 entry <b>同时充当 attention 的 key 和 value</b>（式 18–19）：</p>
+<div class="formula">\[ q_t = c_t^Q \cdot W^{UQ};\qquad o_{t,i} = \mathrm{CoreAttn}(\mathrm{query}=q_{t,i},\ \mathrm{key}=C_t^{\mathrm{SprsComp}},\ \mathrm{value}=C_t^{\mathrm{SprsComp}}) \]</div>
+<p>查询头数 \(n_h\) 很大（V4-Pro 为 128），但 KV 只有 1「头」——KV entry 维度 c=512 与查询头维度相同。这是 V4 与 MLA 的本质区别：MLA 缓存的是「待解压的 latent」，解码时要上投影恢复多头 K/V；V4 直接把压缩 entry 当 K/V 用，<b>缓存即所需</b>，省掉解压步骤。</p>
+
+<h4>(d) 分组输出投影（Grouped Output Projection）</h4>
+<p>\(n_h\) 个头 × c=512 维的输出直接投影回 d 维代价太大，于是把 \(n_h\) 个输出分成 g 组，每组先降到 \(d_g\) 维中间量（\(d_g < c \cdot n_h / g\)），再拼起来投影到 d 维（V4-Pro：g=16，d_g=1024；论文 p.11）。</p>
+
+<h3>2.3 HCA：重压缩 × 稠密</h3>
+<p>HCA 与 CSA 同构，但压缩率 \(m' = 128 \gg m = 4\)，<b>不做重叠</b>、也不做稀疏选择，对全部压缩 entry 做稠密注意力（式 20–23）：</p>
+<div class="formula">\[ C = H \cdot W^{KV},\quad Z = H \cdot W^{Z};\qquad S^{m'i:m'(i+1)-1} = \mathrm{Softmax}_{row}(Z^{m'i:m'(i+1)-1} + B) \]</div>
+<div class="formula">\[ C_i^{\mathrm{Comp}} = \sum_{j=m'i}^{m'(i+1)-1} S_j \odot C_j \]</div>
+<p>同样的低秩 query（式 24–25）与 SKV-MQA、分组输出投影。HCA 层的 KV cache 只有 CSA 层的 1/32，适合放在模型头尾对全局信息做「粗粒度但全覆盖」的稠密建模。</p>
+
+<h3>2.4 稳定性与位置的四个细节（§2.3.3）</h3>
+<ul>
+  <li><b>Query / KV entry 归一化</b>：核心注意力之前，对每个 query head 与唯一的压缩 KV「头」做 RMSNorm，防止 attention logits 爆炸——因此 V4 不再需要 Muon 的 QK-Clip 技巧（论文 §2.4）；</li>
+  <li><b>部分 RoPE</b>：只对 query 与 KV entry 的<b>最后 64 维</b>施加 RoPE。因为压缩 entry 既是 key 又是 value，输出 \(\{o_{t,i}\}\) 会带着 KV 的绝对位置旋转，所以对输出再施加位置 \(-i\) 的<b>反旋转</b>，让输出携带「query 与 KV entry 的相对距离」；</li>
+  <li><b>滑窗分支</b>：压缩块内的 token 彼此不可见（因果性被压缩破坏），且近处 token 更相关，因此额外保留最近 \(n_{win}=128\) 个 token 的<b>未压缩</b> KV，与被选中的压缩 entry 拼接后一起参与核心注意力；</li>
+  <li><b>Attention sink</b>：为每个 query head 设置可学习 sink logit \(z_h'\)，softmax 分母加上 \(\mathrm{Exp}(z_h')\)（式 27），让头的总注意力权重可以不为 1、甚至接近 0：</li>
+</ul>
+<div class="formula">\[ s_{h,i,j} = \frac{\mathrm{Exp}(z_{h,i,j})}{\sum_k \mathrm{Exp}(z_{h,i,k}) + \mathrm{Exp}(z_h')} \]</div>
+
+<h3>2.5 张量形状一览（以 V4-Pro 为例）</h3>
+
+<div class="fig">
+<svg viewBox="0 0 880 272" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="arC" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <!-- 输入 -->
+  <rect x="8" y="112" width="86" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="51" y="130" text-anchor="middle" fill="#1a1f2e">H</text>
+  <text x="51" y="147" text-anchor="middle" fill="#5a6272">(n×d)</text>
+  <!-- 支路 1：压缩器 -->
+  <rect x="136" y="20" width="150" height="38" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="211" y="44" text-anchor="middle" fill="#1a1f2e">Compressor 压缩器</text>
+  <rect x="336" y="20" width="190" height="38" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="431" y="36" text-anchor="middle" fill="#1a1f2e">压缩 entry</text>
+  <text x="431" y="52" text-anchor="middle" fill="#5a6272">(n/4)×512 · FP8/BF16</text>
+  <!-- 支路 2：低秩 Q -->
+  <rect x="136" y="116" width="150" height="38" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="211" y="131" text-anchor="middle" fill="#1a1f2e">低秩 Q c^Q</text>
+  <text x="211" y="147" text-anchor="middle" fill="#5a6272">(d_c=1536)</text>
+  <rect x="336" y="116" width="190" height="38" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="431" y="131" text-anchor="middle" fill="#1a1f2e">n_h=128 查询头</text>
+  <text x="431" y="147" text-anchor="middle" fill="#5a6272">RMSNorm + RoPE(末64维)</text>
+  <!-- Indexer -->
+  <rect x="336" y="72" width="190" height="30" rx="6" fill="#fff" stroke="#d9a13c"/>
+  <text x="431" y="91" text-anchor="middle" font-size="11" fill="#1a1f2e">Indexer：打分 → top-k=1024</text>
+  <!-- 支路 3：滑窗 -->
+  <rect x="136" y="208" width="190" height="38" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="231" y="223" text-anchor="middle" fill="#1a1f2e">滑窗 KV：最近 128 token</text>
+  <text x="231" y="239" text-anchor="middle" fill="#5a6272">未压缩 (128×512)</text>
+  <!-- 汇聚 -->
+  <rect x="586" y="96" width="150" height="80" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="661" y="122" text-anchor="middle" fill="#1a1f2e">SKV-MQA</text>
+  <text x="661" y="140" text-anchor="middle" fill="#1a1f2e">核心注意力</text>
+  <text x="661" y="158" text-anchor="middle" fill="#5a6272">+ attn sink</text>
+  <rect x="756" y="96" width="116" height="80" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="814" y="118" text-anchor="middle" font-size="11" fill="#1a1f2e">输出反旋转(−i)</text>
+  <text x="814" y="134" text-anchor="middle" font-size="11" fill="#5a6272">+</text>
+  <text x="814" y="150" text-anchor="middle" font-size="11" fill="#1a1f2e">分组输出投影</text>
+  <text x="814" y="166" text-anchor="middle" font-size="11" fill="#5a6272">wo_a → wo_b</text>
+  <!-- 箭头 -->
+  <polyline points="94,124 111,124 111,39 136,39" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arC)"/>
+  <line x1="94" y1="134" x2="136" y2="134" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arC)"/>
+  <polyline points="94,146 119,146 119,227 136,227" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arC)"/>
+  <line x1="286" y1="39" x2="336" y2="39" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arC)"/>
+  <line x1="286" y1="135" x2="336" y2="135" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arC)"/>
+  <polyline points="211,116 211,87 336,87" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arC)"/>
+  <line x1="431" y1="72" x2="431" y2="60" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arC)"/>
+  <polyline points="526,39 560,39 560,110 586,110" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arC)"/>
+  <line x1="526" y1="135" x2="586" y2="135" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arC)"/>
+  <polyline points="326,227 640,227 640,176" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arC)"/>
+  <line x1="736" y1="136" x2="756" y2="136" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arC)"/>
+  <text x="545" y="76" font-size="10" fill="#5a6272">top-k 选中</text>
+</svg>
+<p class="cap"><b>图 3</b>｜CSA 层解码一步的完整数据流（仿论文图 3，补全滑窗与输出侧）。三条支路共享输入 H：压缩器产出 FP8/BF16 混合存储的压缩 entry（KV cache 主体）；低秩 latent \(c^Q\) 一份两用——升维成 128 个查询头供主注意力，同时喂给 Indexer 打分选出 top-k=1024 条压缩 entry；滑窗分支额外保留最近 128 个 token 的未压缩细粒度 KV。三路 KV 以单 KV「头」参与 SKV-MQA 核心注意力（含 attention sink），输出经位置 −i 反旋转与分组输出投影（<code>wo_a→wo_b</code>）得到 o。HCA 层没有 Indexer 分支，压缩率为 128 且全 entry 稠密参与。</p>
+</div>
+
+<table>
+  <tr><th>对象</th><th>形状 / 数值</th><th>说明</th></tr>
+  <tr><td>压缩 entry \(C^{\mathrm{Comp}}\)</td><td>\((n/m) \times 512\)（CSA）；\((n/m') \times 512\)（HCA）</td><td>m=4、m'=128（V4-Pro，config.json：compress_ratios [128,128,4,128,…,0]）</td></tr>
+  <tr><td>latent query \(c_t^Q\)</td><td>\(d_c = 1536\)（Pro）/ 1024（Flash）</td><td>主注意力与 indexer 共享（model.py 中 <code>q_lora_rank</code>）</td></tr>
+  <tr><td>查询头</td><td>\(n_h = 128\)（Pro）/ 64（Flash）× 头维 c=512</td><td>最后 64 维施加 RoPE（<code>rope_head_dim=64</code>）</td></tr>
+  <tr><td>索引器</td><td>\(n_h^I = 64\) 头 × \(c_I = 128\)；top-k = 1024（Pro）/ 512（Flash）</td><td><code>index_n_heads/index_head_dim/index_topk</code></td></tr>
+  <tr><td>滑窗分支</td><td>\(n_{win} = 128\) 条未压缩 KV（512 维）</td><td>每层保留最近 128 token 的细粒度 KV</td></tr>
+  <tr><td>输出投影</td><td>g=16 组（Pro）/ 8（Flash），中间维 \(d_g = 1024\)</td><td><code>o_groups/o_lora_rank</code></td></tr>
+</table>
+
+<h3>2.6 与 MHA / MQA / GQA / MLA / DSA 的对比</h3>
+
+<table>
+  <tr><th>方法</th><th>每 token KV 缓存量（元素）</th><th>可见粒度</th><th>长上下文复杂度</th><th>关键短板</th></tr>
+  <tr><td>MHA</td><td>\(2 \cdot n_h \cdot d_h\)</td><td>全 token 细粒度</td><td>\(O(L^2)\) 算力 + 巨量缓存</td><td>KV cache 最大</td></tr>
+  <tr><td>GQA（8 组，hd 128）</td><td>\(2 \cdot 8 \cdot 128 = 2048\)（BF16 存 4096 B/token）</td><td>全 token 细粒度</td><td>\(O(L^2)\)</td><td>只压头数，不压序列</td></tr>
+  <tr><td>MQA</td><td>\(2 \cdot d_h\)</td><td>全 token 细粒度</td><td>\(O(L^2)\)</td><td>表达能力受损</td></tr>
+  <tr><td>MLA（V2/V3）</td><td>\(d_c + n_{rope} = 576\)（c=512 latent + 64 解耦 RoPE）</td><td>全 token 细粒度（解码时需上投影）</td><td>\(O(L^2)\)</td><td>缓存仍随 L 线性；矩阵吸收使缓存必须保存完整 latent</td></tr>
+  <tr><td>DSA（V3.2）</td><td>同 MLA 576/token</td><td>top-k token 细粒度</td><td>核心注意力 \(O(Lk)\)；indexer \(O(L^2)\) 但轻量</td><td>缓存元素量不变，只省算力</td></tr>
+  <tr><td><b>CSA（V4）</b></td><td>压缩后 \(\approx c/m = 128\) 元素/token 量级 + 滑窗与索引开销</td><td>top-k 条 <b>4-token 粒度</b> entry + 128 token 滑窗</td><td>\(O(Lk)\)（k 条压缩 entry）</td><td>块内 token 互相不可见（靠滑窗分支弥补）</td></tr>
+  <tr><td><b>HCA（V4）</b></td><td>\(\approx c/m' \approx 4\) 元素/token 量级</td><td>全部 <b>128-token 粒度</b> entry，稠密</td><td>\(O((L/m')^2)\)</td><td>粒度极粗，依赖 CSA 层补细粒度信息</td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜各方法对比。MLA/DSA 的 576 元素/token 为论文与公开资料（DeepSeek-V2 arXiv:2405.04434）给出的数字；CSA/HCA 行的「元素量级」由本文按 head_dim=512 与压缩率换算，见第 4 节推断框。</p>
+
+<h2>3. 代码是怎么实现的</h2>
+
+<p>官方开源实现在 Hugging Face 仓库 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">deepseek-ai/DeepSeek-V4-Pro 的 <code>inference/</code> 目录</a>（论文脚注 1 所指实现），核心三个文件：<code>model.py</code>（模型结构，纯 PyTorch 参考实现）、<code>kernel.py</code>（TileLang 编写的稀疏注意力与量化内核）、<code>config.json</code>（V4-Pro 真实超参）。以下代码均摘自 <code>git clone --depth 1</code> 该仓库后的实际文件（commit <code>b5968e9</code>，2026-06-22；2026-09-14 抓取），行号为文件内真实行号。</p>
+
+<h3>3.1 配置即结构：<code>config.json</code></h3>
+<p>V4-Pro 的注意力超参与论文 §4.2.1 完全对应：</p>
+<pre><code class="language-json">"q_lora_rank": 1536,      // d_c：latent query 维度（低秩 Q）
+"head_dim": 512,          // c：压缩 entry / 查询头维度
+"rope_head_dim": 64,      // 部分维 RoPE：仅最后 64 维
+"o_groups": 16,           // g：输出投影分组数
+"o_lora_rank": 1024,      // d_g：每组中间维度
+"window_size": 128,       // n_win：滑窗分支窗口
+"index_n_heads": 64, "index_head_dim": 128, "index_topk": 1024,
+"compress_rope_theta": 160000,
+"compress_ratios": [128, 128, 4, 128, 4, 128, ..., 4, 0]
+</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/config.json:14-34</code>（中间项省略）。<code>compress_ratios</code> 逐层给出压缩率：128=HCA、4=CSA、0=无压缩分支；前两层 HCA 与论文"the first two layers use HCA"一致，收尾 0 表示最后一层无压缩分支。注意压缩分支使用独立的 <code>compress_rope_theta</code>（16 万），与主 RoPE theta（1 万）分离。</p>
+
+<h3>3.2 压缩器：公式 (9)–(12) 的逐行对应</h3>
+
+<pre><code class="language-python">class Compressor(nn.Module):
+    """Compresses KV cache via learned gated pooling over `compress_ratio` consecutive tokens.
+    When overlap=True (ratio==4), uses overlapping windows for smoother compression boundaries."""
+
+    def __init__(self, args: ModelArgs, compress_ratio: int = 4, head_dim: int = 512, rotate: bool = False):
+        super().__init__()
+        ...
+        self.compress_ratio = compress_ratio
+        self.overlap = compress_ratio == 4
+        coff = 1 + self.overlap
+        self.ape = nn.Parameter(torch.empty(compress_ratio, coff * self.head_dim, dtype=torch.float32))
+        # wkv and wgate in the checkpoint is stored in bf16, ...
+        # When overlap, the first half of dims is for overlapping compression, second half for normal.
+        self.wkv = Linear(self.dim, coff * self.head_dim, dtype=torch.float32)
+        self.wgate = Linear(self.dim, coff * self.head_dim, dtype=torch.float32)
+        self.norm = RMSNorm(self.head_dim, args.norm_eps)
+        ...
+    def forward(self, x: torch.Tensor, start_pos: int):
+        ...
+        kv = self.wkv(x)
+        score = self.wgate(x)
+        ...
+        kv = kv.unflatten(1, (-1, ratio))
+        score = score.unflatten(1, (-1, ratio)) + self.ape
+        if overlap:
+            kv = self.overlap_transform(kv, 0)
+            score = self.overlap_transform(score, float("-inf"))
+        kv = (kv * score.softmax(dim=2)).sum(dim=2)
+        ...
+        kv = self.norm(kv.to(dtype))
+        apply_rotary_emb(kv[..., -rd:], freqs_cis)   # 只旋转最后 64 维
+        if self.rotate:
+            kv = rotate_activation(kv)               # Hadamard 旋转，供 FP4 量化
+            fp4_act_quant(kv, fp4_block_size, True)  # indexer 的 KV 走 FP4
+        else:
+            act_quant(kv[..., :-rd], 64, ...)        # 主 KV：非 RoPE 维 FP8 存储</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/model.py:279-372</code>（有删节，均为连续行内摘录）。与论文的对应：<code>wkv</code> ↔ \(W^{KV}_{a/b}\)，<code>wgate</code> ↔ \(W^{Z}_{a/b}\)，<code>ape</code> ↔ 可学习位置偏置 \(B_a, B_b\)（CSA 时形状 \(m \times 2c\)，两分支各占一半维度）；<code>kv * score.softmax(dim=2)</code> 的加权求和即式 (11)(12) 的 \(\mathrm{Softmax}_{row}(Z+B) \odot C\) 池化；<code>overlap_transform</code>（model.py:307-314）把 \(C_a\) 整体错后一个窗口、\(C_b\) 保持原位，正是"第 i 条 entry 取 \(C_a\) 的 \([mi, m(i+1)-1)\) 与 \(C_b\) 的 \([m(i-1), mi)\)，两者重叠"的实现。压缩后立即 RMSNorm（§2.3.3 归一化）、RoPE 最后 64 维（部分 RoPE），并按用途量化：主 KV 非 RoPE 维 FP8（对应论文"RoPE 维度 BF16 + 其余 FP8"混合存储），索引器 KV 走 Hadamard 旋转 + FP4（对应"indexer FP4 计算"）。</p>
+
+<div class="infer">论文中 \(C_a, C_b\) 是两条独立投影（\(W_a^{KV}, W_b^{KV}\)），而参考实现把两支折叠进一个 <code>coff*head_dim</code> 宽的 <code>wkv</code> 线性层（前半维给重叠分支、后半维给正常分支），数学上等价；「HCA 也可被视为 CSA 去掉 indexer 与重叠」的实现结构（ratio≠4 时 <code>overlap=False</code> 且 <code>indexer=None</code>）由源码与论文共同证实。</div>
+
+<h3>3.3 Lightning Indexer：公式 (13)–(17) 的逐行对应</h3>
+
+<pre><code class="language-python">class Indexer(torch.nn.Module):
+    """Selects top-k compressed KV positions for sparse attention via learned scoring.
+    Has its own Compressor (with Hadamard rotation) to build compressed KV for scoring."""
+
+    def __init__(self, args: ModelArgs, compress_ratio: int = 4):
+        super().__init__()
+        ...
+        self.wq_b = ColumnParallelLinear(self.q_lora_rank, self.n_heads * self.head_dim)
+        self.weights_proj = ColumnParallelLinear(self.dim, self.n_heads, dtype=torch.bfloat16)
+        ...
+    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, offset: int):
+        ...
+        q = self.wq_b(qr)                                    # 从共享 latent c^Q_t 升维 → 式(14)
+        q = q.unflatten(-1, (self.n_local_heads, self.head_dim))
+        apply_rotary_emb(q[..., -rd:], freqs_cis)            # 索引 query 也只转最后 64 维
+        q = rotate_activation(q)                             # Hadamard 旋转
+        # use fp4 simulation for q and kv in indexer
+        fp4_act_quant(q, fp4_block_size, True)               # 索引 Q 用 FP4
+        self.compressor(x, start_pos)                        # 压缩索引 KV（同一压缩器逻辑）
+        weights = self.weights_proj(x) * (self.softmax_scale * self.n_heads ** -0.5)   # 式(15)
+        index_score = torch.einsum("bshd,btd->bsht", q, self.kv_cache[:bsz, :end_pos // ratio])
+        index_score = (index_score.relu_() * weights.unsqueeze(-1)).sum(dim=2)         # 式(16)
+        ...
+        topk_idxs = index_score.topk(min(self.index_topk, end_pos // ratio), dim=-1)[1]  # 式(17)</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/model.py:380-427</code>（有删节）。<code>qr</code> 即主注意力算出的 latent \(c_t^Q\)（式 13，见下一段代码第一行），indexer 不再单独降维，实现"latent 共享"；einsum 得到每个索引头、每个压缩 entry 的内积，<code>relu_()</code> 对应论文选 ReLU 的"throughput 考虑"（V3.2 论文 §2.1 同款设计），按 <code>weights</code> 加权求和得索引分 \(I_{t,s}\)，最后 top-k。索引 KV 与主 KV 缓存在同一层内（<code>self.kv_cache</code> 与主注意力的 <code>kv_cache[:, win:]</code> 拼接共享缓冲，见 model.py:491）。</p>
+
+<h3>3.4 主注意力：低秩 Q、归一化、滑窗拼接与输出反旋转</h3>
+
+<pre><code class="language-python">class Attention(nn.Module):
+    """Multi-head Latent Attention (MLA) with sliding window + optional KV compression.
+    Uses low-rank Q projection (wq_a -> q_norm -> wq_b) and grouped low-rank O projection."""
+    def __init__(self, layer_id: int, args: ModelArgs):
+        ...
+        self.attn_sink = nn.Parameter(torch.empty(self.n_local_heads, dtype=torch.float32))
+        self.wq_a = Linear(self.dim, self.q_lora_rank)         # W^DQ：式(13)
+        self.q_norm = RMSNorm(self.q_lora_rank, self.eps)
+        self.wq_b = ColumnParallelLinear(self.q_lora_rank, self.n_heads * self.head_dim)  # W^UQ：式(18)
+        self.wkv = Linear(self.dim, self.head_dim)             # 滑窗分支的未压缩 KV 投影
+        self.kv_norm = RMSNorm(self.head_dim, self.eps)
+        self.wo_a = ColumnParallelLinear(self.n_heads * self.head_dim // self.n_groups,
+                                         self.n_groups * args.o_lora_rank, dtype=torch.bfloat16)
+        self.wo_b = RowParallelLinear(self.n_groups * args.o_lora_rank, self.dim)  # 分组输出投影
+        ...
+    def forward(self, x: torch.Tensor, start_pos: int):
+        ...
+        # q
+        qr = q = self.q_norm(self.wq_a(x))
+        q = self.wq_b(q).unflatten(-1, (self.n_local_heads, self.head_dim))
+        q *= torch.rsqrt(q.square().mean(-1, keepdim=True) + self.eps)   # 逐头 RMSNorm
+        apply_rotary_emb(q[..., -rd:], freqs_cis)                        # 部分 RoPE
+        # win kv & topk_idxs
+        kv = self.wkv(x)
+        kv = self.kv_norm(kv)
+        apply_rotary_emb(kv[..., -rd:], freqs_cis)
+        # FP8-simulate non-rope dims to match QAT; rope dims stay bf16 for positional precision
+        act_quant(kv[..., :-rd], 64, scale_fmt, scale_dtype, True)
+        topk_idxs = get_window_topk_idxs(win, bsz, seqlen, start_pos)
+        if self.compress_ratio:
+            offset = kv.size(1) if start_pos == 0 else win
+            if self.indexer is not None:                       # CSA 层
+                compress_topk_idxs = self.indexer(x, qr, start_pos, offset)
+            else:                                              # HCA 层：全部压缩 entry，无稀疏
+                compress_topk_idxs = get_compress_topk_idxs(ratio, bsz, seqlen, start_pos, offset)
+            topk_idxs = torch.cat([topk_idxs, compress_topk_idxs], dim=-1)
+        ...
+        o = sparse_attn(q, kv, self.attn_sink, topk_idxs, self.softmax_scale)
+        ...
+        apply_rotary_emb(o[..., -rd:], freqs_cis, True)                  # 输出反旋转（位置 -i）
+        # o
+        o = o.view(bsz, seqlen, self.n_local_groups, -1)
+        wo_a = self.wo_a.weight.view(self.n_local_groups, self.o_lora_rank, -1)
+        o = torch.einsum("bsgd,grd->bsgr", o, wo_a)
+        x = self.wo_b(o.flatten(2))
+        return x</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/model.py:436-543</code>（有删节）。要点逐条对应论文：<code>attn_sink</code> 参数即式 (27) 的 \(z_h'\)；<code>wq_a → q_norm → wq_b</code> 是 MLA 式低秩 Q（式 13/18），latent <code>qr</code> 随后传给 indexer 复用；query 与 KV 各自 RMSNorm 后只转最后 64 维 RoPE；滑窗 KV 的非 RoPE 维以 FP8 模拟量化（QAT 一致性），注释原文写明"rope dims stay bf16 for positional precision"——正是论文混合存储策略；topk 索引 = 「滑窗 128 条 + 压缩 top-k」拼接；核心注意力交给 <code>sparse_attn</code>；输出先做位置 \(-i\) 的反旋转（<code>inverse=True</code>，对应论文"carry relative position embeddings"），再走 <code>wo_a/wo_b</code> 的两段式分组投影（式：\(o^G \to d_g \to d\)）。</p>
+
+<h3>3.5 稀疏注意力内核：按索引 gather + online softmax + sink</h3>
+
+<pre><code class="language-python">@tilelang.jit(pass_configs=pass_configs)
+def sparse_attn_kernel(h: int, d: int, scale=None):
+    """Sparse multi-head attention via index gathering + online softmax (FlashAttention-style).
+    For each (batch, seq_pos), gathers top-k KV positions by index, computes attention
+    with numerically stable running max/sum, and includes a learnable attn_sink bias."""
+    ...
+    @T.prim_func
+    def sparse_attn_kernel_(
+        q: T.Tensor[(b, m, h, d), BF16],
+        kv: T.Tensor[(b, n, d), BF16],          # 单 KV 头：SKV-MQA
+        o: T.Tensor[(b, m, h, d), BF16],
+        attn_sink: T.Tensor[(h,), FP32],
+        topk_idxs: T.Tensor[(b, m, topk), INT32],
+    ):
+        ...
+            for t in T.Pipelined(num_blocks, num_stages=num_stages):
+                for i in T.Parallel(block):
+                    idxs[i] = T.if_then_else(t * block + i &lt; topk, topk_idxs[by, bx, t * block + i], -1)
+                for i, j in T.Parallel(block, d):
+                    kv_shared[i, j] = T.if_then_else(idxs[i] != -1, kv[by, idxs[i], j], 0)  # 按索引 gather
+                ...
+                T.gemm(q_shared, kv_shared, acc_s, transpose_B=True, policy=T.GemmWarpPolicy.FullRow)
+                ...                              # online softmax：running max / rescale
+            for i in T.Parallel(h):
+                sum_exp[i] += T.exp(attn_sink[i] - scores_max[i])   # attention sink 并入分母
+            for i, j in T.Parallel(h, d):
+                acc_o[i, j] /= sum_exp[i]</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/kernel.py:276-350</code>（TileLang DSL，有删节）。这是式 (19) + 式 (27) 的内核化：KV 张量只有<b>一个头</b>（shape <code>(b, n, d)</code>），即 SKV-MQA；每个 (batch, 位置) 沿 <code>topk_idxs</code> gather 出被选中的压缩 entry（或滑窗 KV），做 FlashAttention 式 online softmax；分母额外加上 \(\mathrm{Exp}(z_h' - \mathrm{max})\) 实现 attention sink——与式 (27) 的分母 \(\sum_k \mathrm{Exp}(z_{h,i,k}) + \mathrm{Exp}(z_h')\) 严格一致（减去 running max 只是数值稳定技巧）。</p>
+
+<h3>3.6 代码 ↔ 公式对照表</h3>
+<table>
+  <tr><th>论文记号</th><th>代码</th><th>位置</th></tr>
+  <tr><td>\(W^{KV}_{a/b}\)、\(W^{Z}_{a/b}\)、\(B_a, B_b\)（式 9–11）</td><td><code>Compressor.wkv / wgate / ape</code></td><td>model.py:294-298</td></tr>
+  <tr><td>\(\mathrm{Softmax}_{row}(Z+B)\) 池化 + 重叠（式 11–12）</td><td><code>(kv * score.softmax(dim=2)).sum(dim=2)</code> + <code>overlap_transform</code></td><td>model.py:340-342、307-314</td></tr>
+  <tr><td>\(c_t^Q = h_t W^{DQ}\)（式 13）与 \(q_t = c_t^Q W^{UQ}\)（式 18）</td><td><code>wq_a / q_norm / wq_b</code>，latent <code>qr</code> 传给 Indexer 共享</td><td>model.py:457-459、496-497</td></tr>
+  <tr><td>\(I_{t,s} = \sum_h w \cdot \mathrm{ReLU}(q \cdot k)\)（式 15–16）</td><td><code>weights_proj</code> + <code>einsum → relu_ → 加权求和</code></td><td>model.py:394、418-421</td></tr>
+  <tr><td>Top-k 选择（式 17）</td><td><code>index_score.topk(...)</code>；HCA 层改用 <code>get_compress_topk_idxs</code> 全选</td><td>model.py:427、511-513</td></tr>
+  <tr><td>SKV-MQA（式 19/26）</td><td>内核中 <code>kv: (b, n, d)</code> 单头，Q 多头</td><td>kernel.py:296-297</td></tr>
+  <tr><td>Attention sink（式 27）</td><td><code>sum_exp += exp(attn_sink - max)</code></td><td>kernel.py:345-346</td></tr>
+  <tr><td>分组输出投影（§2.3.1）</td><td><code>wo_a</code>(g 组 → d_g) → <code>wo_b</code>(→ d)</td><td>model.py:462-463、537-542</td></tr>
+  <tr><td>输出反旋转（位置 −i，§2.3.3）</td><td><code>apply_rotary_emb(o[..., -rd:], freqs_cis, inverse=True)</code></td><td>model.py:534</td></tr>
+</table>
+
+<h2>4. 复杂度与效果对比</h2>
+
+<h3>4.1 KV cache 与算力（论文数字）</h3>
+<table>
+  <tr><th>对比项</th><th>数字</th><th>出处</th></tr>
+  <tr><td>V4-Pro @1M 上下文 vs V3.2</td><td>单 token 推理 FLOPs 为 27%（等效 FP8），KV cache 为 10%</td><td>摘要、§1（p.4-5）</td></tr>
+  <tr><td>V4-Flash @1M 上下文 vs V3.2</td><td>FLOPs 10%，KV cache 7%</td><td>§1（p.5）</td></tr>
+  <tr><td>V4 系列 vs BF16 GQA8（hd 128）基线</td><td>1M 上下文 KV cache 约为基线的 2%</td><td>§2.3.4（p.13）</td></tr>
+  <tr><td>混合精度存储</td><td>RoPE 维 BF16 + 其余 FP8，相比纯 BF16 KV cache 近乎减半</td><td>§2.3.4（p.13）</td></tr>
+  <tr><td>索引器精度</td><td>indexer 内 FP4 计算（QK 路径做 FP4 量化感知训练）</td><td>§2.3.4、§1（p.4）</td></tr>
+  <tr><td>top-k 设置</td><td>比 V3.2 更小（Flash 512 / Pro 1024 条压缩 entry），中短文本收益更明显</td><td>§2.3.4、§4.2.1</td></tr>
+  <tr><td>on-disk KV 复用</td><td>压缩 KV 全量落盘；SWA KV 体积约为压缩 KV 的 8 倍，提供 Full / Periodic / Zero 三种缓存策略</td><td>§3.5.2（p.23）</td></tr>
+</table>
+
+<div class="infer">每 token KV 量级核算（本文按论文配置推算，非论文原文）：CSA 主 KV 每条 entry 512 维，其中 64 维 BF16（2B）+ 448 维 FP8（1B）≈ 576 B，每 4 token 一条 → 约 144 B/token；GQA8 hd128 BF16 基线为 8×128×2(K+V)×2B = 4096 B/token，CSA 层单独看约为其 3.5%；再与 HCA 层（≈ 4.5 B/token，约 0.1%）及少量滑窗/索引开销平均（HCA 层占多数），总体落在论文所述"约 2%"量级。算力端同理：CSA 每查询只与 top-k=1024 条 4-token 粒度 entry 交互，等效细粒度 attention 范围约为 4k 个 token，且索引器在 1/4 长度的序列上打分。</div>
+
+<div class="fig">
+<svg viewBox="0 0 860 212" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <line x1="330" y1="28" x2="330" y2="190" stroke="#e3e7ee"/>
+  <line x1="490" y1="28" x2="490" y2="190" stroke="#e3e7ee"/>
+  <line x1="650" y1="28" x2="650" y2="190" stroke="#e3e7ee"/>
+  <line x1="810" y1="28" x2="810" y2="190" stroke="#e3e7ee"/>
+  <line x1="170" y1="28" x2="170" y2="190" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="160" y="53" text-anchor="end" fill="#1a1f2e">GQA8 (hd128, BF16)</text>
+  <rect x="170" y="36" width="578" height="26" rx="4" fill="#c9d2e0"/>
+  <text x="740" y="53" text-anchor="end" fill="#1a1f2e">4096 B</text>
+  <text x="160" y="93" text-anchor="end" fill="#1a1f2e">MLA (576 元素, BF16)</text>
+  <rect x="170" y="76" width="490" height="26" rx="4" fill="#8fb3e8"/>
+  <text x="652" y="93" text-anchor="end" fill="#1a1f2e">1152 B</text>
+  <text x="160" y="133" text-anchor="end" fill="#1a1f2e">V4 CSA 层 (m=4)</text>
+  <rect x="170" y="116" width="345" height="26" rx="4" fill="#2456c4"/>
+  <text x="507" y="133" text-anchor="end" font-size="11" fill="#fff">≈144 B（推断）</text>
+  <text x="160" y="173" text-anchor="end" fill="#1a1f2e">V4 HCA 层 (m′=128)</text>
+  <rect x="170" y="156" width="104" height="26" rx="4" fill="#163a86"/>
+  <text x="282" y="173" fill="#1a1f2e">≈4.5 B（推断）</text>
+  <text x="170" y="206" text-anchor="middle" font-size="11" fill="#5a6272">1 B</text>
+  <text x="330" y="206" text-anchor="middle" font-size="11" fill="#5a6272">10 B</text>
+  <text x="490" y="206" text-anchor="middle" font-size="11" fill="#5a6272">100 B</text>
+  <text x="650" y="206" text-anchor="middle" font-size="11" fill="#5a6272">1000 B</text>
+  <text x="810" y="206" text-anchor="middle" font-size="11" fill="#5a6272">10000 B</text>
+</svg>
+<p class="cap"><b>图 4</b>｜每 token KV cache 字节数对比（横轴 log 刻度，单层口径）。GQA8 = 8 头 × 128 维 × 2(K+V) × 2B = 4096 B；MLA 缓存 576 元素（c=512 latent + 64 解耦 RoPE）× 2B ≈ 1152 B；CSA/HCA 为本文推断核算值（RoPE 64 维 BF16 + 其余 FP8，核算见上方推断框）。V4 全模型是 61 层 CSA/HCA 混合（HCA 占多数），1M 上下文整体 KV cache 约为 GQA8 基线的 2%（论文口径，§2.3.4）。</p>
+</div>
+
+<h3>4.2 效果基准（论文数字）</h3>
+<table>
+  <tr><th>基准</th><th>V3.2-Base</th><th>V4-Flash-Base</th><th>V4-Pro-Base</th></tr>
+  <tr><td>LongBench-V2 (EM, 1-shot)</td><td>40.2</td><td>44.7</td><td><b>51.5</b></td></tr>
+  <tr><td>MMLU-Pro (EM, 5-shot)</td><td>65.5</td><td>68.3</td><td><b>73.5</b></td></tr>
+  <tr><td>HumanEval (Pass@1)</td><td>62.8</td><td>69.5</td><td><b>76.8</b></td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜基座模型对比（Table 1，p.28）。更参数高效的 V4-Flash-Base（13B 激活）已在多数基准超过 37B 激活的 V3.2-Base——架构与数据改进没有被压缩注意力拖累。</p>
+
+<table>
+  <tr><th>1M 上下文评测</th><th>Claude Opus 4.6</th><th>Gemini 3.1 Pro</th><th>DeepSeek-V4-Pro-Max</th></tr>
+  <tr><td>OpenAI MRCR 1M (MMR)</td><td>92.9</td><td>76.3</td><td>83.5</td></tr>
+  <tr><td>CorpusQA 1M (ACC)</td><td>71.7</td><td>53.8</td><td>62.0</td></tr>
+</table>
+<p class="cap"><b>表 4</b>｜1M 上下文闭源对比（Table 6，p.38）：V4-Pro-Max 优于 Gemini 3.1 Pro、落后 Opus 4.6。</p>
+
+<h3>4.3 训练如何驯服稀疏注意力（§4.2.2）</h3>
+<p>序列长度课程 4K → 16K → 64K → 1M；<b>先用稠密注意力训练 1T token，再在 64K 序列长度处引入稀疏</b>，且稀疏开启后先安排一个短暂阶段专门 warmup Lightning Indexer，然后全程稀疏训练。压缩分支 RoPE 使用独立 theta（config：<code>compress_rope_theta=160000</code>）。推理侧配套设计：因压缩率 4 与 128 的最小公倍数为 128，KV cache 块按 lcm 对齐（§3.5.1），SWA 与未满压缩块的 token 走"状态缓存"，压缩 entry 走经典分页缓存。</p>
+
+<h2>5. 事实与推断的边界</h2>
+<ul>
+  <li><b>论文/源码证实</b>：本文所有公式、超参（m=4、m'=128、top-k、n_win、c、d_c、g、d_g）、效率与评测数字均出自 <code>paper/deepseek_v4.pdf</code> 及官方 inference 仓库源码；代码片段与行号来自 <code>/tmp/paper-research/v4-pro/inference/</code> 实际克隆内容。</li>
+  <li><b>推断（已标注）</b>：① §4.1 推断框中的每 token 字节数核算与"等效细粒度 attention 范围 ≈ 4k token"的换算；② "两分支折叠进单个 <code>wkv</code> 线性层在数学上等价"的实现等价性判断；③ 表 2 中 CSA/HCA 行的每 token 元素量级换算。</li>
+  <li><b>未决</b>：V4 论文为 preview 版本，未给出与 MHA/MQA 直接对照的受控消融表（如同训练预算下 CSA vs GQA 的性能差）；V4.1（本地 <code>paper/deepseek_v41.pdf</code>）已提出 CSA2 进一步沿 entry/序列/层三个维度压缩，属后续演进，本文不展开。</li>
+</ul>
+
+<h2>6. 参考来源</h2>
+<ol class="refs">
+  <li>DeepSeek-AI. <i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>. arXiv:2606.19348, 2026.（本地 <code>paper/deepseek_v4.pdf</code>）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V4-Pro</i> 官方推理实现. <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro（inference/）</a>. commit <code>b5968e9</code>（2026-06-22），2026-09-14 抓取. 关键文件：<code>model.py</code>（Compressor/Indexer/Attention）、<code>kernel.py</code>（TileLang sparse_attn_kernel）、<code>config.json</code>.</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V3.2: Pushing the Frontier of Open Large Language Models</i>. arXiv:2512.02556, 2025.（本地 <code>paper/deepseek_v32.pdf</code>，DSA/Lightning Indexer 背景）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V4.1</i> 技术报告.（本地 <code>paper/deepseek_v41.pdf</code>，CSA2 演进方向）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model</i>. arXiv:2405.04434.（MLA：KV cache −93.3%、c=512、解耦 RoPE 64 维）</li>
+  <li>Shazeer, N. <i>Fast Transformer Decoding: One Write-Head is All You Need</i>. arXiv:1911.02150, 2019.（MQA）</li>
+  <li>Ainslie, J. et al. <i>GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints</i>. EMNLP 2023.（GQA，表 2 基线配置）</li>
+  <li>Su, J. et al. <i>RoFormer: Enhanced Transformer with Rotary Position Embedding</i>. 2024.（RoPE / 部分维旋转）</li>
+</ol>
+
+<footer>生成于 2026-09-14 · paper-research 工作流 · 公式由 MathJax 3 渲染，代码高亮由 highlight.js 11.9 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

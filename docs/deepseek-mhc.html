@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek mHC 解读：流形约束超连接（Manifold-Constrained Hyper-Connections）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DeepSeek mHC 解读：流形约束超连接（Manifold-Constrained Hyper-Connections）</h1>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>日期：</b>2026-09-14　<b>论文：</b><i>mHC: Manifold-Constrained Hyper-Connections</i>（DeepSeek-AI，Zhenda Xie 等）</p>
+  <p style="margin:4px 0"><b>arXiv：</b><a href="https://arxiv.org/abs/2512.24880">arxiv.org/abs/2512.24880</a>　<b>代码：</b>随 DeepSeek-V4-Pro 官方推理实现开源（<a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro 的 <code>inference/</code> 目录</a>，commit <code>b5968e9</code> / 2026-06-22，2026-09-14 抓取）</p>
+  <p style="margin:4px 0"><b>本地文件：</b><code>paper/mhc.pdf</code>（主论文，19 页）；<code>paper/deepseek_v4.pdf</code>（§2.2、§3.4.2 落地）；<code>paper/deepseek_v41.pdf</code>（§2.4.1 Single-Pass mHC）</p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>Hyper-Connections（HC）把残差流宽度从 \(d\) 扩到 \(n\times d\)，用三个可学习映射管理「读出 / 流内混合 / 写入」，FLOPs 几乎不涨但性能显著提升；代价是<b>层间复合映射不再守恒，信号增益失控（27B 模型实测峰值约 3000 倍），大规模训练出现 loss surge</b>，且 n 流设计把显存读写放大约 n 倍。mHC 的解法非常克制：只把流内混合矩阵 \(B_l\)（即 \(H^{res}\)）用 <b>Sinkhorn-Knopp 算法投影到双随机矩阵流形（Birkhoff 多胞体）</b>——行和 = 列和 = 1、非负。由此谱范数 ≤ 1（前向非扩张）、乘法封闭（任意深度复合仍守恒）、\(B_l x\) 成为各流的凸组合（可混合但均值守恒）；\(n=1\) 时恰好退化为原始恒等映射。消融显示 \(H^{res}\) 贡献了 HC 绝大部分收益（−0.022 / 总 −0.027 loss gap），所以只严格约束它、保住表达力。27B 实验：复合映射增益从 ~3000 降到 ~1.6（三个数量级），最终 loss 比 baseline 低 0.021，8 项下游基准全面超 baseline、多数超 HC（BBH +2.1、DROP +2.3 vs HC）；n=4 时大规模训练仅 +6.7% 墙钟开销。mHC 已进入生产：<b>DeepSeek-V4</b>（1.6T-Pro / 284B-Flash）全面采用，<b>DeepSeek-V4.1</b> 进一步升级为 Single-Pass mHC + Mega-mHC 单内核，激活显存流量减半，45T token 训练全程无不稳定。</p>
+</div>
+
+<h2>1. 解决什么问题</h2>
+
+<h3>1.1 背景：恒等映射与 HC 的「加宽」</h3>
+<p>标准残差 \(x_{l+1} = x_l + F(x_l, W_l)\)（式 1）多层展开后，浅层信号 \(\ x_l\) 以<b>恒等映射</b>直达深层（式 2）——这是 ResNet 以来大规模训练稳定性的基石（He et al. 2016b）。Hyper-Connections（HC，Zhu et al. 2024）在不动层内计算的前提下把残差流从 \(d\) 维加宽到 \(n\times d\)（n 个流，n=4），并引入三个可学习映射（式 3）：</p>
+<div class="formula">\[ x_{l+1} = H^{res}_l\, x_l + (H^{post}_l)^{\!\top} F\!\left(H^{pre}_l\, x_l,\ W_l\right) \]</div>
+<ul>
+  <li>\(H^{pre}_l \in \mathbb{R}^{1\times n}\)：把 n 个流<b>读出</b>成层输入；</li>
+  <li>\(H^{post}_l \in \mathbb{R}^{1\times n}\)：把层输出<b>写回</b>各流；</li>
+  <li>\(H^{res}_l \in \mathbb{R}^{n\times n}\)：流之间的<b>混合</b>（残差映射）。</li>
+</ul>
+<p>每个映射由「动态分量（依赖输入的 \(\tanh(\theta \tilde{x}^{\!\top})\)）+ 静态分量（bias \(b\)）」构成，门控 \(\alpha\) 初始化为小值。由于 \(n=4 \ll d\)，这些映射的 FLOPs 可忽略——HC 本质上给模型加了一条<b>解耦于计算量的容量扩展轴</b>。论文的消融（Table 1）指明了收益来源：</p>
+
+<table>
+  <tr><th>\(H^{res}_l\)</th><th>\(H^{pre}_l\)</th><th>\(H^{post}_l\)</th><th>Absolute Loss Gap</th></tr>
+  <tr><td></td><td>✓</td><td></td><td>−0.022</td></tr>
+  <tr><td></td><td>✓</td><td>✓</td><td>−0.025</td></tr>
+  <tr><td>✓</td><td>✓</td><td>✓</td><td><b>−0.027</b></td></tr>
+</table>
+<p class="cap"><b>表 1</b>｜HC 组件消融（论文 Table 1）。禁用某映射时以固定映射保持维度一致：\(H^{pre}\) 用均匀 1/n、\(H^{post}\) 用全 1、\(H^{res}\) 用单位阵。仅 \(H^{res}\) 一项就贡献了 −0.022（约八成收益）——这直接决定了 mHC「只严格约束 \(H^{res}\)」的设计取舍。</p>
+
+<h3>1.2 问题一：复合映射失控 → 训练不稳定</h3>
+<p>把 HC 递归展开到 L 层（式 4），浅层到深层的有效信号传播由<b>复合映射</b> \(\prod_{i=1}^{L-l} H^{res}_{L-i}\) 决定。标准残差里它是恒等映射（严格守恒），而 HC 的 \(H^{res}\) 无约束，复合后信号幅度 prone to 爆炸或消失。论文用 <b>Amax Gain Magnitude</b> 量化：复合矩阵的<b>最大绝对行和</b>（前向信号增益）与<b>最大绝对列和</b>（反向梯度增益）。</p>
+<ul>
+  <li>27B 模型实测（论文 Fig 3）：单层 \(H^{res}\) 的增益已偏离 1，<b>复合映射增益峰值接近 3000</b>——残差流在层间爆炸；</li>
+  <li>训练动态（Fig 2）：HC 在约 12k 步出现 loss surge，梯度范数飙到 0.2+；同规模的 mHC 平稳。</li>
+</ul>
+
+<h3>1.3 问题二：n 流设计的系统开销</h3>
+<p>FLOPs 不涨不等于快。n 流设计成倍放大<b>显存读写（I/O）</b>——现代加速器的主要瓶颈（"memory wall"）。论文 Table 2 给出单层每 token 的 I/O 对比：</p>
+
+<table>
+  <tr><th>方法</th><th>读（元素）</th><th>写（元素）</th><th>n=4 量级</th></tr>
+  <tr><td>标准残差（Residual Merge）</td><td>\(2C\)</td><td>\(C\)</td><td>2C / C</td></tr>
+  <tr><td>HC（系数计算 + 读出 + 写回 + 残差合并）</td><td>\((5n{+}1)C + n^2 + 2n\)</td><td>\((3n{+}1)C + n^2 + 2n\)</td><td>21C / 13C（≈10× 读）</td></tr>
+  <tr><td>mHC 融合 kernel 后的合并步</td><td>\((n{+}1)C\)</td><td>\(nC\)</td><td>5C / 4C</td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜每 token 显存访问开销（论文 Table 2 + §4.3.1，只计残差流维护、不含层函数 \(F\) 内部）。HC 把读放大到约 10 倍；mHC 把 \(H^{post}\) 写回、\(H^{res}\) 混合与残差合并融合为一个 kernel，大幅回收。此外 HC 的可学习系数需要为反向保留中间激活（显存大增）、流水线并行通信量翻 n 倍。</p>
+
+<h2>2. 设计是什么</h2>
+
+<h3>2.1 核心约束：把 \(H^{res}\) 投影到 Birkhoff 多胞体</h3>
+<p>mHC 的主张是：<b>稳定性不需要退回恒等映射，只需要复合映射不放大信号</b>；而流间信息交换（HC 收益的来源）必须保留。同时满足两者的最小约束集是<b>双随机矩阵</b>——非负、行和与列和均为 1（式 6）：</p>
+<div class="formula">\[ \mathcal{M}_{res} = \left\{\, H \in \mathbb{R}^{n\times n} \;\middle|\; H\mathbf{1}_n = \mathbf{1}_n,\ \mathbf{1}_n^{\!\top} H = \mathbf{1}_n^{\!\top},\ H \geqslant 0 \,\right\},\qquad H^{res}_l = \mathcal{P}_{\mathcal{M}_{res}}(\tilde H^{res}_l) \]</div>
+<p>这组约束带来三条严格性质（论文 §4.1）：</p>
+<ol>
+  <li><b>谱范数 ≤ 1</b>：\(\|H^{res}_l\|_2 \le 1\)，映射非扩张（non-expansive），前向不放大信号、抑制梯度爆炸；</li>
+  <li><b>乘法封闭</b>：双随机矩阵对矩阵乘法封闭，任意深度的复合映射 \(\prod H^{res}\) 仍是双随机的——稳定性不随深度衰减；</li>
+  <li><b>几何解释</b>：\(\mathcal{M}_{res}\) 即 Birkhoff 多胞体（置换矩阵的凸包），\(H^{res} x\) 是各流的<b>凸组合</b>——信息可以混合，但特征均值守恒；反复应用会单调增加流间混合，相当于一个稳健的特征融合机制。</li>
+</ol>
+<p>关键的性质检查：\(n=1\) 时双随机条件退化为标量 1，恰好<b>恢复原始残差的恒等映射</b>——mHC 是残差连接的严格泛化，而非另一个孤立设计。另外 \(H^{pre}\)、\(H^{post}\) 加非负有界约束（\(H^{pre}=\sigma(\cdot)\)、\(H^{post}=2\sigma(\cdot)\)），防止正负系数叠加造成信号抵消。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="arA" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <!-- (a) 残差 -->
+  <text x="130" y="26" text-anchor="middle" font-weight="bold" fill="#1a1f2e">(a) 残差连接</text>
+  <line x1="30" y1="70" x2="230" y2="70" stroke="#2456c4" stroke-width="2.5" marker-end="url(#arA)"/>
+  <text x="24" y="60" fill="#5a6272">x</text>
+  <text x="222" y="60" fill="#5a6272">x+F</text>
+  <rect x="96" y="52" width="70" height="36" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="131" y="74" text-anchor="middle" fill="#1a1f2e">层 F</text>
+  <path d="M 60 70 C 60 110, 160 110, 196 84" fill="none" stroke="#8fb3e8" stroke-width="1.6" marker-end="url(#arA)"/>
+  <text x="122" y="128" text-anchor="middle" fill="#5a6272">x 直接透传（恒等）</text>
+  <text x="130" y="150" text-anchor="middle" fill="#5a6272">xₗ₊₁ = xₗ + F(xₗ)</text>
+  <!-- (b) HC -->
+  <text x="450" y="26" text-anchor="middle" font-weight="bold" fill="#1a1f2e">(b) Hyper-Connections</text>
+  <line x1="330" y1="52" x2="570" y2="52" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
+  <line x1="330" y1="76" x2="570" y2="76" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
+  <line x1="330" y1="100" x2="570" y2="100" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
+  <line x1="330" y1="124" x2="570" y2="124" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
+  <text x="318" y="56" text-anchor="end" fill="#5a6272">流 1</text>
+  <text x="318" y="104" text-anchor="end" fill="#5a6272">流 n</text>
+  <text x="450" y="150" text-anchor="middle" font-size="11" fill="#5a6272">n 条并行流（n×d）</text>
+  <!-- pre 聚合 -->
+  <path d="M 336 52 C 300 52, 296 160, 306 160 L 384 160" fill="none" stroke="#e8862a" stroke-width="1.6" marker-end="url(#arA)"/>
+  <path d="M 336 124 C 306 124, 296 160, 306 160" fill="none" stroke="#e8862a" stroke-width="1.6"/>
+  <text x="282" y="150" text-anchor="end" fill="#b05e10">Hpre 读出</text>
+  <rect x="386" y="144" width="66" height="32" rx="6" fill="#fff" stroke="#e8862a"/>
+  <text x="419" y="164" text-anchor="middle" fill="#1a1f2e">层 F</text>
+  <!-- post 写回 -->
+  <path d="M 452 144 C 452 132, 560 60, 566 56" fill="none" stroke="#4a9e6f" stroke-width="1.6" marker-end="url(#arA)"/>
+  <text x="556" y="150" text-anchor="start" fill="#2e7351">Hpost 写回</text>
+  <!-- res 混合 -->
+  <path d="M 500 46 L 500 130" fill="none" stroke="#2456c4" stroke-width="1.4"/>
+  <path d="M 404 46 L 404 130" fill="none" stroke="#2456c4" stroke-width="1.4"/>
+  <path d="M 404 50 C 420 66, 484 66, 498 52" fill="none" stroke="#2456c4" stroke-width="1.2" marker-end="url(#arA)"/>
+  <path d="M 498 126 C 482 110, 420 110, 406 124" fill="none" stroke="#2456c4" stroke-width="1.2" marker-end="url(#arA)"/>
+  <text x="452" y="94" text-anchor="middle" font-size="11" fill="#2456c4">Hres 混合</text>
+  <text x="450" y="186" text-anchor="middle" fill="#8a2b2b" font-weight="bold">三个映射均无约束 → 复合映射增益可达 ~3000×</text>
+  <text x="450" y="208" text-anchor="middle" fill="#5a6272">xₗ₊₁ = Hres·xₗ + Hpostᵀ·F(Hpre·xₗ)</text>
+  <!-- (c) mHC -->
+  <text x="762" y="26" text-anchor="middle" font-weight="bold" fill="#1a1f2e">(c) mHC</text>
+  <line x1="648" y1="52" x2="876" y2="52" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
+  <line x1="648" y1="76" x2="876" y2="76" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
+  <line x1="648" y1="100" x2="876" y2="100" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
+  <line x1="648" y1="124" x2="876" y2="124" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
+  <path d="M 726 46 L 726 130" fill="none" stroke="#2456c4" stroke-width="1.4"/>
+  <path d="M 802 46 L 802 130" fill="none" stroke="#2456c4" stroke-width="1.4"/>
+  <path d="M 726 50 C 742 66, 786 66, 800 52" fill="none" stroke="#2456c4" stroke-width="1.2" marker-end="url(#arA)"/>
+  <path d="M 800 126 C 784 110, 742 110, 728 124" fill="none" stroke="#2456c4" stroke-width="1.2" marker-end="url(#arA)"/>
+  <rect x="716" y="80" width="96" height="22" rx="11" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="764" y="95" text-anchor="middle" font-size="11" fill="#2456c4">P(Hres) 双随机</text>
+  <text x="762" y="160" text-anchor="middle" fill="#2456c4" font-weight="bold">Hres = Sinkhorn(H̃res)</text>
+  <text x="762" y="180" text-anchor="middle" fill="#5a6272">行和=列和=1，‖H‖₂≤1，乘法封闭</text>
+  <text x="762" y="200" text-anchor="middle" fill="#5a6272">复合增益被压到 ~1.6 以内；n=1 退化为恒等</text>
+  <text x="762" y="220" text-anchor="middle" fill="#5a6272">Hpre/Hpost 加非负有界约束（σ / 2σ）</text>
+</svg>
+<p class="cap"><b>图 1</b>｜三种残差范式（仿论文 Fig 1）。残差连接靠恒等透传保证守恒；HC 用无约束可学习映射换取表达力，牺牲了守恒；mHC 只把流内混合 \(H^{res}\) 约束到双随机流形——「可混合、不放大」，读出/写回通道仅加轻量非负有界约束。</p>
+</div>
+
+<h3>2.2 参数化与 Sinkhorn-Knopp 投影</h3>
+<p>约束如何参与梯度训练？mHC 把「生成无约束原始系数 → 投影」做成可微流水线（式 7–8）。把流矩阵展平为 \(\bar{x}_l = \mathrm{vec}(x_l) \in \mathbb{R}^{nC}\)（保留全部流信息），归一化后经线性投影产生动态分量，加静态 bias（式 7）：</p>
+<div class="formula">\[ \bar{x}'_l = \mathrm{RMSNorm}(\bar{x}_l);\quad \tilde H^{pre}_l = \alpha^{pre}_l (\bar{x}'_l \varphi^{pre}_l) + b^{pre}_l,\quad \tilde H^{post}_l = \alpha^{post}_l (\bar{x}'_l \varphi^{post}_l) + b^{post}_l,\quad \tilde H^{res}_l = \alpha^{res}_l\, \mathrm{mat}(\bar{x}'_l \varphi^{res}_l) + b^{res}_l \]</div>
+<p>其中 \(\varphi^{pre},\varphi^{post} \in \mathbb{R}^{nC\times n}\)、\(\varphi^{res} \in \mathbb{R}^{nC\times n^2}\)，\(\mathrm{mat}(\cdot)\) 把 \(n^2\) 维向量重塑为 \(n\times n\) 矩阵。然后施加约束（式 8）：</p>
+<div class="formula">\[ H^{pre}_l = \sigma(\tilde H^{pre}_l),\qquad H^{post}_l = 2\sigma(\tilde H^{post}_l),\qquad H^{res}_l = \mathrm{Sinkhorn\!-\!Knopp}(\tilde H^{res}_l) \]</div>
+<p>Sinkhorn-Knopp 投影（式 9）：先取 \(M^{(0)} = \exp(\tilde H^{res}_l)\) 保证正性，再交替做行/列归一化</p>
+<div class="formula">\[ M^{(t)} = T_r\!\left(T_c(M^{(t-1)})\right) \]</div>
+<p>迭代收敛到双随机矩阵；实验取 \(t_{max}=20\) 次作为精度/开销折衷。指数化 + 交替归一化可理解为<b>熵正则化的流形投影</b>，整条路径可微，梯度可穿过 20 次迭代回传到 \(\varphi^{res}\)。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="arD" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <!-- 输入流 -->
+  <rect x="10" y="120" width="96" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="58" y="144" text-anchor="middle" fill="#1a1f2e">Xₗ</text>
+  <text x="58" y="162" text-anchor="middle" fill="#5a6272">n×d 流矩阵</text>
+  <!-- 系数支路 -->
+  <rect x="152" y="34" width="150" height="40" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="227" y="50" text-anchor="middle" fill="#1a1f2e">展平 → matmul(φ)</text>
+  <text x="227" y="66" text-anchor="middle" fill="#5a6272">×rsqrt（RMSNorm 后置）</text>
+  <rect x="348" y="34" width="120" height="40" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="408" y="50" text-anchor="middle" fill="#1a1f2e">24 个系数</text>
+  <text x="408" y="66" text-anchor="middle" fill="#5a6272">α·mix + b</text>
+  <!-- 三分支 -->
+  <rect x="520" y="14" width="130" height="32" rx="6" fill="#fff" stroke="#e8862a"/>
+  <text x="585" y="34" text-anchor="middle" fill="#1a1f2e">pre = σ(·)　读出</text>
+  <rect x="520" y="58" width="130" height="32" rx="6" fill="#fff" stroke="#4a9e6f"/>
+  <text x="585" y="78" text-anchor="middle" fill="#1a1f2e">post = 2σ(·)　写回</text>
+  <rect x="520" y="102" width="150" height="44" rx="6" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="595" y="120" text-anchor="middle" fill="#1a1f2e">comb = Sinkhorn(·)</text>
+  <text x="595" y="137" text-anchor="middle" fill="#5a6272">20 次行/列归一化 → 双随机</text>
+  <!-- 主干 -->
+  <rect x="152" y="126" width="150" height="40" rx="6" fill="#fff" stroke="#e8862a"/>
+  <text x="227" y="142" text-anchor="middle" fill="#1a1f2e">层输入 = Σ pre·Xₗ</text>
+  <text x="227" y="158" text-anchor="middle" fill="#5a6272">n 流加权求和 → d 维</text>
+  <rect x="348" y="126" width="120" height="40" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="408" y="150" text-anchor="middle" fill="#1a1f2e">RMSNorm → 层 F</text>
+  <text x="408" y="166" text-anchor="middle" fill="#5a6272">Attn / MoE</text>
+  <!-- 合并 -->
+  <rect x="720" y="96" width="150" height="76" rx="8" fill="#fff" stroke="#2456c4" stroke-width="1.4"/>
+  <text x="795" y="122" text-anchor="middle" fill="#1a1f2e">Xₗ₊₁ = comb·Xₗ</text>
+  <text x="795" y="140" text-anchor="middle" fill="#1a1f2e">+ post ⊗ F输出</text>
+  <text x="795" y="158" text-anchor="middle" fill="#5a6272">融合 kernel：读 (n+1)d</text>
+  <!-- 箭头 -->
+  <polyline points="106,132 128,132 128,54 152,54" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arD)"/>
+  <line x1="106" y1="146" x2="152" y2="146" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arD)"/>
+  <polyline points="106,160 128,160 128,236 740,236 740,172" fill="none" stroke="#c9d2e0" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="420" y="228" text-anchor="middle" font-size="11" fill="#5a6272">原始流 Xₗ 保留至合并步（残差主体）</text>
+  <line x1="302" y1="54" x2="348" y2="54" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arD)"/>
+  <polyline points="468,44 494,44 494,30 520,30" fill="none" stroke="#e8862a" stroke-width="1.4" marker-end="url(#arD)"/>
+  <polyline points="468,58 494,58 494,74 520,74" fill="none" stroke="#4a9e6f" stroke-width="1.4" marker-end="url(#arD)"/>
+  <polyline points="468,70 480,70 480,124 520,124" fill="none" stroke="#2456c4" stroke-width="1.4" marker-end="url(#arD)"/>
+  <line x1="302" y1="146" x2="348" y2="146" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arD)"/>
+  <polyline points="650,30 690,30 690,84 720,84 720,108" fill="none" stroke="#e8862a" stroke-width="1.4" marker-end="url(#arD)"/>
+  <polyline points="670,124 700,124 700,134 720,134" fill="none" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arD)"/>
+  <polyline points="468,146 490,146 490,188 660,188 660,148 720,148" fill="none" stroke="#4a9e6f" stroke-width="1.4" marker-end="url(#arD)"/>
+  <text x="565" y="204" text-anchor="middle" font-size="11" fill="#2e7351">层 F 输出（d 维）</text>
+</svg>
+<p class="cap"><b>图 2</b>｜mHC 单层数据流（对应官方实现 <code>Block.forward</code>）。系数支路把 n×d 流矩阵展平后与融合的投影矩阵 \(\varphi\) 做 matmul，<b>除以 RMS 范数挪到 matmul 之后</b>（数学等价，省一次大张量读写），产出 24 个原始系数；按语义拆成 pre（σ）、post（2σ）、comb（Sinkhorn ×20）三组。层输入 = pre 加权聚合的 d 维向量；层输出经 post 写回，与 comb 混合的原始流相加得到下一代流矩阵。</p>
+</div>
+
+<h3>2.3 工程设计：把 6.7% 开销磨出来（论文 §4.3）</h3>
+<p>mHC 论文一半篇幅在工程上，三条主线：</p>
+<ul>
+  <li><b>Kernel 融合</b>：RMSNorm 的除法重排到 matmul 之后（数学等价）；用 <a href="https://arxiv.org/abs/2504.17577">TileLang</a> 编写混合精度 kernel（\(\varphi\) 用 tf32、激活 bf16、系数 fp32）；Sinkhorn 迭代整体在单 kernel 内完成，反向用自定义 kernel 在片上重算中间结果再遍历迭代；\(H^{post}\) 写回 + \(H^{res}\) 混合 + 残差合并融合为一个 kernel，读从 \((3n{+}1)C\) 降到 \((n{+}1)C\)、写从 \(3nC\) 降到 \(nC\)；</li>
+  <li><b>选择性重算</b>：每 \(L_r\) 层只持久保存块首输入 \(x_{l_0}\)（\(\approx nC\)/token）与层函数输出，块内重算流状态与归一化输入；峰值显存由 \(nC\cdot\lceil L/L_r\rceil + (n{+}2)C\cdot L_r\) 决定，最优块大小 \(L^*_r = \sqrt{nL/(n{+}2)}\)——实测恰与流水线 stage 层数对齐，于是重算边界直接对齐流水线；</li>
+  <li><b>DualPipe 通信重叠扩展</b>：n 流使流水线 stage 边界通信量翻 n 倍；把 MLP 的 \(F_{post,res}\) kernel 放到<b>高优先级计算流</b>避免阻塞通信，attention 不用 persistent kernel 以便可被抢占，重算与流水线通信解耦（stage 首激活已在本地缓存）。</li>
+</ul>
+<p>综合效果：n=4 的大规模训练<b>仅 +6.7% 墙钟开销</b>（论文摘要；V4 论文 §3.4.2 口径为「1F1B 流水线 stage 的 6.7%」）。</p>
+
+<h2>3. 代码是怎么实现的</h2>
+
+<p>mHC 随 DeepSeek-V4-Pro 官方推理实现开源（与 V4 注意力报告同一仓库：<code>inference/model.py</code>、<code>inference/kernel.py</code>、<code>inference/config.json</code>）。以下代码摘自 <code>git clone --depth 1</code> 该仓库的实际文件，行号为文件内真实行号。</p>
+
+<h3>3.1 配置：n=4、20 次 Sinkhorn 迭代</h3>
+<pre><code class="language-json">"hc_mult": 4,            // n：流扩展率（残差流 n×d）
+"hc_sinkhorn_iters": 20, // Sinkhorn-Knopp 迭代次数 t_max
+</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/config.json:28-29</code>（<code>hc_eps: 1e-6</code 在 <code>model.py:80</code 作为默认值）。与论文附录 A.1 的 27B 实验配置（n=4、\(t_{max}=20\)、\(\alpha\) 初始化 0.01）一致。</p>
+
+<h3>3.2 <code>Block</code>：hc_pre / hc_post 与公式的逐行对应</h3>
+<pre><code class="language-python">class Block(nn.Module):
+    """Transformer block with Hyper-Connections (HC) mixing.
+    Instead of a simple residual, HC maintains `hc_mult` copies of the hidden state.
+    hc_pre: reduces hc copies -> 1 via learned weighted sum (pre-weights from Sinkhorn).
+    hc_post: expands 1 -> hc copies via learned post-weights + combination matrix."""
+    def __init__(self, layer_id: int, args: ModelArgs):
+        ...
+        self.hc_mult = hc_mult = args.hc_mult
+        mix_hc = (2 + hc_mult) * hc_mult        # n + n + n² = 24 个系数
+        hc_dim = hc_mult * args.dim
+        with set_dtype(torch.float32):
+            self.hc_attn_fn = nn.Parameter(torch.empty(mix_hc, hc_dim))   # φ（三组合一，含 RMSNorm 权重）
+            self.hc_ffn_fn = nn.Parameter(torch.empty(mix_hc, hc_dim))
+            self.hc_attn_base = nn.Parameter(torch.empty(mix_hc))         # 静态 bias b
+            self.hc_ffn_base = nn.Parameter(torch.empty(mix_hc))
+            self.hc_attn_scale = nn.Parameter(torch.empty(3))             # α_pre/α_post/α_res 门控
+            self.hc_ffn_scale = nn.Parameter(torch.empty(3))
+
+    def hc_pre(self, x: torch.Tensor, hc_fn, hc_scale, hc_base):
+        # x: [b,s,hc,d] -> 层输入 y: [b,s,d]，同时产出 post/comb 供 hc_post 使用
+        shape, dtype = x.size(), x.dtype
+        x = x.flatten(2).float()                                  # vec(X)：n×d → 1×n·d
+        rsqrt = torch.rsqrt(x.square().mean(-1, keepdim=True) + self.norm_eps)
+        mixes = F.linear(x, hc_fn) * rsqrt                        # 先 matmul 再除 RMS（论文 §4.3.1 等价重排）
+        pre, post, comb = hc_split_sinkhorn(mixes, hc_scale, hc_base, self.hc_mult, self.hc_sinkhorn_iters, self.hc_eps)
+        y = torch.sum(pre.unsqueeze(-1) * x.view(shape), dim=2)   # 层输入 = Σ_k pre[k]·X[k]
+        return y.to(dtype), post, comb
+
+    def hc_post(self, x: torch.Tensor, residual: torch.Tensor, post, comb):
+        # x: [b,s,d], residual: [b,s,hc,d] -> X_{l+1} = comb·X_l + post ⊗ x
+        y = post.unsqueeze(-1) * x.unsqueeze(-2) + torch.sum(comb.unsqueeze(-1) * residual.unsqueeze(-2), dim=2)
+        return y.type_as(x)
+
+    def forward(self, x: torch.Tensor, start_pos: int, input_ids):
+        residual = x
+        x, post, comb = self.hc_pre(x, self.hc_attn_fn, self.hc_attn_scale, self.hc_attn_base)
+        x = self.attn_norm(x)
+        x = self.attn(x, start_pos)
+        x = self.hc_post(x, residual, post, comb)                 # attention 子层后更新流
+
+        residual = x
+        x, post, comb = self.hc_pre(x, self.hc_ffn_fn, self.hc_ffn_scale, self.hc_ffn_base)
+        x = self.ffn_norm(x)
+        x = self.ffn(x, input_ids)
+        x = self.hc_post(x, residual, post, comb)                 # MoE 子层后再次更新流
+        return x</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/model.py:647-700</code>（有删节）。对照要点：每层内 <b>attention 与 MoE 各做一次完整的 mHC 更新</b>（即论文 Fig 3 把一个 block 拆成两层计数的口径）；\(\varphi\) 把三组投影折叠成单个 \([24, n\cdot d]\) 矩阵（attention/FFN 各一份），RMSNorm 权重按论文说法「absorbed in \(\varphi\)」；<code>F.linear(...) * rsqrt</code> 正是论文 §4.3.1 的「除以范数后置」等价重排；<code>hc_post</code> 一行完成式 (3) 的 \(B X + C\otimes F\) 两个乘加。</p>
+
+<h3>3.3 <code>hc_split_sinkhorn</code>：约束三分支的 TileLang 内核</h3>
+<pre><code class="language-python">def hc_split_sinkhorn_kernel(hc: int, sinkhorn_iters: int, eps: float):
+    n = T.symbolic("n")
+    mix_hc = (2 + hc) * hc          # 24
+
+    @T.prim_func
+    def hc_split_sinkhorn_kernel_(
+        mixes: T.Tensor[(n, mix_hc), FP32],      # 原始动态+静态融合系数
+        hc_scale: T.Tensor[(3,), FP32],
+        hc_base: T.Tensor[(mix_hc,), FP32],
+        pre: T.Tensor[(n, hc), FP32],            # Hpre（读出）
+        post: T.Tensor[(n, hc), FP32],           # Hpost（写回）
+        comb: T.Tensor[(n, hc, hc), FP32],       # Hres（流内混合）
+    ):
+        with T.Kernel(n, threads=threads) as i:
+            mixes_shared = T.alloc_shared(mix_hc, FP32)
+            comb_frag = T.alloc_fragment((hc, hc), FP32)
+            T.copy(mixes[i, :], mixes_shared)
+
+            for j in T.Parallel(hc):
+                pre[i, j] = T.sigmoid(mixes_shared[j] * hc_scale[0] + hc_base[j]) + eps
+            for j in T.Parallel(hc):
+                post[i, j] = 2 * T.sigmoid(mixes_shared[j + hc] * hc_scale[1] + hc_base[j + hc])
+            for j, k in T.Parallel(hc, hc):
+                comb_frag[j, k] = mixes_shared[j * hc + k + hc * 2] * hc_scale[2] + hc_base[j * hc + k + hc * 2]
+
+            # 第一轮：行 softmax（带 max 减除的数值稳定 exp+行归一化）
+            row_max = T.alloc_fragment(hc, FP32)
+            T.reduce_max(comb_frag, row_max, dim=1)
+            for j, k in T.Parallel(hc, hc):
+                comb_frag[j, k] = T.exp(comb_frag[j, k] - row_max[j])
+            T.reduce_sum(comb_frag, row_sum, dim=1)
+            for j, k in T.Parallel(hc, hc):
+                comb_frag[j, k] = comb_frag[j, k] / row_sum[j] + eps
+            # 列归一化
+            T.reduce_sum(comb_frag, col_sum, dim=0)
+            for j, k in T.Parallel(hc, hc):
+                comb_frag[j, k] = comb_frag[j, k] / (col_sum[k] + eps)
+
+            for _ in T.serial(sinkhorn_iters - 1):        # 共 20 轮行/列交替归一化
+                T.reduce_sum(comb_frag, row_sum, dim=1)
+                for j, k in T.Parallel(hc, hc):
+                    comb_frag[j, k] = comb_frag[j, k] / (row_sum[j] + eps)
+                T.reduce_sum(comb_frag, col_sum, dim=0)
+                for j, k in T.Parallel(hc, hc):
+                    comb_frag[j, k] = comb_frag[j, k] / (col_sum[k] + eps)
+
+            T.copy(comb_frag, comb[i, :, :])
+    return hc_split_sinkhorn_kernel_</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/kernel.py:372-427</code>（TileLang DSL，有删节；Python 包装 <code>hc_split_sinkhorn</code> 在 kernel.py:430-439）。24 个系数在前 24 维连续排布：前 n 个给 pre、中间 n 个给 post、后 n² 个给 comb；三组分别套 σ、2σ、Sinkhorn。整个投影逐 token（kernel 网格即 token 维）在单 kernel 内完成，与论文 §4.3.1「Sinkhorn 迭代在单个 kernel 内实现」对应。</p>
+
+<div class="infer">① 代码首轮用「减行最大值的 softmax」替代论文所述 \(\exp\) 后行归一化——数学上等价（softmax = exp 归一化），只是数值稳定的实现变体；② 每次归一化后加 <code>eps=1e-6</code> 防止零元素，属实现细节，论文未提及；③ 20 轮迭代 = 首轮 softmax+列归一化 + 后续 19 轮（行、列），与 \(t_{max}=20\) 对应。</div>
+
+<h3>3.4 代码 ↔ 公式对照表</h3>
+<table>
+  <tr><th>论文记号</th><th>代码</th><th>位置</th></tr>
+  <tr><td>\(\varphi\)（\(\varphi^{pre}/\varphi^{post}/\varphi^{res}\) 合一，含 RMSNorm 权重）</td><td><code>hc_attn_fn / hc_ffn_fn</code>: [24, n·d]</td><td>model.py:666-667</td></tr>
+  <tr><td>静态 bias \(b\)；门控 \(\alpha^{pre}/\alpha^{post}/\alpha^{res}\)</td><td><code>hc_*_base</code>: [24]；<code>hc_*_scale</code>: [3]</td><td>model.py:668-671</td></tr>
+  <tr><td>\(\bar{x}=\mathrm{vec}(X)\)，\(\bar{x}'\varphi\) 后除 RMS（§4.3.1 重排）</td><td><code>flatten(2) → F.linear(x, hc_fn) * rsqrt</code></td><td>model.py:676-678</td></tr>
+  <tr><td>\(H^{pre}=\sigma(\cdot)\)、\(H^{post}=2\sigma(\cdot)\)（式 8）</td><td><code>sigmoid(...)+eps</code> / <code>2*sigmoid(...)</code></td><td>kernel.py:386-390</td></tr>
+  <tr><td>\(H^{res}=\mathrm{Sinkhorn\!-\!Knopp}(\tilde H^{res})\)，\(t_{max}=20\)（式 9）</td><td>行 softmax + 19×（行、列归一化）</td><td>kernel.py:393-424</td></tr>
+  <tr><td>层输入 \(H^{pre} x\)（n 流 → d 维）</td><td><code>sum(pre.unsqueeze(-1) * x.view(shape), dim=2)</code></td><td>model.py:680</td></tr>
+  <tr><td>\(X_{l+1}=H^{res}X_l + (H^{post})^{\!\top}F\)（式 3）</td><td><code>hc_post</code> 的单行乘加</td><td>model.py:685</td></tr>
+  <tr><td>输入嵌入复制为 n 条流（\(x_{l_0}\) 初始化）</td><td><code>h.unsqueeze(2).repeat(1,1,hc_mult,1)</code></td><td>model.py:804-805</td></tr>
+  <tr><td>系数维度 \(n^2{+}2n=24\)（V4 论文 §3.3 确定性讨论）</td><td><code>mix_hc = (2+hc_mult)*hc_mult</code></td><td>model.py:663</td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜mHC 公式与官方推理代码的对应关系。V4 论文 §3.3 提到「mHC 的矩阵乘法输出维度只有 24」，小批量下被迫用 split-k，需特殊处理才能保持确定性——正对应 <code>mix_hc=24</code> 这个系数总量。</p>
+
+<div class="infer">LM 头与 MTP 也参与 mHC：<code>ParallelHead.hc_head</code>（model.py:728-734）用与 pre 同款的 <code>σ(·)+eps</code> 加权读出把 n 条流合成 logits 输入，<b>无 post/comb、无 Sinkhorn</b>——只有读出、没有流更新的位置天然不需要混合约束；输入侧把 embedding 复制 n 份初始化流矩阵（所有流从同一向量出发）。</div>
+
+<h2>4. 复杂度与效果对比</h2>
+
+<h3>4.1 稳定性：增益从 ~3000 到 ~1.6</h3>
+<table>
+  <tr><th>指标（27B，Amax Gain Magnitude）</th><th>HC</th><th>mHC</th></tr>
+  <tr><td>单层映射增益（前向/后向，理想值 1）</td><td>约 10¹⁻² 量级波动</td><td>≈1（Sinkhorn 近似使后向略偏）</td></tr>
+  <tr><td>复合映射增益峰值</td><td><b>≈3000</b>（爆炸）</td><td><b>≈1.6</b>（三个数量级改善）</td></tr>
+  <tr><td>训练动态</td><td>~12k 步 loss surge，grad norm 飙至 0.2+</td><td>与 baseline 同样平稳</td></tr>
+</table>
+<p class="cap"><b>表 4</b>｜论文 Fig 2/3/7。1.6 而非 1.0 的残差来自 \(t_{max}=20\) 的近似投影——20 次迭代未完全收敛，复合 60 层后误差累积但<b>有界</b>。论文 Fig 8 的矩阵可视化：mHC 学到的 \(H^{res}\) 近似对角占优 + 轻度流间混合，复合映射行/列和 ≈1；HC 则在增益大的层出现全路径失稳。</p>
+
+<h3>4.2 训练与下游（27B，262B tokens，MoE/MLA 架构）</h3>
+<table>
+  <tr><th>基准</th><th>Baseline</th><th>HC</th><th>mHC</th></tr>
+  <tr><td>BBH (EM, 3-shot)</td><td>43.8</td><td>48.9</td><td><b>51.0</b></td></tr>
+  <tr><td>DROP (F1, 3-shot)</td><td>47.0</td><td>51.6</td><td><b>53.9</b></td></tr>
+  <tr><td>GSM8K (EM, 8-shot)</td><td>46.7</td><td>53.2</td><td><b>53.8</b></td></tr>
+  <tr><td>HellaSwag (Acc, 10-shot)</td><td>73.7</td><td>74.3</td><td><b>74.7</b></td></tr>
+  <tr><td>MATH (EM, 4-shot)</td><td>22.0</td><td><b>26.4</b></td><td>26.0</td></tr>
+  <tr><td>MMLU (Acc, 5-shot)</td><td>59.0</td><td>63.0</td><td><b>63.4</b></td></tr>
+  <tr><td>PIQA (Acc, 0-shot)</td><td>78.5</td><td>79.9</td><td><b>80.5</b></td></tr>
+  <tr><td>TriviaQA (EM, 5-shot)</td><td>54.3</td><td>56.3</td><td><b>57.6</b></td></tr>
+</table>
+<p class="cap"><b>表 5</b>｜论文 Table 4。mHC 最终 loss 比 baseline 低 0.021；下游全面超 baseline、8 项中 7 项超 HC（MATH 略低于 HC 0.4）。相对 HC 的额外增益集中在推理类任务（BBH +2.1、DROP +2.3）。</p>
+
+<h3>4.3 Scaling</h3>
+<ul>
+  <li><b>Compute scaling</b>（3B→9B→27B，各自 compute-optimal 数据量）：相对 baseline 的 loss 优势随规模只有边际衰减（论文 Fig 6a）；</li>
+  <li><b>Token scaling</b>（3B 固定语料 1.05T tokens）：run 内动态同样保持优势（Fig 6b）；</li>
+  <li>实验配置（附录 A.1）：DeepSeek-V3 风格 MoE + MLA，27B 总参/4.14B 激活，30 层，dim 2560，n=4，\(\alpha\) 初始 0.01，AdamW β=(0.9, 0.95)。</li>
+</ul>
+
+<h2>5. 在 DeepSeek 产品线的落地</h2>
+
+<h3>5.1 DeepSeek-V4：1.6T 生产模型中的 mHC</h3>
+<p>V4 系列把 mHC 列为三大架构升级之一（另两项：CSA/HCA 混合注意力、Muon 优化器）。V4 论文 §2.2 完整复述了 mHC 设计（记号改为 \(A_l/B_l/C_l\)），配置与 mHC 论文一致（\(n_{hc}=4\)、\(t_{max}=20\)）。几个值得注意的生产细节：</p>
+<ul>
+  <li><b>优化器分工</b>（§2.4）：mHC 的静态 bias 与门控因子（代码中的 <code>hc_*_base / hc_*_scale</code>）用 <b>AdamW</b> 优化，其余矩阵参数用 Muon——标量/近标量参数不参与 Newton-Schulz 正交化；</li>
+  <li><b>训练框架</b>（§3.4.2）：融合 kernel（训练+推理）+ 选择性重算（重算层间隐状态与归一化输入、不重算计算密集操作）+ DualPipe 调整，把 mHC 墙钟开销压到 1F1B stage 的 <b>6.7%</b>；</li>
+  <li><b>确定性</b>（§3.3）：mHC 的 matmul 输出维度只有 24，小批量下需要 split-k，通过「分片输出 + 后续确定性规约」避免原子加导致的非确定累积。</li>
+</ul>
+
+<h3>5.2 DeepSeek-V4.1：Single-Pass mHC 与 Mega-mHC</h3>
+<p>V4.1 把 mHC 的显存流量砍半（§2.4.1）。推理实现的理想下界是每 token 读 \((n{+}1)d\)、写 \((n{+}1)d\)（合计 \((2n{+}2)d\)），但 V4 的多 pass 实现因数据依赖拆成三个串行 kernel，实际流量 \((4n{+}4)d\)——恰为下界两倍：</p>
+<table>
+  <tr><th>实现</th><th>激活流量（每 token）</th><th>说明</th></tr>
+  <tr><td>V4 多 pass（3 kernel 串行）</td><td>\((4n{+}4)d\) = 2× 下界</td><td>残差更新 → 系数计算 → 输入混合，各自读写一遍流</td></tr>
+  <tr><td>两 pass（折叠后）</td><td>\((3n{+}2)d\)</td><td>残差更新与系数计算共享一次流遍历；输入混合仍需第二次读 \(X_l\)</td></tr>
+  <tr><td><b>Single-Pass + Mega-mHC</b></td><td><b>\((2n{+}2)d\) = 达到下界</b></td><td>单 kernel 读一次写一次，激活流量较原实现<b>减半</b></td></tr>
+</table>
+<p class="cap"><b>表 6</b>｜V4.1 论文 §2.4.1 的 kernel 流量对比（n=4 时：20d → 14d → 10d）。</p>
+<p>关键改动很小：<b>把输入混合系数错开一层</b>——第 l 层用第 l−1 层生成的 \(A_{l-1}\) 而非 \(A_l\) 做输入混合：</p>
+<div class="formula">\[ X_{l+1} = B_l X_l + C_l\, F_l(A_{l-1} X_l),\qquad (A_l, B_l, C_l) = H(X_l) \]</div>
+<p>输入混合不再依赖本层刚算出的系数，「每个 tile 的 \(X_l\) 可同时用于输入混合与系数预测」，三步融合成单个 Mega-mHC kernel（含输入 pre-norm 与 FP8 转换，部署于 DeepGEMM）。错开一层带来一步的系数时延，<b>实测性能损失可忽略</b>；训练侧保留原多 kernel 实现（错位只改变各层应用哪份系数），部署侧才启用单 kernel。配置不变：扩展率 4、Sinkhorn 20 迭代；<b>45T token 多模态训练全程无不稳定</b>。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 170" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <line x1="300" y1="24" x2="300" y2="140" stroke="#e3e7ee"/>
+  <line x1="470" y1="24" x2="470" y2="140" stroke="#e3e7ee"/>
+  <line x1="640" y1="24" x2="640" y2="140" stroke="#e3e7ee"/>
+  <text x="160" y="50" text-anchor="end" fill="#1a1f2e">V4 多 pass（3 kernel）</text>
+  <rect x="170" y="34" width="600" height="22" rx="4" fill="#c9d2e0"/>
+  <text x="760" y="50" text-anchor="end" fill="#1a1f2e">(4n+4)d = 20d</text>
+  <text x="160" y="90" text-anchor="end" fill="#1a1f2e">两 pass（折叠）</text>
+  <rect x="170" y="74" width="420" height="22" rx="4" fill="#8fb3e8"/>
+  <text x="580" y="90" text-anchor="end" fill="#1a1f2e">(3n+2)d = 14d</text>
+  <text x="160" y="130" text-anchor="end" fill="#1a1f2e">Single-Pass（Mega-mHC）</text>
+  <rect x="170" y="114" width="300" height="22" rx="4" fill="#2456c4"/>
+  <text x="460" y="130" text-anchor="end" fill="#fff">下界 (2n+2)d = 10d</text>
+  <text x="170" y="158" text-anchor="middle" font-size="11" fill="#5a6272">0</text>
+  <text x="300" y="158" text-anchor="middle" font-size="11" fill="#5a6272">5d</text>
+  <text x="470" y="158" text-anchor="middle" font-size="11" fill="#5a6272">10d</text>
+  <text x="640" y="158" text-anchor="middle" font-size="11" fill="#5a6272">15d</text>
+  <text x="810" y="158" text-anchor="middle" font-size="11" fill="#5a6272">20d</text>
+</svg>
+<p class="cap"><b>图 3</b>｜mHC 激活显存流量演进（n=4，V4.1 论文 §2.4.1 口径）。Single-Pass 用「系数错开一层」消除 kernel 间数据依赖，使单融合 kernel 达到理论下界、流量较 V4 实现减半。</p>
+</div>
+
+<h2>6. 事实与推断的边界</h2>
+<ul>
+  <li><b>论文/源码证实</b>：所有公式、理论性质（非扩张、封闭性、Birkhoff 几何）、实验数字（增益 3000→1.6、loss −0.021、表 5 基准、6.7% 开销、\(L^*_r\) 公式）出自 <code>paper/mhc.pdf</code>；V4/V4.1 落地细节出自 <code>paper/deepseek_v4.pdf</code>（§2.2、§2.4、§3.3、§3.4.2）与 <code>paper/deepseek_v41.pdf</code>（§2.4.1、§4.2.1-4.2.2）；代码片段与行号来自 <code>/tmp/paper-research/v4-pro/inference/</code> 实际克隆内容（commit <code>b5968e9</code>，2026-09-14 抓取；<code>model.py</code>、<code>kernel.py</code>、<code>config.json</code>）。</li>
+  <li><b>推断（已标注）</b>：① §3.3 推断框中「首轮 softmax 是 exp+行归一化的数值稳定等价」「eps 为实现细节」；② <code>hc_head</code> 无需混合约束的解读；③ 表 2 中 n=4 的量级换算（21C/13C）。</li>
+  <li><b>未决</b>：① mHC 论文的 6.7% 与稳定性实验均为 DeepSeek in-house 规模，公开实验只到 27B/262B tokens，更大规模的对照数据未公开；② \(H^{pre}/H^{post}\) 的 σ/2σ 约束不保证读出/写入通道严格守恒（论文只论证了 \(H^{res}\) 的守恒性），稳定性保证是不完整的；③ 论文未提供 \(t_{max}\) 的敏感性消融（20 次的选取依据仅为「practical value」）。</li>
+</ul>
+
+<h2>7. 参考来源</h2>
+<ol class="refs">
+  <li>Xie, Z., Wei, Y., Cao, H., et al. <i>mHC: Manifold-Constrained Hyper-Connections</i>. arXiv:2512.24880, 2026.（本地 <code>paper/mhc.pdf</code>）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>. arXiv:2606.19348, 2026.（本地 <code>paper/deepseek_v4.pdf</code>，§2.2 mHC 架构、§3.3 确定性、§3.4.2 训练实现）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V4.1</i> 技术报告.（本地 <code>paper/deepseek_v41.pdf</code>，§2.4.1 Single-Pass mHC / Mega-mHC、§4.2 训练设置）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V4-Pro</i> 官方推理实现. <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro（inference/）</a>. commit <code>b5968e9</code>（2026-06-22），2026-09-14 抓取. 关键代码：<code>model.py</code>（<code>Block.hc_pre/hc_post</code>、<code>ParallelHead.hc_head</code>）、<code>kernel.py</code>（<code>hc_split_sinkhorn_kernel</code>）、<code>config.json</code>（<code>hc_mult=4</code>）.</li>
+  <li>Zhu, D., Huang, H., Huang, Z., et al. <i>Hyper-Connections</i>. arXiv:2409.19606, 2024.（HC 原论文）</li>
+  <li>Sinkhorn, R. &amp; Knopp, P. <i>Concerning Nonnegative Matrices and Doubly Stochastic Matrices</i>. Pacific J. Math. 21(2), 1967.（Sinkhorn-Knopp 迭代）</li>
+  <li>He, K., Zhang, X., Ren, S., Sun, J. <i>Identity Mappings in Deep Residual Networks</i>. ECCV 2016.（恒等映射性质）</li>
+  <li>Wang, L., et al. <i>TileLang: A Composable Tiled Programming Model for AI Systems</i>. arXiv:2504.17577, 2025.（mHC kernel 的实现语言）</li>
+</ol>
+
+<footer>生成于 2026-09-14 · paper-research 工作流 · 公式由 MathJax 3 渲染，代码高亮由 highlight.js 11.9 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

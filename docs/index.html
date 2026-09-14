@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM 论文研究报告</title>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.7; font-size: 16px;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: 1.7em; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 32px; font-size: 0.95em; }
+  .card {
+    display: block; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 22px; margin: 14px 0; text-decoration: none; color: inherit;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .card:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(36,86,196,.08); text-decoration: none; }
+  .card h2 { font-size: 1.08em; margin: 0 0 6px; color: var(--accent); }
+  .card p { margin: 2px 0; color: var(--muted); font-size: 0.88em; }
+  .card .tags { margin-top: 8px; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.8em; margin-right: 6px;
+  }
+  #err { color: var(--muted); font-size: 0.9em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LLM 论文研究报告</h1>
+  <p class="sub">按日期倒序排列 · 报告为自包含单文件 HTML，公式用 MathJax 渲染</p>
+  <div id="list"><p id="err">正在加载 reports.json …</p></div>
+</main>
+<script>
+fetch('reports.json')
+  .then(r => r.json())
+  .then(items => {
+    items.sort((a, b) => b.date.localeCompare(a.date));
+    const list = document.getElementById('list');
+    list.innerHTML = items.map(it =>
+      '<a class="card" href="' + it.slug + '.html">' +
+        '<h2>' + it.title + '</h2>' +
+        '<p>' + it.date + (it.paper ? ' · ' + it.paper : '') + '</p>' +
+        '<div class="tags">' +
+          (it.arxiv ? '<span class="pill">arXiv</span>' : '') +
+          (it.repo ? '<span class="pill">官方代码</span>' : '') +
+        '</div>' +
+      '</a>'
+    ).join('');
+  })
+  .catch(() => {
+    document.getElementById('err').textContent = 'reports.json 加载失败（如直接以 file:// 打开，请通过本地 HTTP 服务访问，例如：python3 -m http.server）。';
+  });
+</script>
+</body>
+</html>
