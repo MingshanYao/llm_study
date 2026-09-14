@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSA 压缩过程详解：DeepSeek-V4 压缩稀疏注意力的序列维压缩</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  nav.toc {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 20px; margin: 20px 0; font-size: 0.92em;
+  }
+  nav.toc b { color: var(--ink); }
+  nav.toc ol { margin: 6px 0 0; padding-left: 22px; }
+  nav.toc li { margin: 2px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>CSA 压缩过程详解：DeepSeek-V4 压缩稀疏注意力的序列维压缩</h1>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>日期：</b>2026-09-14　<b>主题：</b>压缩稀疏注意力（CSA）中「每 m=4 个 token 压成 1 条 KV entry」的压缩过程（论文式 9–12）</p>
+  <p style="margin:4px 0"><b>依据：</b><i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>（本地 <code>paper/deepseek_v4.pdf</code>，<a href="https://arxiv.org/abs/2606.19348">arXiv:2606.19348</a>）；官方参考实现 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">DeepSeek-V4-Pro <code>inference/model.py</code></a></p>
+  <p style="margin:4px 0"><b>姊妹篇：</b><a href="deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读：CSA 与 HCA</a>（整体架构、Indexer、核心注意力与效果对比在彼篇展开，本页只把「压缩」这一件事讲透）</p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>CSA 的压缩是一次<b>可学习门控池化（learned gated pooling）</b>：对每 m=4 个 token，用两条内容投影 \(C_a, C_b\) 和两条门控投影 \(Z_a, Z_b\)，按<b>重叠双分支</b>窗口取 2m=8 个候选 token，对候选做 softmax 得到「每个 token × 每个维度」的权重，再逐元素加权求和成一条 512 维的压缩 entry。压缩率 1/m=1/4，边界因重叠而平滑；entry 随后经 RMSNorm、部分 RoPE（只转最后 64 维）与 FP8/BF16 混合量化进入 KV cache，等待 Lightning Indexer 的 top-k 稀疏选择。每条 entry 约 576 B、摊到每 token 约 144 B（推断），只有 BF16 GQA8 基线（4096 B/token）的 3.5%。</p>
+</div>
+
+<nav class="toc">
+<b>目录</b>
+<ol>
+  <li><a href="#s1">压缩处在整个注意力的什么位置</a></li>
+  <li><a href="#s2">记号、形状与总公式</a></li>
+  <li><a href="#s3">压缩逐步拆解（投影 → 重叠窗口 → 门控 softmax → 加权求和 → 边界处理）</a></li>
+  <li><a href="#s4">压缩之后：归一化 → 部分 RoPE → 混合精度量化 → 缓存</a></li>
+  <li><a href="#s5">参考实现对照（<code>Compressor</code> 类）</a></li>
+  <li><a href="#s6">为什么这么设计（FAQ）</a></li>
+  <li><a href="#s7">CSA 与 HCA 的压缩对比</a></li>
+  <li><a href="#s8">成本账目</a></li>
+</ol>
+</nav>
+
+<h2 id="s1">1. 压缩处在整个注意力的什么位置</h2>
+
+<p>DeepSeek 的注意力优化有三个正交维度：<b>MLA 压「entry 大小」</b>（KV 头维度，576 元素/token）、<b>GQA 压「KV 头数」</b>、<b>V4 的 CSA/HCA 首次压「序列长度」</b>——把 n 个 token 的 KV 变成 n/m 条 entry。压缩器（Compressor）是 CSA 层所有后续动作的源头：Indexer 的打分对象、核心注意力的 K/V、KV cache 的主体，全部是压缩 entry。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m1a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <!-- 压缩过程 scope -->
+  <rect x="122" y="56" width="392" height="116" rx="10" fill="none" stroke="#2456c4" stroke-dasharray="6 4" opacity="0.7"/>
+  <text x="130" y="50" font-size="11" fill="#2456c4" font-weight="bold">压缩过程（本页聚焦）</text>
+  <!-- 输入 -->
+  <rect x="8" y="100" width="80" height="48" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="48" y="120" text-anchor="middle" fill="#1a1f2e">H</text>
+  <text x="48" y="138" text-anchor="middle" fill="#5a6272">(n×d)</text>
+  <!-- 压缩器 -->
+  <rect x="130" y="88" width="180" height="72" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-width="2"/>
+  <text x="220" y="110" text-anchor="middle" fill="#1a1f2e" font-weight="bold">压缩器 Compressor</text>
+  <text x="220" y="128" text-anchor="middle" fill="#5a6272">learned gated pooling</text>
+  <text x="220" y="146" text-anchor="middle" fill="#5a6272">m=4 · 重叠双分支</text>
+  <!-- 压缩 entry -->
+  <rect x="352" y="88" width="150" height="72" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="427" y="110" text-anchor="middle" fill="#1a1f2e" font-weight="bold">压缩 entry</text>
+  <text x="427" y="128" text-anchor="middle" fill="#5a6272">(n/m)×512</text>
+  <text x="427" y="146" text-anchor="middle" fill="#5a6272">FP8/BF16 存储</text>
+  <!-- Indexer -->
+  <rect x="544" y="20" width="150" height="52" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <text x="619" y="41" text-anchor="middle" fill="#5a6272">Lightning Indexer</text>
+  <text x="619" y="59" text-anchor="middle" fill="#5a6272">top-k=1024 选择</text>
+  <!-- 核心注意力 -->
+  <rect x="544" y="108" width="150" height="72" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <text x="619" y="130" text-anchor="middle" fill="#1a1f2e">核心注意力</text>
+  <text x="619" y="148" text-anchor="middle" fill="#5a6272">SKV-MQA：entry 即 K=V</text>
+  <text x="619" y="166" text-anchor="middle" fill="#5a6272">+ attn sink</text>
+  <!-- 滑窗 -->
+  <rect x="352" y="196" width="150" height="44" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <text x="427" y="214" text-anchor="middle" fill="#5a6272">滑窗 KV</text>
+  <text x="427" y="231" text-anchor="middle" fill="#5a6272">最近 128 token 未压缩</text>
+  <!-- 输出 -->
+  <rect x="736" y="108" width="116" height="72" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="794" y="134" text-anchor="middle" font-size="11" fill="#1a1f2e">输出反旋转(−i)</text>
+  <text x="794" y="152" text-anchor="middle" font-size="11" fill="#1a1f2e">分组输出投影</text>
+  <text x="794" y="168" text-anchor="middle" font-size="10" fill="#5a6272">wo_a → wo_b</text>
+  <!-- 箭头 -->
+  <line x1="88" y1="124" x2="130" y2="124" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="310" y1="124" x2="352" y2="124" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <polyline points="502,108 523,108 523,46 544,46" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="502" y1="140" x2="544" y2="140" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="619" y1="72" x2="619" y2="108" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <text x="627" y="94" font-size="10" fill="#5a6272">top-k 选中</text>
+  <polyline points="48,148 48,218 352,218" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <polyline points="502,218 619,218 619,180" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="694" y1="144" x2="736" y2="144" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+</svg>
+<p class="cap"><b>图 1</b>｜CSA 层数据流中的压缩器。三条支路共享输入 H：压缩器产出 KV cache 主体（压缩 entry，本页主题）；低秩 latent \(c^Q\) 一份两用（升维成查询头 + 喂给 Indexer 打分）；滑窗分支保留最近 128 个 token 的未压缩 KV，弥补压缩破坏的块内可见性。HCA 层没有 Indexer 分支，压缩率为 128 且全 entry 稠密参与（见 <a href="deepseek-v4-attention.html">主文档</a> §2.3 数据流图）。</p>
+</div>
+
+<p>一个容易混淆的顺序问题：CSA 是<b>先压缩、后稀疏</b>。压缩发生在序列维（4 个 token → 1 条 entry），稀疏选择发生在压缩之后（top-k=1024 条 entry）——Indexer 的打分对象已经是压缩 entry 而非原始 token，这使得索引器本身也只需在 1/4 长度的序列上工作。</p>
+
+<h2 id="s2">2. 记号、形状与总公式</h2>
+
+<p>设输入隐状态 \(H \in \mathbb{R}^{n \times d}\)（n 为序列长度），压缩率 m=4（V4-Pro 的 CSA 层），head 维度 c=512。压缩器的全部工作可以概括为两个公式（论文式 11–12）：</p>
+
+<div class="formula">\[ [\,S_a^{mi:m(i+1)-1};\, S_b^{m(i-1):mi-1}\,] = \mathrm{Softmax}_{row}\!\left([\,Z_a^{mi:m(i+1)-1} + B_a;\, Z_b^{m(i-1):mi-1} + B_b\,]\right) \]</div>
+<div class="formula">\[ C_i^{\mathrm{Comp}} = \sum_{j=mi}^{m(i+1)-1} S_j^a \odot C_j^a + \sum_{j=m(i-1)}^{mi-1} S_j^b \odot C_j^b \]</div>
+
+<p>其中 \(\odot\) 为 Hadamard 积（逐元素乘）。各对象的形状与实现对应如下：</p>
+
+<table>
+  <tr><th>记号</th><th>含义</th><th>形状（V4-Pro）</th><th>实现（model.py）</th></tr>
+  <tr><td>\(H\)</td><td>输入隐状态</td><td>\(n \times d\)</td><td><code>x</code></td></tr>
+  <tr><td>\(W^{KV}_a, W^{KV}_b\)</td><td>两条 KV 内容投影</td><td>\(d \to c\)（c=512）</td><td><code>wkv</code>（折叠成 <code>coff·c</code>=1024 宽）</td></tr>
+  <tr><td>\(W^{Z}_a, W^{Z}_b\)</td><td>两条门控分数投影</td><td>\(d \to c\)</td><td><code>wgate</code>（同上折叠）</td></tr>
+  <tr><td>\(B_a, B_b\)</td><td>窗口内可学习位置偏置</td><td>\(m \times c\)（各）</td><td><code>ape</code>（形状 <code>m × 2c</code>，两支各半）</td></tr>
+  <tr><td>\(S^a, S^b\)</td><td>门控权重（每 entry）</td><td>\(m \times c\)（各）</td><td><code>score.softmax(dim=2)</code></td></tr>
+  <tr><td>\(C_i^{\mathrm{Comp}}\)</td><td>第 i 条压缩 entry</td><td>\(c=512\)（每条）；\((n/m)\times 512\)（整体）</td><td>池化输出，再经 norm / RoPE / 量化</td></tr>
+</table>
+<p class="cap"><b>表 1</b>｜压缩器的记号与形状。压缩发生在「序列维」：输出 entry 数 = n/m，每条 entry 仍是 512 维——entry 的大小没有变，变的是<b>多少个 token 共享一条 entry</b>。</p>
+
+<h2 id="s3">3. 压缩逐步拆解</h2>
+
+<h3>3.1 第一步：两条投影轨（式 9）</h3>
+
+<p>对每个 token 的隐状态做两组独立投影，得到两套「内容」与两套「打分」：</p>
+<div class="formula">\[ C_a = H \cdot W_a^{KV},\quad C_b = H \cdot W_b^{KV};\qquad Z_a = H \cdot W_a^{Z},\quad Z_b = H \cdot W_b^{Z} \]</div>
+
+<p>\(C_a, C_b\) 是真正会被池化、缓存、参与注意力的<b>内容向量</b>；\(Z_a, Z_b\) 不进 cache，只在压缩时当<b>门控分数</b>用。为什么要两条轨而不是一条？这正是下一步「重叠双分支」的物料基础——两条独立学出来的投影，一条负责「本窗口视角」、一条负责「前一窗口视角」，等价于给边界两侧的 token 各配一套专属的表征通道。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 330" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m2a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <!-- 同列高亮：token t2 -->
+  <rect x="258" y="20" width="40" height="271" rx="4" fill="none" stroke="#b8c4da" stroke-dasharray="4 3"/>
+  <!-- token 行 -->
+  <g font-size="11">
+    <rect x="170" y="20" width="40" height="30" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="190" y="39" text-anchor="middle">t0</text>
+    <rect x="214" y="20" width="40" height="30" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="234" y="39" text-anchor="middle">t1</text>
+    <rect x="258" y="20" width="40" height="30" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="278" y="39" text-anchor="middle" fill="#2456c4">t2</text>
+    <rect x="302" y="20" width="40" height="30" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="322" y="39" text-anchor="middle">t3</text>
+    <rect x="346" y="20" width="40" height="30" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="366" y="39" text-anchor="middle">t4</text>
+    <rect x="390" y="20" width="40" height="30" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="410" y="39" text-anchor="middle">t5</text>
+    <rect x="434" y="20" width="40" height="30" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="454" y="39" text-anchor="middle">t6</text>
+    <rect x="478" y="20" width="40" height="30" rx="4" fill="#fff" stroke="#8ea6d8"/><text x="498" y="39" text-anchor="middle">t7</text>
+  </g>
+  <text x="344" y="70" text-anchor="middle" font-size="11" fill="#5a6272">输入 H ∈ R^(n×d)（示意 8 个 token）</text>
+  <!-- 投影盒 -->
+  <line x1="344" y1="50" x2="344" y2="78" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
+  <rect x="234" y="78" width="220" height="36" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="344" y="94" text-anchor="middle" font-size="11" fill="#1a1f2e">4 条线性投影</text>
+  <text x="344" y="108" text-anchor="middle" font-size="10" fill="#5a6272">W_a^KV · W_b^KV · W_a^Z · W_b^Z（可学习）</text>
+  <!-- 扇出 -->
+  <line x1="344" y1="114" x2="162" y2="152" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m2a)"/>
+  <line x1="344" y1="114" x2="162" y2="192" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m2a)"/>
+  <line x1="344" y1="114" x2="162" y2="232" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m2a)"/>
+  <line x1="344" y1="114" x2="162" y2="272" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m2a)"/>
+  <!-- 轨 1：C_a -->
+  <g font-size="10">
+    <rect x="170" y="139" width="40" height="26" fill="#dbe6f8" stroke="#2456c4"/><rect x="214" y="139" width="40" height="26" fill="#dbe6f8" stroke="#2456c4"/><rect x="258" y="139" width="40" height="26" fill="#dbe6f8" stroke="#2456c4"/><rect x="302" y="139" width="40" height="26" fill="#dbe6f8" stroke="#2456c4"/><rect x="346" y="139" width="40" height="26" fill="#dbe6f8" stroke="#2456c4"/><rect x="390" y="139" width="40" height="26" fill="#dbe6f8" stroke="#2456c4"/><rect x="434" y="139" width="40" height="26" fill="#dbe6f8" stroke="#2456c4"/><rect x="478" y="139" width="40" height="26" fill="#dbe6f8" stroke="#2456c4"/>
+  </g>
+  <text x="534" y="147" font-size="11" fill="#2456c4" font-weight="bold">内容轨 A</text>
+  <text x="534" y="163" font-size="11" fill="#5a6272">C_a = H·W_a^KV，c=512</text>
+  <!-- 轨 2：C_b -->
+  <g font-size="10">
+    <rect x="170" y="179" width="40" height="26" fill="#fbe3cc" stroke="#e8862a"/><rect x="214" y="179" width="40" height="26" fill="#fbe3cc" stroke="#e8862a"/><rect x="258" y="179" width="40" height="26" fill="#fbe3cc" stroke="#e8862a"/><rect x="302" y="179" width="40" height="26" fill="#fbe3cc" stroke="#e8862a"/><rect x="346" y="179" width="40" height="26" fill="#fbe3cc" stroke="#e8862a"/><rect x="390" y="179" width="40" height="26" fill="#fbe3cc" stroke="#e8862a"/><rect x="434" y="179" width="40" height="26" fill="#fbe3cc" stroke="#e8862a"/><rect x="478" y="179" width="40" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  </g>
+  <text x="534" y="187" font-size="11" fill="#b05e10" font-weight="bold">内容轨 B</text>
+  <text x="534" y="203" font-size="11" fill="#5a6272">C_b = H·W_b^KV，c=512</text>
+  <!-- 轨 3：Z_a -->
+  <g font-size="10">
+    <rect x="170" y="219" width="40" height="26" fill="#d9f0e2" stroke="#2f9e63"/><rect x="214" y="219" width="40" height="26" fill="#d9f0e2" stroke="#2f9e63"/><rect x="258" y="219" width="40" height="26" fill="#d9f0e2" stroke="#2f9e63"/><rect x="302" y="219" width="40" height="26" fill="#d9f0e2" stroke="#2f9e63"/><rect x="346" y="219" width="40" height="26" fill="#d9f0e2" stroke="#2f9e63"/><rect x="390" y="219" width="40" height="26" fill="#d9f0e2" stroke="#2f9e63"/><rect x="434" y="219" width="40" height="26" fill="#d9f0e2" stroke="#2f9e63"/><rect x="478" y="219" width="40" height="26" fill="#d9f0e2" stroke="#2f9e63"/>
+  </g>
+  <text x="534" y="227" font-size="11" fill="#1d7a4a" font-weight="bold">门控轨 A</text>
+  <text x="534" y="243" font-size="11" fill="#5a6272">Z_a = H·W_a^Z（池化用的分数）</text>
+  <!-- 轨 4：Z_b -->
+  <g font-size="10">
+    <rect x="170" y="259" width="40" height="26" fill="#c4e6d2" stroke="#1d7a4a"/><rect x="214" y="259" width="40" height="26" fill="#c4e6d2" stroke="#1d7a4a"/><rect x="258" y="259" width="40" height="26" fill="#c4e6d2" stroke="#1d7a4a"/><rect x="302" y="259" width="40" height="26" fill="#c4e6d2" stroke="#1d7a4a"/><rect x="346" y="259" width="40" height="26" fill="#c4e6d2" stroke="#1d7a4a"/><rect x="390" y="259" width="40" height="26" fill="#c4e6d2" stroke="#1d7a4a"/><rect x="434" y="259" width="40" height="26" fill="#c4e6d2" stroke="#1d7a4a"/><rect x="478" y="259" width="40" height="26" fill="#c4e6d2" stroke="#1d7a4a"/>
+  </g>
+  <text x="534" y="267" font-size="11" fill="#1d7a4a" font-weight="bold">门控轨 B</text>
+  <text x="534" y="283" font-size="11" fill="#5a6272">Z_b = H·W_b^Z（池化用的分数）</text>
+  <text x="278" y="304" text-anchor="middle" font-size="10" fill="#5a6272">同一列 = 同一个 token 的 4 个输出向量</text>
+  <text x="170" y="324" font-size="11" fill="#5a6272">注：实现把 C_a/C_b 折叠进 1024 维（=2c）宽的 <tspan font-family="monospace">wkv</tspan>、Z_a/Z_b 折叠进同宽的 <tspan font-family="monospace">wgate</tspan>，数学等价（§5）。</text>
+</svg>
+<p class="cap"><b>图 2</b>｜压缩器的四条输出轨。内容轨 \(C_a, C_b\) 与门控轨 \(Z_a, Z_b\) 两两配对；门控轨不进 KV cache，只在压缩瞬间使用。高亮列示意：token t2 在四条轨上各得到一个 512 维向量。</p>
+</div>
+
+<h3>3.2 第二步：重叠双分支窗口（式 11 的取段）</h3>
+
+<p>第 i 条压缩 entry 不只取「本窗口」的 m 个 token，而是取 <b>2m=8 个候选</b>：</p>
+<ul>
+  <li>\(C_a\) 分支取第 \([mi,\ m(i+1)-1]\) 段——<b>本窗口</b>；</li>
+  <li>\(C_b\) 分支取第 \([m(i-1),\ mi-1]\) 段——<b>前一窗口</b>。</li>
+</ul>
+<p>于是相邻两条 entry 共享一个窗口：窗口 i 的 token 既经 \(C_a\) 进入 entry i，又经 \(C_b\) 进入 entry i+1。除序列最后一个窗口外，每个 token 的信息都会进入两条相邻 entry——压缩边界处的语义不会在任一 entry 中被「拦腰截断」，等效压缩率仍为 1/m（论文 p.10）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m3a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker><marker id="m3b" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#e8862a"/></marker><marker id="m3c" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2456c4"/></marker></defs>
+  <!-- token 行：20 个 -->
+  <g font-size="9" fill="#5a6272">
+    <rect x="48" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="65" y="58" text-anchor="middle">t0</text>
+    <rect x="86" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="103" y="58" text-anchor="middle">t1</text>
+    <rect x="124" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="141" y="58" text-anchor="middle">t2</text>
+    <rect x="162" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="179" y="58" text-anchor="middle">t3</text>
+    <rect x="200" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="217" y="58" text-anchor="middle">t4</text>
+    <rect x="238" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="255" y="58" text-anchor="middle">t5</text>
+    <rect x="276" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="293" y="58" text-anchor="middle">t6</text>
+    <rect x="314" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="331" y="58" text-anchor="middle">t7</text>
+    <rect x="352" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="369" y="58" text-anchor="middle">t8</text>
+    <rect x="390" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="407" y="58" text-anchor="middle">t9</text>
+    <rect x="428" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="445" y="58" text-anchor="middle">t10</text>
+    <rect x="466" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="483" y="58" text-anchor="middle">t11</text>
+    <rect x="504" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="521" y="58" text-anchor="middle">t12</text>
+    <rect x="542" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="559" y="58" text-anchor="middle">t13</text>
+    <rect x="580" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="597" y="58" text-anchor="middle">t14</text>
+    <rect x="618" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="635" y="58" text-anchor="middle">t15</text>
+    <rect x="656" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="673" y="58" text-anchor="middle">t16</text>
+    <rect x="694" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="711" y="58" text-anchor="middle">t17</text>
+    <rect x="732" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="749" y="58" text-anchor="middle">t18</text>
+    <rect x="770" y="40" width="34" height="28" fill="#fff" stroke="#c9d2e0"/><text x="787" y="58" text-anchor="middle">t19</text>
+  </g>
+  <!-- 窗口虚线框 -->
+  <g fill="none" stroke="#b8c4da" stroke-dasharray="4 3">
+    <rect x="46" y="36" width="152" height="36" rx="5"/>
+    <rect x="198" y="36" width="152" height="36" rx="5"/>
+    <rect x="350" y="36" width="152" height="36" rx="5"/>
+    <rect x="502" y="36" width="152" height="36" rx="5"/>
+    <rect x="654" y="36" width="152" height="36" rx="5"/>
+  </g>
+  <!-- 高亮窗口1 -->
+  <rect x="198" y="36" width="152" height="36" rx="5" fill="#eef3fc" opacity="0.55"/>
+  <rect x="198" y="36" width="152" height="36" rx="5" fill="none" stroke="#2456c4" stroke-dasharray="4 3"/>
+  <g font-size="10" fill="#5a6272" text-anchor="middle">
+    <text x="122" y="30">窗口0 · t0–3</text>
+    <text x="274" y="30" fill="#2456c4" font-weight="bold">窗口1 · t4–7</text>
+    <text x="426" y="30">窗口2 · t8–11</text>
+    <text x="578" y="30">窗口3 · t12–15</text>
+    <text x="730" y="30">窗口4 · t16–19</text>
+  </g>
+  <!-- C_a 轨 -->
+  <text x="40" y="105" text-anchor="end" font-size="11" fill="#2456c4">C_a 轨</text>
+  <g font-size="10" fill="#fff" text-anchor="middle">
+    <rect x="48" y="92" width="148" height="20" rx="4" fill="#2456c4" opacity="0.85"/><text x="122" y="106">→ e0</text>
+    <rect x="200" y="92" width="148" height="20" rx="4" fill="#2456c4" opacity="0.85"/><text x="274" y="106">→ e1</text>
+    <rect x="352" y="92" width="148" height="20" rx="4" fill="#2456c4" opacity="0.85"/><text x="426" y="106">→ e2</text>
+    <rect x="504" y="92" width="148" height="20" rx="4" fill="#2456c4" opacity="0.85"/><text x="578" y="106">→ e3</text>
+    <rect x="656" y="92" width="148" height="20" rx="4" fill="#2456c4" opacity="0.85"/><text x="730" y="106">→ e4</text>
+  </g>
+  <!-- C_b 轨 -->
+  <text x="40" y="149" text-anchor="end" font-size="11" fill="#b05e10">C_b 轨</text>
+  <g font-size="10" fill="#fff" text-anchor="middle">
+    <rect x="48" y="136" width="148" height="20" rx="4" fill="#e8862a" opacity="0.85"/><text x="122" y="150">→ e1</text>
+    <rect x="200" y="136" width="148" height="20" rx="4" fill="#e8862a" opacity="0.85"/><text x="274" y="150">→ e2</text>
+    <rect x="352" y="136" width="148" height="20" rx="4" fill="#e8862a" opacity="0.85"/><text x="426" y="150">→ e3</text>
+    <rect x="504" y="136" width="148" height="20" rx="4" fill="#e8862a" opacity="0.85"/><text x="578" y="150">→ e4</text>
+    <rect x="656" y="136" width="148" height="20" rx="4" fill="none" stroke="#c9d2e0" stroke-dasharray="4 3"/><text x="730" y="150" fill="#5a6272">→ e5（图外）</text>
+  </g>
+  <!-- 蓝色箭头（直下） -->
+  <g stroke="#2456c4" stroke-width="1.3">
+    <line x1="122" y1="112" x2="122" y2="192" marker-end="url(#m3c)"/>
+    <line x1="274" y1="112" x2="274" y2="192" marker-end="url(#m3c)"/>
+    <line x1="426" y1="112" x2="426" y2="192" marker-end="url(#m3c)"/>
+    <line x1="578" y1="112" x2="578" y2="192" marker-end="url(#m3c)"/>
+    <line x1="730" y1="112" x2="730" y2="192" marker-end="url(#m3c)"/>
+  </g>
+  <!-- 橙色箭头（右移一窗） -->
+  <g stroke="#e8862a" stroke-width="1.3" fill="none">
+    <polyline points="122,156 122,178 250,178 250,192" marker-end="url(#m3b)"/>
+    <polyline points="274,156 274,178 402,178 402,192" marker-end="url(#m3b)"/>
+    <polyline points="426,156 426,178 554,178 554,192" marker-end="url(#m3b)"/>
+    <polyline points="578,156 578,178 706,178 706,192" marker-end="url(#m3b)"/>
+  </g>
+  <!-- entry 行 -->
+  <g font-size="10" text-anchor="middle">
+    <rect x="48" y="196" width="148" height="46" rx="7" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="122" y="214" font-size="11" fill="#1a1f2e" font-weight="bold">entry 0</text>
+    <text x="122" y="231"><tspan fill="#2456c4">A←窗0</tspan><tspan dx="4" fill="#9aa2b1">｜B←无(−∞)</tspan></text>
+    <rect x="200" y="196" width="148" height="46" rx="7" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="274" y="214" font-size="11" fill="#1a1f2e" font-weight="bold">entry 1</text>
+    <text x="274" y="231"><tspan fill="#2456c4">A←窗1</tspan><tspan dx="4" fill="#b05e10">｜B←窗0</tspan></text>
+    <rect x="352" y="196" width="148" height="46" rx="7" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="426" y="214" font-size="11" fill="#1a1f2e" font-weight="bold">entry 2</text>
+    <text x="426" y="231"><tspan fill="#2456c4">A←窗2</tspan><tspan dx="4" fill="#b05e10">｜B←窗1</tspan></text>
+    <rect x="504" y="196" width="148" height="46" rx="7" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="578" y="214" font-size="11" fill="#1a1f2e" font-weight="bold">entry 3</text>
+    <text x="578" y="231"><tspan fill="#2456c4">A←窗3</tspan><tspan dx="4" fill="#b05e10">｜B←窗2</tspan></text>
+    <rect x="656" y="196" width="148" height="46" rx="7" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="730" y="214" font-size="11" fill="#1a1f2e" font-weight="bold">entry 4</text>
+    <text x="730" y="231"><tspan fill="#2456c4">A←窗4</tspan><tspan dx="4" fill="#b05e10">｜B←窗3</tspan></text>
+  </g>
+  <text x="48" y="272" font-size="11" fill="#5a6272">高亮的窗口1：经 C_a 轨进入 entry 1，又经 C_b 轨进入 entry 2——每个 token 的信息都进入两条相邻 entry（首尾窗口除外），</text>
+  <text x="48" y="288" font-size="11" fill="#5a6272">压缩边界平滑、等效压缩率仍为 1/m。entry 0 的前一窗口不存在（−∞ 掩码，见图 5）。</text>
+</svg>
+<p class="cap"><b>图 3</b>｜重叠双分支的窗口划分（m=4，示意 20 个 token / 5 个窗口）。蓝轨（\(C_a\)）取本窗口，橙轨（\(C_b\)）错后一窗取前一窗口，两轨信息相加成一条 entry：每条 entry 由 2m=8 个候选 token 汇聚而成，entry 数仍是 n/m。</p>
+</div>
+
+<h3>3.3 第三步：门控权重 Softmax(Z+B)（式 11）</h3>
+
+<p>对 2m 个候选，用门控分数加可学习位置偏置做归一化，得到权重：</p>
+<div class="formula">\[ S = \mathrm{Softmax}_{row}\!\left([\,Z_a^{mi:m(i+1)-1} + B_a;\, Z_b^{m(i-1):mi-1} + B_b\,]\right) \]</div>
+
+<p>三个关键性质：</p>
+<ul>
+  <li><b>权重与内容同维</b>：\(S_j \in \mathbb{R}^{c}\)（c=512），每个 token 在<b>每个维度上</b>都有一个权重，而非一个标量——模型可以表达「这个 token 的哪些维度值得保留、哪些抹掉」；</li>
+  <li><b>位置偏置 \(B_a, B_b \in \mathbb{R}^{m \times c}\)</b>：窗口内 4 个位置各有一套可学习偏置（逐维），让池化对「token 在窗口内的相对位置」敏感（比如句尾 token 常携带收束信息）；</li>
+  <li><b>Softmax 保证有界</b>：权重经过归一化，池化结果的量纲稳定，不会因个别 token 的 \(Z\) 分数过大而爆炸。</li>
+</ul>
+
+<div class="infer">关于归一化的轴：论文把 2m 个候选记作一次 \(\mathrm{Softmax}_{row}\)；参考实现中两支<b>各自</b>在自己的 m 个候选上做 softmax（<code>score.softmax(dim=2)</code> 作用在 token 维——每一维在 4 个候选 token 间形成一个分布），再把两支的加权和相加，与式 (12) 的「两支之和」一致（见 §5 代码）。图 4 按「每列（每个维度）在候选间归一化」的口径绘制。</div>
+
+<div class="fig">
+<svg viewBox="0 0 860 270" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m4a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <!-- 候选矩阵 -->
+  <text x="130" y="28" text-anchor="middle" font-size="11" fill="#5a6272">候选矩阵（2m=8 行 × c=512 列，示意 4 列）</text>
+  <g>
+    <rect x="40" y="40"  width="180" height="20" fill="#dbe6f8"/><rect x="40" y="60"  width="180" height="20" fill="#dbe6f8"/><rect x="40" y="80"  width="180" height="20" fill="#dbe6f8"/><rect x="40" y="100" width="180" height="20" fill="#dbe6f8"/>
+    <rect x="40" y="120" width="180" height="20" fill="#fbe3cc"/><rect x="40" y="140" width="180" height="20" fill="#fbe3cc"/><rect x="40" y="160" width="180" height="20" fill="#fbe3cc"/><rect x="40" y="180" width="180" height="20" fill="#fbe3cc"/>
+    <g stroke="#fff" stroke-width="1.4">
+      <line x1="40" y1="60" x2="220" y2="60"/><line x1="40" y1="80" x2="220" y2="80"/><line x1="40" y1="100" x2="220" y2="100"/><line x1="40" y1="120" x2="220" y2="120"/><line x1="40" y1="140" x2="220" y2="140"/><line x1="40" y1="160" x2="220" y2="160"/><line x1="40" y1="180" x2="220" y2="180"/>
+    </g>
+    <g stroke="#c9d2e0" stroke-dasharray="3 3">
+      <line x1="85" y1="40" x2="85" y2="200"/><line x1="130" y1="40" x2="130" y2="200"/><line x1="175" y1="40" x2="175" y2="200"/>
+    </g>
+    <rect x="40" y="40" width="180" height="160" fill="none" stroke="#8ea6d8"/>
+  </g>
+  <g font-size="9" fill="#5a6272" text-anchor="end">
+    <text x="34" y="54">t8</text><text x="34" y="74">t9</text><text x="34" y="94">t10</text><text x="34" y="114">t11</text>
+    <text x="34" y="134">t4</text><text x="34" y="154">t5</text><text x="34" y="174">t6</text><text x="34" y="194">t7</text>
+  </g>
+  <text x="40" y="218" font-size="11" fill="#2456c4">■ C_a：t8–11（窗口2）</text>
+  <text x="40" y="234" font-size="11" fill="#b05e10">■ C_b：t4–7（窗口1）</text>
+  <!-- 权重网格 S^a -->
+  <text x="355" y="42" text-anchor="middle" font-size="10" fill="#1d7a4a">S^a = Softmax(Z_a+B_a)</text>
+  <g>
+    <rect x="300" y="48" width="110" height="72" fill="#d9f0e2" stroke="#2f9e63"/>
+    <rect x="300" y="48"  width="27.5" height="18" fill="#9fd6b8"/><rect x="327.5" y="66" width="27.5" height="18" fill="#9fd6b8"/><rect x="355" y="48"  width="27.5" height="18" fill="#9fd6b8"/><rect x="382.5" y="102" width="27.5" height="18" fill="#9fd6b8"/>
+    <g stroke="#fff" stroke-width="1.2">
+      <line x1="300" y1="66" x2="410" y2="66"/><line x1="300" y1="84" x2="410" y2="84"/><line x1="300" y1="102" x2="410" y2="102"/>
+      <line x1="327.5" y1="48" x2="327.5" y2="120"/><line x1="355" y1="48" x2="355" y2="120"/><line x1="382.5" y1="48" x2="382.5" y2="120"/>
+    </g>
+  </g>
+  <!-- 权重网格 S^b -->
+  <text x="355" y="146" text-anchor="middle" font-size="10" fill="#1d7a4a">S^b = Softmax(Z_b+B_b)</text>
+  <g>
+    <rect x="300" y="152" width="110" height="72" fill="#d9f0e2" stroke="#2f9e63"/>
+    <rect x="327.5" y="152" width="27.5" height="18" fill="#9fd6b8"/><rect x="300" y="188" width="27.5" height="18" fill="#9fd6b8"/><rect x="382.5" y="170" width="27.5" height="18" fill="#9fd6b8"/><rect x="355" y="206" width="27.5" height="18" fill="#9fd6b8"/>
+    <g stroke="#fff" stroke-width="1.2">
+      <line x1="300" y1="170" x2="410" y2="170"/><line x1="300" y1="188" x2="410" y2="188"/><line x1="300" y1="206" x2="410" y2="206"/>
+      <line x1="327.5" y1="152" x2="327.5" y2="224"/><line x1="355" y1="152" x2="355" y2="224"/><line x1="382.5" y1="152" x2="382.5" y2="224"/>
+    </g>
+  </g>
+  <text x="355" y="240" text-anchor="middle" font-size="9" fill="#5a6272">每列（每个维度）在 4 个候选上归一化</text>
+  <!-- 池化盒 -->
+  <line x1="220" y1="136" x2="470" y2="136" stroke="#5a6272" stroke-width="1.3" marker-end="url(#m4a)"/>
+  <text x="252" y="130" font-size="9" fill="#5a6272">C（8×512）</text>
+  <line x1="410" y1="84" x2="468" y2="102" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m4a)"/>
+  <line x1="410" y1="188" x2="468" y2="142" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m4a)"/>
+  <rect x="470" y="88" width="110" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="525" y="112" text-anchor="middle" font-size="13" fill="#1a1f2e" font-weight="bold">⊙ → Σ</text>
+  <text x="525" y="130" text-anchor="middle" font-size="9" fill="#5a6272">逐元素相乘</text>
+  <text x="525" y="144" text-anchor="middle" font-size="9" fill="#5a6272">沿 token 维求和</text>
+  <line x1="580" y1="120" x2="660" y2="120" stroke="#5a6272" stroke-width="1.3" marker-end="url(#m4a)"/>
+  <!-- 输出 -->
+  <rect x="660" y="92" width="150" height="56" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-width="2"/>
+  <text x="735" y="114" text-anchor="middle" font-size="12" fill="#1a1f2e" font-weight="bold">C₂^Comp</text>
+  <text x="735" y="132" text-anchor="middle" font-size="10" fill="#5a6272">一条 512 维 entry</text>
+  <text x="40" y="262" font-size="11" fill="#5a6272">以 entry 2 为例：权重与内容同维（c 维向量），不是标量——模型按「token × 维度」决定保留什么；Σ 对 8 个候选求和（两支各 4 个）。</text>
+</svg>
+<p class="cap"><b>图 4</b>｜门控池化的矩阵视角（式 11–12）。左侧是 2m=8 个候选内容向量，中间是两支门控权重（深色格示意较大权重），逐元素相乘后沿候选维求和得到一条 entry。深浅不一的格子强调：权重是学出来的、逐 token 逐维度的，不是均匀平均。</p>
+</div>
+
+<h3>3.4 第四步：Hadamard 加权求和成 entry（式 12）</h3>
+
+<div class="formula">\[ C_i^{\mathrm{Comp}} = \sum_{j=mi}^{m(i+1)-1} S_j^a \odot C_j^a \;+\; \sum_{j=m(i-1)}^{mi-1} S_j^b \odot C_j^b \]</div>
+
+<p>两条分支各产出一个 512 维向量，相加即第 i 条 entry。整个池化只有逐元素乘与求和两种运算，没有矩阵乘、没有注意力——这是它能够便宜地对<b>全序列每个 token</b> 都执行一遍的原因；压缩器的开销相对于它省下的注意力算力可以忽略（推断）。至此，序列长度 n 的 KV 变成了 n/m 条 entry，<b>等效压缩率 1/m</b>。</p>
+
+<h3>3.5 边界细节：第一条 entry 的「前一窗口」不存在怎么办</h3>
+
+<p>entry 0 的 \(C_b\) 取段 \([m(i-1),\ mi-1]\) 在 i=0 时指向窗口 −1，并不存在。参考实现的处理是<b>补值</b>：错位后空出的候选槽位，内容侧补 0、分数侧补 −∞——−∞ 经 softmax 归一化后权重恰为 0，等价于「不存在的窗口不参与池化」。序列末尾对称地少一次复用（最后一个窗口不再进入下一条 entry）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 240" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m5a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2456c4"/></marker><marker id="m5b" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#e8862a"/></marker><marker id="m5c" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#c9d2e0"/></marker></defs>
+  <!-- token 行 -->
+  <g font-size="10" fill="#5a6272">
+    <rect x="36" y="30" width="44" height="26" fill="#fff" stroke="#c9d2e0"/><text x="58" y="47" text-anchor="middle">t0</text>
+    <rect x="84" y="30" width="44" height="26" fill="#fff" stroke="#c9d2e0"/><text x="106" y="47" text-anchor="middle">t1</text>
+    <rect x="132" y="30" width="44" height="26" fill="#fff" stroke="#c9d2e0"/><text x="154" y="47" text-anchor="middle">t2</text>
+    <rect x="180" y="30" width="44" height="26" fill="#fff" stroke="#c9d2e0"/><text x="202" y="47" text-anchor="middle">t3</text>
+    <rect x="228" y="30" width="44" height="26" fill="#fff" stroke="#c9d2e0"/><text x="250" y="47" text-anchor="middle">t4</text>
+    <rect x="276" y="30" width="44" height="26" fill="#fff" stroke="#c9d2e0"/><text x="298" y="47" text-anchor="middle">t5</text>
+    <rect x="324" y="30" width="44" height="26" fill="#fff" stroke="#c9d2e0"/><text x="346" y="47" text-anchor="middle">t6</text>
+    <rect x="372" y="30" width="44" height="26" fill="#fff" stroke="#c9d2e0"/><text x="394" y="47" text-anchor="middle">t7</text>
+  </g>
+  <g fill="none" stroke="#b8c4da" stroke-dasharray="4 3">
+    <rect x="34" y="26" width="192" height="34" rx="5"/><rect x="226" y="26" width="192" height="34" rx="5"/>
+  </g>
+  <text x="130" y="20" text-anchor="middle" font-size="10" fill="#5a6272">窗口0 · t0–3</text>
+  <text x="322" y="20" text-anchor="middle" font-size="10" fill="#5a6272">窗口1 · t4–7</text>
+  <!-- C_a 轨 -->
+  <g font-size="10" fill="#fff" text-anchor="middle">
+    <rect x="36" y="78" width="188" height="18" rx="4" fill="#2456c4" opacity="0.85"/><text x="130" y="91">→ e0</text>
+    <rect x="228" y="78" width="188" height="18" rx="4" fill="#2456c4" opacity="0.85"/><text x="322" y="91">→ e1</text>
+  </g>
+  <!-- C_b 轨 -->
+  <rect x="228" y="112" width="188" height="18" rx="4" fill="#e8862a" opacity="0.85"/>
+  <text x="322" y="125" text-anchor="middle" font-size="10" fill="#fff">→ e1</text>
+  <rect x="36" y="112" width="188" height="18" rx="4" fill="none" stroke="#c9d2e0" stroke-dasharray="4 3"/>
+  <text x="130" y="125" text-anchor="middle" font-size="10" fill="#9aa2b1">窗口 −1：不存在</text>
+  <!-- 箭头 -->
+  <line x1="130" y1="96" x2="130" y2="166" stroke="#2456c4" stroke-width="1.3" marker-end="url(#m5a)"/>
+  <line x1="322" y1="96" x2="302" y2="166" stroke="#2456c4" stroke-width="1.3" marker-end="url(#m5a)"/>
+  <line x1="322" y1="130" x2="342" y2="166" stroke="#e8862a" stroke-width="1.3" marker-end="url(#m5b)"/>
+  <line x1="130" y1="130" x2="130" y2="160" stroke="#c9d2e0" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#m5c)"/>
+  <text x="138" y="152" font-size="10" fill="#9aa2b1">✕ 权重 0</text>
+  <!-- entries -->
+  <g text-anchor="middle">
+    <rect x="36" y="170" width="188" height="44" rx="7" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="130" y="188" font-size="11" fill="#1a1f2e" font-weight="bold">entry 0</text>
+    <text x="130" y="205" font-size="10"><tspan fill="#2456c4">A←窗0</tspan><tspan dx="4" fill="#9aa2b1">｜B←（无）</tspan></text>
+    <rect x="228" y="170" width="188" height="44" rx="7" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="322" y="188" font-size="11" fill="#1a1f2e" font-weight="bold">entry 1</text>
+    <text x="322" y="205" font-size="10"><tspan fill="#2456c4">A←窗1</tspan><tspan dx="4" fill="#b05e10">｜B←窗0</tspan></text>
+  </g>
+  <!-- 右侧说明 -->
+  <text x="470" y="70" font-size="12" fill="#1a1f2e" font-weight="bold">实现：overlap_transform 的补值（model.py:307-314）</text>
+  <g font-size="12" fill="#2a3040">
+    <text x="470" y="98">· C_a 支整体错后一个窗口，C_b 支保持原位</text>
+    <text x="470" y="120">· 空出的候选槽位：kv 补 0，score 补 −∞</text>
+    <text x="470" y="142">· −∞ 经 Softmax 归一化 → 权重恰为 0</text>
+    <text x="470" y="164">· 等效于「不存在的窗口不参与池化」</text>
+  </g>
+  <text x="470" y="200" font-size="10.5" fill="#5a6272">对应式 (11) 中 S_b 的取段 [m(i−1), mi−1) 在 i=0 时为空段；</text>
+  <text x="470" y="218" font-size="10.5" fill="#5a6272">序列末尾对称地少一次复用（最后一窗不进入 e_{n/m}，图外）。</text>
+</svg>
+<p class="cap"><b>图 5</b>｜序列起始处的边界处理（放大 entry 0 与 entry 1）。缺失窗口在内容侧补 0、分数侧补 −∞，softmax 自动将其权重归零——边界不需要任何特殊分支代码。</p>
+</div>
+
+<h2 id="s4">4. 压缩之后：归一化 → 部分 RoPE → 混合精度量化 → 缓存</h2>
+
+<p>池化输出并不会直接进 cache。参考实现在压缩器 forward 的末尾串了一条固定的后处理链，压缩与「存储格式」在同一步完成：</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 225" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m6a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <text x="20" y="50" font-size="12" fill="#2456c4" font-weight="bold">主 KV 路径（CSA 层与 HCA 层共用）</text>
+  <g text-anchor="middle">
+    <rect x="20" y="64" width="150" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="95" y="86" fill="#1a1f2e" font-weight="bold">池化输出 C_i</text>
+    <text x="95" y="104" font-size="10" fill="#5a6272">式(12) Σ 之后 · 512 维</text>
+    <rect x="184" y="64" width="116" height="56" rx="8" fill="#fff" stroke="#8ea6d8"/>
+    <text x="242" y="86" fill="#1a1f2e" font-weight="bold">RMSNorm</text>
+    <text x="242" y="104" font-size="10" fill="#5a6272">整条 entry 归一化</text>
+    <rect x="314" y="64" width="190" height="56" rx="8" fill="#fff" stroke="#8ea6d8"/>
+    <text x="409" y="86" fill="#1a1f2e" font-weight="bold">部分 RoPE</text>
+    <text x="409" y="104" font-size="10" fill="#5a6272">只转最后 64 维 · θ=16 万</text>
+    <rect x="518" y="64" width="150" height="56" rx="8" fill="#fff" stroke="#8ea6d8"/>
+    <text x="593" y="86" fill="#1a1f2e" font-weight="bold">混合精度存储</text>
+    <text x="593" y="104" font-size="10" fill="#5a6272">448 维 FP8 + 64 维 BF16</text>
+    <rect x="682" y="64" width="158" height="56" rx="8" fill="#fff" stroke="#2456c4"/>
+    <text x="761" y="86" fill="#1a1f2e" font-weight="bold">KV cache</text>
+    <text x="761" y="104" font-size="10" fill="#5a6272">每 m=4 token 一条</text>
+  </g>
+  <g stroke="#5a6272" stroke-width="1.4">
+    <line x1="170" y1="92" x2="184" y2="92" marker-end="url(#m6a)"/>
+    <line x1="300" y1="92" x2="314" y2="92" marker-end="url(#m6a)"/>
+    <line x1="504" y1="92" x2="518" y2="92" marker-end="url(#m6a)"/>
+    <line x1="668" y1="92" x2="682" y2="92" marker-end="url(#m6a)"/>
+    <line x1="409" y1="120" x2="409" y2="160" marker-end="url(#m6a)"/>
+  </g>
+  <text x="184" y="146" font-size="12" fill="#b05e10" font-weight="bold">Indexer 路径 —— 复用同一压缩器逻辑（rotate=True）</text>
+  <g text-anchor="middle">
+    <rect x="314" y="160" width="190" height="48" rx="8" fill="#fff" stroke="#d9a13c"/>
+    <text x="409" y="180" fill="#1a1f2e" font-weight="bold">Hadamard 旋转</text>
+    <text x="409" y="197" font-size="10" fill="#5a6272">rotate_activation</text>
+    <rect x="518" y="160" width="150" height="48" rx="8" fill="#fff" stroke="#d9a13c"/>
+    <text x="593" y="180" fill="#1a1f2e" font-weight="bold">FP4 模拟量化</text>
+    <text x="593" y="197" font-size="10" fill="#5a6272">QK 路径 QAT</text>
+    <rect x="682" y="160" width="158" height="48" rx="8" fill="#fff" stroke="#d9a13c"/>
+    <text x="761" y="180" fill="#1a1f2e" font-weight="bold">索引 KV cache</text>
+    <text x="761" y="197" font-size="10" fill="#5a6272">c_I=128 · 每 m=4 token 一条</text>
+  </g>
+  <g stroke="#5a6272" stroke-width="1.4">
+    <line x1="504" y1="184" x2="518" y2="184" marker-end="url(#m6a)"/>
+    <line x1="668" y1="184" x2="682" y2="184" marker-end="url(#m6a)"/>
+  </g>
+</svg>
+<p class="cap"><b>图 6</b>｜压缩后的处理链。RMSNorm 稳定核心注意力的 logits（因此 V4 不再需要 Muon 的 QK-Clip）；部分 RoPE 只旋转最后 64 维、使用独立的 <code>compress_rope_theta</code>=16 万；主 KV 的非 RoPE 维以 FP8 存储、RoPE 64 维保持 BF16（位置精度）；Indexer 复用同一压缩器逻辑，但 KV 走 Hadamard 旋转 + FP4（对应论文「indexer FP4 计算」）。</p>
+</div>
+
+<ul>
+  <li><b>RMSNorm</b>：entry 既是 key 又是 value，不归一化的话 attention logits 容易爆炸（§2.3.3）；</li>
+  <li><b>部分 RoPE（最后 64 维）</b>：压缩 entry 同时充当 K 和 V，输出会带上 KV 的绝对位置旋转，所以主注意力侧还要对输出做位置 −i 的<b>反旋转</b>，让输出携带「query 与 entry 的相对距离」（§2.4）；</li>
+  <li><b>混合精度</b>：RoPE 维 BF16（位置敏感）+ 其余 FP8，相比纯 BF16 cache 近乎减半（§2.3.4）。</li>
+</ul>
+
+<h2 id="s5">5. 参考实现对照（<code>Compressor</code> 类）</h2>
+
+<p>以下摘自官方 <code>inference/model.py:279-372</code>（有删节，均为连续行内摘录）。类注释原文就写明：<i>When overlap=True (ratio==4), uses overlapping windows for smoother compression boundaries</i>——重叠是专门给 m=4 的 CSA 准备的。</p>
+
+<pre><code class="language-python">class Compressor(nn.Module):
+    """Compresses KV cache via learned gated pooling over `compress_ratio` consecutive tokens.
+    When overlap=True (ratio==4), uses overlapping windows for smoother compression boundaries."""
+
+    def __init__(self, args: ModelArgs, compress_ratio: int = 4, head_dim: int = 512, rotate: bool = False):
+        super().__init__()
+        ...
+        self.compress_ratio = compress_ratio
+        self.overlap = compress_ratio == 4
+        coff = 1 + self.overlap
+        self.ape = nn.Parameter(torch.empty(compress_ratio, coff * self.head_dim, dtype=torch.float32))
+        # wkv and wgate in the checkpoint is stored in bf16, ...
+        # When overlap, the first half of dims is for overlapping compression, second half for normal.
+        self.wkv = Linear(self.dim, coff * self.head_dim, dtype=torch.float32)
+        self.wgate = Linear(self.dim, coff * self.head_dim, dtype=torch.float32)
+        self.norm = RMSNorm(self.head_dim, args.norm_eps)
+        ...
+    def forward(self, x: torch.Tensor, start_pos: int):
+        ...
+        kv = self.wkv(x)
+        score = self.wgate(x)
+        ...
+        kv = kv.unflatten(1, (-1, ratio))
+        score = score.unflatten(1, (-1, ratio)) + self.ape
+        if overlap:
+            kv = self.overlap_transform(kv, 0)
+            score = self.overlap_transform(score, float("-inf"))
+        kv = (kv * score.softmax(dim=2)).sum(dim=2)
+        ...
+        kv = self.norm(kv.to(dtype))
+        apply_rotary_emb(kv[..., -rd:], freqs_cis)   # 只旋转最后 64 维
+        if self.rotate:
+            kv = rotate_activation(kv)               # Hadamard 旋转，供 FP4 量化
+            fp4_act_quant(kv, fp4_block_size, True)  # indexer 的 KV 走 FP4
+        else:
+            act_quant(kv[..., :-rd], 64, ...)        # 主 KV：非 RoPE 维 FP8 存储</code></pre>
+
+<table>
+  <tr><th>论文记号</th><th>代码</th><th>说明</th></tr>
+  <tr><td>\(W^{KV}_{a/b}\)、\(W^{Z}_{a/b}\)（式 9）</td><td><code>wkv</code> / <code>wgate</code>（各 <code>coff·c</code>=1024 宽）</td><td>两支折叠进一个宽线性层：前半维给重叠分支、后半维给正常分支，数学等价于两条独立投影</td></tr>
+  <tr><td>\(B_a, B_b\)（式 11）</td><td><code>ape</code>（形状 <code>m × 2c</code>）</td><td>窗口内可学习位置偏置，两支各占一半维度</td></tr>
+  <tr><td>窗口错位（式 11 取段）</td><td><code>overlap_transform(kv, 0)</code> / <code>(score, -inf)</code></td><td>一条支路整体错后一个窗口；空槽位 kv 补 0、score 补 −∞（model.py:307-314）</td></tr>
+  <tr><td>\(\mathrm{Softmax}_{row}(Z+B)\)（式 11）</td><td><code>score.softmax(dim=2)</code></td><td>沿 token 维归一化：每一维在候选 token 间形成分布（两支各自归一化）</td></tr>
+  <tr><td>加权求和（式 12）</td><td><code>(kv * score.softmax(dim=2)).sum(dim=2)</code></td><td>逐元素乘 + 沿候选求和，一步完成两支池化</td></tr>
+  <tr><td>entry 归一化（§2.3.3）</td><td><code>self.norm = RMSNorm(head_dim)</code></td><td>压缩完立刻归一化</td></tr>
+  <tr><td>部分 RoPE（§2.3.3）</td><td><code>apply_rotary_emb(kv[..., -rd:])</code></td><td>只转最后 64 维，theta=16 万（<code>compress_rope_theta</code>）</td></tr>
+  <tr><td>FP8 / FP4 混合（§2.3.4）</td><td><code>act_quant</code> / <code>rotate_activation</code> + <code>fp4_act_quant</code></td><td>主 KV 非 RoPE 维 FP8；Indexer 的 KV 走 Hadamard 旋转 + FP4</td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜压缩器代码 ↔ 公式对照。<code>overlap</code> 由 <code>compress_ratio == 4</code> 自动判定——m=4 即 CSA（重叠 + 稀疏），m=128 即 HCA（无重叠、无稀疏）。</p>
+
+<div class="infer">实现与论文的两处记法差异，均已验证为数学等价：① 论文的 \(C_a, C_b\) 是两条独立投影，实现折叠进一个 <code>coff·head_dim</code> 宽的 <code>wkv</code>；② 论文称第 i 条 entry 取 \(C_a\) 的本窗口与 \(C_b\) 的前一窗口，实现是「一条支路错后一窗、另一支保持原位」，两支都是可学习投影，错位配对关系相同。</div>
+
+<h2 id="s6">6. 为什么这么设计（FAQ）</h2>
+
+<h3>Q1：为什么用可学习的门控池化，而不是平均池化？</h3>
+<p>平均池化把窗口内所有 token 无差别混合：重要 token 的信息被稀释，无关 token 的噪声被保留。门控池化让网络自己学「哪个 token 的哪些维度进入 entry」，是一次有选择的压缩。注意压缩率只由窗口大小 m 决定，与权重无关——门控不改变 entry 数，改变的只是每条 entry 的<b>内容质量</b>。</p>
+
+<h3>Q2：为什么权重是 c 维向量（逐维）而非每个 token 一个标量？</h3>
+<p>标量权重只能整条向量缩放；逐维权重能表达「这个 token 的某些维度值得保留、其余抹掉」，表达力上限更高，而计算上仍只是逐元素乘加，与 Hadamard 积 \(\odot\) 天然配合。</p>
+
+<h3>Q3：为什么要重叠双分支？代价是什么？</h3>
+<p>非重叠压缩在窗口边界做「硬切分」：跨边界语义（一个跨在 t7–t9 上的短语）只能进其中一条 entry。重叠让每个 token 的信息进入两条相邻 entry，边界平滑；entry 0 的缺失窗口用 −∞ 优雅处理（图 5）。代价是候选数翻倍（2m）、两条投影轨宽度翻倍（<code>coff=2</code>），即压缩器的参数量与计算量近似翻倍。</p>
+
+<div class="infer">这笔「翻倍」开销花得值：压缩器对每个 token 只跑一次、开销是 O(n) 级的线性投影；而它换来的是后续注意力在 1/4 长度的 entry 序列上做 top-k 选择。相比省下的注意力算力与 KV cache，压缩器开销可以忽略。</div>
+
+<h3>Q4：为什么 CSA 用 m=4、HCA 用 m′=128，而不是全用一种？</h3>
+<p>m 越大压缩越狠，但单条 entry 混合的 token 越多、粒度越粗。CSA 用轻压缩保住细粒度（4-token 粒度），再用 top-k 稀疏控制算力，放在中间层承担主要的信息存取；HCA 用重压缩把 cache 压到 CSA 层的 1/32，全部 entry 稠密参与、保证全局信息「一个不漏」，适合放在模型头尾做粗粒度全覆盖建模。两者共享同一套压缩骨架——HCA 可以看作「去掉重叠与 Indexer 的 CSA」（源码：<code>overlap=False</code> 且 <code>indexer=None</code>）。</p>
+
+<h3>Q5：压缩把块内 token 的因果可见性破坏了，怎么办？</h3>
+<p>一条 entry 是 4 个 token 的混合体：块内 token 彼此不可见，且对当前 query 而言最近处的 token 几乎总是最相关的。因此每层额外保留最近 \(n_{win}=128\) 个 token 的<b>未压缩</b> KV，与被选中的压缩 entry 拼接后一起参与核心注意力（图 1 下路）。这也是为什么压缩质量（Q1–Q3）重要——滑窗只兜住「近处」，远处信息全靠 entry 本身的保真度。</p>
+
+<h2 id="s7">7. CSA 与 HCA 的压缩对比</h2>
+
+<div class="fig">
+<svg viewBox="0 0 860 210" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <line x1="428" y1="20" x2="428" y2="200" stroke="#e3e7ee"/>
+  <text x="36" y="26" font-size="13" fill="#2456c4" font-weight="bold">CSA：m=4 · 重叠 · 稀疏</text>
+  <text x="456" y="26" font-size="13" fill="#163a86" font-weight="bold">HCA：m′=128 · 不重叠 · 稠密</text>
+  <!-- CSA tokens -->
+  <g fill="#f6f8fa" stroke="#c9d2e0">
+    <rect x="36" y="44" width="20" height="18"/><rect x="59" y="44" width="20" height="18"/><rect x="82" y="44" width="20" height="18"/><rect x="105" y="44" width="20" height="18"/><rect x="128" y="44" width="20" height="18"/><rect x="151" y="44" width="20" height="18"/><rect x="174" y="44" width="20" height="18"/><rect x="197" y="44" width="20" height="18"/><rect x="220" y="44" width="20" height="18"/><rect x="243" y="44" width="20" height="18"/><rect x="266" y="44" width="20" height="18"/><rect x="289" y="44" width="20" height="18"/><rect x="312" y="44" width="20" height="18"/><rect x="335" y="44" width="20" height="18"/><rect x="358" y="44" width="20" height="18"/><rect x="381" y="44" width="20" height="18"/>
+  </g>
+  <g fill="none" stroke="#8ea6d8" stroke-dasharray="3 3">
+    <rect x="34" y="40" width="91" height="26" rx="4"/><rect x="126" y="40" width="91" height="26" rx="4"/><rect x="218" y="40" width="91" height="26" rx="4"/><rect x="310" y="40" width="91" height="26" rx="4"/>
+  </g>
+  <g font-size="9" fill="#fff" text-anchor="middle">
+    <rect x="36" y="78" width="89" height="14" rx="3" fill="#2456c4" opacity="0.85"/><text x="80" y="88">e0</text>
+    <rect x="128" y="78" width="89" height="14" rx="3" fill="#2456c4" opacity="0.85"/><text x="172" y="88">e1</text>
+    <rect x="220" y="78" width="89" height="14" rx="3" fill="#2456c4" opacity="0.85"/><text x="264" y="88">e2</text>
+    <rect x="312" y="78" width="89" height="14" rx="3" fill="#2456c4" opacity="0.85"/><text x="356" y="88">e3</text>
+  </g>
+  <g stroke="#e8862a" fill="none" stroke-width="1.2">
+    <path d="M 80,96 Q 104,110 128,96"/>
+    <path d="M 172,96 Q 196,110 220,96"/>
+    <path d="M 264,96 Q 288,110 312,96"/>
+  </g>
+  <text x="218" y="122" text-anchor="middle" font-size="10" fill="#b05e10">相邻 entry 共享一个窗口（重叠双分支）</text>
+  <g font-size="9" text-anchor="middle">
+    <rect x="36" y="132" width="89" height="14" rx="3" fill="#f2f4f8" stroke="#d5dae2"/><text x="80" y="142" fill="#9aa2b1">✗ 淘汰</text>
+    <rect x="128" y="132" width="89" height="14" rx="3" fill="#eef3fc" stroke="#2456c4"/><text x="172" y="142" fill="#2456c4">✓ 选中</text>
+    <rect x="220" y="132" width="89" height="14" rx="3" fill="#f2f4f8" stroke="#d5dae2"/><text x="264" y="142" fill="#9aa2b1">✗ 淘汰</text>
+    <rect x="312" y="132" width="89" height="14" rx="3" fill="#eef3fc" stroke="#2456c4"/><text x="356" y="142" fill="#2456c4">✓ 选中</text>
+  </g>
+  <text x="36" y="166" font-size="10.5" fill="#5a6272">Indexer 只放行 top-k=1024 条 entry 参与注意力（示意 4 选 2）</text>
+  <text x="36" y="188" font-size="10.5" fill="#1a1f2e">entry 数 = n/4 · KV ≈ 144 B/token（推断）</text>
+  <!-- HCA tokens -->
+  <g fill="#f6f8fa" stroke="#c9d2e0">
+    <rect x="456" y="44" width="20" height="18"/><rect x="479" y="44" width="20" height="18"/><rect x="502" y="44" width="20" height="18"/><rect x="525" y="44" width="20" height="18"/><rect x="548" y="44" width="20" height="18"/><rect x="571" y="44" width="20" height="18"/><rect x="594" y="44" width="20" height="18"/><rect x="617" y="44" width="20" height="18"/><rect x="640" y="44" width="20" height="18"/><rect x="663" y="44" width="20" height="18"/><rect x="686" y="44" width="20" height="18"/><rect x="709" y="44" width="20" height="18"/><rect x="732" y="44" width="20" height="18"/><rect x="755" y="44" width="20" height="18"/><rect x="778" y="44" width="20" height="18"/><rect x="801" y="44" width="20" height="18"/>
+  </g>
+  <g fill="none" stroke="#7cc39a" stroke-dasharray="3 3">
+    <rect x="454" y="40" width="185" height="26" rx="4"/><rect x="639" y="40" width="185" height="26" rx="4"/>
+  </g>
+  <text x="546" y="36" text-anchor="middle" font-size="9" fill="#5a6272">窗口（实际 m′=128，图示 8 仅示意）</text>
+  <text x="731" y="36" text-anchor="middle" font-size="9" fill="#5a6272">窗口</text>
+  <g font-size="9" fill="#fff" text-anchor="middle">
+    <rect x="456" y="78" width="181" height="14" rx="3" fill="#163a86"/><text x="546" y="88">entry 0（全保留）</text>
+    <rect x="642" y="78" width="181" height="14" rx="3" fill="#163a86"/><text x="732" y="88">entry 1（全保留）</text>
+  </g>
+  <text x="456" y="122" font-size="10" fill="#5a6272">单窗口直接池化：无重叠、无 top-k</text>
+  <text x="456" y="142" font-size="10.5" fill="#5a6272">全部 entry 稠密参与注意力——全局信息一个不漏</text>
+  <text x="456" y="188" font-size="10.5" fill="#1a1f2e">entry 数 = n/128 · KV ≈ 4.5 B/token（推断）· 约为 CSA 层的 1/32</text>
+</svg>
+<p class="cap"><b>图 7</b>｜两种层共享同一套压缩骨架，差别在压缩率、重叠与稀疏。CSA「细粒度 + 选择性」，HCA「粗粒度 + 全覆盖」；61 层中 HCA 占多数，开头两层全是 HCA。</p>
+</div>
+
+<table>
+  <tr><th>维度</th><th>CSA（m=4）</th><th>HCA（m′=128）</th></tr>
+  <tr><td>压缩率</td><td>1/4</td><td>1/128</td></tr>
+  <tr><td>重叠双分支</td><td>有（<code>overlap=True</code>，候选 2m=8）</td><td>无（单窗口直接池化）</td></tr>
+  <tr><td>门控权重</td><td>\(S_a, S_b\) 两支</td><td>单支 \(S\)（式 20–23）</td></tr>
+  <tr><td>稀疏选择</td><td>Lightning Indexer top-k=1024</td><td>无，全部 entry 稠密参与</td></tr>
+  <tr><td>entry 形状</td><td>\((n/4)\times 512\)</td><td>\((n/128)\times 512\)</td></tr>
+  <tr><td>KV cache（单层）</td><td>≈144 B/token（推断）</td><td>≈4.5 B/token（推断），CSA 层的 1/32</td></tr>
+  <tr><td>角色</td><td>细粒度信息存取（中间层主力）</td><td>粗粒度全局建模（头尾覆盖）</td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜CSA 与 HCA 的压缩对比。Byte 数为按 448 维 FP8 + 64 维 BF16 的推断核算，见 §8。</p>
+
+<h2 id="s8">8. 成本账目</h2>
+
+<table>
+  <tr><th>对象</th><th>每 token entry 数</th><th>每条 entry</th><th>估算 B/token</th></tr>
+  <tr><td>CSA 主 KV</td><td>1/4</td><td>448 维 FP8（1B）+ 64 维 BF16（2B）≈ 576 B</td><td>≈ 144（另有滑窗与索引开销）</td></tr>
+  <tr><td>HCA 主 KV</td><td>1/128</td><td>≈ 576 B</td><td>≈ 4.5</td></tr>
+  <tr><td>（对照）BF16 GQA8，hd=128</td><td>—</td><td>8 头 × 128 维 × 2(K+V) × 2B</td><td>4096</td></tr>
+</table>
+<p class="cap"><b>表 4</b>｜单层 KV cache 账目（推断核算，非论文原文）。CSA 层单独看约为 GQA8 基线的 3.5%。</p>
+
+<div class="infer">完整口径：61 层为 CSA/HCA 混合且 HCA 占多数，再叠加 Indexer 的 FP4 索引 KV（c_I=128）与每层 128 token 的滑窗，1M 上下文下 V4-Pro 整体 KV cache 约为 GQA8 基线的 2%（论文口径，§2.3.4）。算力端：CSA 每个查询只与 top-k=1024 条 4-token 粒度 entry 交互，等效细粒度注意力范围约 4k token，且 Indexer 只在 1/4 长度的序列上打分。</div>
+
+<footer>
+<ul class="refs">
+  <li><b>主文档</b>：<a href="deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读：CSA 与 HCA</a>（整体架构、Lightning Indexer、核心注意力、基准效果）</li>
+  <li><b>论文</b>：DeepSeek-AI. <i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>. 式 (9)–(12) 见 §2.3，压缩稳定性细节见 §2.3.3，量化策略见 §2.3.4（本地 <code>paper/deepseek_v4.pdf</code>）</li>
+  <li><b>参考实现</b>：<a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">deepseek-ai/DeepSeek-V4-Pro · <code>inference/model.py</code></a>（<code>Compressor</code>：model.py:279-372；<code>overlap_transform</code>：model.py:307-314）</li>
+</ul>
+</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

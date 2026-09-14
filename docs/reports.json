@@ -8,6 +8,22 @@
     "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
   },
   {
+    "slug": "csa-compression",
+    "title": "CSA 压缩过程详解：DeepSeek-V4 压缩稀疏注意力的序列维压缩",
+    "date": "2026-09-14",
+    "paper": "DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence (paper/deepseek_v4.pdf)",
+    "arxiv": "https://arxiv.org/abs/2606.19348",
+    "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
+  },
+  {
+    "slug": "deepseek-v4-kvcache",
+    "title": "DeepSeek-V4 KV Cache 组织解读：异构条目、双缓存布局与盘上存储",
+    "date": "2026-09-14",
+    "paper": "DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence (paper/deepseek_v4.pdf)",
+    "arxiv": "https://arxiv.org/abs/2606.19348",
+    "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
+  },
+  {
     "slug": "deepseek-mhc",
     "title": "DeepSeek mHC 解读：流形约束超连接（Manifold-Constrained Hyper-Connections）",
     "date": "2026-09-14",
