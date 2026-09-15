@@ -83,7 +83,7 @@ window.MathJax = {
 <h1>DeepSeek mHC 解读：流形约束超连接（Manifold-Constrained Hyper-Connections）</h1>
 
 <div class="meta">
-  <p style="margin:4px 0"><b>日期：</b>2026-09-14　<b>论文：</b><i>mHC: Manifold-Constrained Hyper-Connections</i>（DeepSeek-AI，Zhenda Xie 等）</p>
+  <p style="margin:4px 0"><b>日期：</b>2026-09-14（09-15 增补 §2.2 约束机制详解）　<b>论文：</b><i>mHC: Manifold-Constrained Hyper-Connections</i>（DeepSeek-AI，Zhenda Xie 等）</p>
   <p style="margin:4px 0"><b>arXiv：</b><a href="https://arxiv.org/abs/2512.24880">arxiv.org/abs/2512.24880</a>　<b>代码：</b>随 DeepSeek-V4-Pro 官方推理实现开源（<a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro 的 <code>inference/</code> 目录</a>，commit <code>b5968e9</code> / 2026-06-22，2026-09-14 抓取）</p>
   <p style="margin:4px 0"><b>本地文件：</b><code>paper/mhc.pdf</code>（主论文，19 页）；<code>paper/deepseek_v4.pdf</code>（§2.2、§3.4.2 落地）；<code>paper/deepseek_v41.pdf</code>（§2.4.1 Single-Pass mHC）</p>
 </div>
@@ -164,7 +164,7 @@ window.MathJax = {
   <line x1="330" y1="124" x2="570" y2="124" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
   <text x="318" y="56" text-anchor="end" fill="#5a6272">流 1</text>
   <text x="318" y="104" text-anchor="end" fill="#5a6272">流 n</text>
-  <text x="450" y="150" text-anchor="middle" font-size="11" fill="#5a6272">n 条并行流（n×d）</text>
+  <text x="450" y="42" text-anchor="middle" font-size="11" fill="#5a6272">n 条并行流（n×d）</text>
   <!-- pre 聚合 -->
   <path d="M 336 52 C 300 52, 296 160, 306 160 L 384 160" fill="none" stroke="#e8862a" stroke-width="1.6" marker-end="url(#arA)"/>
   <path d="M 336 124 C 306 124, 296 160, 306 160" fill="none" stroke="#e8862a" stroke-width="1.6"/>
@@ -203,13 +203,39 @@ window.MathJax = {
 </div>
 
 <h3>2.2 参数化与 Sinkhorn-Knopp 投影</h3>
-<p>约束如何参与梯度训练？mHC 把「生成无约束原始系数 → 投影」做成可微流水线（式 7–8）。把流矩阵展平为 \(\bar{x}_l = \mathrm{vec}(x_l) \in \mathbb{R}^{nC}\)（保留全部流信息），归一化后经线性投影产生动态分量，加静态 bias（式 7）：</p>
+<p>约束如何参与梯度训练？mHC 的做法与神经网络里一切「约束出口」的技巧同源——要概率分布就接 softmax、要正数就接 σ：<b>参数与原始系数完全自由，只在出口处放一个可微投影，保证送出去的 \(H^{res}\) 永远落在流形上</b>。具体而言，把「生成无约束原始系数 → 投影」做成可微流水线（式 7–8）。把流矩阵展平为 \(\bar{x}_l = \mathrm{vec}(x_l) \in \mathbb{R}^{nC}\)（保留全部流信息），归一化后经线性投影产生动态分量，加静态 bias（式 7）：</p>
 <div class="formula">\[ \bar{x}'_l = \mathrm{RMSNorm}(\bar{x}_l);\quad \tilde H^{pre}_l = \alpha^{pre}_l (\bar{x}'_l \varphi^{pre}_l) + b^{pre}_l,\quad \tilde H^{post}_l = \alpha^{post}_l (\bar{x}'_l \varphi^{post}_l) + b^{post}_l,\quad \tilde H^{res}_l = \alpha^{res}_l\, \mathrm{mat}(\bar{x}'_l \varphi^{res}_l) + b^{res}_l \]</div>
 <p>其中 \(\varphi^{pre},\varphi^{post} \in \mathbb{R}^{nC\times n}\)、\(\varphi^{res} \in \mathbb{R}^{nC\times n^2}\)，\(\mathrm{mat}(\cdot)\) 把 \(n^2\) 维向量重塑为 \(n\times n\) 矩阵。然后施加约束（式 8）：</p>
 <div class="formula">\[ H^{pre}_l = \sigma(\tilde H^{pre}_l),\qquad H^{post}_l = 2\sigma(\tilde H^{post}_l),\qquad H^{res}_l = \mathrm{Sinkhorn\!-\!Knopp}(\tilde H^{res}_l) \]</div>
-<p>Sinkhorn-Knopp 投影（式 9）：先取 \(M^{(0)} = \exp(\tilde H^{res}_l)\) 保证正性，再交替做行/列归一化</p>
+<h4>为什么用「出口投影」，而不是别的方式加约束</h4>
+<p>\(H^{res}\) 是<b>逐 token 动态生成</b>的：出口矩阵每层、每个 token 都不同，约束的作用对象只能是出口矩阵而非参数——参数合法不代表生成的矩阵合法。这排除了几种直觉做法：</p>
+<ul>
+  <li><b>加正则项</b>：惩罚偏离双随机的程度是软约束，只在梯度尺度上施压，任何时刻都可能被其他损失项压过，还引入需要调的惩罚权重；出口投影无超参、任何时刻严格合法；</li>
+  <li><b>行 softmax 直接参数化</b>：出口矩阵逐行过 softmax——行和 = 1 有了，<b>列和没人管</b>。而稳定性恰恰两头都要（行和对应前向信号增益、列和对应反向梯度增益，见 §1.2 的 Amax Gain 度量），想同时精确满足行列两个约束，几乎绕不开交替归一化；</li>
+  <li><b>欧氏投影到 Birkhoff 多胞体</b>：每步要解一个二次规划，对逐 token、逐层的调用频率太贵。Sinkhorn 是它的廉价替代——指数化入口对应熵正则化的流形投影。</li>
+</ul>
+
+<h4>Sinkhorn-Knopp 是什么</h4>
+<p>1967 年的经典算法（Sinkhorn &amp; Knopp），功能单一：<b>把任意正矩阵交替归一化，收敛到双随机矩阵</b>。投影（式 9）先取 \(M^{(0)} = \exp(\tilde H^{res}_l)\) 逐元素指数化保证正性，再交替做行/列归一化：</p>
 <div class="formula">\[ M^{(t)} = T_r\!\left(T_c(M^{(t-1)})\right) \]</div>
-<p>迭代收敛到双随机矩阵；实验取 \(t_{max}=20\) 次作为精度/开销折衷。指数化 + 交替归一化可理解为<b>熵正则化的流形投影</b>，整条路径可微，梯度可穿过 20 次迭代回传到 \(\varphi^{res}\)。</p>
+<p>两步交替：行归一化让行和全变 1 但破坏列和；列归一化让列和全变 1 但又破坏行和——振荡着向「同时满足」逼近。拿 \(2\times 2\) 手算两轮就有体感（exp 输出必为正，不妨直接从一个正矩阵出发）：</p>
+<pre><code class="language-plaintext">初始  M0 = [[1.00, 2.00],
+            [3.00, 4.00]]
+
+第 1 轮：
+  行归一化 → [[0.333, 0.667], [0.429, 0.571]]    行和 = 1 ✓，列和 = [0.76, 1.24] ✗
+  列归一化 → [[0.4375, 0.5385], [0.5625, 0.4615]] 列和 = 1 ✓，行和 = [0.976, 1.024] ✗（更近了）
+
+第 2 轮：
+  行归一化 → [[0.4483, 0.5517], [0.5493, 0.4507]]  行和 = 1 ✓，列和 = [0.998, 1.002]
+  列归一化 → [[0.4494, 0.5504], [0.5506, 0.4496]]  列和 = 1 ✓，行和 = [0.9998, 1.0002] ✓
+
+极限 ≈ [[0.4495, 0.5505], [0.5505, 0.4495]] —— 两轮即收敛到 10⁻⁴ 量级</code></pre>
+<p class="cap">2×2 Sinkhorn 两轮迭代演示（作者补充，论文未含此例）。首轮「对 exp 矩阵做行归一化」正是 §3.3 kernel 里减行最大值的 softmax 的数学等价。收敛速度取决于矩阵病态程度——\(\tilde H^{res}\) 逐 token 变化、无法保证良性条件，这与 §4.1「20 次迭代未完全收敛、复合增益残差 ~1.6」的观察一致（推断）。</p>
+<p>同一算法最广为人知的应用在别处：熵正则化最优传输（Cuturi 2013）用它把代价矩阵迭代成合法传输计划。mHC 借它当流形投影用，实验取 \(t_{max}=20\) 次作为精度/开销折衷。</p>
+
+<h4>梯度如何穿过投影回传</h4>
+<p>投影全程只含 exp 与除法，均为可微操作——整条链 \(\tilde H^{res} \to \exp \to 20\) 次归一化 \(\to H^{res}\) 对 \(\tilde H^{res}\) 可微，autograd 穿过 20 次迭代把梯度送回 \(\varphi^{res}\)。所以 Sinkhorn 不是「训练时加惩罚、部署时才合法」的事后补救，而是端到端可训练的严格参数化：<b>混合策略照常学习，稳定性由前向计算的结构保证</b>。代价是反向需要 20 次迭代的中间量——§2.3 的自定义反向 kernel（片上重算再遍历迭代）就是为它服务的。</p>
 
 <div class="fig">
 <svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
@@ -261,6 +287,112 @@ window.MathJax = {
   <text x="565" y="204" text-anchor="middle" font-size="11" fill="#2e7351">层 F 输出（d 维）</text>
 </svg>
 <p class="cap"><b>图 2</b>｜mHC 单层数据流（对应官方实现 <code>Block.forward</code>）。系数支路把 n×d 流矩阵展平后与融合的投影矩阵 \(\varphi\) 做 matmul，<b>除以 RMS 范数挪到 matmul 之后</b>（数学等价，省一次大张量读写），产出 24 个原始系数；按语义拆成 pre（σ）、post（2σ）、comb（Sinkhorn ×20）三组。层输入 = pre 加权聚合的 d 维向量；层输出经 post 写回，与 comb 混合的原始流相加得到下一代流矩阵。</p>
+</div>
+
+<div class="fig">
+<svg viewBox="0 0 960 580" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m3a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <text x="20" y="26" font-size="13" font-weight="bold" fill="#1a1f2e">hc_pre / hc_post 全步骤数据流（n = 4）</text>
+
+  <!-- ===== 上带：系数生成 ①–⑦ ===== -->
+  <text x="20" y="48" font-size="11" fill="#5a6272">系数生成</text>
+  <rect x="20" y="56" width="118" height="44" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="79" y="76" text-anchor="middle" fill="#1a1f2e">Xₗ 流矩阵</text>
+  <text x="79" y="91" text-anchor="middle" font-size="10" fill="#5a6272">[4×d]</text>
+  <rect x="186" y="56" width="150" height="44" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="261" y="76" text-anchor="middle" fill="#1a1f2e">① 展平 + fp32</text>
+  <text x="261" y="91" text-anchor="middle" font-size="10" fill="#5a6272">vec(X) → 4d 维向量</text>
+  <rect x="384" y="56" width="150" height="44" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="459" y="76" text-anchor="middle" fill="#1a1f2e">② RMS 统计</text>
+  <text x="459" y="91" text-anchor="middle" font-size="10" fill="#5a6272">rsqrt(mean(x²)+ε)</text>
+  <rect x="582" y="56" width="150" height="44" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="657" y="76" text-anchor="middle" fill="#1a1f2e">③ matmul φ</text>
+  <text x="657" y="91" text-anchor="middle" font-size="10" fill="#5a6272">[4d]×[24,4d]ᵀ → 24</text>
+  <rect x="780" y="56" width="160" height="44" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="860" y="76" text-anchor="middle" fill="#1a1f2e">④ ×rsqrt（等价重排）</text>
+  <text x="860" y="91" text-anchor="middle" font-size="10" fill="#5a6272">先 matmul 后除 RMS</text>
+
+  <line x1="140" y1="78" x2="184" y2="78" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <line x1="338" y1="78" x2="382" y2="78" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <line x1="536" y1="78" x2="580" y2="78" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <line x1="734" y1="78" x2="778" y2="78" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+
+  <!-- 24 维系数条带 -->
+  <text x="512" y="124" text-anchor="end" font-size="10" fill="#5a6272">24 维系数</text>
+  <rect x="520" y="130" width="40" height="28" fill="#fbe3cc" stroke="#c9d2e0"/>
+  <rect x="560" y="130" width="40" height="28" fill="#d9f0e2" stroke="#c9d2e0"/>
+  <rect x="600" y="130" width="160" height="28" fill="#eef3fc" stroke="#c9d2e0"/>
+  <text x="540" y="148" text-anchor="middle" font-size="10" fill="#1a1f2e">pre</text>
+  <text x="580" y="148" text-anchor="middle" font-size="10" fill="#1a1f2e">post</text>
+  <text x="680" y="148" text-anchor="middle" font-size="10" fill="#1a1f2e">comb ×16</text>
+  <polyline points="860,100 860,144 761,144" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+
+  <line x1="540" y1="158" x2="430" y2="198" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <line x1="580" y1="158" x2="620" y2="198" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <line x1="680" y1="158" x2="828" y2="198" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+
+  <rect x="360" y="200" width="140" height="52" rx="6" fill="#fff" stroke="#e8862a"/>
+  <text x="430" y="224" text-anchor="middle" fill="#1a1f2e">⑤ σ(α·x+b)+ε</text>
+  <text x="430" y="242" text-anchor="middle" font-size="10.5" fill="#5a6272">Hpre 读出权重 [4]</text>
+  <rect x="550" y="200" width="140" height="52" rx="6" fill="#fff" stroke="#2f9e63"/>
+  <text x="620" y="224" text-anchor="middle" fill="#1a1f2e">⑥ 2σ(α·x+b)</text>
+  <text x="620" y="242" text-anchor="middle" font-size="10.5" fill="#5a6272">Hpost 写回权重 [4]</text>
+  <rect x="730" y="200" width="196" height="52" rx="6" fill="#fff" stroke="#2456c4"/>
+  <text x="828" y="224" text-anchor="middle" fill="#1a1f2e">⑦ mat 4×4 → Sinkhorn ×20</text>
+  <text x="828" y="242" text-anchor="middle" font-size="10.5" fill="#5a6272">Hres 双随机 [4×4]</text>
+
+  <!-- ===== 中带：层计算 ⑧–⑨ ===== -->
+  <text x="20" y="340" font-size="11" fill="#5a6272">层计算</text>
+  <polyline points="79,100 79,335 236,335" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <polyline points="79,335 79,445 226,445" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <text x="157" y="326" text-anchor="middle" font-size="10" fill="#5a6272">X [4×d]（原始流）</text>
+  <text x="152" y="437" text-anchor="middle" font-size="10" fill="#5a6272">原始流 X</text>
+
+  <rect x="240" y="310" width="170" height="50" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="325" y="332" text-anchor="middle" fill="#1a1f2e">⑧ 读出 Σ pre[k]·X[k]</text>
+  <text x="325" y="350" text-anchor="middle" font-size="10" fill="#5a6272">4 条流 → 1 条 [d]</text>
+  <rect x="450" y="310" width="150" height="50" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="525" y="332" text-anchor="middle" fill="#1a1f2e">⑨ RMSNorm → 层 F</text>
+  <text x="525" y="350" text-anchor="middle" font-size="10" fill="#5a6272">（Attn / MoE）</text>
+  <rect x="640" y="310" width="170" height="50" rx="6" fill="#fff" stroke="#8ea6d8"/>
+  <text x="725" y="332" text-anchor="middle" fill="#1a1f2e">F(y) 层输出 [d]</text>
+  <text x="725" y="350" text-anchor="middle" font-size="10" fill="#5a6272">（本子层计算完成）</text>
+
+  <line x1="430" y1="252" x2="325" y2="308" stroke="#e8862a" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <text x="450" y="290" text-anchor="middle" font-size="10" fill="#b05e10">Hpre [4]</text>
+  <line x1="412" y1="335" x2="448" y2="335" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <text x="429" y="326" text-anchor="middle" font-size="10" fill="#5a6272">y [d]</text>
+  <line x1="602" y1="335" x2="638" y2="335" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+
+  <!-- ===== 下带：流更新 ⑩–⑫ ===== -->
+  <text x="20" y="448" font-size="11" fill="#5a6272">流更新</text>
+  <rect x="230" y="420" width="230" height="50" rx="6" fill="#fff" stroke="#2456c4"/>
+  <text x="345" y="442" text-anchor="middle" fill="#1a1f2e">⑩ 混合 X′[k] = Σ comb[k][j]·X[j]</text>
+  <text x="345" y="460" text-anchor="middle" font-size="10" fill="#5a6272">（4×4 凸组合，行和 = 1）</text>
+  <rect x="510" y="420" width="170" height="50" rx="6" fill="#fff" stroke="#2f9e63"/>
+  <text x="595" y="442" text-anchor="middle" fill="#1a1f2e">⑪ 写回 post[k]·F(y)</text>
+  <text x="595" y="460" text-anchor="middle" font-size="10" fill="#5a6272">（广播到每条流）</text>
+  <rect x="720" y="420" width="140" height="50" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="790" y="442" text-anchor="middle" fill="#1a1f2e">⑫ 相加 → Xₗ₊₁</text>
+  <text x="790" y="460" text-anchor="middle" font-size="10" fill="#5a6272">[4×d] 新流矩阵</text>
+
+  <line x1="620" y1="252" x2="620" y2="418" stroke="#2f9e63" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <text x="612" y="392" text-anchor="end" font-size="10" fill="#2e7351">Hpost [4]</text>
+  <line x1="700" y1="360" x2="660" y2="418" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <text x="714" y="392" text-anchor="start" font-size="10" fill="#5a6272">F(y) [d]</text>
+  <polyline points="926,226 944,226 944,490 355,490 355,472" fill="none" stroke="#2456c4" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <text x="640" y="505" text-anchor="middle" font-size="10" fill="#2456c4">Hres [4×4]（双随机）</text>
+
+  <line x1="462" y1="445" x2="508" y2="445" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <text x="484" y="437" text-anchor="middle" font-size="10" fill="#5a6272">X′ [4×d]</text>
+  <line x1="682" y1="445" x2="718" y2="445" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <line x1="862" y1="445" x2="938" y2="445" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <text x="899" y="437" text-anchor="middle" font-size="10" fill="#5a6272">Xₗ₊₁</text>
+
+  <text x="20" y="528" font-size="10" fill="#5a6272">注：block 内 attention 与 FFN 各执行一遍 ①–⑫；α、b 为可学习门控与偏置（hc_scale / hc_base）。</text>
+  <text x="20" y="550" font-size="10" fill="#5a6272">n=4 时系数 4+4+16=24 个；Sinkhorn 20 轮 = 首轮行 softmax + 19 轮行/列归一化。</text>
+</svg>
+<p class="cap"><b>图 3</b>｜hc_pre / hc_post 全步骤数据流（对应 <code>kernel.py</code> 的 <code>hc_split_sinkhorn_kernel</code> 与 <code>model.py</code> 的 <code>Block.hc_pre / hc_post</code>）。上带系数生成：流矩阵展平（①）→ 整体 RMS 统计（②）→ matmul φ 得 24 维（③）→ 后置除以 RMS（④，§4.3.1 等价重排）；24 维按序拆成 pre / post / comb 三段，各分支先施加 α·(·)+b，再分别经 σ+ε（读出权重）、2σ（写回权重）、Sinkhorn×20（双随机混合矩阵）变换（⑤–⑦）。中带层计算：原始流按 pre 加权和读出层输入（⑧），经 RMSNorm 与层 F 得 d 维输出（⑨）。下带流更新：comb 对 4 条流做凸组合混合（⑩）、post 把层输出广播写回（⑪）、相加得新一代流矩阵（⑫）进入下一子层。</p>
 </div>
 
 <h3>2.3 工程设计：把 6.7% 开销磨出来（论文 §4.3）</h3>
@@ -476,13 +608,13 @@ window.MathJax = {
   <text x="640" y="158" text-anchor="middle" font-size="11" fill="#5a6272">15d</text>
   <text x="810" y="158" text-anchor="middle" font-size="11" fill="#5a6272">20d</text>
 </svg>
-<p class="cap"><b>图 3</b>｜mHC 激活显存流量演进（n=4，V4.1 论文 §2.4.1 口径）。Single-Pass 用「系数错开一层」消除 kernel 间数据依赖，使单融合 kernel 达到理论下界、流量较 V4 实现减半。</p>
+<p class="cap"><b>图 4</b>｜mHC 激活显存流量演进（n=4，V4.1 论文 §2.4.1 口径）。Single-Pass 用「系数错开一层」消除 kernel 间数据依赖，使单融合 kernel 达到理论下界、流量较 V4 实现减半。</p>
 </div>
 
 <h2>6. 事实与推断的边界</h2>
 <ul>
   <li><b>论文/源码证实</b>：所有公式、理论性质（非扩张、封闭性、Birkhoff 几何）、实验数字（增益 3000→1.6、loss −0.021、表 5 基准、6.7% 开销、\(L^*_r\) 公式）出自 <code>paper/mhc.pdf</code>；V4/V4.1 落地细节出自 <code>paper/deepseek_v4.pdf</code>（§2.2、§2.4、§3.3、§3.4.2）与 <code>paper/deepseek_v41.pdf</code>（§2.4.1、§4.2.1-4.2.2）；代码片段与行号来自 <code>/tmp/paper-research/v4-pro/inference/</code> 实际克隆内容（commit <code>b5968e9</code>，2026-09-14 抓取；<code>model.py</code>、<code>kernel.py</code>、<code>config.json</code>）。</li>
-  <li><b>推断（已标注）</b>：① §3.3 推断框中「首轮 softmax 是 exp+行归一化的数值稳定等价」「eps 为实现细节」；② <code>hc_head</code> 无需混合约束的解读；③ 表 2 中 n=4 的量级换算（21C/13C）。</li>
+  <li><b>推断（已标注）</b>：① §3.3 推断框中「首轮 softmax 是 exp+行归一化的数值稳定等价」「eps 为实现细节」；② <code>hc_head</code> 无需混合约束的解读；③ 表 2 中 n=4 的量级换算（21C/13C）；④ §2.2 新增的「出口投影」设计动机分析与 2×2 Sinkhorn 数值演示（演示为作者补充，论文未含此例；「收敛速度与矩阵病态程度相关」为解释性推断）。</li>
   <li><b>未决</b>：① mHC 论文的 6.7% 与稳定性实验均为 DeepSeek in-house 规模，公开实验只到 27B/262B tokens，更大规模的对照数据未公开；② \(H^{pre}/H^{post}\) 的 σ/2σ 约束不保证读出/写入通道严格守恒（论文只论证了 \(H^{res}\) 的守恒性），稳定性保证是不完整的；③ 论文未提供 \(t_{max}\) 的敏感性消融（20 次的选取依据仅为「practical value」）。</li>
 </ul>
 
@@ -494,11 +626,12 @@ window.MathJax = {
   <li>DeepSeek-AI. <i>DeepSeek-V4-Pro</i> 官方推理实现. <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro（inference/）</a>. commit <code>b5968e9</code>（2026-06-22），2026-09-14 抓取. 关键代码：<code>model.py</code>（<code>Block.hc_pre/hc_post</code>、<code>ParallelHead.hc_head</code>）、<code>kernel.py</code>（<code>hc_split_sinkhorn_kernel</code>）、<code>config.json</code>（<code>hc_mult=4</code>）.</li>
   <li>Zhu, D., Huang, H., Huang, Z., et al. <i>Hyper-Connections</i>. arXiv:2409.19606, 2024.（HC 原论文）</li>
   <li>Sinkhorn, R. &amp; Knopp, P. <i>Concerning Nonnegative Matrices and Doubly Stochastic Matrices</i>. Pacific J. Math. 21(2), 1967.（Sinkhorn-Knopp 迭代）</li>
+  <li>Cuturi, M. <i>Sinkhorn Distances: Lightspeed Computation of Optimal Transport</i>. NeurIPS 2013.（熵正则化最优传输，与式 9 为同一交替归一化算法）</li>
   <li>He, K., Zhang, X., Ren, S., Sun, J. <i>Identity Mappings in Deep Residual Networks</i>. ECCV 2016.（恒等映射性质）</li>
   <li>Wang, L., et al. <i>TileLang: A Composable Tiled Programming Model for AI Systems</i>. arXiv:2504.17577, 2025.（mHC kernel 的实现语言）</li>
 </ol>
 
-<footer>生成于 2026-09-14 · paper-research 工作流 · 公式由 MathJax 3 渲染，代码高亮由 highlight.js 11.9 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+<footer>生成于 2026-09-14 · 2026-09-15 增补 §2.2 约束机制与 Sinkhorn-Knopp 详解 · paper-research 工作流 · 公式由 MathJax 3 渲染，代码高亮由 highlight.js 11.9 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
 
 </main>
 <script>hljs.highlightAll();</script>
