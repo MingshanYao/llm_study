@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek-V4 Lightning Indexer 深度解读：稀疏注意力的可学习索引器</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DeepSeek-V4 Lightning Indexer 深度解读：稀疏注意力的可学习索引器</h1>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>日期：</b>2026-09-16　<b>论文：</b><i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>（索引器机制出自其 §2.3.1，式 13–17；演进对照用 V3.2 报告 §2.1）</p>
+  <p style="margin:4px 0"><b>arXiv：</b><a href="https://arxiv.org/abs/2606.19348">arxiv.org/abs/2606.19348</a>　<b>官方代码：</b><a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro（<code>inference/</code> 目录，commit <code>b5968e9</code>，2026-09-16 抓取）</a></p>
+  <p style="margin:4px 0"><b>本地文件：</b><code>paper/deepseek_v4.pdf</code>（主论文）；<code>paper/deepseek_v32.pdf</code>（DSA / Lightning Indexer 原始出处）</p>
+  <p style="margin:4px 0"><b>前置阅读：</b><a href="deepseek-v4-attention.html">V4 Attention 总览（CSA/HCA）</a> · <a href="deepseek-v4-architecture.html">V4 总体架构</a> · <a href="csa-compression.html">CSA 压缩过程</a> · <a href="deepseek-v4-kvcache.html">KV Cache 组织（§4 有 Indexer 缓存特写）</a></p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>Lightning Indexer（闪电索引器）是 DeepSeek 稀疏注意力（DSA）体系里<b>独立于主注意力的可学习打分模块</b>：用少量小维度索引头（64 头 × 128 维）对全部候选算一个标量索引分 \(I_{t,s} = \sum_h w^I_{t,h}\cdot\mathrm{ReLU}(q^I_{t,h}\cdot K_s)\)，再 top-k 选出稀疏注意力的参与集合。它存在的根本原因：<b>top-k 不可微、主注意力分数既贵又逐头分歧，无法直接当排序信号用</b>。V3.2 中它在 token 粒度上选 top-k=2048 个 token；V4 中索引器自己的 KV 也经过同一套压缩器压成 128 维 entry（\(K^{\mathrm{I,Comp}}\in\mathbb{R}^{\frac{n}{m}\times c_I}\)），选择粒度变成「压缩 entry」，候选数与索引缓存都 ÷4。索引器 QK 路径做了 FP4 量化感知训练、索引分数存 BF16，使 top-k 选择提速 2×、召回 99.7%。1M 上下文解码时，indexer 打分是 CSA 层注意力侧的主要 FLOPs 来源——它的每一点精简都直接兑现为端到端效率。</p>
+</div>
+
+<h2>1. 为什么需要独立的 Lightning Indexer</h2>
+
+<p>稀疏注意力要做的事很朴素：对每个 query token，从全部历史候选里挑出少数几个参与真正的注意力计算。难点在于「挑」本身——这个挑选信号从哪来？直接用主注意力的分数做 top-k 行不行？论文与源码给出的答案是：不行，需要一个独立、轻量、可训练的索引器，理由有四条。</p>
+
+<h3>1.1 top-k 不可微，选择必须有自己的训练通路</h3>
+<p>top-k 是离散操作，没有梯度。如果稀疏模式由主注意力的分数隐式决定，模型没有任何直接监督信号告诉它「该选哪些 entry」。V3.2 的解法是把「打分」变成显式模块并配上专门的对齐目标：稠密 warm-up 阶段冻结除 indexer 外的全部参数，把主注意力各头分数求和、L1 归一化成目标分布 \(p_{t,:}\)，用 KL 散度把 indexer 输出对齐上去（V3.2 论文 §2.1.1，p.4，式 3）：</p>
+<div class="formula">\[ \mathcal{L}^{\mathrm{I}} = \sum_t D_{\mathrm{KL}}\!\left(p_{t,:}\,\|\,\mathrm{Softmax}(I_{t,:})\right) \]</div>
+<p>稀疏训练阶段再把这个 KL 限制在被选中的集合 \(S_t\) 内（式 4），并且<b>把 indexer 的输入从计算图上 detach</b>——indexer 只从 \(\mathcal{L}^{\mathrm{I}}\) 学习，主模型只从语言建模损失学习，两条优化通路互不干扰。</p>
+
+<h3>1.2 top-k 要求全量扫描，扫描者必须便宜</h3>
+<p>要选出 top-k，就必须对<b>全部</b>候选打分。如果用主注意力来打分，等于先做一遍完整的 \(O(L^2)\) 注意力再稀疏化，稀疏化就失去了意义。所以打分者必须比主注意力便宜得多：indexer 只有 64 个头、每头 128 维（主注意力 V4-Pro 是 128 头 × 512 维），V3.2 论文直言「indexer 仍具有 \(O(L^2)\) 复杂度，但其计算量远小于 MLA」（§2.3，p.5）——便宜，正是它能承担「全量扫描」这一职责的前提。</p>
+
+<h3>1.3 主注意力分数是逐头的，top-k 需要单一标量序</h3>
+<p>核心注意力中每个 query head 有自己的分数分布；而为了 kernel 效率，同一 token 的所有 query 头必须<b>共享同一批 KV entry</b>（V3.2 论文 §2.1：「each key-value entry must be shared across multiple queries for computational efficiency」）。这意味着 top-k 集合必须是唯一的——需要把多头意见汇成一个标量分。indexer 的设计恰好就是这个汇合器：\(w^I_{t,h}\) 是由当前 query token 动态生成的<b>逐头权重</b>（V4 式 15），对 64 个索引头的 ReLU 分数加权求和得到单一 \(I_{t,s}\)（式 16）。它不是「主注意力分数的平均」，而是一个参数独立、专门为排序训练的轻量多头打分器。</p>
+
+<h3>1.4 精度–开销解耦：打分可以牺牲精度，注意力不能</h3>
+<p>ReLU 的选用论文说得直白：「We choose ReLU as the activation function for <b>throughput</b> consideration」（V3.2 论文 p.3）——ReLU 计算与硬件实现都极简，且打分是原始 logit（不做 softmax），单调性保序，直接可 top-k。更重要的是，indexer 小而独立，可以<b>单独</b>压到极低精度而不伤主注意力：V3.2 说它「can be implemented in FP8」（p.3），V4 更进一步把 QK 路径做 FP4、索引分数存 BF16（§2.3.4、§5.2.1）。打分错一点的代价只是选错 entry（损失一点召回），而参与计算的注意力内容始终保持高精度——「粗筛可以糙，精算必须准」。</p>
+
+<div class="infer">还有一条论文未明说的隐含原因：解码阶段稀疏 kernel 只读被选中的 entry，主注意力分数对未被选中的候选根本算不出来（先有选择、后有分数的鸡生蛋问题），所以全局排序信号只能来自一个能廉价访问全量候选的旁路模块。这是对 §1.2 的工程化补充理解。</div>
+
+<h2>2. V3.2 → V4：从 token 粒度到 entry 粒度</h2>
+
+<p>Lightning Indexer 首次提出于 DeepSeek-V3.2 的 DSA。两代的打分公式同构——逐头内积、ReLU、逐头权重加权求和——变的是<b>索引 key 的粒度</b>：</p>
+
+<div class="formula">\[ \text{V3.2（式 1）}:\ I_{t,s} = \sum_{j=1}^{H^I} w^I_{t,j}\cdot \mathrm{ReLU}\!\left(q^I_{t,j}\cdot k^I_s\right),\quad k^I_s\in\mathbb{R}^{d_I}\ \text{逐 token 一条} \]</div>
+<div class="formula">\[ \text{V4（式 15–16）}:\ I_{t,s} = \sum_{h=1}^{n^I_h} w^I_{t,h}\cdot \mathrm{ReLU}\!\left(q^I_{t,h}\cdot K^{\mathrm{I,Comp}}_s\right),\quad K^{\mathrm{I,Comp}}\in\mathbb{R}^{\frac{n}{m}\times c_I}\ \text{逐压缩 entry 一条} \]</div>
+
+<p>V4 论文（§2.3.1，p.10）只加了一句话：「CSA 用与 \(C^{\mathrm{Comp}}\) 相同的压缩操作得到压缩索引 key \(K^{\mathrm{I,Comp}}\in\mathbb{R}^{\frac{n}{m}\times c_I}\)，其中 \(c_I\) 是索引头维度」。变化全在这句话里：</p>
+
+<table>
+  <tr><th>维度</th><th>V3.2（DSA，token 粒度）</th><th>V4（CSA，entry 粒度）</th></tr>
+  <tr><td>候选单元</td><td>单 token 的 MLA latent \(c_s\)</td><td>压缩 entry（每 m=4 个 token 压 1 条）</td></tr>
+  <tr><td>索引 key</td><td>\(k^I_s\in\mathbb{R}^{d_I}\)，逐 token 缓存</td><td>\(K^{\mathrm{I,Comp}}\in\mathbb{R}^{\frac{n}{4}\times 128}\)，逐 entry 缓存（\(c_I=128\)）</td></tr>
+  <tr><td>打分候选数 / query</td><td>\(L\)（全序列逐 token）</td><td>\(L/4\)（压缩后 entry 数）</td></tr>
+  <tr><td>top-k</td><td>2048 个 token</td><td>Pro 1024 条 entry（≈4096 token 当量）；Flash 512 条</td></tr>
+  <tr><td>打分计算量</td><td>\(O(L^2)\)（论文承认，但远轻于 MLA）</td><td>\(O(L^2/4)\)</td></tr>
+  <tr><td>索引 KV 缓存</td><td>每 token 1 条 \(d_I\) 维</td><td>每 4 token 1 条 128 维 → 条数 −75%</td></tr>
+  <tr><td>打分精度</td><td>FP8 可行</td><td>QK 路径 FP4（QAT），索引分数 FP32→BF16</td></tr>
+</table>
+<p class="cap"><b>表 1</b>｜两代索引器对照。V3.2 数字出自 paper/deepseek_v32.pdf §2.1–2.2（p.3–5）；V4 数字出自 paper/deepseek_v4.pdf §2.3.1、§4.2.1（p.10、24–25）与 §5.2.1（p.33）。\(d_I\) 的具体取值 V3.2 论文未给出，此处不展开。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 420" xmlns="http://www.w3.org/2000/svg" font-size="11" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m2a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <text x="20" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">V3.2 · DSA：token 粒度索引（候选 = 每个 token）</text>
+  <g>
+    <rect x="20" y="50" width="170" height="76" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+    <text x="105" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">每 token 缓存</text>
+    <text x="105" y="90" text-anchor="middle" fill="#1a1f2e">1 条索引 key k^I_s ∈ R^d_I</text>
+    <text x="105" y="108" text-anchor="middle" fill="#5a6272">（FP8 可行，V3.2 p.3）</text>
+    <rect x="235" y="50" width="170" height="76" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+    <text x="320" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Lightning Indexer</text>
+    <text x="320" y="90" text-anchor="middle" fill="#1a1f2e">L×L 逐 token 打分</text>
+    <text x="320" y="108" text-anchor="middle" fill="#5a6272">ReLU + 逐头加权（式 1）</text>
+    <rect x="450" y="50" width="170" height="76" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+    <text x="535" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Top-k = 2048</text>
+    <text x="535" y="90" text-anchor="middle" fill="#1a1f2e">选出 2048 个 token</text>
+    <text x="535" y="108" text-anchor="middle" fill="#5a6272">（需 KL 门控损失对齐）</text>
+    <rect x="665" y="50" width="170" height="76" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+    <text x="750" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">主注意力 MLA-MQA</text>
+    <text x="750" y="90" text-anchor="middle" fill="#1a1f2e">只在选中 token 上算</text>
+    <text x="750" y="108" text-anchor="middle" fill="#5a6272">O(Lk)，k=2048</text>
+    <line x1="190" y1="88" x2="231" y2="88" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
+    <line x1="405" y1="88" x2="446" y2="88" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
+    <line x1="620" y1="88" x2="661" y2="88" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
+  </g>
+  <text x="20" y="160" fill="#5a6272">索引 KV：每 token 1 条 d_I 维 → 随 L 线性增长；打分计算量 O(L²)（V3.2 论文 §2.3 明确承认 indexer 仍为 O(L²)）</text>
+
+  <text x="20" y="248" font-size="13" font-weight="bold" fill="#2456c4">V4 · CSA：压缩 entry 粒度索引（候选 = 每 m=4 token 一条）</text>
+  <g>
+    <rect x="20" y="266" width="170" height="76" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="105" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">索引 KV 同样压缩</text>
+    <text x="105" y="306" text-anchor="middle" fill="#1a1f2e">K^I,Comp：(n/4) × 128</text>
+    <text x="105" y="324" text-anchor="middle" fill="#5a6272">（同一压缩机制，式 9–12）</text>
+    <rect x="235" y="266" width="170" height="76" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="320" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Lightning Indexer</text>
+    <text x="320" y="306" text-anchor="middle" fill="#1a1f2e">L×(n/4) 逐 entry 打分</text>
+    <text x="320" y="324" text-anchor="middle" fill="#5a6272">QK 路径 FP4（式 15–16）</text>
+    <rect x="450" y="266" width="170" height="76" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="535" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Top-k = 1024</text>
+    <text x="535" y="306" text-anchor="middle" fill="#1a1f2e">1024 条 entry</text>
+    <text x="535" y="324" text-anchor="middle" fill="#5a6272">≈ 4096 token 的信息</text>
+    <rect x="665" y="266" width="170" height="76" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="750" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">SKV-MQA 核心注意力</text>
+    <text x="750" y="306" text-anchor="middle" fill="#1a1f2e">选中 entry 即 K=V</text>
+    <text x="750" y="324" text-anchor="middle" fill="#5a6272">选择单元 = 注意力单元</text>
+    <line x1="190" y1="304" x2="231" y2="304" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
+    <line x1="405" y1="304" x2="446" y2="304" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
+    <line x1="620" y1="304" x2="661" y2="304" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
+  </g>
+  <text x="20" y="382" fill="#2f9e63">索引 KV 条数 L → L/4（−75%）；打分计算 O(L²/4)；top-k 在 n/4=25 万级候选上排序，比 V3.2 的 100 万级候选更省且覆盖更大</text>
+</svg>
+<p class="cap"><b>图 1</b>｜两代索引器的粒度对比（对照 V3.2 论文式 1 与 V4 论文式 13–17）。核心差异在最左一格：V4 先把索引 key 本身压到 1/m（m=4），后续每一环——打分量、排序量、缓存条数——都跟着 ÷4；且「选择单元」与「注意力单元」合一，选中即可用。</p>
+</div>
+
+<h3>2.1 为什么 entry 粒度更省</h3>
+<ul>
+  <li><b>打分候选数 ÷4</b>：打分是对全部候选的扫描，候选从 L 个 token 变成 n/4 个 entry，打分 FLOPs 与 top-k 排序开销同比例下降；</li>
+  <li><b>索引缓存条数 ÷4</b>：索引 key 与主 KV 用同一压缩节奏（每 4 token 1 条），缓存条数直接减为 1/4，且索引头维度只有 128（主 entry 是 512）；</li>
+  <li><b>选择单元 = 注意力单元</b>：V3.2 选出 token 后，主注意力还要读这些 token 的 latent 向量；V4 中被选中的 entry 本身就是主注意力的 K=V（SKV-MQA），选择结果即取即用，没有第二跳检索；</li>
+  <li><b>覆盖面反而更大</b>：k=1024 条 entry 每条代表 4 个 token 的信息，等效覆盖约 4096 token，比 V3.2 的 2048 token 覆盖更大，而排序的候选规模（n/4）与选中数（1024）都不吃亏。论文也点明「相对 V3.2 选择了更小的 top-k 以提升短中文本效率」（§2.3.4，p.13）。</li>
+</ul>
+
+<h2>3. 结构走查：一次打分的数据流（V4-Pro 数）</h2>
+
+<p>以 DeepSeek-V4-Pro 为例（\(d=7168\)、\(n^I_h=64\)、\(c_I=128\)、\(d_c=1536\)、top-k=1024，论文 §4.2.1 p.25，与 <code>config.json</code> 一致）。对 query token \(t\)：</p>
+
+<div class="formula">\[ c^Q_t = h_t\cdot W^{DQ} \in \mathbb{R}^{1536} \quad (13) \qquad [q^I_{t,1};\dots;q^I_{t,64}] = q^I_t = c^Q_t\cdot W^{IUQ} \in \mathbb{R}^{64\times128} \quad (14) \]</div>
+<div class="formula">\[ [w^I_{t,1};\dots;w^I_{t,64}] = w^I_t = h_t\cdot W^{w} \in \mathbb{R}^{64} \quad (15) \qquad I_{t,s} = \sum_{h=1}^{64} w^I_{t,h}\cdot \mathrm{ReLU}\!\left(q^I_{t,h}\cdot K^{\mathrm{I,Comp}}_s\right) \quad (16) \]</div>
+<div class="formula">\[ C^{\mathrm{SprsComp}}_t = \left\{ C^{\mathrm{Comp}}_s \ \middle|\ I_{t,s}\in \mathrm{Top\text{-}k}(I_{t,:}) \right\} \quad (17) \]</div>
+
+<p>三个值得注意的设计点：</p>
+<ul>
+  <li><b>索引 query 走低秩</b>：先降到 \(d_c=1536\) 再升到 \(64\times128=8192\) 维。参数量 \(7168\times1536 + 1536\times8192 \approx 13.6\,\mathrm{M}\)，若直接升维 \(7168\times8192\approx 58.7\,\mathrm{M}\)，省 4 倍以上；</li>
+  <li><b>latent \(c^Q_t\) 一份两用</b>：论文 p.11 明确「the latent query vector \(c^Q_t\) is shared with that used for the indexer queries」——主注意力的 query 升维（式 18）与索引 query 升维（式 14）从同一个 latent 出发，一次降维、两处受益。代码里就是同一个 <code>qr</code> 张量先后喂给两条 <code>wq_b</code>（见 §6.3）；</li>
+  <li><b>逐头权重 \(w^I_t\) 不走低秩</b>：只有 64 维，直接 \(h_t\cdot W^w\)（\(W^w\in\mathbb{R}^{7168\times64}\)）一条独立投影。它承担 §1.3 说的「多头 → 标量」汇合，必须逐 token 动态生成——相关性模式随 query 内容变化，静态权重退化成固定平均。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 860 516" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m1a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker><marker id="m1b" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2f9e63"/></marker></defs>
+  <!-- 行1：query 侧 -->
+  <rect x="20" y="54" width="96" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="68" y="72" text-anchor="middle" font-weight="bold" fill="#1a1f2e">h_t</text>
+  <text x="68" y="90" text-anchor="middle" font-size="10" fill="#5a6272">∈ R^7168</text>
+  <rect x="160" y="40" width="130" height="32" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="225" y="60" text-anchor="middle" fill="#1a1f2e">W^DQ：7168→1536</text>
+  <rect x="330" y="40" width="130" height="32" rx="6" fill="#dbe6f8" stroke="#2456c4"/>
+  <text x="395" y="60" text-anchor="middle" fill="#1a1f2e">c^Q_t ∈ R^1536</text>
+  <rect x="160" y="96" width="130" height="32" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="225" y="116" text-anchor="middle" fill="#1a1f2e">W^w：7168→64</text>
+  <rect x="330" y="96" width="130" height="32" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="395" y="116" text-anchor="middle" fill="#1a1f2e">w^I ∈ R^64</text>
+  <rect x="500" y="40" width="130" height="32" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="565" y="60" text-anchor="middle" fill="#1a1f2e">W^IUQ：1536→8192</text>
+  <rect x="670" y="40" width="150" height="32" rx="6" fill="#2456c4"/>
+  <text x="745" y="60" text-anchor="middle" fill="#fff">q^I：64 头 × 128 维</text>
+  <rect x="500" y="96" width="240" height="32" rx="6" fill="none" stroke="#2f9e63" stroke-dasharray="5 4"/>
+  <text x="620" y="116" text-anchor="middle" font-size="11" fill="#2f9e63">latent 同时供主注意力升维（式 18）</text>
+  <line x1="116" y1="66" x2="156" y2="56" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="116" y1="86" x2="156" y2="112" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="290" y1="56" x2="326" y2="56" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="290" y1="112" x2="326" y2="112" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="460" y1="56" x2="496" y2="56" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="630" y1="56" x2="666" y2="56" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <polyline points="460,64 480,64 480,112 496,112" fill="none" stroke="#2f9e63" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#m1b)"/>
+  <text x="139" y="32" text-anchor="middle" font-size="10" fill="#5a6272">式 13</text>
+  <text x="480" y="30" text-anchor="middle" font-size="10" fill="#5a6272">式 14</text>
+  <text x="245" y="90" text-anchor="middle" font-size="10" fill="#5a6272">式 15</text>
+  <!-- 行2：KV 侧 -->
+  <rect x="20" y="190" width="140" height="36" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="90" y="204" text-anchor="middle" font-size="11" fill="#1a1f2e">KV token 隐状态</text>
+  <text x="90" y="219" text-anchor="middle" font-size="10" fill="#5a6272">（每 4 token 一组）</text>
+  <rect x="200" y="190" width="160" height="36" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="280" y="204" text-anchor="middle" font-size="11" fill="#1a1f2e">Indexer 专用压缩器</text>
+  <text x="280" y="219" text-anchor="middle" font-size="10" fill="#5a6272">（rotate=True，式 9–12）</text>
+  <rect x="400" y="190" width="180" height="36" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="490" y="204" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1f2e">K^I,Comp</text>
+  <text x="490" y="219" text-anchor="middle" font-size="10" fill="#5a6272">(n/4) × 128 维</text>
+  <line x1="160" y1="208" x2="196" y2="208" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="360" y1="208" x2="396" y2="208" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <text x="20" y="262" font-size="10" fill="#5a6272">打分全程可低精度化：QK 路径 FP4，索引分数 BF16（§5.2.1）</text>
+  <!-- 行3：打分 -->
+  <rect x="180" y="290" width="500" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="430" y="314" text-anchor="middle" fill="#1a1f2e">I_t,s = Σ(h=1..64) w^I_t,h · ReLU( q^I_t,h · K_s^I,Comp )</text>
+  <text x="430" y="334" text-anchor="middle" font-size="10" fill="#5a6272">逐头内积 → ReLU → 逐头加权求和为单一标量分（式 16）</text>
+  <line x1="395" y1="128" x2="395" y2="286" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="510" y1="226" x2="510" y2="286" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <polyline points="760,72 760,318 684,318" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <!-- 行4：top-k -->
+  <line x1="430" y1="346" x2="430" y2="376" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <rect x="240" y="380" width="360" height="40" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="420" y="405" text-anchor="middle" fill="#1a1f2e">Top-k 选择：保留 k=1024 条 entry（式 17）</text>
+  <rect x="650" y="378" width="180" height="44" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="740" y="396" text-anchor="middle" font-size="11" fill="#1a1f2e">主 KV entry C^Comp</text>
+  <text x="740" y="412" text-anchor="middle" font-size="10" fill="#5a6272">(n/4) × 512 维</text>
+  <line x1="650" y1="400" x2="604" y2="400" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <line x1="430" y1="420" x2="430" y2="452" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <rect x="240" y="456" width="360" height="40" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="420" y="481" text-anchor="middle" fill="#1a1f2e">被选 entry C^SprsComp_t → SKV-MQA 核心注意力</text>
+</svg>
+<p class="cap"><b>图 2</b>｜Lightning Indexer 完整数据流与张量形状（V4-Pro 配置；对应 V4 论文图 3 的 Indexer 部分，式 13–17）。蓝色：低秩索引 query（式 13–14）；绿色：独立投影的逐头权重（式 15）与 latent 共享支路；橙色：索引器专用的压缩器与 128 维索引 key。打分输出单一标量序列，top-k 直接索引主 KV entry。</p>
+</div>
+
+<h3>3.1 索引器的因果性与位置编码</h3>
+<ul>
+  <li><b>因果掩码</b>：式 16 只对「前序压缩块」\(s < \mathrm{Floor}(t/m)\) 打分（论文 p.10）。代码在 prefill 时用 <code>mask</code> 把未来 entry 的分数置 −inf（model.py:424–426），与公式一致；</li>
+  <li><b>部分 RoPE</b>：索引 query 与索引 key 都只对最后 64 维（<code>rope_head_dim</code>）施加 RoPE（model.py:413 与压缩器内部），与主 KV 同款位置编码方案，保证索引分对相对位置敏感；</li>
+  <li><b>Hadamard 旋转 ≠ RoPE</b>：索引器的压缩器以 <code>rotate=True</code> 构造，池化完成后对整条 128 维 entry 做 <code>rotate_activation</code>（随机 Hadamard 旋转，model.py:247–252，注释写明目的是「spread information across dims before FP8 quant」）再做 FP4 量化——这是为低精度量化服务的能量摊平，与位置编码无关，两件事共用「旋转」一词但语义完全不同。</li>
+</ul>
+
+<h2>4. 索引器的 KV cache：独立布局与体积</h2>
+
+<p>索引器给 KV cache 引入了<b>一套维度与主注意力不同的额外条目</b>（论文 §3.5.1，p.21–22；图 6 的缓存布局里 CSA Indexer KV 与 CSA Main KV、HCA KV 同块分段共存）。布局与分块对齐的细节本站已有专文：<a href="deepseek-v4-kvcache.html">deepseek-v4-kvcache.html §2、§4</a>（Indexer 段「一次压缩、两份产出」「写入节奏」「解码四步旅程」三个特写），此处只补代码视角：</p>
+
+<ul>
+  <li><b>独立缓冲</b>：<code>Indexer</code> 类有自己的 <code>kv_cache</code>，形状 <code>(max_batch_size, max_seq_len//4, 128)</code>（model.py:399）——每个 CSA 层一份，每 4 个原始 token 占 1 个槽位、每槽 128 维；</li>
+  <li><b>与主缓存的关系</b>：主注意力的 <code>Attention.kv_cache</code> 是「SWA 段 + 压缩段」合一的 512 维缓冲（model.py:474、491）；索引器缓冲与之平行、互不混用。以元素量计，索引缓存是主压缩缓存的 \(128/512 = 1/4\)；</li>
+  <li><b>score_state 不是索引缓存</b>：<code>score_state</code>（连同 <code>kv_state</code>）注册在压缩器 <code>Compressor</code> 类上（model.py:303–304），装的是<b>还没攒满压缩窗口的在途 token</b> 的门控分数与 KV（padding 为 −inf），大小与上下文长度无关，属于「状态缓冲」，与随序列线性增长的索引 entry 缓存是两类东西。索引器的压缩器是独立实例，自然也有一套自己的 <code>kv_state/score_state</code>（在 model.py:408–410 惰性绑定到 <code>Indexer.kv_cache</code> 上写入）。</li>
+</ul>
+
+<div class="infer">每条索引 entry 的字节数取决于存储精度：论文口径下 QK 激活按 FP4 缓存加载（§5.2.1），则约 128×0.5=64 B/条；参考实现当前用 BF16 存（model.py:419 注释原文「kv could also use fp8 format, though current implementation uses bf16」），则约 256 B/条。主 entry（512 维，RoPE 64 维 BF16 + 其余 FP8）约 576 B/条。逐条目字节的推算口径详见 kvcache 报告 §6。</div>
+
+<div class="fig">
+<svg viewBox="0 0 860 360" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m3a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <rect x="20" y="56" width="110" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="75" y="74" text-anchor="middle" font-size="11" fill="#1a1f2e">解码 token</text>
+  <text x="75" y="90" text-anchor="middle" font-size="10" fill="#5a6272">x_t（隐状态）</text>
+  <line x1="130" y1="78" x2="176" y2="78" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <rect x="180" y="36" width="240" height="140" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="300" y="58" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">indexer.compressor</text>
+  <text x="300" y="74" text-anchor="middle" font-size="10" fill="#5a6272">（rotate=True：Hadamard 旋转 + FP4）</text>
+  <rect x="196" y="86" width="100" height="30" rx="4" fill="#fff" stroke="#e8862a"/>
+  <text x="246" y="105" text-anchor="middle" font-size="11" fill="#1a1f2e">kv_state</text>
+  <rect x="304" y="86" width="100" height="30" rx="4" fill="#fff" stroke="#e8862a"/>
+  <text x="354" y="105" text-anchor="middle" font-size="11" fill="#1a1f2e">score_state</text>
+  <text x="300" y="138" text-anchor="middle" font-size="10" fill="#5a6272">在途 token 的门控分数 + KV（未满窗口）</text>
+  <text x="300" y="154" text-anchor="middle" font-size="10" fill="#5a6272">ape = 压缩位置偏置 B_a,B_b（式 11）</text>
+  <line x1="300" y1="176" x2="300" y2="210" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <text x="312" y="198" font-size="10" fill="#5a6272">每攒满 4 token 压出 1 条 128 维 entry</text>
+  <rect x="180" y="214" width="240" height="60" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="300" y="238" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Indexer.kv_cache</text>
+  <text x="300" y="258" text-anchor="middle" font-size="10" fill="#5a6272">⌊pos/4⌋ 条 × 128 维（每 CSA 层独立）</text>
+  <rect x="560" y="36" width="270" height="90" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="695" y="60" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Attention.kv_cache（主注意力）</text>
+  <text x="695" y="82" text-anchor="middle" font-size="10" fill="#1a1f2e">[ SWA 段 128×512 | 压缩段 ⌊pos/4⌋×512 ]</text>
+  <text x="695" y="100" text-anchor="middle" font-size="10" fill="#5a6272">512 维 entry，与 SWA 共用同一缓冲</text>
+  <text x="560" y="152" font-size="10" fill="#5a6272">元素量比 ≈ 128/512 = 1:4（同为每 4 token 1 条）</text>
+  <rect x="560" y="214" width="270" height="60" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="695" y="238" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">打分（式 16）→ Top-k=1024</text>
+  <text x="695" y="258" text-anchor="middle" font-size="10" fill="#5a6272">新 query 与全部 ⌊pos/4⌋ 条 entry 算分</text>
+  <line x1="420" y1="244" x2="556" y2="244" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <text x="20" y="320" font-size="10.5" fill="#5a6272">两类缓冲分工：kv_state / score_state 只装未满压缩窗口的在途 token（有界，随请求固定，对应论文 §3.5.1 的 State Cache）；</text>
+  <text x="20" y="340" font-size="10.5" fill="#5a6272">Indexer.kv_cache 追加压缩 entry（随上下文线性增长，进分页 KV Cache）——缓存布局总览见 deepseek-v4-kvcache.html 图 1–3。</text>
+</svg>
+<p class="cap"><b>图 3</b>｜索引器缓存的代码视角（对应 <code>inference/model.py</code> 的 <code>Indexer</code> 与 <code>Compressor</code> 类）。橙色：索引器专用压缩器（rotate=True）及其状态缓冲；蓝色：随序列增长的 128 维索引 entry 缓存；绿色：每步打分–选择。注意 <code>score_state</code> 属于压缩器、是「状态」而非「索引缓存」。</p>
+</div>
+
+<h2>5. 训练与推理代价</h2>
+
+<h3>5.1 训练：V3.2 的门控损失，V4 的暖启安排</h3>
+<p><b>V3.2（写明了损失）</b>：两阶段。①稠密暖启：冻结除 indexer 外的全部参数，以「主注意力各头分数求和 + L1 归一化」为目标分布，KL 损失（式 3）只训 indexer——学习率 \(10^{-3}\)，仅 1000 步（每步 16 条 128K 序列，共 2.1B token）；②稀疏训练：引入 top-k=2048 后，KL 损失只在被选集合 \(S_t\) 内计算（式 4），indexer 输入 detach、与主模型分别优化，训 15000 步共 943.7B token（V3.2 论文 §2.1.1，p.4）。</p>
+<p><b>V4（只写安排，未写损失）</b>：预训练先用稠密注意力训 1T token，在序列长度 64K 处引入稀疏；「引入稀疏时，先安排一个短暂阶段 warm up CSA 的 lightning indexer，随后全程以稀疏注意力训练」（§4.2.2，p.24）。论文<b>没有写明 V4 的 indexer 暖启用什么损失</b>，也未提 KL/gating 损失是否沿用——见 §7 边界条目。</p>
+<p><b>V4 的量化感知训练（QAT，§5.2.1，p.33）</b>：后训练阶段对两处做 MXFP4 量化感知训练——MoE 专家权重，以及 <b>CSA 索引器的 QK 路径</b>（QK 激活的缓存、加载、乘法全在 FP4 下）；同时把索引分数 \(I_{:,:}\) 从 FP32 量化到 BF16。后一项优化使 top-k 选择器提速 <b>2×</b>，KV entry 召回率保持 <b>99.7%</b>。RL/推理 rollout 阶段直接用原生 FP4 权重，保证与线上部署行为一致。</p>
+
+<h3>5.2 开销的账：indexer 花了多少，省了多少</h3>
+<p>indexer 的额外开销在三处：①两条投影（低秩 query + 64 维权重，一次性的小矩阵乘）；②索引 entry 的压缩与缓存（每 4 token 一条 128 维）；③<b>逐 query 对全部候选的打分</b>（这是主体）。它换来的：主注意力从对 \(L\) 个候选的稠密计算降为对 \(k\) 条 entry 的稀疏计算。</p>
+
+<p>以 V4-Pro、1M 上下文、CSA 层解码一步为口径核算（论文未给出该拆分，此为<b>推断核算</b>）：</p>
+
+<table>
+  <tr><th>项目</th><th>规模</th><th>每 token FLOPs（×2 乘加口径）</th><th>需读取的量</th></tr>
+  <tr><td>indexer 打分（式 16）</td><td>候选 n/4 = 250,000 条 × 64 头 × 128 维</td><td>≈ 4.1 GFLOP（FP4 下执行）</td><td>全部索引 entry：250K × 128 维</td></tr>
+  <tr><td>主注意力（式 18–19）</td><td>top-k = 1024 条 × 128 头 × 512 维（QK+AV）</td><td>≈ 0.27 GFLOP</td><td>仅被选中的 1024 条 entry</td></tr>
+  <tr><td>对照：稠密注意力</td><td>250,000 条 × 128 头 × 512 维（QK+AV）</td><td>≈ 65 GFLOP</td><td>全部 512 维 entry</td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜1M 上下文解码一步的单层拆分（推断核算，非论文数字）。indexer 打分的 FLOPs 约为主注意力的 15 倍、但只有稠密注意力的约 1/16——它是稀疏化后注意力侧的主要剩余开销。</p>
+
+<div class="infer">由表 2 可得一个论文未明说但数据支持的结论：<b>在 1M 上下文的解码阶段，indexer 打分是 CSA 层注意力侧 FLOPs 的主导项</b>。这解释了论文三项优化的着力点——entry 粒度（候选 ÷4）、QK 路径 FP4（QK 是打分的主体，矩阵乘可由 FP4 tensor core 加速）、索引分数 BF16（top-k 选择器 2× 提速）——每一项都直接压这根最粗的杆。同时「99.7% 召回」说明 FP4 打分的排序质量损失很小。Prefill 侧同理：V3.2 已承认 indexer 是 \(O(L^2)\) 剩余项，V4 用压缩把常数再除以 4。</div>
+
+<h2>6. 官方代码走读（inference/model.py，commit b5968e9）</h2>
+
+<h3>6.1 Indexer 类：结构定义</h3>
+<pre><code class="language-python">class Indexer(torch.nn.Module):
+    """Selects top-k compressed KV positions for sparse attention via learned scoring.
+    Has its own Compressor (with Hadamard rotation) to build compressed KV for scoring."""
+
+    def __init__(self, args: ModelArgs, compress_ratio: int = 4):
+        super().__init__()
+        self.dim = args.dim
+        self.n_heads = args.index_n_heads            # 64
+        self.head_dim = args.index_head_dim          # 128
+        self.index_topk = args.index_topk            # 1024
+        self.q_lora_rank = args.q_lora_rank          # 1536
+        self.wq_b = ColumnParallelLinear(self.q_lora_rank, self.n_heads * self.head_dim)
+        self.weights_proj = ColumnParallelLinear(self.dim, self.n_heads, dtype=torch.bfloat16)
+        self.softmax_scale = self.head_dim ** -0.5
+        self.compress_ratio = compress_ratio
+
+        self.compressor = Compressor(args, compress_ratio, self.head_dim, True)
+        self.register_buffer("kv_cache", torch.zeros(args.max_batch_size,
+            args.max_seq_len // compress_ratio, self.head_dim), persistent=False)</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/model.py:380-400</code>（删节了 <code>n_local_heads/rope_head_dim</code> 等并行与位置行，均为连续行内摘录）。对应关系：<code>wq_b</code> ↔ 式 14 的 \(W^{IUQ}\)（输入是共享 latent，见 6.3）；<code>weights_proj</code> ↔ 式 15 的 \(W^w\)，显式 <code>bfloat16</code>、不走 FP4；<code>Compressor(args, compress_ratio, self.head_dim, True)</code> 第 4 个参数 <code>rotate=True</code>——索引器有<b>独立的压缩器实例</b>（自己的 <code>wkv/wgate/ape</code> 权重，工作在 128 维空间），实现论文「对 \(K^{\mathrm{I,Comp}}\) 采用与 \(C^{\mathrm{Comp}}\) 相同的压缩<b>操作</b>」；<code>kv_cache</code> 即 128 维索引 entry 缓存，条数 = <code>max_seq_len // 4</code>。</p>
+
+<h3>6.2 打分与 top-k：式 15–17 的逐行对应</h3>
+<pre><code class="language-python">    def forward(self, x: torch.Tensor, qr: torch.Tensor, start_pos: int, offset: int):
+        ...
+        q = self.wq_b(qr)                                  # 式 14：q^I = c^Q_t · W^IUQ
+        q = q.unflatten(-1, (self.n_local_heads, self.head_dim))
+        apply_rotary_emb(q[..., -rd:], freqs_cis)          # 部分 RoPE：最后 64 维
+        q = rotate_activation(q)                           # Hadamard 旋转（摊平离群值）
+        # use fp4 simulation for q and kv in indexer
+        fp4_act_quant(q, fp4_block_size, True)             # QK 路径 FP4（QAT 一致性）
+        self.compressor(x, start_pos)                      # 压出索引 entry 并写入 kv_cache
+        weights = self.weights_proj(x) * (self.softmax_scale * self.n_heads ** -0.5)
+        # We performed QAT here, kv could also use fp8 format, though current implementation uses bf16
+        index_score = torch.einsum("bshd,btd->bsht", q, self.kv_cache[:bsz, :end_pos // ratio])
+        index_score = (index_score.relu_() * weights.unsqueeze(-1)).sum(dim=2)   # 式 16
+        if world_size > 1:
+            dist.all_reduce(index_score)
+        if start_pos == 0:
+            mask = torch.arange(seqlen // ratio).repeat(seqlen, 1) >= \
+                   torch.arange(1, seqlen + 1).unsqueeze(1) // ratio   # s < Floor(t/m)
+            index_score += torch.where(mask, float("-inf"), 0)
+        topk_idxs = index_score.topk(min(self.index_topk, end_pos // ratio), dim=-1)[1]
+        if start_pos == 0:
+            mask = topk_idxs >= torch.arange(1, seqlen + 1).unsqueeze(1) // ratio
+            topk_idxs = torch.where(mask, -1, topk_idxs + offset)
+        else:
+            topk_idxs += offset                            # 指回主缓存中压缩段的位置
+        return topk_idxs</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/model.py:402-433</code>。逐段对应：<code>einsum("bshd,btd->bsht")</code> 一次算出 [seq, entry, head] 的三维权内积，<code>relu_()</code> 原地 ReLU，再乘逐头权重 <code>weights</code> 沿头维求和——正是式 16 的 \(\sum_h w^I_{t,h}\cdot\mathrm{ReLU}(q^I_{t,h}\cdot K_s)\)；权重乘上 \(1/(\sqrt{128}\cdot\sqrt{64})\) 的固定尺度稳定分数幅值；prefill 掩码实现式 16 的「\(s<\mathrm{Floor}(t/m)\)」因果条件；<code>topk</code> 即式 17。<code>offset</code> 是因为主注意力的 <code>kv_cache</code> 前段装着 SWA 窗、压缩段在后，索引值需平移到全缓存坐标（decode 时 offset=win=128）。<code>q</code> 与索引 entry 各自做过 Hadamard 旋转后，内积数学上仍等于原空间内积（正交变换不变性），旋转只为量化友好——这也是「rotate=True 不影响打分语义」的原因（推断，基于 Hadamard 变换正交性）。</p>
+
+<h3>6.3 latent 共享与索引 entry 的产生</h3>
+<pre><code class="language-python">    # Attention.forward（CSA 层）
+    qr = q = self.q_norm(self.wq_a(x))          # 低秩 latent c^Q_t（式 13，含 RMSNorm）
+    q = self.wq_b(q).unflatten(-1, (self.n_local_heads, self.head_dim))   # 主注意力升维（式 18）
+    ...
+    if self.indexer is not None:                # 仅 CSA 层（compress_ratio == 4）
+        compress_topk_idxs = self.indexer(x, qr, start_pos, offset)       # latent 共享</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/model.py:496-511</code>（连续行内摘录）。<code>qr</code> 就是主注意力的低秩 latent \(c^Q_t\)：先经 <code>q_norm</code>（RMSNorm），随后<b>同一个张量</b>既喂给主注意力的 <code>wq_b</code>（式 18）也传给 <code>Indexer.forward</code> 的 <code>qr</code>（在索引器里再乘索引器自己的 <code>wq_b</code>，即式 14 的 \(W^{IUQ}\)）——「一次降维、两处受益」在代码里就是少算一次 <code>wq_a</code>。索引 entry 的压缩复用式 9–12 的门控池化（见 <a href="csa-compression.html">CSA 压缩过程详解</a>），索引器压缩器在池化后追加 <code>rotate_activation(kv)</code> + <code>fp4_act_quant(kv)</code>（model.py:369–370，仅 <code>rotate=True</code> 分支）。</p>
+
+<h3>6.4 config.json 里的索引器维度（V4-Pro）</h3>
+<pre><code class="language-json">"dim": 7168, "n_heads": 128, "q_lora_rank": 1536, "head_dim": 512, "rope_head_dim": 64,
+"index_n_heads": 64, "index_head_dim": 128, "index_topk": 1024,
+"window_size": 128, "compress_rope_theta": 160000,
+"compress_ratios": [128, 128, 4, 128, 4, ..., 4, 0]</code></pre>
+<p class="cap"><b>摘自</b> <code>inference/config.json</code>（V4-Pro；<code>compress_ratios</code> 中 61 项完整列出，此处省略中段重复的 <code>128, 4</code> 交错）。<code>index_n_heads/index_head_dim/index_topk</code> 即 \(n^I_h=64\)、\(c_I=128\)、top-k=1024，与论文 §4.2.1 p.25 逐项一致；<code>compress_ratios</code> 中值为 4 的层（CSA 层）才挂 <code>Indexer</code>（model.py:467–471：仅 <code>compress_ratio == 4</code> 时创建）。</p>
+
+<h2>7. 事实与推断的边界</h2>
+<ul>
+  <li><b>论文/源码证实</b>：式 13–17 及「\(c^Q_t\) 由主注意力与 indexer 共享」「\(K^{\mathrm{I,Comp}}\) 用与 \(C^{\mathrm{Comp}}\) 相同的压缩操作」均出自 paper/deepseek_v4.pdf §2.3.1（p.10–11）；\(n^I_h=64\)、\(c_I=128\)、top-k=512/1024、m=4 出自 §4.2.1（p.24–25）并与 <code>config.json</code> 逐项核对；V3.2 的打分公式、ReLU 的 throughput 理由、FP8 可行性、KL 门控损失与两阶段训练数字（1000 步 / 2.1B token / 2048 / 943.7B token）出自 paper/deepseek_v32.pdf §2.1（p.3–4）；indexer FP4、索引分数 BF16、top-k 提速 2× 与 99.7% 召回出自 §2.3.4（p.13）与 §5.2.1（p.33）；「1M 上下文 V4-Pro 为 V3.2 的 27% FLOPs、10% KV cache」出自 §1（p.2）与图 1 说明。代码行为（独立压缩器 rotate=True、<code>kv_cache</code> 形状、因果掩码、offset 平移、latent 经 <code>q_norm</code> 后共享）逐行核对自 <code>/tmp/paper-research/v4-pro/inference/model.py</code>（commit <code>b5968e9</code>）。</li>
+  <li><b>推断（已标注）</b>：① §5.2 表 2 的 FLOPs/读取量核算与「1M 解码时 indexer 打分主导 CSA 层注意力 FLOPs」的结论；② 索引 entry 每条字节数（FP4 64 B / BF16 256 B 口径）；③ 「Hadamard 旋转后内积不变、不影响打分语义」；④ 「解码时主注意力分数对未选中候选不可算，故必须旁路打分」的工程化补充（§1 推断框）。</li>
+  <li><b>未决</b>：V4 论文只说「短暂阶段 warm up lightning indexer」，<b>未写明暖启损失是否沿用 V3.2 的 KL 门控损失</b>，也未给出 V4 下 indexer 的头数/维度消融；V3.2 论文未给 \(d_I\) 与 \(H^I\) 的具体取值。这些以官方后续披露为准。</li>
+</ul>
+
+<h2>8. 参考来源</h2>
+<ol class="refs">
+  <li>DeepSeek-AI. <i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>. arXiv:2606.19348, 2026.（本地 <code>paper/deepseek_v4.pdf</code>；式 13–17 见 p.10，配置见 p.24–25，FP4 QAT 见 p.33）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V3.2: Pushing the Frontier of Open Large Language Models</i>. arXiv:2512.02556, 2025.（本地 <code>paper/deepseek_v32.pdf</code>；Lightning Indexer 原始定义与 KL 门控损失见 p.3–4）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V4-Pro</i> 官方推理实现. <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro（inference/）</a>. commit <code>b5968e9</code>，2026-09-16 抓取. 关键文件：<code>model.py</code>（Indexer: 380–433，Compressor: 279–378，Attention: 436–543）、<code>config.json</code>（index_n_heads=64, index_head_dim=128, index_topk=1024）.</li>
+  <li>本站相关报告：<a href="deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读</a>（§2.3(b) 索引器简述、§3.3 代码对照）· <a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV Cache 组织解读</a>（§4 Indexer 缓存特写）· <a href="csa-compression.html">CSA 压缩过程详解</a>（式 9–12）.</li>
+</ol>
+
+<footer>生成于 2026-09-16 · paper-research 工作流 · 公式由 MathJax 3 渲染，代码高亮由 highlight.js 11.9 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

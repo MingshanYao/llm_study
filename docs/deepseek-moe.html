@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek MoE 进化史：细粒度专家、无损均衡与 MegaMoE</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DeepSeek MoE 进化史：细粒度专家、无损均衡与 MegaMoE</h1>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>日期：</b>2026-09-16　<b>主论文：</b><i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>（MoE 机制见其 §2.1、§4.2、§3.1；演进对照用 V1/V2/V3/V3.2/V4.1 论文）</p>
+  <p style="margin:4px 0"><b>arXiv：</b><a href="https://arxiv.org/abs/2606.19348">arxiv.org/abs/2606.19348</a>　<b>官方代码：</b><a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro（<code>inference/</code> 目录，commit <code>b5968e9</code>，2026-09-15 抓取）</a></p>
+  <p style="margin:4px 0"><b>本地文件：</b><code>paper/deepseek_v4.pdf</code>（主）、<code>paper/deepseek_v32.pdf</code>、<code>paper/deepseek_v41.pdf</code>；V1/V2/V3 论文未入库存档，事实经 arXiv HTML 核对（链接见参考来源）</p>
+  <p style="margin:4px 0"><b>前置阅读：</b><a href="deepseek-v4-architecture.html">V4 总体架构（§3.3 有 MoE 微调概览，本篇展开演进与难点）</a> · <a href="deepseek-mhc.html">mHC（包裹 MoE 层的残差流形约束）</a></p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>DeepSeek 系全部模型把 FFN 换成 MoE，用「<b>不到 1/30 的激活参数</b>」扛住万亿总参：V4-Pro 1.6T 总参、每 token 只激活 49B（论文摘要，p.1）。其 MoE 范式——<b>DeepSeekMoE</b>——由 V1（arXiv:2401.06066）奠基：<b>细粒度专家</b>（把一个粗专家切成 \(m\) 个小的，激活同样的参数容量但组合自由度从 \(\binom{N}{K}\) 涨到 \(\binom{mN}{mK}\)）＋ <b>共享专家隔离</b>（通用知识收编进恒激活专家，路由专家专注特化）。此后五代演进各解决一个瓶颈：<b>V2</b> 用设备限制路由压通信；<b>V2.5→V3</b> 用「辅助损失免费」的 bias 门控替代伤性能的均衡损失（γ=0.001），V3 换 Sigmoid 亲和度并加权重 0.0001 的序列级均衡保险丝；<b>V4</b> 把亲和度换成 \(\sqrt{\mathrm{Softplus}(\cdot)}\)、彻底去掉路由目标节点数限制、前 3 层改 Hash 路由、全 61 层 MoE，并以 <b>MegaMoE</b> 波级流水把 all-to-all 通信完全藏进计算（通用推理加速 1.50–1.73×，RL rollout 最高 1.96×）；<b>V4.1</b> 把 bias 均衡扩展成图文双模态各一份。贯穿始终的矛盾只有一对：<b>负载均衡要路由均匀，模型质量要专家特化</b>——DeepSeek 的答案是让均衡信号（bias、Hash 表）永远不碰主梯度。</p>
+</div>
+
+<h2>1. 解决什么问题</h2>
+
+<p>稠密 Transformer 的 FFN 占模型约 2/3 参数，且每个 token 都要全额计算。MoE 的交换条件是：参数量（知识容量）按专家数扩展，计算量只按 top-k 扩展——V4-Pro 每层 384 个路由专家，每个 token 只走 6 个。但把 MoE 做到万亿规模且质量不掉，要同时闯三关：</p>
+
+<ol>
+  <li><b>均衡与特化的矛盾</b>：经典 MoE（Switch/GShard 式）靠辅助均衡损失把负载压平，但均衡损失直接改写主目标——它惩罚「大家都挤几个热门专家」，而语言模型恰恰需要某些专家被高频使用（特化）。DeepSeek-V3 论文明确说引入辅助损失免费策略就是为了「minimize the performance overhead that is incurred when encouraging load balancing」（V3 论文 §2.1.2）；V4 论文沿用了这一点，只留权重 0.0001 的序列级损失当保险丝（V4 论文 p.25）。</li>
+  <li><b>稀疏激活下的通信</b>：专家并行（EP）把不同专家放到不同设备，每个 token 都要做两次 all-to-all（Dispatch 送出、Combine 收回），跨机带宽成为瓶颈。V4 论文给出的解法是把 MoE 层拆成 Dispatch / Linear-1 / Activation / Linear-2 / Combine 五段并证明「单层内通信总时长小于计算」（§3.1，p.15），从而用波级流水把通信完全藏进计算。</li>
+  <li><b>专家参数的显存与精度</b>：专家不激活也要占显存。V4 把路由专家权重压到 <b>FP4</b>（p.5：routed expert parameters utilize FP4 precision），并在 post-training 用量化感知训练（QAT）补回精度（§5.2.1，p.33）。</li>
+</ol>
+
+<p>下文的进化史，就是这三关被逐个攻破的历史。</p>
+
+<h2>2. 进化过程：V1 → V2 → V3 → V4 → V4.1</h2>
+
+<div class="fig">
+<svg viewBox="0 0 940 320" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <!-- boxes -->
+  <rect x="25" y="60" width="136" height="132" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="93" y="84" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">V1（2024.01）</text>
+  <text x="93" y="102" font-size="10" text-anchor="middle" fill="#5a6272">arXiv 2401.06066</text>
+  <text x="93" y="122" font-size="10" text-anchor="middle" fill="#2a3040">细粒度专家＋共享隔离</text>
+  <text x="93" y="140" font-size="10" text-anchor="middle" fill="#2a3040">64路由/6激活/2共享</text>
+  <text x="93" y="158" font-size="10" text-anchor="middle" fill="#2a3040">2B 匹敌 GShard 2.9B</text>
+
+  <rect x="175" y="60" width="136" height="132" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="243" y="84" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">V2（2024.05）</text>
+  <text x="243" y="102" font-size="10" text-anchor="middle" fill="#5a6272">arXiv 2405.04434</text>
+  <text x="243" y="122" font-size="10" text-anchor="middle" fill="#2a3040">160路由/6激活/2共享</text>
+  <text x="243" y="140" font-size="10" text-anchor="middle" fill="#2a3040">设备限制路由 M=3</text>
+  <text x="243" y="158" font-size="10" text-anchor="middle" fill="#2a3040">V2.5 引入 bias 门控</text>
+
+  <rect x="325" y="60" width="136" height="132" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="393" y="84" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">V3（2024.12）</text>
+  <text x="393" y="102" font-size="10" text-anchor="middle" fill="#5a6272">arXiv 2412.19437</text>
+  <text x="393" y="122" font-size="10" text-anchor="middle" fill="#2a3040">Sigmoid 亲和度＋归一化</text>
+  <text x="393" y="140" font-size="10" text-anchor="middle" fill="#2a3040">256路由/8激活/1共享</text>
+  <text x="393" y="158" font-size="10" text-anchor="middle" fill="#2a3040">序列级均衡损失</text>
+
+  <rect x="475" y="60" width="136" height="132" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="543" y="84" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">V3.2（2025.09）</text>
+  <text x="543" y="102" font-size="10" text-anchor="middle" fill="#5a6272">DSA 稀疏注意力</text>
+  <text x="543" y="122" font-size="10" text-anchor="middle" fill="#2a3040">Keep Routing 稳定 RL</text>
+  <text x="543" y="140" font-size="10" text-anchor="middle" fill="#2a3040">MoE 结构保持不变</text>
+
+  <rect x="625" y="60" width="136" height="132" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="693" y="84" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">V4（2026.06）</text>
+  <text x="693" y="102" font-size="10" text-anchor="middle" fill="#5a6272">arXiv 2606.19348</text>
+  <text x="693" y="122" font-size="10" text-anchor="middle" fill="#2a3040">√Softplus 亲和度</text>
+  <text x="693" y="140" font-size="10" text-anchor="middle" fill="#2a3040">384路由/6激活/1共享</text>
+  <text x="693" y="158" font-size="10" text-anchor="middle" fill="#2a3040">Hash 前 3 层 · MegaMoE</text>
+
+  <rect x="775" y="60" width="136" height="132" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="843" y="84" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">V4.1（2026）</text>
+  <text x="843" y="102" font-size="10" text-anchor="middle" fill="#5a6272">多模态 · 552B 主干</text>
+  <text x="843" y="122" font-size="10" text-anchor="middle" fill="#2a3040">模态分组 bias 均衡</text>
+  <text x="843" y="140" font-size="10" text-anchor="middle" fill="#2a3040">384路由/6激活/2304</text>
+  <text x="843" y="158" font-size="10" text-anchor="middle" fill="#2a3040">FP4 主 KV cache</text>
+
+  <!-- chain arrows -->
+  <line x1="163" y1="126" x2="173" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <line x1="313" y1="126" x2="323" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <line x1="463" y1="126" x2="473" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <line x1="613" y1="126" x2="623" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <line x1="763" y1="126" x2="773" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+
+  <!-- affinity strip -->
+  <text x="35" y="261" font-size="11" fill="#5a6272">亲和度：</text>
+  <rect x="110" y="240" width="230" height="32" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="225" y="261" font-size="11" text-anchor="middle" fill="#5a6272">Softmax（V1–V2）</text>
+  <rect x="350" y="240" width="250" height="32" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="475" y="261" font-size="11" text-anchor="middle" fill="#1a1f2e">Sigmoid ＋ 行归一化（V3–V3.2）</text>
+  <rect x="610" y="240" width="280" height="32" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="750" y="261" font-size="11" text-anchor="middle" fill="#1a1f2e">√Softplus（V4–V4.1）</text>
+  <text x="470" y="300" font-size="11" text-anchor="middle" fill="#5a6272">负载均衡：辅助损失（V1–V2）→ 辅助损失免费 bias 门控（V2.5–）＋ 序列级均衡损失（V3–）</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>｜DeepSeek 系 MoE 演进时间线。主链为各代关键改动（出处标注在框内 arXiv 号或本地文件）；下方色带是贯穿各代的亲和度函数与负载均衡机制两条演化线（对应 V4 论文 §2.1「Different from DeepSeek-V3, we change the activation function that computes the affinity scores from Sigmoid(·) into Sqrt(Softplus(·))」，p.7）。</p>
+
+<h3>2.1 V1（DeepSeekMoE，arXiv:2401.06066）：细粒度 + 共享隔离的奠基</h3>
+<p><b>改了什么：</b>传统 MoE（GShard/Switch）用少量粗专家（如 2048 隐维的大 FFN）。DeepSeekMoE 做两件事：(1) <b>细粒度专家分割</b>——把 \(N\) 个粗专家切成 \(mN\) 个细专家、激活 \(mK\) 个（16B 模型 \(m{=}4\)：64 路由 / 6 激活）；(2) <b>共享专家隔离</b>——把 \(K_s\) 个恒激活的共享专家从路由池里拿出来，专门吸收通用知识，让路由专家不必浪费容量在共性上（V1 论文摘要与 §2，arXiv:2401.06066）。</p>
+<p><b>为什么改：</b>同样的激活参数量下，细专家把组合空间从 \(\binom{N}{K}\) 提升到 \(\binom{mN}{mK}\)——16B 模型以约 40% 的计算量逼近 LLaMA2 7B，2B 版本匹敌 GShard 2.9B（V1 论文摘要）。特化是性能之源。</p>
+<p><b>代价：</b>专家数变多后，单个专家负载方差变大，对均衡机制的要求变高——这正是后续各代在均衡上反复做文章的根源。</p>
+
+<h3>2.2 V2 / V2.5（arXiv:2405.04434）：为规模化压通信、换均衡</h3>
+<p><b>改了什么：</b>236B 总参 / 21B 激活，每层 160 路由专家、激活 6、共享 2。为控制跨机通信，引入<b>设备限制路由（device-limited routing）</b>：每个 token 最多发往 \(M{=}3\) 个设备（V2 论文 §2.1.2）；同时保留专家级 / 设备级 / 通信级三重辅助均衡损失（V2 论文 §2.1.2）。<b>V2.5</b> 开始把辅助损失换成 Wang et al. 2024a（arXiv:2408.15664）的<b>辅助损失免费 bias 门控</b>（见 §3.3，该策略在 V3 论文中被追认为「随 DeepSeek-V2.5 引入」一脉，V3 论文 §2.1.2）。</p>
+<p><b>代价：</b>设备限制路由给每 token 可见专家加了上限，等价于限制路由自由度、轻微损失特化；辅助均衡损失则在训练目标里掺了沙子（见 §5.1）。</p>
+
+<h3>2.3 V3（arXiv:2412.19437）：Sigmoid 亲和度 + 双轨均衡定型</h3>
+<p><b>改了什么：</b>671B / 37B，256 路由 + 1 共享、激活 8、专家中间维 2048，前 3 层保留稠密 FFN。亲和度从 Softmax 换成 <b>Sigmoid</b> 并对选中分数做行归一化（V3 论文 §2.1.2）；均衡走「辅助损失免费 bias（γ=0.001）＋ 权重 0.0001 的序列级辅助损失」双轨；通信限制改为每 token 至多发往 \(M\) 个节点（V3 论文 §2.1.2）。</p>
+<p><b>为什么换 Sigmoid：</b>Softmax 在专家间强耦合（分母含所有专家分数），个别专家的异常 logits 会抬压其他所有专家的权重，万亿规模训练时放大不稳定性；Sigmoid 让每个专家的亲和度独立成值，且选中后归一化保留相对量级。这是从 V3 起定型的设计，V4 论文沿袭并继续替换它（见 §3.2）。</p>
+<p><b>代价：</b>1 共享 + 256 路由意味着每层 2048 中间维 × 257 个专家的参数显存，推理端 batch 聚合与 EP 通信压力都到新量级——直接催生 V4 的 MegaMoE（§5.2）。</p>
+
+<h3>2.4 V3.2（paper/deepseek_v32.pdf，p.8）：MoE 结构不动，动的是路由一致性</h3>
+<p>V3.2 的重头戏是注意力（DSA / Lightning Indexer，见<a href="deepseek-v4-lightning-indexer.html">专篇</a>），MoE 结构未改。但对 MoE 模型的 RL 训练补了一块关键拼图——<b>Keep Routing</b>：训练框架与推理框架实现差异加上策略更新，会使同一输入在两边走出不一致的专家路由，造成激活参数子空间突变、破坏 RL 稳定性。解法是在采样时保存在推理框架里的路由路径，训练时强制走同一路径。论文称该操作「自 DeepSeek-V3-0324 起已采用，对 MoE 模型的 RL 训练稳定性至关重要」（V3.2 论文 p.8）。</p>
+
+<h3>2.5 V4（arXiv:2606.19348）：√Softplus、去通信限制、Hash 前 3 层、MegaMoE</h3>
+<p><b>改了什么</b>（V4 论文 §2.1，p.7；§4.2.1，p.24–25）：</p>
+<ul>
+  <li>亲和度 Sigmoid → \(\sqrt{\mathrm{Softplus}(\cdot)}\)（config <code>score_func: "sqrtsoftplus"</code>）；</li>
+  <li>负载均衡仍是辅助损失免费策略（bias 更新速度 0.001）＋ 序列级均衡损失（权重 0.0001，防单序列极端失衡）；</li>
+  <li><b>去掉路由目标节点数限制</b>，「carefully redesign the parallelism strategy to maintain training efficiency」——靠 §3.1 的细粒度 EP 与 MegaMoE 找回效率；</li>
+  <li>前 3 层 MoE 用 <b>Hash 路由</b>（Roller et al., 2021）替代 V3 的稠密 FFN，61 层全部 MoE；Pro 规格：1 共享 + 384 路由、中间维 3072、激活 6、1.6T / 49B；Flash：256 / 2048 / 6、284B / 13B；</li>
+  <li>路由专家权重 FP4（p.5），训练稳定性新增 Anticipatory Routing 与 SwiGLU clamping（§4.2.3，p.26）。</li>
+</ul>
+<p><b>代价：</b>去掉节点限制后 all-to-all 通信对象从「少数几个节点」变成任意设备，通信路径更发散——这正是 V4 必须自研 MegaMoE 波级流水（§5.2）才能守住效率的原因；Hash 层放弃了学习路由的表达力（为什么值得，见 §5.5）。</p>
+
+<h3>2.6 V4.1（paper/deepseek_v41.pdf，§2.1）：均衡的多模态化</h3>
+<p>V4.1-Flash 保留 1 共享 + 384 路由（中间维 2304、激活 6）的 DeepSeekMoE 结构，唯一 MoE 级变更是<b>多模态辅助损失免费均衡</b>：图像与文本 token 的路由偏好不同，「混在一起均衡会掩盖模态内的失衡」，因此为文本 / 图像各维护一套专家校正 bias——路由选择用各自模态的 bias，加权仍用原始路由分数，每步后两套 bias 按各自模态的专家负载独立更新（V4.1 论文 §2.1，p.8）。552B 主干、prefill 激活 8B / decode 激活 16B，45T tokens 训练全程无不稳定（§4.2.1–4.2.2）。</p>
+
+<h3>2.7 演进对照表</h3>
+<table>
+  <tr><th>代际</th><th>路由专家 / 激活 / 共享</th><th>亲和度</th><th>均衡机制</th><th>通信限制</th><th>规模（总/激活）</th></tr>
+  <tr><td>V1（16B）</td><td>64 / 6 / 2（\(m{=}4\)）</td><td>Softmax</td><td>辅助均衡损失</td><td>—</td><td>16B 级</td></tr>
+  <tr><td>V2</td><td>160 / 6 / 2</td><td>Softmax</td><td>专家/设备/通信三重辅助损失</td><td>设备限制 \(M{=}3\)</td><td>236B / 21B</td></tr>
+  <tr><td>V2.5</td><td>同 V2</td><td>Softmax</td><td>辅助损失免费 bias 门控</td><td>设备限制</td><td>—</td></tr>
+  <tr><td>V3</td><td>256 / 8 / 1（中间维 2048）</td><td>Sigmoid＋行归一化</td><td>bias（γ=0.001）＋序列级损失（α=0.0001）</td><td>节点限制（至多 \(M\) 个节点）</td><td>671B / 37B</td></tr>
+  <tr><td>V3.2</td><td>同 V3</td><td>同 V3</td><td>同 V3（RL 侧加 Keep Routing）</td><td>同 V3</td><td>同 V3</td></tr>
+  <tr><td><b>V4-Pro</b></td><td><b>384 / 6 / 1（中间维 3072）</b></td><td><b>√Softplus</b></td><td>bias（0.001）＋序列级损失（0.0001）</td><td><b>无节点数限制</b>＋MegaMoE</td><td>1.6T / 49B</td></tr>
+  <tr><td>V4-Flash</td><td>256 / 6 / 1（中间维 2048）</td><td>√Softplus</td><td>同上；前 3 层 Hash 路由</td><td>同上</td><td>284B / 13B</td></tr>
+  <tr><td>V4.1-Flash</td><td>384 / 6 / 1（中间维 2304）</td><td>√Softplus</td><td>图文双套 bias（模态分组）</td><td>同 V4</td><td>552B / 8–16B</td></tr>
+</table>
+<p class="cap">来源：V1/V2/V3 论文（arXiv 链接见参考来源）、V4 论文 p.7 与 p.24–25、V4.1 论文 §2.1/§4.2.1、V3.2 论文 p.8；V4 两档规格与 config.json（<code>n_routed_experts</code>/<code>n_activated_experts</code>/<code>moe_inter_dim</code> 等）双重核实。V2.5 的确切配置未逐项核实（见 §7）。</p>
+
+<h2>3. 设计特点：DeepSeek 系 MoE 的四个签名</h2>
+
+<h3>3.1 共享 / 路由解耦 + 细粒度专家</h3>
+<p>每层输出 \( \mathrm{FFN}(\mathbf{u}_t) = \sum_{i=1}^{K_s}\mathrm{FFN}_{s,i}(\mathbf{u}_t) + \sum_{i=1}^{K_r} g_{i,t}\,\mathrm{FFN}_{r,i}(\mathbf{u}_t) \)（V1 论文式 5–6 记号）。共享专家恒激活、不参与路由竞争，承担跨 token 的共性变换；路由专家小而多（中间维 2048–3072，只有稠密 FFN 的零头），靠组合表达特化。代码里两者是两个独立模块（model.py:624 与 627：<code>self.experts</code> 列表与 <code>self.shared_experts</code>），前向各算各的、最后相加（model.py:643）。</p>
+
+<h3>3.2 亲和度函数演化：Softmax → Sigmoid → √Softplus</h3>
+<p>三代亲和度依次是：</p>
+<div class="formula">\[
+\text{V1/V2：}\ s_{i,t}=\frac{\exp(\mathbf{u}_t^\top\mathbf{e}_i)}{\sum_j \exp(\mathbf{u}_t^\top\mathbf{e}_j)}
+\qquad
+\text{V3：}\ s_{i,t}=\mathrm{Sigmoid}(\mathbf{u}_t^\top\mathbf{e}_i)
+\qquad
+\text{V4：}\ s_{i,t}=\sqrt{\mathrm{Softplus}(\mathbf{u}_t^\top\mathbf{e}_i)}
+\]</div>
+<p>其中 \(\mathrm{Softplus}(x)=\log(1+e^x)\)。三者的关键差异（前两代为论文陈述，√Softplus 性质分析为推断，见 §7）：</p>
+<ul>
+  <li><b>Softmax：全局耦合。</b>分母含全部专家 logits——某个专家分数爆炸，其余所有权重被压扁；且对数域计算有上溢风险。V3 弃用。</li>
+  <li><b>Sigmoid：逐专家独立、有饱和上界。</b>解耦了专家间干扰，但输出压在 (0,1)，大 logits 时梯度趋零（饱和），且需要后接行归一化恢复权重量级。</li>
+  <li><b>√Softplus：独立、无上界、零点光滑。</b>\(\sqrt{\mathrm{Softplus}(x)}\) 保持独立打分，但对大 logits 不饱和（近似 \(\sqrt{x}\) 增长），对 \(x\le 0\) 平滑（不会像 ReLU 那样梯度断零）；在 \(x=0\) 处值约 0.833、导数有限，数值行为温和。V4 论文只写了「换了」，未解释动机——几何直觉是它在「无界线性」与「饱和压缩」之间取中，配合行归一化后权重动态范围更平稳。</li>
+</ul>
+<p>注意三代都有「先选中、后归一化」结构，且归一化只发生在被选中的 top-k 内部（代码 model.py:581–582：<code>if self.score_func != "softmax": weights /= weights.sum(...)</code>——Softmax 分数天然归一，故跳过）。</p>
+
+<h3>3.3 辅助损失免费均衡：bias 与主梯度彻底解耦</h3>
+<p>Wang et al. 2024a（arXiv:2408.15664）的机制：每个专家维护一个标量偏置 \(b_i\)，<b>只在选择时加、在加权时不加</b>：</p>
+<div class="formula">\[
+g'_{i,t}=\begin{cases}s_{i,t}, & s_{i,t}+b_i\in\mathrm{Topk}\big(\{s_{j,t}+b_j\}_{j=1}^{N_r},\,K_r\big)\\[2pt] 0,&\text{否则}\end{cases}
+\qquad
+g_{i,t}=\frac{g'_{i,t}}{\sum_{j} g'_{j,t}}
+\]</div>
+<p>（V3 论文 §2.1.2；V4 沿用后再乘 <code>route_scale=2.5</code>，见 config.json）。\(b_i\) 不是可学习参数，而是按负载信号以固定步长滚动：过载的专家每步 \(-\gamma\)、欠载的 \(+\gamma\)，\(\gamma{=}0.001\)（V3/V4 论文，p.25：bias update speed 0.001）。妙处在于：bias 只改变「谁被选中」这个离散决策，<b>选中的专家输出仍按原始分数 \(s_{i,t}\) 加权</b>——语言建模损失对 \(s_{i,t}\) 的梯度干净无扰，均衡信号被隔离在不可微的 argtop-k 之外。</p>
+
+<h3>3.4 序列级均衡：权重 0.0001 的保险丝</h3>
+<p>bias 门控在全局（整个 batch）粒度上起效，管不了「单条序列内部极端失衡」（例如一段代码把所有 token 都送进同类专家）。V3 起补一条序列级辅助损失：</p>
+<div class="formula">\[
+\mathcal{L}_{\mathrm{Bal}}=\alpha\sum_{i=1}^{N_r} f_i P_i,\quad
+f_i=\frac{N_r}{K_r\,T}\sum_{t=1}^{T}\mathbb{1}\!\left(s_{i,t}+b_i\in\mathrm{Topk}(\cdot)\right),\quad
+P_i=\frac{1}{T}\sum_{t=1}^{T}s_{i,t}
+\]</div>
+<p>（V3 论文 §2.1.2 记号；\(f_i\) 是选择频次、\(P_i\) 是平均亲和度，两者乘积在均匀时最小）。V4 把 \(\alpha\) 仍压在 0.0001：「to avoid extreme imbalance within single sequences」（p.25）——量级说明它的角色只是防极端，不是做均衡的主力。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 380" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="m2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    </marker>
+    <marker id="m2c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <!-- band 1 -->
+  <rect x="20" y="40" width="130" height="48" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="85" y="60" font-size="11" text-anchor="middle" fill="#1a1f2e">token 隐状态 x</text>
+  <text x="85" y="76" font-size="10" text-anchor="middle" fill="#5a6272">[T, 7168]</text>
+  <line x1="152" y1="64" x2="186" y2="64" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <rect x="190" y="40" width="170" height="48" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="275" y="60" font-size="11" text-anchor="middle" fill="#1a1f2e">门控投影 Wg·x</text>
+  <text x="275" y="76" font-size="10" text-anchor="middle" fill="#5a6272">[384,7168]→[T,384]</text>
+  <line x1="362" y1="64" x2="396" y2="64" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <rect x="400" y="40" width="210" height="48" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="505" y="60" font-size="11" text-anchor="middle" fill="#1a1f2e">√Softplus 亲和度</text>
+  <text x="505" y="76" font-size="10" text-anchor="middle" fill="#5a6272">s = sqrt(softplus(Wg·x))</text>
+  <line x1="612" y1="64" x2="646" y2="64" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <rect x="650" y="40" width="150" height="48" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="725" y="60" font-size="11" text-anchor="middle" fill="#1a1f2e">original_scores</text>
+  <text x="725" y="76" font-size="10" text-anchor="middle" fill="#5a6272">[T, 384]</text>
+  <!-- band 2 -->
+  <rect x="380" y="150" width="230" height="48" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="495" y="170" font-size="11" text-anchor="middle" fill="#1a1f2e">s ＋ bias b（仅选择用）</text>
+  <text x="495" y="186" font-size="10" text-anchor="middle" fill="#5a6272">b ∈ R^384，训练中按负载更新</text>
+  <text x="495" y="216" font-size="10" text-anchor="middle" fill="#5a6272">过载则 −γ，欠载则 +γ（γ=0.001）</text>
+  <rect x="650" y="150" width="150" height="48" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="725" y="170" font-size="11" text-anchor="middle" fill="#1a1f2e">top-6 选择</text>
+  <text x="725" y="186" font-size="10" text-anchor="middle" fill="#5a6272">indices [T, 6]</text>
+  <rect x="20" y="150" width="140" height="48" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-dasharray="5,3"/>
+  <text x="90" y="170" font-size="11" text-anchor="middle" fill="#1a1f2e">input_ids</text>
+  <text x="90" y="186" font-size="10" text-anchor="middle" fill="#5a6272">[T]（仅前 3 层）</text>
+  <text x="90" y="216" font-size="10" text-anchor="middle" fill="#5a6272">无 bias（model.py:560）</text>
+  <rect x="170" y="150" width="180" height="48" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="260" y="170" font-size="11" text-anchor="middle" fill="#1a1f2e">tid2eid 查表</text>
+  <text x="260" y="186" font-size="10" text-anchor="middle" fill="#5a6272">[V=129280, 6]→专家号</text>
+  <line x1="162" y1="174" x2="168" y2="174" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m2c)"/>
+  <!-- S to D (bias path) -->
+  <polyline points="670,88 670,112 495,112 495,148" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <!-- D to E -->
+  <line x1="612" y1="174" x2="646" y2="174" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <!-- hash to E -->
+  <polyline points="260,198 260,232 660,232 660,202" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m2c)"/>
+  <!-- S to W (scores path, green) -->
+  <polyline points="700,88 700,120 620,120 620,264" fill="none" stroke="#2f9e63" stroke-width="1.5" marker-end="url(#m2b)"/>
+  <!-- band 3 -->
+  <rect x="380" y="268" width="300" height="64" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="530" y="292" font-size="11" text-anchor="middle" fill="#1a1f2e">weights = gather(original_scores, indices)</text>
+  <text x="530" y="312" font-size="11" text-anchor="middle" fill="#1a1f2e">行归一化 ÷Σ → × route_scale 2.5</text>
+  <polyline points="725,198 725,250 680,250 680,264" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <rect x="720" y="268" width="200" height="64" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="820" y="292" font-size="11" text-anchor="middle" fill="#1a1f2e">Σk wk·Expertk(x)</text>
+  <text x="820" y="312" font-size="11" text-anchor="middle" fill="#1a1f2e">＋ 共享专家（恒激活）</text>
+  <line x1="682" y1="300" x2="716" y2="300" stroke="#2f9e63" stroke-width="1.5" marker-end="url(#m2b)"/>
+  <text x="820" y="352" font-size="10" text-anchor="middle" fill="#5a6272">路由专家 FP4 权重 · 384 选 6</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>｜V4 门控数据流与张量形状（对应 <code>inference/model.py:564-584</code> 的 <code>Gate.forward</code>；形状为 V4-Pro config：\(d{=}7168\)、\(N_r{=}384\)、\(K_r{=}6\)）。绿色路径：原始 \(\sqrt{\mathrm{Softplus}}\) 分数 <b>绕过</b> bias 与 top-k，直接进 gather 加权——这就是「bias 不碰主梯度」的几何位置。橙色路径：bias 只参与「谁能进 top-6」。蓝色分支：仅前 3 层（<code>n_hash_layers=3</code>），专家号由 token ID 查预计算表 <code>tid2eid</code> 得到，无 bias、无可学习选择；但权重仍从同一套分数 gather（model.py:576–583），即 Hash 层「选择靠哈希、加权靠学习分数」。</p>
+
+<h2>4. 代码是怎么实现的</h2>
+
+<h3>4.1 <code>Gate</code>：√Softplus、bias 旁路与 Hash 分支</h3>
+<pre><code class="language-python"># inference/model.py:564-584（Gate.forward，删节注释）
+def forward(self, x, input_ids=None):
+    scores = linear(x.float(), self.weight.float())     # Wg ∈ R^384×7168 → logits [T,384]
+    if self.score_func == "softmax":
+        scores = scores.softmax(dim=-1)
+    elif self.score_func == "sigmoid":
+        scores = scores.sigmoid()
+    else:
+        scores = F.softplus(scores).sqrt()               # √Softplus 亲和度（V4 新增）
+    original_scores = scores
+    # Bias shifts scores for expert selection (topk) but does not affect routing weights.
+    if self.bias is not None:
+        scores = scores + self.bias                      # bias 只进 top-k 的比较键
+    if self.hash:
+        indices = self.tid2eid[input_ids]                # 前 3 层：token ID 直接查表
+    else:
+        indices = scores.topk(self.topk, dim=-1)[1]      # 后 58 层：带 bias 的 top-6
+    weights = original_scores.gather(1, indices)         # 加权用原始分数（无 bias！）
+    if self.score_func != "softmax":
+        weights /= weights.sum(dim=-1, keepdim=True)     # 行归一化
+    weights *= self.route_scale                          # ×2.5（config.json）
+    return weights, indices</code></pre>
+<p>逐行对照 §3 的公式：第 4 行是 \(\sqrt{\mathrm{Softplus}}\)；第 7–8 行实现 \(s_{i,t}+b_i\) 只做选择键；第 11 行实现 \(g'_{i,t}=s_{i,t}\)（选中者取原始分数）；第 12–14 行实现行归一化与 <code>route_scale</code>。Hash 分支的字段在构造函数里：</p>
+<pre><code class="language-python"># inference/model.py:556-562（Gate.__init__，节选）
+self.hash = layer_id &lt; args.n_hash_layers          # 前 3 层（config: n_hash_layers=3）
+self.weight = nn.Parameter(torch.empty(args.n_routed_experts, args.dim))
+if self.hash:
+    # token ID → 6 个专家号的预计算映射；非可学习参数
+    self.tid2eid = nn.Parameter(torch.empty(args.vocab_size, args.n_activated_experts,
+                                            dtype=torch.int32), requires_grad=False)
+    self.bias = None                                # Hash 层没有 bias
+else:
+    self.bias = nn.Parameter(torch.empty(args.n_routed_experts, dtype=torch.float32))</code></pre>
+<p>两个值得注意的代码事实：<b>(1)</b> Hash 层仍保留 <code>self.weight</code>——它的分数不用于选择，但用于加权（图 2 的绿色路径对 Hash 层同样生效）；<b>(2)</b> <code>tid2eid</code> 是 <code>requires_grad=False</code> 的整型查找表，哈希函数本身不在开源推理代码里（<code>inference/</code> 目录 grep <code>tid2eid</code> 仅 4 处命中，均为模型定义与加载），应随 checkpoint 权重分发——见 §7。</p>
+
+<h3>4.2 <code>Expert</code>：SwiGLU + clamping</h3>
+<pre><code class="language-python"># inference/model.py:596-606（Expert.forward）
+def forward(self, x, weights=None):
+    dtype = x.dtype
+    gate = self.w1(x).float()
+    up = self.w3(x).float()
+    if self.swiglu_limit &gt; 0:
+        up = torch.clamp(up, min=-self.swiglu_limit, max=self.swiglu_limit)   # ±10
+        gate = torch.clamp(gate, max=self.swiglu_limit)                       # 上界 10
+    x = F.silu(gate) * up
+    if weights is not None:
+        x = weights * x                            # 路由权重在这里乘进专家输出
+    return self.w2(x.to(dtype))</code></pre>
+<p>每个专家是标准 SwiGLU（\(w_1\) gate、\(w_3\) up、\(w_2\) down），中间维 3072（V4-Pro）。clamp 对应论文 §4.2.3 的 SwiGLU Clamping（线性分量夹到 \([-10,10]\)、gate 分量夹上界 10，p.26）——训练期用来压 MoE 层离群值。注意权重乘法发生在 down 投影之前（第 8 行），即论文口径的 \(g_{i,t}\,\mathrm{FFN}_{r,i}(\mathbf{u}_t)\)。</p>
+
+<h3>4.3 <code>MoE</code>：单卡参考实现里的「按专家聚 batch」</h3>
+<pre><code class="language-python"># inference/model.py:629-644（MoE.forward，节选）
+weights, indices = self.gate(x, input_ids.flatten())
+y = torch.zeros_like(x, dtype=torch.float32)
+counts = torch.bincount(indices.flatten(), minlength=self.n_routed_experts).tolist()
+for i in range(self.experts_start_idx, self.experts_end_idx):
+    if counts[i] == 0:
+        continue                                   # 本 rank 上无人问津的专家直接跳过
+    idx, top = torch.where(indices == i)           # 聚出分到专家 i 的全部 (token, 槽位)
+    y[idx] += expert(x[idx], weights[idx, top, None])
+if world_size &gt; 1:
+    dist.all_reduce(y)                             # 参考实现用 all_reduce 模拟 EP 合并
+y += self.shared_experts(x)                        # 共享专家恒激活，最后相加</code></pre>
+<p>这是<b>教学版</b>实现：TP 分片下每 rank 持有 384/world_size 个专家（model.py:618），用 <code>bincount</code> 统计每个专家的 token 数，<code>torch.where</code> 把同一专家的 token 聚成一批再过 FFN——这正是推理端「MoE batch 聚合」问题的最小样本：专家计算是分组 GEMM，batch 越大越接近算力峰值，凑不满 batch 的专家是纯浪费（<code>counts[i]==0</code> 直接跳过）。生产实现把这段循环换成 Dispatch all-to-all → 分组 GEMM → Combine all-to-all 的融合流水（§5.2 的 MegaMoE）。</p>
+
+<h3>4.4 FP4 专家的 GEMM 内核</h3>
+<pre><code class="language-python"># inference/kernel.py:442-451（fp4_gemm_kernel 文档串，节选）
+def fp4_gemm_kernel(N, K, out_dtype=BF16, accum_dtype=FP32, scale_dtype=FP32):
+    """
+    C[M, N] = A_fp8[M, K] @ B_fp4[N, K]^T.
+    ...
+    B is stored as [N, K//2] in float4_e2m1fn_x2, logical [N, K] in fp4.
+    """</code></pre>
+<p>激活走 FP8（Dispatch 也用 FP8），专家权重是 FP4（config <code>expert_dtype: "fp4"</code>；model.py:623 把权重张量建成 <code>float4_e2m1fn_x2</code>），内核在片上把 FP4 上转 FP8/FP32 做乘累加（kernel.py:496）。量化侧的 <code>fp4_quant_kernel</code>（kernel.py:129–186）按 1×32 tile 求局部 amax 打 scale，<code>fp4_max = 6.0</code>（E2M1 动态范围）——与论文 §5.2.1 的 MXFP4 QAT 叙述一一对应（FP32 主权重 → 模拟量化到 FP4 → 无损反量化回 FP8 前向，反向 STE 直通到 FP32 主权重）。</p>
+
+<h2>5. 优化的难点</h2>
+
+<h3>5.1 均衡 vs 特化：为什么均衡损失伤性能</h3>
+<p>辅助均衡损失的梯度直接落在路由器与主干上：它奖励「把 token 推给欠载专家」，但欠载专家之所以欠载，往往因为当前 token 真正需要的是热门专家。<b>均衡损失强行让模型用次优专家</b>，等于在语言建模目标里掺入与质量无关甚至相悖的项；细粒度专家放大了这一点——专家越多，热门/冷门差距越大，要压平负载所需的均衡力道就越重，性能税越贵。DeepSeek 的两步走是：(1) 把均衡从「损失」降格为「选择偏置」——bias 门控只挪动 top-k 的门槛，模型对「选中的专家输出有多好用」的学习（原始分数 \(s_{i,t}\)）完全不受污染（§3.3）；(2) 真正的序列级损失只留 0.0001 的权重当保险丝。代价是均衡变成一个开环控制系统：γ 固定、无收敛保证，靠训练中滚动微调吃饭。</p>
+
+<h3>5.2 all-to-all 通信与波级重叠：从 DualPipe 到 MegaMoE</h3>
+<p>EP 下每个 MoE 层都要做两次 all-to-all。V3 时代靠 DualPipe 把「设备内两段通信分别藏进两段计算」做到近乎零气泡（V3 论文基础设施章），通信对象被节点限制路由约束在少数几个节点内。V4 拆掉节点限制后，通信模式完全放开，只能靠更细的重叠兜底：V4 论文 §3.1 先用 profiling 立论——「单层内通信总时长小于计算总时长」，所以理论上计算可以完全盖住通信；然后把 384 个专家切成<b>波（wave）</b>，每波完成 Dispatch 就立刻开算，不等其他波：</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 350" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="m3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    </marker>
+  </defs>
+  <text x="40" y="42" font-size="12" font-weight="bold" fill="#1a1f2e">（a）逐层同步：通信与计算串行（论文图 5a/5b）</text>
+  <rect x="60" y="64" width="70" height="28" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="95" y="82" font-size="11" text-anchor="middle" fill="#1a1f2e">Dispatch</text>
+  <rect x="130" y="64" width="100" height="28" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="180" y="82" font-size="11" text-anchor="middle" fill="#1a1f2e">Linear-1</text>
+  <rect x="230" y="64" width="44" height="28" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="252" y="82" font-size="11" text-anchor="middle" fill="#1a1f2e">Act</text>
+  <rect x="274" y="64" width="100" height="28" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="324" y="82" font-size="11" text-anchor="middle" fill="#1a1f2e">Linear-2</text>
+  <rect x="374" y="64" width="70" height="28" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="409" y="82" font-size="11" text-anchor="middle" fill="#1a1f2e">Combine</text>
+  <text x="60" y="116" font-size="11" fill="#5a6272">Dispatch / Combine 期间计算空闲；Comet 只做两段重叠 → 理论加速 1.42×</text>
+
+  <text x="40" y="166" font-size="12" font-weight="bold" fill="#1a1f2e">（b）V4 MegaMoE：专家分波（wave），计算盖住通信（论文图 5c）</text>
+  <text x="40" y="208" font-size="11" fill="#5a6272">通信 all-to-all</text>
+  <text x="40" y="258" font-size="11" fill="#5a6272">计算 L1·Act·L2</text>
+  <rect x="240" y="192" width="65" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="272" y="209" font-size="11" text-anchor="middle" fill="#1a1f2e">W1</text>
+  <rect x="305" y="192" width="65" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="337" y="209" font-size="11" text-anchor="middle" fill="#1a1f2e">W2</text>
+  <rect x="370" y="192" width="65" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="402" y="209" font-size="11" text-anchor="middle" fill="#1a1f2e">W3</text>
+  <rect x="440" y="192" width="60" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="470" y="209" font-size="11" text-anchor="middle" fill="#1a1f2e">回传</text>
+  <rect x="570" y="192" width="60" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="600" y="209" font-size="11" text-anchor="middle" fill="#1a1f2e">回传</text>
+  <rect x="700" y="192" width="60" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="730" y="209" font-size="11" text-anchor="middle" fill="#1a1f2e">回传</text>
+  <rect x="310" y="242" width="130" height="26" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="375" y="259" font-size="11" text-anchor="middle" fill="#1a1f2e">W1 计算</text>
+  <rect x="440" y="242" width="130" height="26" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="505" y="259" font-size="11" text-anchor="middle" fill="#1a1f2e">W2 计算</text>
+  <rect x="570" y="242" width="130" height="26" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="635" y="259" font-size="11" text-anchor="middle" fill="#1a1f2e">W3 计算</text>
+  <line x1="305" y1="220" x2="373" y2="240" stroke="#2f9e63" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#m3b)"/>
+  <line x1="337" y1="220" x2="503" y2="240" stroke="#2f9e63" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#m3b)"/>
+  <line x1="402" y1="220" x2="633" y2="240" stroke="#2f9e63" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#m3b)"/>
+  <line x1="240" y1="292" x2="830" y2="292" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <text x="848" y="296" font-size="11" fill="#5a6272">时间</text>
+  <text x="40" y="326" font-size="11" fill="#5a6272">稳态下：当前波计算、下一波 token 传输、已完成波结果回发并发；实测 1.50–1.73×（通用推理）、1.96×（RL rollout）</text>
+</svg>
+</div>
+<p class="cap"><b>图 3</b>｜EP 通信-计算重叠的两代方案（对应 V4 论文 §3.1 与其图 5）：(a) 逐层同步 / Comet 式部分重叠（理论加速 1.42×）；(b) V4 把专家切成波，稳态下三件事并发——当前波计算、下一波 Dispatch、已完成波 Combine 回传，理论加速 1.92×（V4-Flash 配置）。MegaMoE（DeepGEMM 中的开源 CUDA mega-kernel）是这套调度的实现。</p>
+
+<p>论文还给出软硬件共设计的量化判据：每个 token-专家对需 \(6hd\) FLOPs（SwiGLU 三投影）却只传 \(3h\) 字节（FP8 Dispatch + BF16 Combine），通信可全隐藏的条件是</p>
+<div class="formula">\[ C/B \le 2d = 6144\ \text{FLOPs/Byte} \]</div>
+<p>（\(d{=}3072\) 为专家中间维；p.16）——带宽过了这条线就不再是瓶颈，「继续堆带宽收益递减」。V4 的全部关键数字：通用推理加速 1.50–1.73×、RL rollout / 高速 agent 服务最高 1.96×（p.16）。</p>
+
+<h3>5.3 专家显存与 FP4 量化</h3>
+<p>384 个路由专家 × 61 层 × 每个专家 \(3\times 7168\times 3072\approx 66.1\)M 参数 ≈ 1.55T——与官方 1.6T 总参吻合（核算；共享专家、注意力、embedding 补足余量）。如此体量的专家权重是 GPU 显存的第一大头（V4 论文 §5.2.1 引 OpenAI 2025 说明）。V4 的三件套：(1) <b>训练期</b> FP8 前向 + FP32 主权重（既有框架不变）；(2) <b>post-training</b> 对专家权重做 MXFP4 QAT，前向模拟量化、反向 STE（p.33–34）；FP4→FP8 反量化「无损」，因为 E4M3 比 E2M1 多 2 个指数位、只要 128×128 块内 1×32 子块 scale 比值不超阈值即可被完全吸收（p.33）；(3) <b>部署/RL rollout 期</b>直接用原生 FP4 权重省显存与加载带宽。难点在于：专家激活是分组 GEMM、每组 batch 小，量化误差不平均——所以必须 QAT 让模型提前适应，而非训练后直接量化。</p>
+
+<h3>5.4 训练稳定性：路由是离群值的「帮凶」</h3>
+<p>V4 论文 §4.2.3（p.25–26）直言：万亿 MoE 训练的 loss spike 与 MoE 层离群值强相关，「the routing mechanism itself appears to exacerbate the emergence of these outliers」。恶性循环：某专家权重异常 → 其亲和度异常 → token 涌向它 → 离群值进一步放大。两个实招（机理论文承认未完全理解）：<b>Anticipatory Routing</b>——路由索引用历史参数 \(\theta_{t-\Delta t}\) 预计算（主干与路由网络更新解耦），额外墙钟开销约 20%，且由 spike 检测器动态启用；<b>SwiGLU Clamping</b>——§4.2 的 clamp。V3.2 的 Keep Routing（§2.4）则是同一矛盾在 RL 侧的投影：路由路径本身就是「激活参数子空间」的选择器，路径抖动 = 参数子空间抖动。</p>
+
+<h3>5.5 为什么前 3 层用 Hash 路由</h3>
+<p>论文只给定义：「Hash routing determines the target experts of each token according to a predefined hash function with regard to the input token ID」（p.7），未解释动机。可拼出的理由链：</p>
+<ul>
+  <li><b>浅层没有可学的分工。</b>深层语义才有稳定的专业分工，浅层 token 的「该去哪个专家」信号弱；用带 bias 的自由路由时，浅层路由器要么学成接近均匀（浪费 384 个专家的参数维护），要么被早期训练噪声带偏。Hash 路由把「前 3 层不特化」直接写死——token ID 决定专家，负载天然均匀（每个 token 恒定映射 6 个专家，<code>tid2eid</code> 是预计算平衡表）。</li>
+  <li><b>稳定性收益。</b>V4 自己发现路由与主干同步更新是 spike 温床（§4.2.3）；前 3 层换成无参数选择的 Hash，等于在最不稳的层直接切断这条反馈回路。</li>
+  <li><b>零路由开销 + 确定性。</b>查表即可，无需 <code>topk</code>，且映射确定——与 §3.3 批不变/逐位确定性的工程目标一致。</li>
+  <li><b>不是全弃学习。</b>代码显示 Hash 层的加权仍走学习出的分数（model.py:580），「去哪儿」交给哈希、「用多少」仍归模型。</li>
+</ul>
+<div class="infer">以上四条动机均为推断——论文未说明原因；「浅层不特化」也与 V1 论文的专家可视化观察方向一致（特化主要在深层涌现），但本次未逐字核对该引文。可核实的事实只有：前 3 层 Hash、查表来自 checkpoint、无 bias（model.py:556–560）。</div>
+
+<h3>5.6 推理端的 batch 聚合</h3>
+<p>专家是分组 GEMM：某专家分到 0 个 token 就是白占显存、分到 3 个 token 就是一批残废 GEMM。§4.3 的参考实现用 <code>bincount</code> + <code>where</code> 展示了聚合的原型；生产系统的对应做法是把整个服务批次的所有 token 拼成一个大 batch 再路由（DeepSeek 推理栈的 prefill/decode 分离调度亦为此服务）。<span class="infer">生产侧聚合策略的具体细节不在本次引用的开源范围内，以上推断自参考实现的 <code>bincount/where</code> 模式与 V3/V4 论文的 EP 叙述。</span></p>
+
+<h2>6. 复杂度与效果对比</h2>
+
+<table>
+  <tr><th>指标</th><th>V3（256/8）</th><th>V4-Pro（384/6）</th><th>说明</th></tr>
+  <tr><td>每层路由专家参数</td><td>256×3×7168×2048 ≈ 11.3B</td><td>384×3×7168×3072 ≈ 25.4B</td><td>核算；专家中间维变大、数量变多</td></tr>
+  <tr><td>每 token 每层激活专家 FLOPs（乘加 ×2）</td><td>\(2\times8\times3\times7168\times2048\) ≈ 0.70 GFLOP</td><td>\(2\times6\times3\times7168\times3072\) ≈ 0.79 GFLOP</td><td>核算（估算口径）；V4 用 6 激活换更胖专家，MoE 侧计算略增</td></tr>
+  <tr><td>单 token 推理 FLOPs（vs V3.2，1M 上下文）</td><td>—</td><td><b>27%</b></td><td>论文 p.5；主要来自注意力侧（CSA/HCA）</td></tr>
+  <tr><td>KV cache（vs V3.2）</td><td>—</td><td><b>10%</b>（Flash：7%）</td><td>论文 p.5</td></tr>
+  <tr><td>EP 重叠加速（vs 非融合基线）</td><td>—</td><td>1.50–1.73×（通用）；≤1.96×（RL rollout）</td><td>论文 p.16</td></tr>
+  <tr><td>通信隐藏带宽门槛</td><td>—</td><td>\(C/B\le 2d=6144\) FLOPs/Byte</td><td>论文 p.16</td></tr>
+  <tr><td>专家权重精度</td><td>FP8</td><td>FP4（MXFP4 QAT）</td><td>论文 p.5、p.33–34</td></tr>
+</table>
+
+<p>一个值得注意的核算结果：V4-Pro 的<b>单层 MoE 计算</b>其实比 V3 略增（0.70 → 0.79 GFLOP/层，激活 8→6 但专家更胖），端到端 27% 的 FLOPs 下降几乎全部来自注意力侧的 CSA/HCA。MoE 这条线在 V4 的贡献不是「算得更少」，而是「<b>同等算力下装下更多专家参数 + 通信不再是瓶颈 + 显存被 FP4 压下来</b>」——总参 1.6T 的知识容量以 49B 的激活价格供货。</p>
+
+<h2>7. 事实与推断的边界</h2>
+
+<p><b>事实</b>（PDF 页码 / 官方代码行号可查）：</p>
+<ul>
+  <li>V4 MoE 配置与改动：√Softplus、辅助损失免费 + 序列级损失、去节点限制、Hash 前 3 层（V4 论文 §2.1，p.7）；Pro/Flash 规格（§4.2.1，p.24–25）；bias 速度 0.001、损失权重 0.0001（§4.2.2，p.25）。</li>
+  <li>代码事实：√Softplus 与 bias 旁路（model.py:565–583）、Hash 查表与无 bias（model.py:556–562）、SwiGLU clamp（model.py:600–602）、bincount/where 聚合与 all_reduce（model.py:629–644）、FP4 GEMM（kernel.py:442–451、518–533）、<code>route_scale=2.5</code> 与 <code>n_hash_layers=3</code>（inference/config.json）。</li>
+  <li>MegaMoE 波级调度、1.50–1.73× / 1.96×、\(C/B\le 2d=6144\)（V4 论文 §3.1，p.15–16）；FP4 QAT 与无损反量化（§5.2.1，p.33–34）；Anticipatory Routing ~20% 开销与 SwiGLU clamp（§4.2.3，p.26）。</li>
+  <li>演进链硬数字：V1 16B 64/6/2、\(m{=}4\)、2B 匹敌 GShard 2.9B（arXiv:2401.06066 摘要，HTML 版核对）；V2 236B/21B、160/6/2、设备限制 \(M{=}3\)（arXiv:2405.04434 HTML 核对）；V3 671B/37B、256/8/1、Sigmoid+归一化、γ=0.001、α=0.0001、前 3 层稠密、节点限制（arXiv:2412.19437 HTML 核对）；V3.2 Keep Routing（本地 PDF p.8）；V4.1 双模态 bias、384/6/2304、552B/8–16B（本地 PDF §2.1、§4.2.1）。</li>
+</ul>
+
+<p><b>推断 / 未核实</b>：</p>
+<ul>
+  <li>√Softplus 的动机与数学性质分析（无上界、零点光滑、避免 Softmax 耦合）——V4 论文只写了「换了」，性质分析为本人推断；</li>
+  <li>Hash 路由选在前 3 层的全部动机（§5.5）——论文未解释；「浅层不特化」方向与 V1 论文可视化一致但引文未逐字核对；哈希函数的具体形式不在开源推理代码中（<code>tid2eid</code> 随 checkpoint 分发）；</li>
+  <li>DeepSeek 67B（V1 旗舰）的确切 MoE 配置未在本次抓取中核实（16B 配置已核实），表中未列出；</li>
+  <li>V2.5 引入 bias 门控的确切版本归属与 V2.5 配置——依据 V3 论文转述与公开时间线，未逐字核对；</li>
+  <li>V3 节点限制路由的 \(M\) 具体取值（HTML 抓取摘要为「at most M nodes / max 4 nodes」，未逐字核对原文数字）；</li>
+  <li>§5.6 生产端推理聚合策略；§6 表中两行「核算/估算」数字（每层参数与 FLOPs）为按 config 推算，非论文原文。</li>
+</ul>
+
+<h2>8. 参考来源</h2>
+<ol class="refs">
+  <li><i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>，DeepSeek-AI，arXiv:2606.19348（本地 <code>paper/deepseek_v4.pdf</code>）：<a href="https://arxiv.org/abs/2606.19348">arxiv.org/abs/2606.19348</a></li>
+  <li>DeepSeek-V4-Pro 官方推理代码（<code>inference/model.py</code>、<code>kernel.py</code>、<code>config.json</code>，commit <code>b5968e9</code>，2026-09-15 抓取）：<a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro</a></li>
+  <li><i>DeepSeekMoE: Towards Ultimate Expert Specialization in Mixture-of-Experts Language Models</i>（V1），arXiv:2401.06066：<a href="https://arxiv.org/abs/2401.06066">arxiv.org/abs/2401.06066</a></li>
+  <li><i>DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model</i>，arXiv:2405.04434：<a href="https://arxiv.org/abs/2405.04434">arxiv.org/abs/2405.04434</a></li>
+  <li><i>DeepSeek-V3 Technical Report</i>，arXiv:2412.19437：<a href="https://arxiv.org/abs/2412.19437">arxiv.org/abs/2412.19437</a></li>
+  <li><i>Auxiliary-Loss-Free Load Balancing Strategy for Mixture-of-Experts</i>（Wang et al., 2024a），arXiv:2408.15664：<a href="https://arxiv.org/abs/2408.15664">arxiv.org/abs/2408.15664</a></li>
+  <li><i>Hash Layers for Large Sparse Models</i>（Roller et al., NeurIPS 2021，V4 论文 Hash 路由引文）：<a href="https://proceedings.neurips.cc/paper/2021/hash/92bf5e624073773ff33f9eb6e5a1f7d5-Abstract.html">proceedings.neurips.cc（Hash Layers）</a></li>
+  <li><i>DeepSeek-V3.2 Technical Report</i>（本地 <code>paper/deepseek_v32.pdf</code>，Keep Routing 见 p.8）</li>
+  <li><i>DeepSeek-V4.1 Technical Report</i>（本地 <code>paper/deepseek_v41.pdf</code>，多模态均衡见 §2.1）</li>
+</ol>
+
+<footer>本页为个人学习笔记，基于论文与官方开源推理代码整理；推断内容均已标注。生成于 2026-09-16。</footer>
+</main>
+</body>
+</html>

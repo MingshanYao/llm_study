@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verilog 速成：半天写出能仿真的 RTL</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "注意"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Verilog 速成：半天写出能仿真的 RTL</h1>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>日期：</b>2026-09-16　<b>定位：</b>面向会写软件（C / Python）工程师的 Verilog 速成教程，非论文解读</p>
+  <p style="margin:4px 0"><b>目标：</b>半天内建立硬件思维，能独立写出组合逻辑、时序逻辑、三段式状态机，并用 Icarus Verilog 完成自检仿真</p>
+  <p style="margin:4px 0"><b>环境：</b>任意编辑器 + <code>iverilog</code>（macOS: <code>brew install icarus-verilog</code>，Ubuntu: <code>apt install iverilog gtkwave</code>）+ GTKWave 看波形</p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>Verilog 不是编程语言，而是<b>用文字画电路图</b>。抛弃「逐行执行」的软件直觉，记住三件事：① 你写的每行代码描述的是一块<b>同时存在、永远在算</b>的电路，与书写顺序无关；② 所有数字硬件只有两类积木——<b>组合逻辑</b>（<code>assign</code> 或 <code>always @(*)</code> + 阻塞赋值 <code>=</code>）和<b>时序逻辑</b>（<code>always @(posedge clk)</code> + 非阻塞赋值 <code>&lt;=</code>）；③ 验证靠写 testbench 仿真自检，不是 printf 调试。按 §0→§9 顺序读完并跑通例程，半天可上手；再去 HDLBits 刷一周题即可熟练。</p>
+</div>
+
+<h2>0. 先换脑子：你描述的是电路，不是流程</h2>
+
+<p>写 C 时，第 2 行要等第 1 行算完——语句是<b>时间上的先后</b>。写 Verilog 时，每一行代码都综合成一块真实存在的电路，上电后<b>全部同时通电工作</b>——代码是<b>空间上的并列</b>。下面这个对照是全篇最重要的图：</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 300" style="width:100%;height:auto" role="img">
+  <defs>
+    <marker id="m1a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/></marker>
+    <marker id="m1g" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/></marker>
+  </defs>
+  <rect x="20" y="36" width="390" height="224" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="215" y="62" text-anchor="middle" font-size="13" font-weight="bold" fill="#1a1f2e">软件：语句按时间顺序执行</text>
+  <rect x="105" y="88" width="220" height="32" rx="6" fill="#ffffff" stroke="#c9d2e0"/>
+  <text x="215" y="109" text-anchor="middle" font-size="12" fill="#1a1f2e">a = b + c;</text>
+  <line x1="215" y1="122" x2="215" y2="134" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <rect x="105" y="140" width="220" height="32" rx="6" fill="#ffffff" stroke="#c9d2e0"/>
+  <text x="215" y="161" text-anchor="middle" font-size="12" fill="#1a1f2e">d = a * 2;</text>
+  <line x1="215" y1="174" x2="215" y2="186" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <rect x="105" y="192" width="220" height="32" rx="6" fill="#ffffff" stroke="#c9d2e0"/>
+  <text x="215" y="213" text-anchor="middle" font-size="12" fill="#1a1f2e">e = d + 1;</text>
+  <text x="215" y="248" text-anchor="middle" font-size="11" fill="#5a6272">t 时刻只跑一行，其余在等</text>
+
+  <rect x="450" y="36" width="390" height="224" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="645" y="62" text-anchor="middle" font-size="13" font-weight="bold" fill="#1a1f2e">硬件：电路在空间中并列，同时工作</text>
+  <rect x="470" y="92" width="104" height="56" rx="6" fill="#ffffff" stroke="#2456c4"/>
+  <text x="522" y="125" text-anchor="middle" font-size="13" fill="#1a1f2e">加法器</text>
+  <rect x="592" y="92" width="104" height="56" rx="6" fill="#ffffff" stroke="#2456c4"/>
+  <text x="644" y="125" text-anchor="middle" font-size="13" fill="#1a1f2e">乘法器</text>
+  <rect x="714" y="92" width="104" height="56" rx="6" fill="#ffffff" stroke="#2456c4"/>
+  <text x="766" y="125" text-anchor="middle" font-size="13" fill="#1a1f2e">寄存器</text>
+  <text x="645" y="196" text-anchor="middle" font-size="11" fill="#5a6272">没有先后，只有相连——上电后全部同时工作</text>
+  <text x="645" y="222" text-anchor="middle" font-size="11" fill="#2456c4">写 Verilog ≈ 画电路图</text>
+
+  <line x1="416" y1="148" x2="442" y2="148" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1g)"/>
+  <text x="429" y="132" text-anchor="middle" font-size="10" fill="#5a6272">换视角</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>｜心智模型对照。左边：三行代码在时间轴上排队执行；右边：同样的三块运算变成三块独立电路，一直并行地算，靠「连线」而非「调用」传递结果。由此推出 Verilog 与软件的四大差异：<b>并发</b>（所有块同时生效，书写顺序无意义）、<b>没有变量只有连线与寄存器</b>、<b>时间由时钟驱动</b>、<b>for 循环是复制硬件</b>（不是迭代）。</p>
+
+<p>而这些电路里，<b>只有两类积木</b>——不带时钟的「纯逻辑」和带时钟的「寄存器」。它们分别对应 Verilog 的两种写法，这是第二张关键图：</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 330" style="width:100%;height:auto" role="img">
+  <defs>
+    <marker id="m2a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/></marker>
+    <marker id="m2o" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e8862a"/></marker>
+  </defs>
+  <rect x="20" y="36" width="390" height="254" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="215" y="62" text-anchor="middle" font-size="13" font-weight="bold" fill="#1a1f2e">组合逻辑：assign / always @(*)</text>
+  <text x="215" y="88" text-anchor="middle" font-size="11" fill="#5a6272">输入一变，输出立刻跟着变（无记忆）</text>
+  <text x="50" y="132" text-anchor="end" font-size="12" fill="#1a1f2e">a</text>
+  <line x1="58" y1="128" x2="136" y2="128" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="50" y="162" text-anchor="end" font-size="12" fill="#1a1f2e">b</text>
+  <line x1="58" y1="158" x2="136" y2="158" stroke="#2456c4" stroke-width="1.5"/>
+  <rect x="138" y="108" width="112" height="70" rx="8" fill="#ffffff" stroke="#2456c4"/>
+  <text x="194" y="148" text-anchor="middle" font-size="13" fill="#1a1f2e">与门</text>
+  <text x="194" y="166" text-anchor="middle" font-size="10" fill="#5a6272">y = a &amp; b</text>
+  <line x1="250" y1="143" x2="320" y2="143" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <text x="330" y="147" text-anchor="start" font-size="12" fill="#1a1f2e">y</text>
+  <text x="215" y="252" text-anchor="middle" font-size="12" fill="#1a1f2e">assign y = a &amp; b;</text>
+  <text x="215" y="272" text-anchor="middle" font-size="12" fill="#1a1f2e">或 always @(*) y = a &amp; b;</text>
+
+  <rect x="450" y="36" width="390" height="254" rx="10" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="645" y="62" text-anchor="middle" font-size="13" font-weight="bold" fill="#1a1f2e">时序逻辑：always @(posedge clk)</text>
+  <text x="645" y="88" text-anchor="middle" font-size="11" fill="#5a6272">只在 clk 上升沿采样一次（有记忆）</text>
+  <text x="478" y="127" text-anchor="end" font-size="12" fill="#1a1f2e">d</text>
+  <line x1="486" y1="123" x2="556" y2="123" stroke="#2456c4" stroke-width="1.5"/>
+  <rect x="558" y="93" width="110" height="70" rx="8" fill="#ffffff" stroke="#e8862a"/>
+  <text x="613" y="113" text-anchor="middle" font-size="13" fill="#1a1f2e">D 触发器</text>
+  <text x="568" y="131" text-anchor="start" font-size="12" fill="#5a6272">D</text>
+  <text x="648" y="131" text-anchor="end" font-size="12" fill="#5a6272">Q</text>
+  <polygon points="601,155 625,155 613,141" fill="none" stroke="#e8862a" stroke-width="1.5"/>
+  <line x1="613" y1="238" x2="613" y2="158" stroke="#e8862a" stroke-width="1.5" marker-end="url(#m2o)"/>
+  <text x="623" y="212" text-anchor="start" font-size="12" fill="#1a1f2e">clk</text>
+  <line x1="668" y1="123" x2="738" y2="123" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <text x="748" y="127" text-anchor="start" font-size="12" fill="#1a1f2e">q</text>
+  <text x="645" y="252" text-anchor="middle" font-size="12" fill="#1a1f2e">always @(posedge clk)</text>
+  <text x="645" y="272" text-anchor="middle" font-size="12" fill="#1a1f2e">    q &lt;= d;  // 打一拍</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>｜两类积木。左：<b>组合逻辑</b>像一坨门电路，输入变、输出立即变，没有记忆；右：<b>时序逻辑</b>像 D 触发器，平时输出不变，只在 clk 上升沿把输入 d「拍」进去——这就是「寄存器打一拍」。§2、§3 分别展开，§4 用一张表收拢。</p>
+
+<h2>1. 五分钟语法底子</h2>
+
+<h3>1.1 第一个模块：module 与端口</h3>
+<p>Verilog 的基本单元是 <code>module</code>：一个带端口的「芯片」。端口就是引脚，分 <code>input</code> / <code>output</code>（还有双向 <code>inout</code>，新手先不碰）：</p>
+
+<pre><code class="language-verilog">module top (
+    input  wire [7:0] a,     // 8 位输入，[7:0] 表示 MSB 在前
+    input  wire [7:0] b,
+    output wire [8:0] sum    // 9 位输出：8 位 + 8 位最多 9 位
+);
+    assign sum = a + b;      // 连续赋值：描述一根"加法器电路"
+endmodule
+</code></pre>
+
+<h3>1.2 数值字面量与四种值</h3>
+<p>字面量格式固定为 <code>&lt;位宽&gt;'&lt;进制&gt;&lt;数值&gt;</code>：<code>8'd200</code>、<code>4'b1010</code>、<code>16'hDEAD</code>、<code>1'b1</code>。<b>不写位宽默认 32 位</b>，这是截断/位宽不匹配问题的常见来源。</p>
+<p>每个位有四种取值：<code>0</code>、<code>1</code>、<code>x</code>（未知，没复位/没驱动）、<code>z</code>（高阻，没人驱动）。仿真里看到 <code>x</code> 泛滥，通常是忘了复位。</p>
+
+<h3>1.3 wire 与 reg：一句话分清</h3>
+<table>
+  <tr><th></th><th><code>wire</code></th><th><code>reg</code></th></tr>
+  <tr><td>像什么</td><td>一根导线，被动地被驱动</td><td><code>always</code> 块里赋值的「变量」</td></tr>
+  <tr><td>谁给它赋值</td><td><code>assign</code>、模块端口、实例化输出</td><td><code>always</code> / <code>initial</code> 块</td></tr>
+  <tr><td>综合成什么</td><td>导线 / 组合逻辑</td><td>组合逻辑（<code>always @(*)</code>）或触发器（<code>posedge</code>）</td></tr>
+</table>
+<p class="cap">记忆法：<b>reg 不等于寄存器</b>——是否生成触发器取决于赋值语境（有没有时钟沿），不是类型名。<code>always @(*)</code> 里的 <code>reg</code> 综合出来是纯组合逻辑。</p>
+
+<h2>2. 组合逻辑：assign 与 always @(*)</h2>
+
+<p><code>assign</code> 的含义是「电路上，左端的 wire <b>永远等于</b>右端表达式的值」——它描述的是一坨常开着的门电路，不是一次性计算。常用运算符一张表带走：</p>
+
+<table>
+  <tr><th>类别</th><th>运算符</th><th>示例 / 备注</th></tr>
+  <tr><td>算术</td><td><code>+ - * / %</code></td><td><code>sum = a + b;</code> 注意结果位宽</td></tr>
+  <tr><td>位运算</td><td><code>&amp; | ^ ~</code></td><td>逐位操作</td></tr>
+  <tr><td>缩减</td><td><code>&amp;a |a ^a</code></td><td>把一个向量的所有位缩成 1 位，如奇偶校验</td></tr>
+  <tr><td>移位</td><td><code>&lt;&lt; &gt;&gt; &gt;&gt;&gt;</code></td><td><code>&gt;&gt;&gt;</code> 算术右移（有符号用）</td></tr>
+  <tr><td>比较 / 逻辑</td><td><code>&lt; &lt;= &gt; &gt;=</code>　<code>&amp;&amp; || !</code></td><td>输出 1 位</td></tr>
+  <tr><td>等值</td><td><code>== !=</code>　<code>=== !==</code></td><td><code>==</code> 遇 x 结果是 x；<code>===</code> 四态精确比较，<b>只用于 testbench</b></td></tr>
+  <tr><td>拼接 / 复制</td><td><code>{a, b}</code>　<code>{n{a}}</code></td><td><code>{cout, sum[7:0]}</code>、<code>{8{1'b0}}</code></td></tr>
+  <tr><td>条件</td><td><code>? :</code></td><td>综合成多路选择器（mux）</td></tr>
+</table>
+
+<p>简单组合用 <code>assign</code> 就够；带 <code>if</code> / <code>case</code> 的复杂组合用 <code>always @(*)</code>（4 选 1 多路选择器）：</p>
+
+<pre><code class="language-verilog">module mux4 (
+    input  wire [7:0] a, b, c, d,
+    input  wire [1:0] sel,
+    output reg  [7:0] y      // 注意：always 里赋值的目标要声明成 reg
+);
+    always @(*) begin        // @(*)：任何输入变了就重算 → 组合逻辑
+        case (sel)
+            2'b00:   y = a;
+            2'b01:   y = b;
+            2'b10:   y = c;
+            default: y = d;  // 别漏 default，否则综合出锁存器
+        endcase
+    end
+endmodule
+</code></pre>
+
+<div class="infer">组合逻辑三条铁律，违反第 ③ 条会综合出<b>锁存器（latch）</b>：组合输出必须「每时每刻都有定义」，漏了某个分支就意味着「保持上次的值」——这就是锁存器，FPGA/ASIC 流程里都是坏味道。① 敏感表一律写 <code>@(*)</code>，手写 <code>always @(a or b)</code> 极易漏信号；② 组合块内用阻塞赋值 <code>=</code>；③ <code>if</code> 要配 <code>else</code>、<code>case</code> 要配 <code>default</code>，让所有输出在所有分支都被赋值。</div>
+
+<h2>3. 时序逻辑：always @(posedge clk)</h2>
+
+<p>时序逻辑的心法一句话：<b>每个时钟上升沿，所有寄存器同时采样一次，其余时间输出保持不变</b>。看波形最直观：</p>
+
+<div class="fig">
+<svg viewBox="0 0 800 300" style="width:100%;height:auto" role="img">
+  <line x1="200" y1="52" x2="200" y2="272" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="4 3"/>
+  <line x1="280" y1="52" x2="280" y2="272" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="4 3"/>
+  <line x1="360" y1="52" x2="360" y2="272" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="4 3"/>
+  <line x1="440" y1="52" x2="440" y2="272" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="4 3"/>
+  <line x1="520" y1="52" x2="520" y2="272" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="4 3"/>
+  <line x1="600" y1="52" x2="600" y2="272" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="4 3"/>
+  <line x1="680" y1="52" x2="680" y2="272" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="200" y="44" text-anchor="middle" font-size="10" fill="#2f9e63">上升沿：q 采样 d</text>
+  <text x="760" y="44" text-anchor="end" font-size="10" fill="#5a6272">灰 = 未定义（x）</text>
+  <text x="105" y="80" text-anchor="end" font-size="13" fill="#1a1f2e">clk</text>
+  <polyline points="120,86 200,86 200,66 240,66 240,86 280,86 280,66 320,66 320,86 360,86 360,66 400,66 400,86 440,86 440,66 480,66 480,86 520,86 520,66 560,66 560,86 600,86 600,66 640,66 640,86 680,86 680,66 720,66 720,86 760,86" fill="none" stroke="#1a1f2e" stroke-width="2"/>
+  <text x="105" y="167" text-anchor="end" font-size="13" fill="#1a1f2e">d</text>
+  <text x="340" y="140" text-anchor="middle" font-size="10" fill="#5a6272">d: 5→7</text>
+  <polygon points="128,150 332,150 340,163 332,176 128,176 120,163" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <polygon points="348,150 532,150 540,163 532,176 348,176 340,163" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <polygon points="548,150 752,150 760,163 752,176 548,176 540,163" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="230" y="167" text-anchor="middle" font-size="12" fill="#1a1f2e">5</text>
+  <text x="440" y="167" text-anchor="middle" font-size="12" fill="#1a1f2e">7</text>
+  <text x="650" y="167" text-anchor="middle" font-size="12" fill="#1a1f2e">3</text>
+  <text x="105" y="257" text-anchor="end" font-size="13" fill="#1a1f2e">q</text>
+  <polygon points="128,240 192,240 200,253 192,266 128,266 120,253" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="1.5"/>
+  <polygon points="208,240 352,240 360,253 352,266 208,266 200,253" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <polygon points="368,240 592,240 600,253 592,266 368,266 360,253" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <polygon points="608,240 752,240 760,253 752,266 608,266 600,253" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="160" y="257" text-anchor="middle" font-size="12" fill="#5a6272">x</text>
+  <text x="280" y="257" text-anchor="middle" font-size="12" fill="#1a1f2e">5</text>
+  <text x="480" y="257" text-anchor="middle" font-size="12" fill="#1a1f2e">7</text>
+  <text x="680" y="257" text-anchor="middle" font-size="12" fill="#1a1f2e">3</text>
+  <text x="360" y="284" text-anchor="middle" font-size="10" fill="#5a6272">q 在 360 才变</text>
+</svg>
+</div>
+<p class="cap"><b>图 3</b>｜<code>always @(posedge clk) q &lt;= d;</code> 的行为。d 在 t=340 从 5 变成 7，但 q <b>视而不见</b>，直到 t=360 的上升沿才把 7 采进去——这就是「打一拍」：q 永远比 d 慢一个上升沿。数字系统的节奏全部由这一排排采样点定义。</p>
+
+<h3>3.1 为什么时序逻辑必须用非阻塞赋值 &lt;=</h3>
+<p><code>&lt;=</code> 的语义：块内<b>所有右值先同时算好，再统一更新</b>——天然并行、与书写顺序无关，正好匹配「所有寄存器同时采样」的硬件行为。写成 <code>=</code>（阻塞）会引入对语句顺序的依赖，仿真和综合结果可能不一致，是 Verilog 第一大坑。口诀：<b>时序用 &lt;=，组合用 =，永不混用</b>。</p>
+
+<h3>3.2 标准模板：带复位的计数器</h3>
+
+<pre><code class="language-verilog">module counter #(
+    parameter WIDTH = 8           // 参数化：实例化时可改位宽
+)(
+    input  wire             clk,
+    input  wire             rst_n,   // 低电平有效的异步复位
+    output wire [WIDTH-1:0] cnt
+);
+    reg [WIDTH-1:0] cnt_r;
+
+    always @(posedge clk or negedge rst_n) begin  // 时钟沿 或 复位下降沿都触发
+        if (!rst_n)
+            cnt_r &lt;= {WIDTH{1'b0}};   // 复制算子：WIDTH 个 0，清零
+        else
+            cnt_r &lt;= cnt_r + 1'b1;    // 每个上升沿 +1（写 1'b1 避免位宽陷阱）
+    end
+
+    assign cnt = cnt_r;
+endmodule
+</code></pre>
+
+<p>两个工程习惯：① 复位信号命名 <code>rst_n</code>（<code>_n</code> 表示低有效），异步复位保证上电后寄存器有确定初值——仿真里的 <code>x</code> 靠它消灭；② FPGA 的寄存器上电配置本身有初值（可写 <code>reg [7:0] cnt_r = 8'd0;</code>），但复位仍是跨平台最稳的写法。</p>
+
+<h2>4. 一张表记住一切</h2>
+
+<p>90% 的 RTL 只有三种块。<b>这张表就是 Verilog 的全部骨架</b>，写代码前回来扫一眼：</p>
+
+<table>
+  <tr><th>电路类型</th><th>写法</th><th>赋值符号</th><th>目标声明</th><th>典型用途</th></tr>
+  <tr><td>组合逻辑（简单）</td><td><code>assign</code></td><td><code>=</code></td><td><code>wire</code></td><td><code>assign y = a &amp; b;</code></td></tr>
+  <tr><td>组合逻辑（复杂）</td><td><code>always @(*)</code></td><td><code>=</code>（阻塞）</td><td><code>reg</code></td><td>mux、译码器、比较、次态逻辑</td></tr>
+  <tr><td>时序逻辑</td><td><code>always @(posedge clk)</code></td><td><code>&lt;=</code>（非阻塞）</td><td><code>reg</code></td><td>计数器、寄存器、状态机状态</td></tr>
+  <tr><td>仅 testbench 用</td><td><code>initial</code> / <code>#延时</code></td><td><code>=</code> 或 <code>&lt;=</code></td><td><code>reg</code></td><td>生成激励与时钟，<b>不可综合</b></td></tr>
+</table>
+
+<h2>5. 状态机：三段式模板</h2>
+
+<p>任何「有过程、有阶段」的控制逻辑（握手、协议、缓存 Controller）都用有限状态机（FSM）表达。业界标准写法是<b>三段式</b>：状态寄存器、次态逻辑、输出逻辑各占一个 always 块，结构清晰、综合友好：</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 340" style="width:100%;height:auto" role="img">
+  <defs>
+    <marker id="m4a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/></marker>
+  </defs>
+  <text x="300" y="44" text-anchor="middle" font-size="13" font-weight="bold" fill="#1a1f2e">状态转移图</text>
+  <rect x="95" y="85" width="110" height="50" rx="25" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="2"/>
+  <text x="150" y="115" text-anchor="middle" font-size="13" font-weight="bold" fill="#5a6272">IDLE</text>
+  <rect x="375" y="85" width="110" height="50" rx="25" fill="#eef3fc" stroke="#2456c4" stroke-width="2"/>
+  <text x="430" y="115" text-anchor="middle" font-size="13" font-weight="bold" fill="#2456c4">RUN</text>
+  <rect x="235" y="215" width="110" height="50" rx="25" fill="#d9f0e2" stroke="#2f9e63" stroke-width="2"/>
+  <text x="290" y="246" text-anchor="middle" font-size="13" font-weight="bold" fill="#2f9e63">DONE</text>
+  <line x1="207" y1="110" x2="371" y2="110" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m4a)"/>
+  <text x="289" y="100" text-anchor="middle" font-size="11" fill="#1a1f2e">start</text>
+  <line x1="410" y1="137" x2="324" y2="212" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m4a)"/>
+  <text x="395" y="185" text-anchor="start" font-size="11" fill="#1a1f2e">finish</text>
+  <line x1="240" y1="215" x2="161" y2="139" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m4a)"/>
+  <text x="152" y="190" text-anchor="middle" font-size="11" fill="#1a1f2e">自动</text>
+
+  <text x="692" y="44" text-anchor="middle" font-size="13" font-weight="bold" fill="#1a1f2e">三段式写法</text>
+  <rect x="555" y="58" width="275" height="78" rx="8" fill="#ffffff" stroke="#c9d2e0"/>
+  <rect x="555" y="58" width="4" height="78" fill="#2456c4"/>
+  <text x="569" y="80" text-anchor="start" font-size="12" font-weight="bold" fill="#2456c4">① 状态寄存器（时序）</text>
+  <text x="569" y="104" text-anchor="start" font-size="10" fill="#1a1f2e">always @(posedge clk)</text>
+  <text x="569" y="120" text-anchor="start" font-size="10" fill="#1a1f2e">  state &lt;= next_state;</text>
+  <rect x="555" y="150" width="275" height="78" rx="8" fill="#ffffff" stroke="#c9d2e0"/>
+  <rect x="555" y="150" width="4" height="78" fill="#e8862a"/>
+  <text x="569" y="172" text-anchor="start" font-size="12" font-weight="bold" fill="#e8862a">② 次态逻辑（组合）</text>
+  <text x="569" y="196" text-anchor="start" font-size="10" fill="#1a1f2e">always @(*) case (state)</text>
+  <text x="569" y="212" text-anchor="start" font-size="10" fill="#1a1f2e">  RUN: next = done ? DONE : RUN;</text>
+  <rect x="555" y="242" width="275" height="78" rx="8" fill="#ffffff" stroke="#c9d2e0"/>
+  <rect x="555" y="242" width="4" height="78" fill="#2f9e63"/>
+  <text x="569" y="264" text-anchor="start" font-size="12" font-weight="bold" fill="#2f9e63">③ 输出逻辑（组合）</text>
+  <text x="569" y="288" text-anchor="start" font-size="10" fill="#1a1f2e">always @(*) case (state)</text>
+  <text x="569" y="304" text-anchor="start" font-size="10" fill="#1a1f2e">  DONE: done_led = 1'b1;</text>
+</svg>
+</div>
+<p class="cap"><b>图 4</b>｜三段式状态机。左：本例 FSM——<code>start</code> 到来进入 RUN，外部 <code>busy</code> 拉高表示完成进 DONE，输出 <code>done</code> 一拍后自动回 IDLE；右：三个 always 块与转移图一一对应（① 时序 ② 组合 ③ 组合）。</p>
+
+<pre><code class="language-verilog">module fsm (
+    input  wire clk,
+    input  wire rst_n,
+    input  wire start,
+    input  wire busy,      // 假设来自下级模块的"忙"信号
+    output reg  done
+);
+    localparam IDLE = 2'd0, RUN = 2'd1, DONE = 2'd2;
+    reg [1:0] state, next_state;
+
+    // 第一段：状态寄存器（时序）
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) state &lt;= IDLE;
+        else        state &lt;= next_state;
+    end
+
+    // 第二段：次态逻辑（组合）
+    always @(*) begin
+        case (state)
+            IDLE:    next_state = start ? RUN  : IDLE;
+            RUN:     next_state = busy  ? DONE : RUN;
+            default: next_state = IDLE;   // DONE → 自动回 IDLE，default 兜底
+        endcase
+    end
+
+    // 第三段：输出逻辑（组合）
+    always @(*) begin
+        done = (state == DONE);
+    end
+endmodule
+</code></pre>
+
+<p>要点：状态用 <code>localparam</code> 编码；第二段 <code>case</code> 必须全覆盖（写 <code>default</code>）；输出也可以打一拍寄存后输出（时序更干净，代价是慢一拍）——这是进阶的 Moore/Mealy 取舍，先用组合输出练手即可。</p>
+
+<h2>6. 层次化：模块实例化</h2>
+
+<p>复杂设计 = 先画框图，每个框一个 module，再用<b>实例化</b>把框连起来。端口用命名关联 <code>.端口名(信号名)</code>，参数用 <code>#()</code> 传递：</p>
+
+<pre><code class="language-verilog">module system (
+    input  wire       clk,
+    input  wire       rst_n,
+    input  wire [7:0] a, b,
+    output wire [8:0] sum
+);
+    wire [7:0] cnt;
+
+    counter #(.WIDTH(8)) u_cnt (      // 实例化 counter，覆盖参数
+        .clk   (clk),
+        .rst_n (rst_n),
+        .cnt   (cnt)
+    );
+
+    top u_add (                        // 实例化 §1 的加法器
+        .a    (a),
+        .b    (b),
+        .sum  (sum)
+    );
+endmodule
+</code></pre>
+
+<p>不要用位置关联 <code>top u_add (a, b, sum);</code>——端口一改顺序就悄悄接错。仿真 testbench 里的 DUT 也是这么实例化的，见下一节。</p>
+
+<h2>7. 验证：testbench 与 iverilog</h2>
+
+<p>RTL 写完不是「跑一下看打印」，而是写一个<b>没有端口的顶层模块</b>（testbench）：生成激励灌进 DUT，再自动检查输出对不对。结构如下：</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 250" style="width:100%;height:auto" role="img">
+  <defs>
+    <marker id="m5a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/></marker>
+    <marker id="m5o" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e8862a"/></marker>
+  </defs>
+  <rect x="20" y="36" width="820" height="196" rx="10" fill="#ffffff" stroke="#5a6272" stroke-dasharray="6 4"/>
+  <text x="430" y="60" text-anchor="middle" font-size="13" font-weight="bold" fill="#5a6272">testbench：无端口的顶层模块</text>
+  <rect x="50" y="96" width="140" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="120" y="122" text-anchor="middle" font-size="13" fill="#1a1f2e">激励生成</text>
+  <text x="120" y="142" text-anchor="middle" font-size="10" fill="#5a6272">initial + #延时</text>
+  <rect x="330" y="86" width="180" height="84" rx="8" fill="#fbe3cc" stroke="#e8862a" stroke-width="2"/>
+  <text x="420" y="118" text-anchor="middle" font-size="14" font-weight="bold" fill="#1a1f2e">DUT</text>
+  <text x="420" y="142" text-anchor="middle" font-size="10" fill="#5a6272">被测模块（有端口）</text>
+  <rect x="650" y="96" width="140" height="64" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="720" y="122" text-anchor="middle" font-size="13" fill="#1a1f2e">结果检查</text>
+  <text x="720" y="142" text-anchor="middle" font-size="10" fill="#5a6272">$display / 比对期望值</text>
+  <rect x="340" y="192" width="160" height="26" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="420" y="209" text-anchor="middle" font-size="11" fill="#1a1f2e">时钟 / 复位生成</text>
+  <line x1="192" y1="128" x2="326" y2="128" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m5a)"/>
+  <text x="260" y="116" text-anchor="middle" font-size="10" fill="#5a6272">数据输入</text>
+  <line x1="512" y1="128" x2="646" y2="128" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m5a)"/>
+  <text x="580" y="116" text-anchor="middle" font-size="10" fill="#5a6272">结果输出</text>
+  <line x1="420" y1="190" x2="420" y2="172" stroke="#e8862a" stroke-width="1.5" marker-end="url(#m5o)"/>
+  <text x="430" y="187" text-anchor="start" font-size="10" fill="#5a6272">clk / rst_n</text>
+</svg>
+</div>
+<p class="cap"><b>图 5</b>｜testbench 结构。激励与时钟都写在 <code>initial</code> / <code>always #延时</code> 里（不可综合，只在仿真器里跑）；结果检查用 <code>!==</code> 四态比较 + 计数报错，实现「自检 tb」——跑完只看一行 ALL PASS / FAIL。</p>
+
+<pre><code class="language-verilog">`timescale 1ns/1ps
+
+module tb_top;
+    reg  [7:0] a, b;
+    wire [8:0] sum;
+    integer errors = 0;
+
+    top dut (.a(a), .b(b), .sum(sum));   // 实例化被测模块
+
+    reg clk = 0;
+    always #5 clk = ~clk;                // 每 5ns 翻转 → 周期 10ns
+
+    initial begin
+        $dumpfile("dump.vcd");           // 生成波形文件，gtkwave 可看
+        $dumpvars(0, tb_top);
+
+        a = 8'd3;   b = 8'd4;    #20;    // 施加激励，等 20ns
+        if (sum !== 9'd7) begin
+            $display("FAIL: 3+4 = %d", sum);
+            errors = errors + 1;
+        end
+        a = 8'd200; b = 8'd100;  #20;
+        if (sum !== 9'd300) begin        // 测进位：200+100=300 需要 9 位
+            $display("FAIL: 200+100 = %d", sum);
+            errors = errors + 1;
+        end
+
+        if (errors == 0) $display("ALL PASS");
+        else             $display("%d FAILURES", errors);
+        $finish;
+    end
+endmodule
+</code></pre>
+
+<p>编译运行只需三行命令：</p>
+
+<pre><code class="language-bash">iverilog -g2012 -o sim.vvp top.v tb_top.v   # 编译（-g2012 允许部分 SystemVerilog 语法）
+vvp sim.vvp                                 # 运行仿真，打印 ALL PASS / FAIL
+gtkwave dump.vcd                            # 可选：打开波形，观察图 3 那样的信号
+</code></pre>
+
+<div class="fig">
+<svg viewBox="0 0 860 140" style="width:100%;height:auto" role="img">
+  <defs>
+    <marker id="m6a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/></marker>
+    <marker id="m6g" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/></marker>
+  </defs>
+  <rect x="55" y="40" width="160" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="135" y="64" text-anchor="middle" font-size="13" fill="#1a1f2e">① 编写 RTL</text>
+  <text x="135" y="84" text-anchor="middle" font-size="10" fill="#5a6272">top.v, tb_top.v</text>
+  <rect x="255" y="40" width="160" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="335" y="64" text-anchor="middle" font-size="13" fill="#1a1f2e">② 功能仿真</text>
+  <text x="335" y="84" text-anchor="middle" font-size="10" fill="#5a6272">iverilog + vvp</text>
+  <rect x="455" y="40" width="160" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="535" y="64" text-anchor="middle" font-size="13" fill="#1a1f2e">③ 综合 / 实现</text>
+  <text x="535" y="84" text-anchor="middle" font-size="10" fill="#5a6272">yosys / FPGA 厂商工具</text>
+  <rect x="655" y="40" width="160" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="735" y="64" text-anchor="middle" font-size="13" fill="#1a1f2e">④ 上板验证</text>
+  <text x="735" y="84" text-anchor="middle" font-size="10" fill="#5a6272">FPGA 开发板</text>
+  <line x1="217" y1="68" x2="251" y2="68" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m6a)"/>
+  <line x1="417" y1="68" x2="451" y2="68" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m6a)"/>
+  <line x1="617" y1="68" x2="651" y2="68" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m6a)"/>
+  <path d="M735,98 L735,110 L135,110 L135,100" fill="none" stroke="#2f9e63" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#m6g)"/>
+  <text x="435" y="128" text-anchor="middle" font-size="11" fill="#2f9e63">没过就改，循环迭代</text>
+</svg>
+</div>
+<p class="cap"><b>图 6</b>｜RTL 开发闭环。前两步用开源工具本地即可完成，能拦住 95% 的逻辑 bug；综合与上板属于后端流程，速成阶段先不碰。</p>
+
+<h2>8. 十大高频坑</h2>
+
+<table>
+  <tr><th>#</th><th>坑</th><th>后果</th><th>规避</th></tr>
+  <tr><td>1</td><td>时序块里用 <code>=</code></td><td>仿真 / 综合不一致，竞争冒险</td><td>时序一律 <code>&lt;=</code></td></tr>
+  <tr><td>2</td><td>组合块漏分支 / 漏 default</td><td>综合出锁存器</td><td>if 配 else，case 配 default</td></tr>
+  <tr><td>3</td><td>敏感表手写 <code>always @(a or b)</code></td><td>漏信号 → 仿真综合不一致</td><td>一律 <code>@(*)</code></td></tr>
+  <tr><td>4</td><td>位宽截断 / 意外扩展</td><td>进位丢失、符号错</td><td>结果位宽 = 操作数最宽位 + 进位需要；用 <code>{a,b}</code> 拼接、显式扩位</td></tr>
+  <tr><td>5</td><td><code>cnt + 1</code> 里裸写 <code>1</code></td><td>隐式 32 位运算，工具警告</td><td>写 <code>cnt + 1'b1</code></td></tr>
+  <tr><td>6</td><td>两个 always 驱动同一信号</td><td>多驱动冲突，综合报错</td><td>一个信号只有一个「主人」</td></tr>
+  <tr><td>7</td><td>没复位 / 复位值不全</td><td>仿真 <code>x</code> 传播，上板状态随机</td><td>时序块配 <code>rst_n</code>，覆盖所有寄存器</td></tr>
+  <tr><td>8</td><td>把 <code>always</code> 当函数调用 / 期待书写顺序生效</td><td>块间顺序是未定义行为</td><td>块之间只靠信号连接，不靠顺序</td></tr>
+  <tr><td>9</td><td>用 <code>==</code> 比较 <code>x</code></td><td>结果还是 x，判断失效</td><td>仿真检查用 <code>!==</code> / <code>===</code></td></tr>
+  <tr><td>10</td><td>initial 里写可综合逻辑</td><td>综合报错（FPGA 专有初值语法除外）</td><td>initial / #延时 只进 testbench</td></tr>
+</table>
+
+<h2>9. 半天路线图与下一步</h2>
+
+<table>
+  <tr><th>时间</th><th>目标</th><th>产出（自检标准）</th></tr>
+  <tr><td>0–30 min</td><td>吃透图 1–图 4 的心智模型</td><td>能向别人解释「为什么时序用 &lt;=、组合用 =」</td></tr>
+  <tr><td>30 min–2 h</td><td>组合逻辑</td><td>默写 mux4；HDLBits「Basics」刷完</td></tr>
+  <tr><td>2–4 h</td><td>时序逻辑</td><td>默写带复位计数器；写出移位寄存器</td></tr>
+  <tr><td>4–6 h</td><td>状态机 + testbench</td><td>三段式 FSM + 自检 tb，iverilog 跑出 ALL PASS</td></tr>
+  <tr><td>之后一周</td><td>小项目串联</td><td>按键消抖 → UART 收发 → VGA 显示（经典三级跳）</td></tr>
+</table>
+
+<p>练习首推 <a href="https://hdlbits.01xz.net">HDLBits</a>（在线判题，即时反馈）。另外记住一句话：<b>今天业界写的是 SystemVerilog</b>——它是 Verilog 的超集，接口、<code>always_ff</code> / <code>always_comb</code>、<code>logic</code> 等语法糖让上面几条铁律直接变成语法约束；把本文学扎实，迁移到 SV 只需一天。仿真器进阶可看 <a href="https://verilator.org">Verilator</a>（编译型，快几个数量级）。</p>
+
+<h2>参考</h2>
+<ul class="refs">
+  <li>HDLBits 在线练习 — <a href="https://hdlbits.01xz.net">hdlbits.01xz.net</a></li>
+  <li>Icarus Verilog（开源仿真器）— <a href="https://github.com/steveicarus/iverilog">github.com/steveicarus/iverilog</a>；GTKWave — <a href="https://gtkwave.sourceforge.net">gtkwave.sourceforge.net</a></li>
+  <li>Samir Palnitkar,《Verilog HDL 数字设计与综合（第二版）》，电子工业出版社 — 系统教材，速成后补全用</li>
+  <li>IEEE Std 1800-2017（SystemVerilog LRM）— 语法终审依据；Verilog-2005（IEEE 1364-2005）已并入其中</li>
+</ul>
+
+<footer>生成于 2026-09-16 · svg-figure 工作流 · 代码高亮由 highlight.js 11.9.0 提供 · 例程可直接用 Icarus Verilog 编译运行，规范表述以 IEEE 1800-2017 为准</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

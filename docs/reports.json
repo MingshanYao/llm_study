@@ -1,5 +1,34 @@
 [
   {
+    "slug": "verilog-crash-course",
+    "title": "Verilog 速成：半天写出能仿真的 RTL",
+    "date": "2026-09-16"
+  },
+  {
+    "slug": "deepseek-moe",
+    "title": "DeepSeek MoE 进化史：细粒度专家、无损均衡与 MegaMoE",
+    "date": "2026-09-16",
+    "paper": "DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence (paper/deepseek_v4.pdf)",
+    "arxiv": "https://arxiv.org/abs/2606.19348",
+    "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
+  },
+  {
+    "slug": "deepseek-v4-lightning-indexer",
+    "title": "DeepSeek-V4 Lightning Indexer 深度解读：稀疏注意力的可学习索引器",
+    "date": "2026-09-16",
+    "paper": "DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence (paper/deepseek_v4.pdf)",
+    "arxiv": "https://arxiv.org/abs/2606.19348",
+    "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
+  },
+  {
+    "slug": "deepseek-v4-architecture",
+    "title": "DeepSeek-V4 总体架构解读：CSA/HCA 混合注意力 + mHC + Muon 的百万上下文 MoE 架构",
+    "date": "2026-09-15",
+    "paper": "DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence (paper/deepseek_v4.pdf)",
+    "arxiv": "https://arxiv.org/abs/2606.19348",
+    "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
+  },
+  {
     "slug": "deepseek-v4-attention",
     "title": "DeepSeek-V4 Attention 设计解读：压缩稀疏注意力（CSA）与重压缩注意力（HCA）",
     "date": "2026-09-14",

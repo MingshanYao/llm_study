@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek-V4 总体架构解读：CSA/HCA 混合注意力 + mHC + Muon 的百万上下文 MoE 架构</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DeepSeek-V4 总体架构解读：CSA/HCA 混合注意力 + mHC + Muon 的百万上下文 MoE 架构</h1>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>日期：</b>2026-09-15　<b>论文：</b><i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>（DeepSeek-AI，58 页；本报告为其总体架构综述，组件细节见下方"深读报告"链接）</p>
+  <p style="margin:4px 0"><b>arXiv：</b><a href="https://arxiv.org/abs/2606.19348">arxiv.org/abs/2606.19348</a>　<b>代码：</b>官方推理实现（<a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro 的 <code>inference/</code> 目录</a>，commit <code>b5968e9</code>，2026-09-15 抓取；<code>config.json</code> 用于参数双重核实）</p>
+  <p style="margin:4px 0"><b>本地文件：</b><code>paper/deepseek_v4.pdf</code>（主论文）；<code>paper/deepseek_v41.pdf</code>（V4.1 增量，用于 §8 演进对照）；<code>paper/deepseek_v32.pdf</code>（前代 V3.2，用于演进对照）</p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>DeepSeek-V4 系列包含 <b>V4-Pro（1.6T 总参 / 49B 激活）</b>与 <b>V4-Flash（284B / 13B）</b>两个 MoE 模型，原生支持 <b>100 万 token 上下文</b>。相对 V3，它保留 DeepSeekMoE 与 MTP，做了三件大事：(1) <b>混合注意力</b>——CSA 把每 \(m{=}4\) 个 token 的 KV 压缩成 1 条目再做 top-k 稀疏注意力，HCA 把每 \(m'{=}128\) 个 token 压成 1 条目后做稠密注意力，两者 1:1 逐层交替；(2) <b>mHC</b>——把残差连接加宽为 \(n{=}4\) 条流，混合矩阵 \(B_l\) 投影到双随机矩阵流形，全层启用；(3) <b>Muon 优化器</b>负责绝大多数矩阵权重，AdamW 只管 embedding / 预测头 / RMSNorm / mHC 静态偏置。三招叠加，1M 上下文下单 token 推理 FLOPs 仅为 V3.2 的 <b>27%（Pro）</b>、KV cache 仅为 <b>10%</b>；Flash 更低至 10% / 7%，KV 约为 BF16 GQA8 基线的 2%。基础设施侧以 MegaMoE 单内核（通信-计算全重叠）、TileLang DSL、逐位确定性与批不变内核、张量级选择性重算支撑训练与推理。组件深读请见：<a href="deepseek-v4-attention.html">注意力设计</a>、<a href="csa-compression.html">CSA 压缩过程</a>、<a href="deepseek-v4-kvcache.html">KV cache 组织</a>、<a href="deepseek-mhc.html">mHC</a>。</p>
+</div>
+
+<h2>1. 模型家族与规格</h2>
+
+<p>V4 系列目前发布两个规格：V4-Pro（旗舰）与 V4-Flash（小而快），均在 32T+ token 上预训练（Flash 32T / Pro 33T），训练序列长度从 4K 逐步扩展到 1M。前代 V3.2（671B / 37B）作为效率与效果的共同基线。核心规格如下（论文 §4.2.1，第 24–25 页）：</p>
+
+<table>
+  <tr><th>规格</th><th>DeepSeek-V3.2（基线）</th><th>DeepSeek-V4-Flash</th><th>DeepSeek-V4-Pro</th></tr>
+  <tr><td>总参数 / 激活参数</td><td>671B / 37B</td><td>284B / 13B</td><td><b>1.6T / 49B</b></td></tr>
+  <tr><td>Transformer 层数</td><td>—</td><td>43</td><td><b>61</b></td></tr>
+  <tr><td>hidden dim \(d\)</td><td>—</td><td>4096</td><td><b>7168</b></td></tr>
+  <tr><td>注意力头数 \(n_h\) × 头维 \(c\)</td><td>—</td><td>64 × 512</td><td><b>128 × 512</b></td></tr>
+  <tr><td>查询压缩维 \(d_c\)（低秩）</td><td>—</td><td>1024</td><td>1536</td></tr>
+  <tr><td>CSA：压缩率 \(m\) / 索引器头 / top-k</td><td>—（DSA top-k=2048，不压缩）</td><td>4 / 64 / 512</td><td>4 / 64 / <b>1024</b></td></tr>
+  <tr><td>HCA：压缩率 \(m'\)</td><td>—</td><td>128</td><td>128</td></tr>
+  <tr><td>输出投影分组 \(g\) / 中间维 \(d_g\)</td><td>—</td><td>8 / 1024</td><td>16 / 1024</td></tr>
+  <tr><td>滑动窗口 \(n_{win}\)</td><td>—</td><td>128</td><td>128</td></tr>
+  <tr><td>MoE：共享 / 路由专家（专家中间维）</td><td>—</td><td>1 + 256（2048）</td><td>1 + <b>384</b>（3072）</td></tr>
+  <tr><td>每 token 激活专家数</td><td>8（V3 系惯例）</td><td>6</td><td>6</td></tr>
+  <tr><td>mHC 流数 \(n\)</td><td>—（恒等残差）</td><td>4</td><td>4</td></tr>
+  <tr><td>MTP 深度</td><td>1</td><td>1</td><td>1</td></tr>
+  <tr><td>上下文长度</td><td>—</td><td colspan="2" style="text-align:center">1,048,576（1M）</td></tr>
+</table>
+
+<p><b>config.json 双重核实</b>（<code>DeepSeek-V4-Pro/config.json</code>，commit <code>b5968e9</code>）：论文披露的全部关键规格均与配置文件一致，未发现冲突：</p>
+
+<table>
+  <tr><th>论文章节（p.24–25）</th><th>论文值</th><th>config.json 字段</th><th>配置值</th></tr>
+  <tr><td>层数 61</td><td>61</td><td><code>num_hidden_layers</code></td><td>61 ✓</td></tr>
+  <tr><td>hidden dim 7168</td><td>7168</td><td><code>hidden_size</code></td><td>7168 ✓</td></tr>
+  <tr><td>查询头 128 × 头维 512</td><td>128 / 512</td><td><code>num_attention_heads</code> / <code>head_dim</code></td><td>128 / 512 ✓</td></tr>
+  <tr><td>查询压缩维 \(d_c{=}1536\)</td><td>1536</td><td><code>q_lora_rank</code></td><td>1536 ✓</td></tr>
+  <tr><td>索引器 64 头 × 128 维、top-k 1024</td><td>64 / 128 / 1024</td><td><code>index_n_heads</code> / <code>index_head_dim</code> / <code>index_topk</code></td><td>64 / 128 / 1024 ✓</td></tr>
+  <tr><td>输出分组 \(g{=}16\)、\(d_g{=}1024\)</td><td>16 / 1024</td><td><code>o_groups</code> / <code>o_lora_rank</code></td><td>16 / 1024 ✓</td></tr>
+  <tr><td>专家 1 共享 + 384 路由（3072）、激活 6</td><td>384 / 3072 / 6</td><td><code>n_shared_experts</code> / <code>n_routed_experts</code> / <code>moe_intermediate_size</code> / <code>num_experts_per_tok</code></td><td>1 / 384 / 3072 / 6 ✓</td></tr>
+  <tr><td>mHC \(n{=}4\)、Sinkhorn 20 步</td><td>4 / 20</td><td><code>hc_mult</code> / <code>hc_sinkhorn_iters</code></td><td>4 / 20 ✓</td></tr>
+  <tr><td>滑动窗口 128、前 3 层 Hash 路由、MTP 1</td><td>128 / 3 / 1</td><td><code>sliding_window</code> / <code>num_hash_layers</code> / <code>num_nextn_predict_layers</code></td><td>128 / 3 / 1 ✓</td></tr>
+  <tr><td>亲和度 \(\sqrt{\mathrm{Softplus}}\)、SwiGLU clamp 10</td><td>✓</td><td><code>scoring_func</code> / <code>swiglu_limit</code></td><td><code>sqrtsoftplus</code> / 10.0 ✓</td></tr>
+  <tr><td>上下文 1M</td><td>1,048,576</td><td><code>max_position_embeddings</code></td><td>1048576 ✓</td></tr>
+</table>
+
+<p class="cap"><b>表 1</b>｜论文 §4.2.1 与 config.json 的逐项核对。唯一的表述差异：论文 §4.1 说词表"仍为 128K"，config 为 <code>vocab_size=129280</code>——约 128K 词 + 若干特殊 token，属同一量级，不视为矛盾。</p>
+
+<p>另一个值得注意的配置字段是 <code>compress_ratios</code>（共 62 项）：</p>
+
+<div class="formula">\[ [\underbrace{128,128}_{\text{层 1–2 HCA}},\underbrace{4,128,4,128,\dots,4}_{\text{层 3–61 CSA/HCA 交替}},\underbrace{0}_{\text{MTP 层}}] \]</div>
+
+<p>即 <b>31 层 HCA + 30 层 CSA</b>，末尾的 0 对应 MTP 模块（MTPBlock 以 <code>layer_id = n_layers + 0</code> 查表，<code>inference/model.py:791</code>，0 表示该层仅滑动窗口、不压缩）。Flash 的前两层则是纯滑动窗口（论文 §4.2.1；Pro 的前两层为 HCA）。</p>
+
+<h2>2. 层堆叠宏结构</h2>
+
+<div class="fig">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0L10,5L0,10z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <!-- ===== 左：整栈 ===== -->
+  <text x="160" y="26" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">整体层堆叠（DeepSeek-V4-Pro）</text>
+  <rect x="60" y="44" width="200" height="32" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="160" y="65" font-size="12" text-anchor="middle" fill="#1a1f2e">预测头（LM Head）</text>
+  <line x1="160" y1="92" x2="160" y2="78" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <rect x="60" y="92" width="200" height="32" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="160" y="113" font-size="11" text-anchor="middle" fill="#1a1f2e">MTP 模块 ×1</text>
+  <line x1="160" y1="136" x2="160" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <rect x="44" y="136" width="232" height="380" rx="8" fill="#fafbfd" stroke="#c9d2e0"/>
+  <text x="160" y="157" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">Transformer Block × 61</text>
+  <rect x="56" y="170" width="208" height="52" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="160" y="190" font-size="12" text-anchor="middle" fill="#1a1f2e">层 1–2</text>
+  <text x="160" y="209" font-size="11" text-anchor="middle" fill="#163a86">HCA：m′=128，稠密全局</text>
+  <rect x="56" y="234" width="208" height="88" rx="6" fill="#ffffff" stroke="#2456c4"/>
+  <text x="160" y="254" font-size="12" text-anchor="middle" fill="#1a1f2e">层 3–61</text>
+  <text x="160" y="272" font-size="11" text-anchor="middle" fill="#1a1f2e">CSA(m=4) ↔ HCA(m′=128)</text>
+  <text x="160" y="290" font-size="10" text-anchor="middle" fill="#5a6272">1:1 交替（30 CSA + 29 HCA）</text>
+  <text x="160" y="308" font-size="10" text-anchor="middle" fill="#5a6272">MQA 共享 KV；滑动窗口 128</text>
+  <line x1="56" y1="334" x2="264" y2="334" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="160" y="351" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">每个 Block 内部：</text>
+  <rect x="56" y="362" width="208" height="40" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="160" y="379" font-size="11" text-anchor="middle" fill="#1a1f2e">注意力子层 + DeepSeekMoE</text>
+  <text x="160" y="396" font-size="10" text-anchor="middle" fill="#5a6272">1 共享 + 384 路由；前 3 层 Hash 路由</text>
+  <rect x="56" y="414" width="208" height="40" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="160" y="431" font-size="11" text-anchor="middle" fill="#1a1f2e">mHC 残差混合（包裹）</text>
+  <text x="160" y="448" font-size="10" text-anchor="middle" fill="#2f9e63">n=4 条流；B_l 双随机（Sinkhorn×20）</text>
+  <rect x="56" y="466" width="208" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="160" y="483" font-size="11" text-anchor="middle" fill="#1a1f2e">位置编码：部分 RoPE + YaRN</text>
+  <text x="160" y="500" font-size="10" text-anchor="middle" fill="#5a6272">RoPE 仅末 64 维；YaRN 64K→1M</text>
+  <line x1="160" y1="530" x2="160" y2="518" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <rect x="60" y="530" width="200" height="32" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="160" y="551" font-size="11" text-anchor="middle" fill="#1a1f2e">Embedding（词表 129,280）</text>
+  <rect x="60" y="578" width="14" height="14" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="80" y="589" font-size="10" fill="#5a6272">注意力（HCA/CSA）</text>
+  <rect x="190" y="578" width="14" height="14" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="210" y="589" font-size="10" fill="#5a6272">MoE</text>
+  <rect x="250" y="578" width="14" height="14" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="270" y="589" font-size="10" fill="#5a6272">mHC 映射</text>
+  <!-- ===== 右：单层放大 ===== -->
+  <text x="630" y="26" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">单层放大：mHC 残差混合与层数据流</text>
+  <rect x="500" y="340" width="280" height="70" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="640" y="362" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">注意力层：CSA 或 HCA</text>
+  <text x="640" y="380" font-size="10" text-anchor="middle" fill="#5a6272">MQA 共享 KV；分组输出投影 g=16</text>
+  <text x="640" y="397" font-size="10" text-anchor="middle" fill="#5a6272">滑动窗口分支 n_win=128 + attention sink</text>
+  <rect x="500" y="252" width="280" height="60" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="640" y="274" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">DeepSeekMoE</text>
+  <text x="640" y="292" font-size="10" text-anchor="middle" fill="#5a6272">1 共享 + 384 路由；√Softplus 亲和度</text>
+  <text x="640" y="307" font-size="10" text-anchor="middle" fill="#5a6272">辅助损失免费均衡 + 序列级均衡损失</text>
+  <rect x="570" y="196" width="140" height="32" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="640" y="216" font-size="11" text-anchor="middle" fill="#1a1f2e">C_l 输出映射（2σ）</text>
+  <circle cx="640" cy="164" r="14" fill="#ffffff" stroke="#1a1f2e" stroke-width="1.5"/>
+  <text x="640" y="169" font-size="14" text-anchor="middle" fill="#1a1f2e">+</text>
+  <rect x="560" y="96" width="160" height="34" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="640" y="117" font-size="11" text-anchor="middle" fill="#1a1f2e">残差流 X_(l+1)</text>
+  <rect x="800" y="146" width="130" height="40" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="865" y="163" font-size="11" text-anchor="middle" fill="#1a1f2e">B_l 残差混合</text>
+  <text x="865" y="179" font-size="10" text-anchor="middle" fill="#2f9e63">双随机（4×4）</text>
+  <rect x="570" y="440" width="140" height="32" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="640" y="460" font-size="11" text-anchor="middle" fill="#1a1f2e">A_l 输入混合（σ）</text>
+  <rect x="560" y="500" width="160" height="48" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="640" y="520" font-size="11" text-anchor="middle" fill="#1a1f2e">残差流 X_l</text>
+  <text x="640" y="538" font-size="10" text-anchor="middle" fill="#5a6272">n = 4 × d = 7168</text>
+  <line x1="640" y1="500" x2="640" y2="474" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <line x1="640" y1="440" x2="640" y2="412" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <line x1="640" y1="340" x2="640" y2="314" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <line x1="640" y1="252" x2="640" y2="230" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <line x1="640" y1="196" x2="640" y2="180" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <line x1="640" y1="150" x2="640" y2="132" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <line x1="800" y1="166" x2="656" y2="164" stroke="#2f9e63" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <polyline points="720,524 865,524 865,188" fill="none" stroke="#2f9e63" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <text x="640" y="600" font-size="11" text-anchor="middle" fill="#5a6272">X_(l+1) = B_l·X_l + C_l·F_l(A_l·X_l)　—— 式(1)，B_l 为双随机矩阵（Sinkhorn ×20 投影）</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>｜DeepSeek-V4 总体架构。左：层堆叠（对应论文 Figure 2 与 §4.2.1 的层配置；RoPE 细节见 §2.3.3 与 config.json 的 <code>rope_scaling</code>）。右：单层数据流（对应论文式 (1)，§2.2）：\(A_l\in\mathbb{R}^{1\times 4}\) 读出 4 条残差流作为层输入，\(F_l\)（注意力 + MoE）计算后由 \(C_l\in\mathbb{R}^{4\times1}\) 写回，\(B_l\in\mathbb{R}^{4\times4}\) 做流间混合——mHC 把 \(B_l\) 约束为双随机矩阵。</p>
+
+<h3>2.1 CSA 与 HCA 的交错策略</h3>
+
+<p>论文 §4.2.1（第 25 页）对 Pro 的描述是："前两层使用 HCA，后续各层以交错方式使用 CSA 与 HCA"。结合 config.json 的 <code>compress_ratios</code> 可以还原精确布局：层 1–2 为 HCA（\(m'{=}128\)），层 3–61 严格按 <b>CSA → HCA → CSA → …</b> 交替（30 层 CSA + 29 层 HCA，合计 31 层 HCA）。两种注意力的分工：</p>
+
+<ul>
+  <li><b>HCA（Heavily Compressed Attention）</b>：以 \(m'{=}128\) 的激进压缩率把 KV 压成 \(\frac{1}{128}\) 长度的条目，然后做<b>稠密</b>注意力——每个查询都能看到全部历史（压缩形态的全局信息），无需索引器、无稀疏选择的开销与风险；</li>
+  <li><b>CSA（Compressed Sparse Attention）</b>：以 \(m{=}4\) 的温和压缩率压缩 KV（保留更多细粒度信息），再由 lightning indexer 做 top-k=1024 的<b>稀疏</b>选择——低成本地"精读"被索引器挑出的少量压缩块。</li>
+</ul>
+
+<div class="infer">论文只给出了摆放方式、未解释动机。从机制看合理的一种解释是：模型开头需要无差别地汇总全局信息（此时 token 尚无可供索引器学习的"查询焦点"，稀疏选择容易漏），HCA 的稠密-重压缩形态恰好提供廉价的全局视野；中后段 token 带有明确意图，CSA 的"轻压缩 + 精确索引"更能保住细粒度依赖。交替 1:1 则在全局粗粒度与局部细粒度之间逐层混织。此段为推断，论文未明说。</div>
+
+<h3>2.2 全 MoE、Hash 路由与 mHC 的摆放</h3>
+
+<p>三个宏结构事实（论文 §2.1，第 7 页）：</p>
+<ul>
+  <li><b>没有稠密 FFN 层</b>：61 层全部是 MoE。V3 只在前几层放稠密 FFN，V4 把它们也换成 MoE，但前 <code>num_hash_layers=3</code> 层改用 <b>Hash 路由</b>（Roller et al. 2021）——按 token ID 的预定义哈希函数确定专家，无需训练路由器、推理时零路由开销。官方推理代码里这是一行判断：</li>
+</ul>
+
+<pre><code class="language-python"># inference/model.py:556（DeepSeek-V4-Pro 官方推理实现，commit b5968e9）
+self.hash = layer_id &lt; args.n_hash_layers   # 前 3 层 MoE 使用 Hash 路由（config: num_hash_layers=3）</code></pre>
+
+<ul>
+  <li><b>mHC 全层启用</b>：每层（含注意力层与 MoE 层）的残差连接都升级为 4 流 mHC，\(B_l\) 经 20 步 Sinkhorn-Knopp 迭代投影到双随机矩阵流形（详见 <a href="deepseek-mhc.html">mHC 专篇</a>）；</li>
+  <li><b>MTP 深度 1</b>：与 V3 完全一致，主栈之外挂 1 个 MTP 模块（训练目标权重 0.3，LR 衰减期降为 0.1，§4.2.2）。</li>
+</ul>
+
+<h3>2.3 位置编码</h3>
+
+<p>V4 不再用 MLA 的解耦 RoPE，改为对 CSA/HCA 统一的<b>部分旋转位置编码</b>（论文 §2.3.3，第 12–13 页）：查询向量、压缩 KV 条目、以及核心注意力输出都只对<b>最后 64 维</b>施加 RoPE（config：<code>qk_rope_head_dim=64</code>）。由于压缩 KV 条目同时充当 key 和 value，注意力输出天然携带绝对位置；论文的做法是对输出再施加位置 \(-i\) 的 RoPE，使输出重新变为相对位置敏感。长上下文扩展用 YaRN（config：<code>rope_scaling: factor=16, original_max_position_embeddings=65536</code>，即 64K 原生 → 1M）；此外 config 还为压缩层单列了 <code>compress_rope_theta=160000</code>，推理代码中压缩层用它替代默认 theta 预计算频率（<code>inference/model.py:476</code>；论文未展开说明，其精确语义见 <a href="csa-compression.html">CSA 压缩专篇</a>）。</p>
+
+<h2>3. 各组件概览</h2>
+
+<h3>3.1 混合注意力：CSA / HCA</h3>
+
+<p>CSA 分三步：(1) <b>token 级压缩器</b>把每 \(m{=}4\) 个 token 的 KV 加权池化为 1 条目（双轨 \(C_a, C_b\) 重叠窗口设计，实际序列长度压缩到 \(\frac{1}{m}\)）；(2) <b>lightning indexer</b> 用 FP4 计算索引分数，为每个查询选出 top-\(k{=}1024\) 个压缩条目；(3) <b>共享 KV 的 MQA</b> 在选中的稀疏集合上做核心注意力，输出经 \(g{=}16\) 组的分组投影降维回 \(d\)。HCA 同构但 \(m'{=}128\)、无索引器、稠密注意力。两者都带 \(n_{win}{=}128\) 的滑动窗口分支（弥补压缩块内的局部细粒度依赖）与 attention sink（可学习 logit 加到分母，允许总注意力权重偏离 1）。<b>深读：</b>注意力整体设计见 <a href="deepseek-v4-attention.html">《DeepSeek-V4 Attention 设计解读》</a>；压缩公式的逐项推导见 <a href="csa-compression.html">《CSA 压缩过程详解》</a>。</p>
+
+<p>从推理代码可以直接看清两种注意力的分派逻辑与 MQA/分组输出投影的落地：</p>
+
+<pre><code class="language-python"># inference/model.py:453–479（节选，commit b5968e9）
+self.compress_ratio = args.compress_ratios[layer_id]   # 逐层查表：4=CSA，128=HCA，0=纯 SWA
+...
+self.wkv = Linear(self.dim, self.head_dim)             # 单共享 KV 头（MQA），head_dim=512
+self.wo_a = ColumnParallelLinear(self.n_heads * self.head_dim // self.n_groups,
+                                 self.n_groups * args.o_lora_rank, ...)  # 分组输出投影 g=16, d_g=1024
+...
+if self.compress_ratio:
+    self.compressor = Compressor(args, self.compress_ratio, self.head_dim)
+    if self.compress_ratio == 4:
+        self.indexer = Indexer(args, self.compress_ratio)  # 仅 CSA（m=4）配 lightning indexer
+    else:
+        self.indexer = None                                # HCA：无索引器，稠密注意力
+...
+if self.compress_ratio:
+    original_seq_len, rope_theta = args.original_seq_len, args.compress_rope_theta</code></pre>
+
+<p class="cap"><b>代码 1</b>｜注意力层按 <code>compress_ratios[layer_id]</code> 分派：<code>compress_ratio==4</code> 时挂 indexer（CSA），<code>==128</code> 时只有压缩器（HCA）。<code>wkv</code> 把 hidden 投到单头 512 维，即论文的共享 KV MQA；<code>wo_a/wo_b</code> 两级投影对应论文的分组输出投影（\(n_h c / g \to g \cdot d_g \to d\)）。</p>
+
+<h3>3.2 mHC：流形约束超连接</h3>
+
+<p>把残差流从 \(\mathbb{R}^d\) 加宽到 \(\mathbb{R}^{4\times d}\)，层更新为 \(X_{l+1} = B_l X_l + C_l F_l(A_l X_l)\)（式 (1)）。\(A_l, C_l\) 用 Sigmoid 约束为非负有界，\(B_l\) 用 Sinkhorn-Knopp 投影到双随机矩阵流形——谱范数 ≤ 1（前向非扩张）、对乘法封闭（任意深度堆叠仍稳定）。三个映射由"动态（依赖输入）+ 静态偏置"两部分参数化，静态部分归 AdamW 管。<b>深读：</b><a href="deepseek-mhc.html">《DeepSeek mHC 解读》</a>。</p>
+
+<h3>3.3 MoE：DeepSeekMoE 的微调</h3>
+
+<p>沿用细粒度路由专家 + 共享专家范式（§2.1），相对 V3 只改了四处：亲和度打分从 Sigmoid 换成 \(\sqrt{\mathrm{Softplus}(\cdot)}\)（config <code>scoring_func: "sqrtsoftplus"</code>）；负载均衡仍用辅助损失免费策略（bias 更新速度 0.001），另加权重 0.0001 的序列级均衡损失防止单序列极端失衡；去掉了路由目标节点数限制（靠重设并行策略保效率）；前 3 层用 Hash 路由替代稠密 FFN。SwiGLU 激活带 clamp（线性分量夹到 \([-10,10]\)，config <code>swiglu_limit: 10.0</code>）。</p>
+
+<h3>3.4 MTP 与推测解码谱系</h3>
+
+<p>MTP 模块与目标（深度 1）原封不动继承 V3。值得注意的是后续演进：V4.1 用 <b>DSpark</b>（3 层滑窗 drafter + 置信度调度验证）替代了 MTP 的推测解码角色，且 DSpark 在预训练后单独阶段训练、不向主干回传梯度（V4.1 论文 §2.4.3）。</p>
+
+<h2>4. 训练配方</h2>
+
+<h3>4.1 Muon + AdamW 的参数分工</h3>
+
+<p>论文 §2.4（第 14 页）+ §4.2.2（第 25 页）的分工是精确的：<b>Muon 管"绝大多数模块"</b>（所有 2D 权重矩阵），<b>AdamW 只管四类参数</b>——embedding、预测头、mHC 的静态偏置与门控因子、所有 RMSNorm 权重。Muon 侧配置：momentum 0.95、weight decay 0.1、更新矩阵 RMS 重标定到 0.18（以复用 AdamW 学习率量级）、<b>混合 Newton-Schulz 迭代</b>——前 8 步用 \((a,b,c)=(3.4445,-4.7750,2.0315)\) 快速收敛，最后 2 步切 \((2,-1.5,0.5)\) 把奇异值精确钉在 1。由于 V4 直接对注意力 Q 与 KV 条目做 RMSNorm（§2.3.3），attention logits 不会爆炸，<b>无需 QK-Clip</b>。</p>
+
+<div class="infer">论文未解释为何标量/近标量参数不参与正交化，但理由是结构性的：Newton-Schulz 正交化对向量（\(1\times n\)）会抹掉各分量的幅度差异（正交化后各方向等权），对 RMSNorm 的逐通道缩放因子、Sigmoid 门控这类"幅度即语义"的参数恰是破坏性的；把这些参数留给保幅值的 AdamW 是自然选择。V4.1（§2.5）沿用同一分类（"normalization-layer weights and other non-matrix parameters"）。此解释为推断，非论文原文。</div>
+
+<h3>4.2 关键超参</h3>
+
+<table>
+  <tr><th>项目</th><th>V4-Flash</th><th>V4-Pro</th></tr>
+  <tr><td>预训练 token 数</td><td>32T</td><td>33T</td></tr>
+  <tr><td>batch size（峰值，tokens）</td><td>75.5M</td><td>94.4M</td></tr>
+  <tr><td>峰值 / 末段学习率（cosine）</td><td>\(2.7\times10^{-4}\) / \(2.7\times10^{-5}\)</td><td>\(2.0\times10^{-4}\) / \(2.0\times10^{-5}\)</td></tr>
+  <tr><td>AdamW（\(\beta_1,\beta_2,\varepsilon\), wd）</td><td colspan="2">0.9, 0.95, \(10^{-20}\), 0.1（两模型相同）</td></tr>
+  <tr><td>序列长度阶梯</td><td colspan="2">4K → 16K → 64K → 1M</td></tr>
+  <tr><td>稀疏注意力引入</td><td>先 1T token 纯稠密预热；64K 起引入（先短程预热 indexer）</td><td>更长稠密预热阶段，随后同法两阶段引入</td></tr>
+  <tr><td>MTP loss 权重</td><td colspan="2">0.3 →（LR 衰减起）0.1</td></tr>
+  <tr><td>均衡：bias 速度 / 序列损失权重</td><td colspan="2">0.001 / 0.0001</td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜预训练超参（论文 §4.2.2，第 25–26 页）。</p>
+
+<h3>4.3 低精度训练与存储</h3>
+
+<ul>
+  <li><b>KV cache 混合精度</b>：RoPE 维用 BF16、其余维用 FP8——相对纯 BF16 存储近乎减半（§2.3.4，第 13 页）；</li>
+  <li><b>lightning indexer FP4</b>：索引分数计算在 FP4 下进行，加速超长上下文的索引（§2.3.4）；</li>
+  <li><b>路由专家 FP4</b>：V4 系列的路由专家参数用 FP4 精度（摘要，第 4 页）；现有硬件上 FP4×FP8 峰值算力与 FP8×FP8 相同，未来硬件理论可再省 1/3；</li>
+  <li><b>FP4 量化感知训练</b>（post-training，§5.2.1）：对 MoE 专家权重与 indexer QK 路径做 MXFP4 QAT——前向模拟量化、反向直通估计（STE）回到 FP8 主权重；FP4→FP8 反量化无损（E4M3 比 E2M1 多 2 个指数位），可完全复用既有 FP8 训练框架；</li>
+  <li><b>通信精度</b>：EP Dispatch 用 FP8、Combine 用 BF16（§3.1）；Muon 的 MoE 梯度经随机舍入降到 BF16 同步，配 all-to-all + FP32 本地求和替代 reduce-scatter，通信量减半且数值稳健（§3.4.1）。</li>
+</ul>
+
+<h3>4.4 训练稳定性：两记实招</h3>
+
+<p>万亿参数 MoE 训练中遭遇与 MoE 层离群值相关的 loss spike，论文（§4.2.3，第 26 页）给出两个经验有效、机理未完全理解的手段：</p>
+<ul>
+  <li><b>Anticipatory Routing</b>：步骤 \(t\) 用当前参数 \(\theta_t\) 算特征，但路由索引用历史参数 \(\theta_{t-\Delta t}\) 预先算好并缓存（提前取数，"预判式"路由），解除主干与路由网络的同步更新耦合。配合"仅 spike 时自动触发 + 短回滚"的动态开关，额外墙钟开销可忽略（激活时约 20%）；</li>
+  <li><b>SwiGLU Clamping</b>：线性分量夹到 \([-10,10]\)、门分量上限 10，有效消除离群值（config <code>swiglu_limit: 10.0</code>）。</li>
+</ul>
+
+<h2>5. 训练与推理基础设施</h2>
+
+<h3>5.1 MegaMoE：单内核通信-计算全重叠（§3.1）</h3>
+
+<p>MoE 层被拆成 Dispatch / Linear-1 / Activation / Linear-2 / Combine 五段，其中两段通信两段计算； profiling 显示单层内通信总时长小于计算，因此把专家切成<b>波（wave）</b>调度进单个融合内核后，计算可以完全盖住通信。实测对通用推理负载加速 1.50–1.73×，对 RL rollout 等长尾小批量场景最高 1.96×；CUDA 实现以 <b>MegaMoE</b> 名义开源在 DeepGEMM（PR #304）。论文还给出软硬件共设计的平衡点：对 V4-Pro，每个 token-专家对需 \(6hd\) FLOPs（SwiGLU 三投影）但仅 \(3h\) 字节通信，通信可全隐藏的条件为 \(C/B \le 2d = 6144\) FLOPs/Byte——带宽过了这个阈值就不再是瓶颈，堆带宽收益递减。</p>
+
+<h3>5.2 TileLang 与确定性内核（§3.2–3.3）</h3>
+
+<p>V4 的新架构若用普通算子拼装会产生数百个细碎 ATen 调用，官方用 TileLang DSL 开发融合内核覆盖绝大多数路径，配套两项工程：Host Codegen 把宿主侧校验移入生成代码（每次调用 CPU 开销从几十上百微秒降到 1 微秒以内）；集成 Z3 SMT 求解器做形式化整数分析（向量化、屏障插入等 pass）。更重要的是 §3.3 的<b>批不变（batch-invariant）与逐位确定性</b>内核库：注意力解码弃用 split-KV、改双内核策略（满波单 SM / 尾波多 SM 但累加顺序对齐）；GEMM 全线用 DeepGEMM 替代 cuBLAS 并弃用 split-k；注意力反向用每 SM 独立累加缓冲 + 全局确定性求和替代 <code>atomicAdd</code>；MoE 反向用 token 序预处理 + 跨 rank 缓冲隔离。这套性质使 pre-training / post-training / inference 三条管线逐位对齐，也是 §5.2.3 "WAL + KV 快照恢复 rollout"正确性的前提。</p>
+
+<h3>5.3 训练框架（§3.4）</h3>
+<ul>
+  <li><b>Muon 的混合 ZeRO</b>：稠密参数限制 ZeRO 并行上限并用背包算法装桶（padding &lt; 10% 开销）；MoE 参数按专家独立优化——把所有专家的 down/up/gate 投影分别展平后均匀切分到各 rank，不设 ZeRO 上限；</li>
+  <li><b>mHC 的低成本实现</b>：融合内核 + 选择性重算（重算大部分层间隐状态与归一化输入，避开计算密集算子）+ 调整 DualPipe 1F1B 重叠以容纳增大的流水线通信——mHC 墙钟开销仅 <b>6.7%</b>；</li>
+  <li><b>两阶段上下文并行</b>：压缩注意力要求 \(m\) 个连续 KV 条目、且压缩后各 rank 长度不齐。第一阶段各 rank 把末 \(m\) 个未压缩条目发给下一 rank 拼合压缩，产出定长 \(s/m+1\) 条目；第二阶段 all-gather + 融合 select-and-pad 算子整理成全长 \(cp\_size \cdot s/m\) 的压缩序列；</li>
+  <li><b>张量级激活检查点</b>：扩展 autograd，开发者只标注需要重算的张量，框架用 TorchFX 反向遍历找最小重算子图插入 backward，共享 storage 的张量自动去重。</li>
+</ul>
+
+<h3>5.4 推理框架与 KV cache（§3.5）</h3>
+
+<p>混合注意力产生三类尺寸与淘汰策略各异的 KV 条目（CSA/HCA 压缩条目、lightning indexer 条目、SWA 未压缩条目 + 待压缩尾部缓冲），PagedAttention 的"逐层同构 page"假设被打破。V4 的方案是把 SWA 与未压缩尾部当作<b>序列状态</b>（定长状态缓存池动态分配），把 CSA/HCA 压缩条目放进经典分块缓存（块大小取 \(\mathrm{lcm}(m,m')\) 的倍数以同时满足两种内核对齐），并为共享前缀复用设计了盘上存储（SWA 部分提供全存 / 周期检查点 / 零存三档权衡）。<b>深读：</b><a href="deepseek-v4-kvcache.html">《DeepSeek-V4 KV Cache 组织解读》</a>。</p>
+
+<h2>6. 效率账本</h2>
+
+<p>论文 Figure 1（第 1 页）与 §2.3.4（第 13–14 页）给出的核心对比（1M token 上下文）：</p>
+
+<table>
+  <tr><th>指标（1M 上下文）</th><th>DeepSeek-V3.2</th><th>DeepSeek-V4-Pro</th><th>DeepSeek-V4-Flash</th></tr>
+  <tr><td>单 token 推理 FLOPs（等效 FP8）</td><td>基准（1×）</td><td><b>27%</b>（约 3.7× 降低）</td><td><b>10%</b>（约 9.8× 降低）</td></tr>
+  <tr><td>累计 KV cache</td><td>基准（1×）</td><td><b>10%</b>（约 9.5× 缩小）</td><td><b>7%</b>（约 13.7× 缩小）</td></tr>
+  <tr><td>KV cache vs BF16 GQA8（头维 128）基线</td><td>—</td><td colspan="2">V4 系列约为基线的 <b>2%</b>（§2.3.4）</td></tr>
+</table>
+
+<p>效率来源可分解为：序列维压缩（KV 条目数 ÷\(m\) 或 ÷\(m'\)）、稀疏选择（FLOPs 只花在 top-\(k\)）、MQA 共享 KV + 分组输出投影、KV 混合精度存储（BF16 RoPE 维 + FP8 其余维）、indexer FP4 计算，以及相对 V3.2 更小的 top-\(k\)（1024 vs 2048）。注意 FLOPs 对比口径："激活参数更多的 Pro 反而 FLOPs 更低"——因为注意力 FLOPs 在长上下文下占主导，V4 砍的正是这一块。</p>
+
+<div class="infer">上表的 FLOPs/KV 比例是论文对 1M 场景的<b>估算</b>（"estimated single-token inference FLOPs"，Figure 1 右），非逐项实测加总；短上下文下优势会收窄（稀疏与压缩收益随长度增长）。这一口径提醒为推断性提醒，比例数字本身为论文陈述。</div>
+
+<h2>7. 评测摘要</h2>
+
+<h3>7.1 基座模型（Table 1，第 28 页，统一内部评测框架）</h3>
+
+<table>
+  <tr><th>Benchmark</th><th>V3.2-Base</th><th>V4-Flash-Base</th><th>V4-Pro-Base</th></tr>
+  <tr><td>MMLU-Pro（EM, 5-shot）</td><td>65.5</td><td>68.3</td><td><b>73.5</b></td></tr>
+  <tr><td>Simple-QA verified（EM, 25-shot）</td><td>28.3</td><td>30.1</td><td><b>55.2</b></td></tr>
+  <tr><td>FACTS Parametric（EM, 25-shot）</td><td>27.1</td><td>33.9</td><td><b>62.6</b></td></tr>
+  <tr><td>HumanEval（Pass@1）</td><td>62.8</td><td>69.5</td><td><b>76.8</b></td></tr>
+  <tr><td>MGSM（EM, 8-shot）</td><td>81.3</td><td><b>85.7</b></td><td>84.4</td></tr>
+  <tr><td>LongBench-V2（EM, 1-shot）</td><td>40.2</td><td>44.7</td><td><b>51.5</b></td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜基座模型摘选。关键信息：284B/13B 的 Flash-Base 以更小的参数预算在多数基准上超过 671B/37B 的 V3.2-Base——论文将此归因于架构改进 + 数据质量 + 训练优化的合力。</p>
+
+<h3>7.2 对齐后模型（Table 6，第 38 页，V4-Pro-Max 摘选）</h3>
+
+<table>
+  <tr><th>Benchmark</th><th>V4-Pro-Max</th><th>对照（最优者）</th><th>开源最优对照</th></tr>
+  <tr><td>SimpleQA-Verified（Pass@1）</td><td>57.9</td><td>Gemini-3.1-Pro 75.6</td><td>大幅领先（+20pt 量级）</td></tr>
+  <tr><td>LiveCodeBench（Pass@1）</td><td><b>93.5</b></td><td>—（表中最高）</td><td>Opus-4.6 88.8 / K2.6 89.6</td></tr>
+  <tr><td>Codeforces（Rating）</td><td><b>3206</b></td><td>GPT-5.4 3168</td><td>—</td></tr>
+  <tr><td>MRCR 1M（MMR）</td><td>83.5</td><td>Opus-4.6 92.9</td><td>超 Gemini-3.1-Pro 76.3</td></tr>
+  <tr><td>SWE Verified（Resolved）</td><td>80.6</td><td>Opus-4.6 80.8</td><td>追平闭源第一梯队</td></tr>
+  <tr><td>Terminal Bench 2.0（Acc）</td><td>67.9</td><td>GPT-5.4 75.1</td><td>K2.6 66.7 / GLM-5.1 63.5</td></tr>
+</table>
+<p class="cap"><b>表 4</b>｜对话/推理模式摘选。论文自我定位（§1）：知识类尚落后 Gemini-3.1-Pro，推理类超 GPT-5.2 / Gemini-3.0-Pro 但距 GPT-5.4 / Gemini-3.1-Pro 约 3–6 个月；<b>长上下文学术基准上超过 Gemini-3.1-Pro</b>，1M 上下文可常态化使用。</p>
+
+<h2>8. 演进小结：V3.2 → V4 → V4.1</h2>
+
+<div class="fig">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0L10,5L0,10z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <rect x="24" y="20" width="280" height="32" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="164" y="41" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">DeepSeek-V3.2</text>
+  <rect x="340" y="20" width="280" height="32" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="480" y="41" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">DeepSeek-V4</text>
+  <rect x="656" y="20" width="280" height="32" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="796" y="41" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">DeepSeek-V4.1-Flash</text>
+  <rect x="24" y="64" width="280" height="172" rx="8" fill="#ffffff" stroke="#c9d2e0"/>
+  <rect x="340" y="64" width="280" height="172" rx="8" fill="#ffffff" stroke="#2456c4"/>
+  <rect x="656" y="64" width="280" height="172" rx="8" fill="#ffffff" stroke="#e8862a"/>
+  <text x="38" y="92" font-size="10" fill="#1a1f2e">· MLA：KV 压缩为隐向量（MQA 模式）</text>
+  <text x="38" y="116" font-size="10" fill="#1a1f2e">· DSA：lightning indexer，top-k = 2048</text>
+  <text x="38" y="140" font-size="10" fill="#1a1f2e">· 671B 总参 / 37B 激活</text>
+  <text x="38" y="164" font-size="10" fill="#1a1f2e">· 残差连接：恒等映射</text>
+  <text x="38" y="188" font-size="10" fill="#1a1f2e">· 优化器：AdamW</text>
+  <text x="354" y="92" font-size="10" fill="#1a1f2e">· CSA(m=4)+HCA(m′=128) 1:1 交替</text>
+  <text x="354" y="116" font-size="10" fill="#1a1f2e">· mHC：双随机残差混合（n=4）</text>
+  <text x="354" y="140" font-size="10" fill="#1a1f2e">· Muon + AdamW 分工优化</text>
+  <text x="354" y="164" font-size="10" fill="#1a1f2e">· 1.6T/49B；284B/13B（Pro/Flash）</text>
+  <text x="354" y="188" font-size="10" fill="#1a1f2e">· KV：BF16（RoPE 维）+ FP8 混合存储</text>
+  <text x="354" y="212" font-size="10" fill="#1a1f2e">· 原生 1M 上下文</text>
+  <text x="670" y="92" font-size="10" fill="#1a1f2e">· 多模态 CED：编码器-解码器架构</text>
+  <text x="670" y="116" font-size="10" fill="#1a1f2e">· CSA2：跨层复用全局 KV 与 Top-K 索引</text>
+  <text x="670" y="140" font-size="10" fill="#1a1f2e">· FP4 主 KV 缓存（HBM/SSD 减半）</text>
+  <text x="670" y="164" font-size="10" fill="#1a1f2e">· Single-Pass mHC + Mega-mHC 内核</text>
+  <text x="670" y="188" font-size="10" fill="#1a1f2e">· Engram 条件记忆 + DSpark 投机解码</text>
+  <text x="670" y="212" font-size="10" fill="#1a1f2e">· 552B 骨干 / 8B 激活（prefill）</text>
+  <line x1="304" y1="150" x2="336" y2="150" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <line x1="620" y1="150" x2="652" y2="150" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <text x="480" y="280" font-size="11" text-anchor="middle" fill="#5a6272">KV 视角的主线：MLA 隐向量 → 序列维压缩 × 稀疏选择 → 跨层复用 + FP4</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>｜三代架构增量（依据 V3.2 论文 §2 / 摘要、V4 论文 §2、V4.1 论文 §1–§2）。V4 的关键一步是把"省 FLOPs"（V3.2 的 DSA 稀疏化）扩展为"省 FLOPs + 省 KV"（序列维压缩）；V4.1 再进一步做跨层复用（Full/Reindex/Reuse 三模式）与 FP4 缓存：相对 V4-Flash，运行时 KV 约降至 1/4、持久化 KV 约降至 1/8（V4.1 论文 §1），且 4K→1M 的 decode FLOPs 仅增长 1/4（近乎平坦）。</p>
+
+<p>三点结构性观察：</p>
+<ul>
+  <li><b>残差连接的演进</b>：V3.2 恒等残差 → V4 全层 mHC（\(n{=}4\)）→ V4.1 Single-Pass mHC（把 \(A_l\) 的使用错位一个 block，消除输入混合对当前块系数的依赖，部署内核 Mega-mHC 把激活读写降到理论下界 \((n{+}1)d\)，流量减半）；</li>
+  <li><b>注意力主线</b>：压缩与稀疏两件事在 V4 合流（CSA），V4.1 干脆去掉 HCA、用纯 CSA2 靠跨层 KV/索引复用继续压 KV——层级分组（如编码器 6 层一组：1 层 Full + 5 层 Reuse）；</li>
+  <li><b>训练稳定性的延续</b>：V4 靠 Anticipatory Routing + SwiGLU clamp 扑灭 spike；V4.1 45T token 训练报告"no instability"，稀疏注意力从 64K 起从头训练、不再需要稠密预热。</li>
+</ul>
+
+<h2>9. 事实与推断的边界</h2>
+
+<p><b>事实</b>（论文 + config.json / 官方推理代码双重核实）：§1 规格表全部数字、CSA/HCA 交错布局（compress_ratios）、Muon/AdamW 分工与超参、MoE/MTP/mHC 配置、效率比例（27%/10%、10%/7%、~2%）、MegaMoE 加速比（1.50–1.73×/1.96×）、mHC 6.7% 开销、评测数字（Table 1/6）。代码事实：<code>compress_ratios</code> 逐层查表分派注意力类型与 indexer 有无（model.py:453–472）、前 3 层 Hash 路由（model.py:556）、MTP 层复用主栈 Block 且压缩率为 0（model.py:791）。</p>
+
+<p><b>推断</b>（均已在正文用"推断"框或显式标注）：</p>
+<ul>
+  <li>Pro 前两层用 HCA 的动机（全局视野打底、早期 token 缺查询焦点）——论文未解释；</li>
+  <li>标量/近标量参数不用 Muon 的机理解释（正交化抹平幅度、幅度即语义）——论文未给出理由；</li>
+  <li>效率表中"FLOPs/KV 为论文估算口径、短上下文优势收窄"的提醒；</li>
+  <li><code>compress_rope_theta=160000</code> 的语义展开（压缩层 RoPE 基频）——代码引用为事实，其设计意图为推断。</li>
+</ul>
+
+<h2>10. 参考来源</h2>
+
+<ol class="refs">
+  <li>DeepSeek-AI. <i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>. arXiv:2606.19348. 本地归档 <code>paper/deepseek_v4.pdf</code>（§2 架构 p.6–14、§3 基础设施 p.15–23、§4 预训练 p.24–28、§5 后训练与评测 p.28–44）。</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V4.1</i>（V4.1 技术报告）. 本地归档 <code>paper/deepseek_v41.pdf</code>（§1 引言、§2.4.1 Single-Pass mHC、§2.4.4 FP4 KV、§4.2.1 模型配置）。</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V3.2</i>（V3.2 技术报告）. 本地归档 <code>paper/deepseek_v32.pdf</code>（DSA / lightning indexer 架构）。</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V4-Pro</i> 官方权重与推理实现. <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro</a>，commit <code>b5968e9</code>（2026-09-15 抓取）：config.json 模型规格、inference/model.py 层分派逻辑。</li>
+  <li>本站深读报告：<a href="deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读（CSA/HCA）</a>；<a href="csa-compression.html">CSA 压缩过程详解</a>；<a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV Cache 组织解读</a>；<a href="deepseek-mhc.html">DeepSeek mHC 解读</a>。</li>
+</ol>
+
+<footer>生成于 2026-09-15 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
