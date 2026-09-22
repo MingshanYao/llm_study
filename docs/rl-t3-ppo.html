@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RL 训练工程师零基础七讲 · 第 3 讲：PPO 精讲</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>RL 训练工程师零基础七讲 · 第 3 讲：PPO 精讲</h1>
+
+<div class="series-nav">
+  <a href="rl-t0-foundation.html">0 全景图</a>
+  <a href="rl-t1-policy-gradient.html">1 策略梯度</a>
+  <a href="rl-t2-llm-as-rl.html">2 LLM×RL</a>
+  <a class="here">3 PPO</a>
+  <a href="rl-t4-rlhf-dpo.html">4 RLHF·DPO</a>
+  <a href="rl-t5-rlvr-grpo.html">5 RLVR·GRPO</a>
+  <a href="rl-t6-systems.html">6 系统与实战</a>
+  <a href="rl-t7-score-centering.html">番外 SC</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>本讲定位：</b>RLHF 时代的引擎（InstructGPT / 早期 ChatGPT 用它做对齐）。第 5 讲的 GRPO 是它的「瘦身版」，所以本讲也是 GRPO 的前置。</p>
+  <p style="margin:4px 0"><b>前置要求：</b>第 1 讲（REINFORCE、优势）、第 2 讲（轨迹 log 概率、KL 缰绳、reference model）。本讲新数学只有三小块，全部配手算。</p>
+  <p style="margin:4px 0"><b>难点预警：</b>clip 的分支行为和 GAE 的递推是全系列最容易懵的两处——本讲用「逐格手算的表格」代替推导，跟着表格走一遍就通。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>REINFORCE 有两大浪费——<b>数据用一次就扔</b>（LLM 生成很贵）、<b>功劳记账太粗</b>（整条链同乘一个奖励）。PPO 用三件发明补齐：① <b>重要性采样</b>：给旧数据乘一个修正比率，回收再用；② <b>clip</b>：给每次更新装保险丝，新旧策略不许差太多；③ <b>GAE</b>：借一个「预期得分」网络，把末尾奖励精细拆分到每个 token。最后看全 PPO 在 LLM 上的完整形态——四个模型同时在场的架构，以及它为什么难跑：这段「难」正是第 5 讲 GRPO 出场的原因。</p>
+</div>
+
+<h2>1. REINFORCE 的两个浪费</h2>
+
+<p>第 2 讲末尾的训练循环能跑，但有隐情。rollout 一批回答的成本极高（几百条 × 几百 token 的推理），而这批数据在 <b>一次参数更新之后就「过期」了</b>——因为策略变了，理论上梯度估计不再指向正确方向，数据只能扔掉重采。第二个浪费来自记账：优势 = 整条链共用一个 \(R - b\)，第 2 讲的功劳记账难题原封未动。</p>
+
+<p>PPO（Proximal Policy Optimization，OpenAI 2017）直击这两点，外加把 KL 缰绳整合进来。它在 LLM 出现前就是机器人、游戏里的主力算法，InstructGPT 把它带进 LLM 后训练，成了 RLHF 的代名词。拆开看只有三个零件。</p>
+
+<h2>2. 零件一：重要性采样——让旧数据能复用</h2>
+
+<p>问题：梯度估计是「按<b>新</b>策略的概率加权」的期望，但数据是<b>旧</b>策略采的，分布对不上。恒等变形修正一下——分子分母同乘比率：</p>
+
+<div class="formula">\[
+\mathbb{E}_{\pi}\big[f(x)\big] = \mathbb{E}_{\pi_{\mathrm{old}}}\Big[\underbrace{\frac{\pi(x)}{\pi_{\mathrm{old}}(x)}}_{\rho\ \text{重要性比率}} f(x)\Big]
+\]</div>
+
+<p>直觉：旧数据里，凡是「新策略比旧策略<b>更</b>看重」的样本，加权系数 \(\rho > 1\) 放大它的声音；「更不看重的」\(\rho < 1\) 缩水。比如某回答在旧策略里概率 0.2、新策略里 0.4，则 \(\rho = 2\)——它按双倍计入估计。</p>
+
+<p>LLM 场景里 \(\rho\) 是<b>逐 token</b> 的：\(\rho_t = \pi_{\theta}(\text{token}_t)/\pi_{\mathrm{old}}(\text{token}_t) = \exp(\log\pi_{\theta} - \log\pi_{\mathrm{old}})\)。工程上毫无负担——rollout 时推理引擎本来就要输出旧策略的 log 概率，存下来即可。</p>
+
+<div class="box">
+<span class="bt">直觉</span>重要性采样像「加权重放」：把旧时代的采访录音（旧数据）剪进新节目，凡是立场变了的片段按变化幅度调音量。代价也在这里：一旦新旧立场差太远（\(\rho\) 巨大或极小），个别片段的音量会大得离谱——方差爆炸。所以它必须搭配下一节的保险丝。
+</div>
+
+<h2>3. 零件二：clip——每次更新的保险丝</h2>
+
+<p>先把梯度估计改写成「直接可优化」的目标函数（用优势 \(A\) 替换 \(R\)，用比率替换权重）：</p>
+
+<div class="formula">\[
+L(\theta) = \mathbb{E}\big[\,\rho(\theta)\, A\,\big], \qquad \rho = \frac{\pi_\theta}{\pi_{\mathrm{old}}}
+\]</div>
+
+<p>如果放着不管，优化器会找到把 \(\rho\) 推到天上的解（尤其优势为正时），一头撞进重要性采样失效的区域。PPO 的做法粗暴而有效——<b>把 \(\rho\) 摁在 \([1-\varepsilon,\ 1+\varepsilon]\) 区间里</b>（典型 \(\varepsilon = 0.2\)），并取两支里更保守的那个：</p>
+
+<div class="formula">\[
+L^{\mathrm{CLIP}}(\theta) = \mathbb{E}\Big[\min\big(\rho A,\ \mathrm{clip}(\rho,\ 1-\varepsilon,\ 1+\varepsilon)\cdot A\big)\Big]
+\]</div>
+
+<p>公式看着唬人，行为用表格一遍算清。\(\varepsilon = 0.2\)，分「好动作 \(A=+2\)」和「坏动作 \(A=-2\)」两组，各取三个 \(\rho\)：</p>
+
+<table>
+  <tr><th>场景</th><th>\(\rho\)</th><th>未裁剪 \(\rho A\)</th><th>裁剪项 \(\mathrm{clip}(\rho)\cdot A\)</th><th>\(\min\)（实际目标）</th><th>效果</th></tr>
+  <tr><td rowspan="3">好动作<br>\(A=+2\)</td><td>0.8</td><td>1.6</td><td>\(0.8\times2=1.6\)</td><td>1.6</td><td>没截断：概率还没涨够，继续推 ↑</td></tr>
+  <tr><td>1.1</td><td>2.2</td><td>\(1.1\times2=2.2\)</td><td>2.2</td><td>没截断：仍在区间内，继续推 ↑</td></tr>
+  <tr><td><b>1.5</b></td><td>3.0</td><td>\(\mathbf{1.2}\times2=2.4\)</td><td><b>2.4</b></td><td><b>截断：涨过 \(1{+}\varepsilon\)，目标变平，不再推 ↑</b></td></tr>
+  <tr><td rowspan="3">坏动作<br>\(A=-2\)</td><td><b>0.5</b></td><td>−1.0</td><td>\(\mathbf{0.8}\times({-}2)=-1.6\)</td><td><b>−1.6</b></td><td><b>截断：压过 \(1{-}\varepsilon\)，目标变平，不再压 ↓</b></td></tr>
+  <tr><td>1.1</td><td>−2.2</td><td>\(1.1\times({-}2)=-2.2\)</td><td>−2.2</td><td>没截断：坏动作概率还偏高，继续压 ↓</td></tr>
+  <tr><td><b>1.5</b></td><td>−3.0</td><td>\(1.2\times({-}2)=-2.4\)</td><td><b>−3.0</b></td><td><b>没截断：坏动作概率反而在涨？绝不手软，狠狠压 ↓</b></td></tr>
+</table>
+
+<p>读表三要点：</p>
+
+<ol>
+  <li><b>对称的是「更新量」，不是「行为」</b>：正优势时，概率涨过 \(1+\varepsilon\) 就停手（别得意忘形）；负优势时，概率压过 \(1-\varepsilon\) 就停手（别赶尽杀绝）。</li>
+  <li><b>单向的不对称</b>：坏动作如果概率不降反升（\(\rho > 1+\varepsilon\)），<b>不会被拦</b>——min 取到真实的 \(\rho A\)，惩罚照常且更大。保险丝只防「学过头」，不防「纠错」。</li>
+  <li><b>clip 不是裁剪梯度，是压平目标</b>：截断区内目标函数对 \(\rho\) 的斜率为 0，梯度自然消失。常见误解是把 clip 想象成「把梯度砍断」，机制其实是「目标函数在这里躺平」。</li>
+</ol>
+
+<div class="box">
+<span class="bt">为什么取 min</span>min 永远选中「对优化者<b>更不利</b>」的那一支——悲观主义下界。宁可少学，绝不多学：这是 PPO 名字里 Proximal（近端/保守）的含义——每次更新只许在旧策略附近挪一小步。上一节重要性采样的方差爆炸，被这根保险丝兜住了。
+</div>
+
+<div class="fig">
+<svg viewBox="0 0 940 380" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="40" y="34" font-size="13" font-weight="bold" fill="#1a1f2e">clip 后的目标函数 L 与概率比 ρ 的关系（ε = 0.2）</text>
+
+  <!-- ================= left panel: A>0 ================= -->
+  <text x="100" y="64" font-size="12" font-weight="bold" fill="#1a1f2e">A &gt; 0（好动作）：涨到 1+ε 就停</text>
+
+  <!-- axes -->
+  <line x1="100" y1="220" x2="400" y2="220" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <line x1="100" y1="220" x2="100" y2="80" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <text x="408" y="224" font-size="10" fill="#5a6272">ρ</text>
+  <text x="88" y="76" font-size="10" fill="#5a6272">L</text>
+
+  <!-- x ticks: ρ=0.8 -> x=175, 1.0 -> 225, 1.2 -> 275 -->
+  <line x1="175" y1="220" x2="175" y2="226" stroke="#5a6272" stroke-width="1"/>
+  <text x="175" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1−ε</text>
+  <line x1="225" y1="220" x2="225" y2="226" stroke="#5a6272" stroke-width="1"/>
+  <text x="225" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1.0</text>
+  <line x1="275" y1="220" x2="275" y2="226" stroke="#5a6272" stroke-width="1"/>
+  <text x="275" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1+ε</text>
+  <line x1="275" y1="124" x2="275" y2="220" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="3,3"/>
+
+  <!-- unclipped rho*A dashed: (100,180) -> (375,92) -->
+  <line x1="100" y1="180" x2="375" y2="92" stroke="#5a6272" stroke-width="1.2" stroke-dasharray="6,3"/>
+  <!-- clipped curve: (100,180) -> (175,156) -> (275,124) -> (375,124) -->
+  <polyline points="100,180 175,156 275,124 375,124" fill="none" stroke="#2456c4" stroke-width="2.2"/>
+
+  <!-- annotations -->
+  <text x="300" y="112" font-size="10.5" fill="#2456c4">变平：梯度 ≈ 0，推不动了</text>
+  <text x="292" y="86" font-size="10.5" fill="#5a6272">虚线 = 不裁剪 ρA（会冲上天）</text>
+
+  <!-- ================= right panel: A<0 ================= -->
+  <text x="520" y="64" font-size="12" font-weight="bold" fill="#1a1f2e">A &lt; 0（坏动作）：压到 1−ε 就停，但涨了绝不手软</text>
+
+  <!-- axes -->
+  <line x1="520" y1="220" x2="830" y2="220" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <line x1="520" y1="220" x2="520" y2="150" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <text x="838" y="224" font-size="10" fill="#5a6272">ρ</text>
+
+  <!-- x ticks: 0.8 -> 595, 1.0 -> 645, 1.2 -> 695 -->
+  <line x1="595" y1="220" x2="595" y2="226" stroke="#5a6272" stroke-width="1"/>
+  <text x="595" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1−ε</text>
+  <line x1="645" y1="220" x2="645" y2="226" stroke="#5a6272" stroke-width="1"/>
+  <text x="645" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1.0</text>
+  <line x1="695" y1="220" x2="695" y2="226" stroke="#5a6272" stroke-width="1"/>
+  <text x="695" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1+ε</text>
+  <line x1="595" y1="284" x2="595" y2="220" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="3,3"/>
+
+  <!-- unclipped dashed: (520,260) -> (795,348) -->
+  <line x1="520" y1="260" x2="795" y2="348" stroke="#5a6272" stroke-width="1.2" stroke-dasharray="6,3"/>
+  <!-- clipped curve: flat (520,284)-(595,284), then fall (595,284) -> (695,316) -> (795,348) -->
+  <polyline points="520,284 595,284 795,348" fill="none" stroke="#2456c4" stroke-width="2.2"/>
+
+  <!-- annotations -->
+  <text x="608" y="272" font-size="10.5" fill="#2456c4">变平：不再继续压</text>
+  <text x="640" y="336" font-size="10.5" fill="#2456c4">坏动作概率反升：惩罚照常（未截断）</text>
+
+  <text x="40" y="292" font-size="11" fill="#5a6272">读图：蓝线是实际优化的目标。截断区（平段）梯度为零——更新自动刹车；虚线是「不裁剪会发生的事」。</text>
+  <text x="40" y="312" font-size="11" fill="#5a6272">左图：好动作的概率比涨过 1+ε，目标不再升高。右图：坏动作的概率比跌破 1−ε，目标不再降低；但若它不降反升（右段），</text>
+  <text x="40" y="330" font-size="11" fill="#5a6272">惩罚沿虚线继续加码。min 的悲观主义：两条支线里永远取对优化者更不利的那条。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-1</b>｜PPO 论文 Figure 1 的手绘版。横轴是新旧策略的概率比 \(\rho\)，纵轴是目标值。蓝色实线的「平段」就是保险丝起作用的位置。</p>
+
+<h2>4. 零件三：GAE——把末尾奖励拆到每个 token</h2>
+
+<h3>4.1 先请出 critic（价值网络）</h3>
+
+<p>第 1 讲的 baseline 是「平均分」这一刀切。PPO 请来一位专门的记账员：<b>价值网络 \(V(s)\)</b>（术语 critic），输入当前状态（LLM 场景 = 当前前缀），输出「从这里出发、按当前策略走下去，<b>预期</b>最终得多少分」。它和策略网络一起训练，学习目标就是「预测得更准」（回归到实际发生的回报）。</p>
+
+<p>有了 \(V\)，「这一步走得好不好」就有了一个精细的定义——<b>TD 残差</b>（Temporal Difference error）：</p>
+
+<div class="formula">\[
+\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)
+\]</div>
+
+<p>读法：「<b>实际得到的</b>（这一步的即时奖励 + 下一状态的预期值）减去<b>出发前的预期</b>」。为正 = 这步走得比预期好，为负 = 比预期差。\(\gamma \in [0,1]\) 是折扣因子（对未来奖励打多少折，LLM 场景通常取接近 1）。</p>
+
+<h3>4.2 GAE：δ 的加权平均</h3>
+
+<p>单步的 \(\delta_t\) 只看眼前一步，噪声大；一路加到底（蒙特卡洛）又太抖。GAE（Generalized Advantage Estimation）用指数衰减把多步 \(\delta\) 揉在一起：</p>
+
+<div class="formula">\[
+A_t = \delta_t + (\gamma\lambda)\,\delta_{t+1} + (\gamma\lambda)^2\,\delta_{t+2} + \cdots
+\]</div>
+
+<p>\(\lambda \in [0,1]\) 是方差-偏差的调节旋钮：\(\lambda = 0\) 只信眼前（\(A_t = \delta_t\)，方差小、偏差大）；\(\lambda = 1\) 全部加总，恰好等于「实际总回报 − 出发时预期」\(R - V(s_t)\)（无偏、方差大）。LLM 训练里 \(\gamma\) 常取 1.0、\(\lambda\) 取 0.95~1.0。</p>
+
+<h3>4.3 完整手算</h3>
+
+<p>设一条 3-token 的回答，每步即时奖励 \(r = [0,\ 0,\ 1]\)（答对末尾 +1；若接 KL 罚款，前两步会是小负数），critic 的预期 \(V = [0.2,\ 0.5,\ 0.3]\)（末尾之后 \(V = 0\)）。取 \(\gamma = 1\)，\(\lambda = 0.5\)：</p>
+
+<table>
+  <tr><th>步骤</th><th>算式</th><th>结果</th></tr>
+  <tr><td>\(\delta_1 = r_1 + V_2 - V_1\)</td><td>\(0 + 0.5 - 0.2\)</td><td>\(+0.3\)</td></tr>
+  <tr><td>\(\delta_2 = r_2 + V_3 - V_2\)</td><td>\(0 + 0.3 - 0.5\)</td><td>\(-0.2\)</td></tr>
+  <tr><td>\(\delta_3 = r_3 + 0 - V_3\)</td><td>\(1 - 0.3\)</td><td>\(+0.7\)</td></tr>
+  <tr><td>\(A_3 = \delta_3\)</td><td>末步无后续</td><td>\(0.7\)</td></tr>
+  <tr><td>\(A_2 = \delta_2 + \lambda\delta_3\)</td><td>\(-0.2 + 0.5\times0.7\)</td><td>\(+0.15\)</td></tr>
+  <tr><td>\(A_1 = \delta_1 + \lambda A_2\)</td><td>\(0.3 + 0.5\times0.15\)</td><td>\(+0.375\)</td></tr>
+</table>
+
+<p>对照两个极端感受 \(\lambda\) 的作用：\(\lambda = 0\)（只看眼前）给 \(A = [0.3,\ -0.2,\ 0.7]\)——第二步被 critic 的一次坏预测（\(V_2 = 0.5\) 偏高）拖成负值；\(\lambda = 1\)（蒙特卡洛）给 \(A = R - V = [0.8,\ 0.5,\ 0.7]\)。GAE（0.375, 0.15, 0.7）是两者的折中：<b>单步噪声被前后步稀释</b>，但整体仍指向「这条链比预期好」。</p>
+
+<div class="infer">注意 \(V\) 的预测质量直接决定 \(\delta\) 的质量——critic 训不好，优势就是噪声。LLM 场景里 critic 与 policy 一样大、一样难训，这是 PPO 工程负担的主要来源之一，记住它，第 5 讲 GRPO 的第一刀就砍在这里。</div>
+
+<h2>5. 拼装：PPO 的 loss 与四模型架构</h2>
+
+<p>PPO 的总 loss 由三部分组成：</p>
+
+<div class="formula">\[
+\mathcal{L} = \underbrace{\mathcal{L}^{\mathrm{CLIP}}}_{\text{策略（本讲第 3 节）}} \; - c_1\, \underbrace{\mathcal{L}^{V}}_{\text{critic 的 MSE}} \; - c_2\, \underbrace{H(\pi)}_{\text{熵奖励（可选）}}
+\]</div>
+
+<p>熵奖励 \(H\) 惩罚「分布过尖」——维持探索（第 2 讲温度一节的精神续集），LLM 训练里常不加或加得很小。第 4、5 讲的算法都是对第一项动手术。</p>
+
+<p>而在 LLM-RLHF 实现里，一次训练要同时养着四个模型——这是 PPO 时代最著名的架构图：</p>
+
+<table>
+  <tr><th>模型</th><th>别称</th><th>干什么</th><th>训练吗</th></tr>
+  <tr><td><b>Actor</b>（策略）</td><td>\(\pi_\theta\)</td><td>生成回答，被 clip 目标更新</td><td>✅ 训练</td></tr>
+  <tr><td><b>Critic</b>（价值）</td><td>\(V(s)\)</td><td>预测预期得分，供 GAE 记账</td><td>✅ 训练</td></tr>
+  <tr><td><b>Reference</b>（参考）</td><td>\(\pi_{\mathrm{ref}}\)（= SFT 模型）</td><td>算逐 token KL 罚款（第 2 讲的缰绳）</td><td>❄️ 冻结</td></tr>
+  <tr><td><b>Reward Model</b>（奖励）</td><td>RM</td><td>给整条回答打分（RLHF 路线）</td><td>❄️ 冻结</td></tr>
+</table>
+
+<p>四个模型全是几十亿参数级：两个在训练（各带优化器状态和梯度）、两个在旁听（占推理显存），再加 rollout 引擎本身——<b>这就是「RLHF 训练贵、难、脆」的物质基础</b>。第 6 讲的系统架构整页都在回答「这些东西怎么塞进机房」；第 5 讲的 GRPO 则直接砍掉其中最贵的一件（critic）。</p>
+
+<h2>6. 为什么 LLM + PPO 难跑</h2>
+
+<p>把 2023 年前后各家实践中的抱怨归纳成四条（它们就是后续算法演化的路线图）：</p>
+
+<table>
+  <tr><th>痛点</th><th>具体表现</th><th>后来的解法</th></tr>
+  <tr><td>rollout 太贵</td><td>生成占训练时间的 50%~80%，且 on-policy 数据用一次就扔</td><td>重要性采样 + 多 epoch 复用（本讲）；更激进的异步架构（第 6 讲）</td></tr>
+  <tr><td>critic 不好训</td><td>价值网络和策略一样大，预测长链条回报困难，训练不稳</td><td>GRPO 用组内对比替代 critic（第 5 讲）</td></tr>
+  <tr><td>超参敏感</td><td>\(\beta, \varepsilon, \lambda, \gamma\), lr, KL 目标值……任何一处不对都表现为「reward 不涨」或「模型变傻」</td><td>DPO 绕开 RL 循环（第 4 讲）；DAPO 等对超参做鲁棒化（第 5 讲）</td></tr>
+  <tr><td>RM 被 hack</td><td>训练后期 reward 涨、人工评测跌——模型学会了刷 RM 的分</td><td>RLVR 用程序判分替代 RM（第 5 讲）；KL 缰绳加强</td></tr>
+</table>
+
+<p>所以后来的故事并不是「PPO 被淘汰」：<b>它的三个零件全部存活</b>——clip 成了几乎所有现代算法的标配，重要性采样以 ratio 的形式无处不在，GAE 的「优势」概念是通用语言。被淘汰的只是「critic + 四模型」的重装形态。</p>
+
+<h2>7. 自查清单</h2>
+
+<p>下面 8 个问题都能不假思索地回答，就可以进入第 4 讲：</p>
+
+<ol class="checklist">
+  <li>REINFORCE 的两个浪费是什么？（答：数据用一次就扔；整条链同乘一个奖励、记账粗）</li>
+  <li>重要性采样的修正是哪个量、直觉是什么？（答：比率 \(\rho = \pi/\pi_{\mathrm{old}}\)；新策略更看重的旧样本加权放大）</li>
+  <li>\(\rho\) 偏离 1 太远会怎样？（答：估计方差爆炸——重要性采样失效区，所以要 clip）</li>
+  <li>clip 的行为：A&gt;0 与 A&lt;0 各在哪儿刹车？哪一侧不设防？（答：涨过 \(1{+}\varepsilon\) 停、压过 \(1{-}\varepsilon\) 停；坏动作概率升高不设防、照罚）</li>
+  <li>clip 的机制是砍梯度吗？（答：不是，是让目标函数在截断区变平，梯度随之消失）</li>
+  <li>TD 残差 \(\delta_t\) 的读法？（答：这一步的实际所得 − 出发前的预期，正=比预期好）</li>
+  <li>GAE 的 \(\lambda = 0\) 和 \(\lambda = 1\) 各退化为？手算例子的 \(A_2\) 是多少？（答：\(A_t=\delta_t\)；\(A_t = R - V(s_t)\)；0.15）</li>
+  <li>四个模型分别是什么、哪两个在训练？（答：actor / critic 训练，reference / reward model 冻结）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="rl-t4-rlhf-dpo.html">第 4 讲：RLHF 与 DPO</a>——PPO 只是引擎，燃料从哪来？第 4 讲讲奖励的制造：人类偏好数据 → Bradley-Terry 模型 → reward model（手算其训练损失）；以及 RLHF 的两条简化支线：绕开 RL 循环的 <b>DPO</b>（手算其损失与梯度方向）和反馈自动化的 RLAIF。读完它，ChatGPT 式对齐的整条流水线就通了。
+</div>
+
+<footer>本页为个人学习笔记 · RL 训练工程师零基础七讲系列 · 生成于 2026-09-19 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · PPO 出自 Schulman et al. 2017 (arXiv:1707.06347)，GAE 出自 Schulman et al. 2015 (arXiv:1506.02438)</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

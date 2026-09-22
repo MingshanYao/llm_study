@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大模型量化零基础七讲 · 第 5 讲：KV Cache 量化与推理系统落地</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>大模型量化零基础七讲 · 第 5 讲：KV Cache 量化与推理系统落地</h1>
+
+<div class="series-nav">
+  <a href="quant-t0-foundation.html">0 全景图</a>
+  <a href="quant-t1-basics.html">1 量化数学</a>
+  <a href="quant-t2-ptq.html">2 GPTQ·AWQ</a>
+  <a href="quant-t3-activation.html">3 激活与FP8</a>
+  <a href="quant-t4-ultra-low-bit.html">4 极低比特</a>
+  <a class="here">5 KV与系统</a>
+  <a href="quant-t6-qat-roadmap.html">6 QAT·路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>大模型量化零基础七讲（本篇为第 5 讲）</p>
+  <p style="margin:4px 0"><b>前置：</b>第 0 讲的显存账本与 memory-bound 直觉；第 3 讲的 outlier 思维（本讲它两度现身）。</p>
+  <p style="margin:4px 0"><b>本讲地位：</b>从算法课转系统课：显存账本里增长最快的 KV cache 怎么量化、量化模型靠什么 kernel 真的跑快、主流服务框架和文件格式怎么选。这一讲是「量化工程师」和「量化研究员」的分水岭——生产环境里的大部分难题都在这里。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>① 补课 KV cache：它是什么、为什么长对话下反超权重成为显存大头；② KV 量化的两个特殊难点（key 的通道 outlier、attention sink）与代表方案 KIVI；③ 量化 kernel 的速度来源——为什么 W4A16 能提速 3~4 倍、Marlin/Machete 在优化什么；④ QServe 的 W4A8KV4 组合拳；⑤ 服务框架与文件格式的选型地图（vLLM/TensorRT-LLM/llama.cpp、GGUF k-quants）。</p>
+</div>
+
+<h2>1. 补课：KV cache，显存账本里的大胃王</h2>
+
+<p>模型生成文字是一个 token 一个 token 蹦的。生成第 \(t\) 个 token 时，注意力要「回看」全部历史——如果每一步都把历史的 K、V 重新算一遍，等于做着天文数字的重复劳动。于是推理引擎把每层每步的 K、V <b>存下来复用</b>，这份存档就是 <b>KV cache</b>。</p>
+
+<p>代价是它随对话长度<b>线性增长</b>。以 Llama-3-70B 级架构（80 层 × 8 个 KV 头 × 128 维、FP16）为例，每个 token 要存：</p>
+
+<div class="formula">
+
+\[ 2 \,(\text{K,V}) \times 80 \times 8 \times 128 \times 2\,\text{字节} \approx 0.33\,\text{MB/token} \]
+
+</div>
+
+<p>一个 100K 长上下文就是约 <b>33 GB</b>——和 FP16 的 70B 权重同一量级。批量服务 N 个并发请求，就是 N 份 KV cache 并存。这就是长上下文时代「KV 是显存大头」的原因：</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 352" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">70B 模型（INT4 权重）的显存构成：上下文一长，KV 反超</text>
+
+  <!-- bar 1: 32K context -->
+  <rect x="220" y="160" width="150" height="140" fill="#163a86"/>
+  <rect x="220" y="152" width="150" height="8" fill="#2456c4"/>
+  <rect x="220" y="149" width="150" height="3" fill="#e8862a"/>
+  <text x="295" y="234" font-size="11.5" font-weight="bold" text-anchor="middle" fill="#ffffff">权重 35 GB</text>
+  <text x="384" y="164" font-size="10.5" fill="#5a6272">激活 ~2 GB</text>
+  <text x="384" y="150" font-size="10.5" fill="#5a6272">KV ~0.5 GB</text>
+  <text x="295" y="324" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">32K 上下文</text>
+
+  <!-- bar 2: 200K context -->
+  <rect x="560" y="168" width="150" height="132" fill="#163a86"/>
+  <rect x="560" y="36" width="150" height="132" fill="#e8862a"/>
+  <rect x="560" y="28" width="150" height="8" fill="#2456c4"/>
+  <text x="635" y="238" font-size="11.5" font-weight="bold" text-anchor="middle" fill="#ffffff">权重 35 GB</text>
+  <text x="635" y="106" font-size="11.5" font-weight="bold" text-anchor="middle" fill="#ffffff">KV ~33 GB</text>
+  <text x="724" y="36" font-size="10.5" fill="#5a6272">激活 ~2 GB</text>
+  <text x="635" y="324" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">100K 上下文</text>
+
+  <text x="40" y="344" font-size="11" fill="#1a1f2e">权重是一次性的，KV 按请求 × 上下文长度无限复制 —— 量化 KV 等于给服务的并发能力直接扩容。</text>
+</svg>
+</div>
+<p class="cap"><b>图 5-1</b>｜显存账本第二课。柱高按实际 GB 等比。另一条路是改架构本身：DeepSeek 系列的 MLA 把 KV 压缩成低秩潜向量，从源头减量——详见本站《DeepSeek-V4 KV Cache 组织解读》。量化 KV 与 MLA 是同一个问题的两条路。</p>
+
+<h2>2. KV 量化的两个特殊难点</h2>
+
+<p>KV 本质也是「网络中间的数值」，理论上第 1 讲的工具直接适用。但 KV 有两个自己的脾气：</p>
+
+<h3>难点一：key 的 outlier 长在「通道」上</h3>
+
+<p>KIVI（Liu 等，2024）发现：key 矩阵的巨大幅值集中在<b>少数固定通道</b>（head_dim 方向的个别维度）上，而不是个别 token 上——这是第 3 讲「离群通道」现象在 KV 里的重演。对策也同款：**换切法**。key 沿<b>通道</b>分组量化（per-channel，把 outlier 关进自己的组），value 则老老实实按 token 量化即可。这一「非对称策略」让 KV 压到 <b>2-bit</b> 仍然可用，且无需微调。</p>
+
+<h3>难点二：attention sink——开头的 token 是「泄压阀」</h3>
+
+<p>StreamingLLM（2023）发现一个有趣现象：softmax 注意力总和中，最初的几个 token 几乎永远被分走可观份额——不管它们内容是什么。机理是 softmax 必须把概率分给某些位置，开头 token 成了「泄压阀」（attention sink）。对量化的含义：这几个 token 的 K/V 幅值大、又被全场依赖，粗暴量化会出大事。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a94a8"/>
+    </marker>
+  </defs>
+  <text x="40" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">KV 量化的两个特殊难点</text>
+
+  <!-- left: channel outliers in key -->
+  <text x="40" y="58" font-size="11.5" font-weight="bold" fill="#1a1f2e">① key 的幅值集中在少数通道</text>
+  <rect x="70" y="72" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="90" y="72" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="110" y="72" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="130" y="72" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="150" y="72" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="170" y="72" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="190" y="72" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="210" y="72" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="230" y="72" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="250" y="72" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="70" y="92" width="18" height="18" fill="#e8862a"/>
+  <rect x="90" y="92" width="18" height="18" fill="#e8862a"/>
+  <rect x="110" y="92" width="18" height="18" fill="#e8862a"/>
+  <rect x="130" y="92" width="18" height="18" fill="#e8862a"/>
+  <rect x="150" y="92" width="18" height="18" fill="#e8862a"/>
+  <rect x="170" y="92" width="18" height="18" fill="#e8862a"/>
+  <rect x="190" y="92" width="18" height="18" fill="#e8862a"/>
+  <rect x="210" y="92" width="18" height="18" fill="#e8862a"/>
+  <rect x="230" y="92" width="18" height="18" fill="#e8862a"/>
+  <rect x="250" y="92" width="18" height="18" fill="#e8862a"/>
+  <rect x="70" y="112" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="90" y="112" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="110" y="112" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="130" y="112" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="150" y="112" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="170" y="112" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="190" y="112" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="210" y="112" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="230" y="112" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="250" y="112" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="70" y="132" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="90" y="132" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="110" y="132" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="130" y="132" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="150" y="132" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="170" y="132" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="190" y="132" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="210" y="132" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="230" y="132" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="250" y="132" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="70" y="152" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="90" y="152" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="110" y="152" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="130" y="152" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="150" y="152" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="170" y="152" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="190" y="152" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="210" y="152" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="230" y="152" width="18" height="18" fill="#dbe6f6"/>
+  <rect x="250" y="152" width="18" height="18" fill="#dbe6f6"/>
+  <text x="284" y="106" font-size="10.5" fill="#e8862a">离群通道（全部 token 都大）</text>
+  <text x="70" y="190" font-size="10" fill="#5a6272">纵轴 = 通道（示意 4 个），横轴 = token（示意 10 个）</text>
+  <text x="70" y="210" font-size="10.5" fill="#2a3040">对策：key 沿「通道」分组量化，</text>
+  <text x="70" y="228" font-size="10.5" fill="#2a3040">把 outlier 关进自己的组（KIVI）</text>
+
+  <!-- right: attention sink -->
+  <text x="520" y="58" font-size="11.5" font-weight="bold" fill="#1a1f2e">② attention sink：开头的 token 是泄压阀</text>
+  <path d="M 656 194 Q 545 115 534 196" stroke="#8a94a8" fill="none" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#m5a)"/>
+  <path d="M 760 194 Q 560 85 536 196" stroke="#8a94a8" fill="none" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#m5a)"/>
+  <path d="M 864 194 Q 585 60 538 196" stroke="#8a94a8" fill="none" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#m5a)"/>
+  <rect x="520" y="198" width="26" height="26" fill="#e8862a"/>
+  <rect x="550" y="198" width="26" height="26" fill="#dbe6f6"/>
+  <rect x="580" y="198" width="26" height="26" fill="#dbe6f6"/>
+  <rect x="610" y="198" width="26" height="26" fill="#dbe6f6"/>
+  <rect x="640" y="198" width="26" height="26" fill="#dbe6f6"/>
+  <rect x="670" y="198" width="26" height="26" fill="#dbe6f6"/>
+  <rect x="700" y="198" width="26" height="26" fill="#dbe6f6"/>
+  <rect x="730" y="198" width="26" height="26" fill="#dbe6f6"/>
+  <rect x="760" y="198" width="26" height="26" fill="#dbe6f6"/>
+  <rect x="790" y="198" width="26" height="26" fill="#dbe6f6"/>
+  <rect x="820" y="198" width="26" height="26" fill="#dbe6f6"/>
+  <rect x="850" y="198" width="26" height="26" fill="#dbe6f6"/>
+  <text x="533" y="244" font-size="10" text-anchor="middle" fill="#e8862a">token 0</text>
+  <text x="880" y="216" font-size="10" fill="#5a6272">token →</text>
+  <text x="520" y="272" font-size="10.5" fill="#2a3040">对策：开头若干 + 最近窗口的 K/V 保留 FP16，</text>
+  <text x="520" y="290" font-size="10.5" fill="#2a3040">其余 2~4-bit（KIVI / KV Quant）</text>
+</svg>
+</div>
+<p class="cap"><b>图 5-2</b>｜KV 量化的两个难点与对策。注意与第 3 讲的呼应：依然是「离群值 + 混合精度保底」的配方——领域知识是通用的，只是换了位置。</p>
+
+<table>
+  <tr><th>方案</th><th>粒度与对策</th><th>位宽</th><th>备注</th></tr>
+  <tr><td><b>KIVI</b>（2024）</td><td>key per-channel + value per-token；开头 + 最近窗口 FP16</td><td>2-bit</td><td>免微调即插即用，HuggingFace 有集成</td></tr>
+  <tr><td><b>KV Quant</b>（2024）</td><td>per-group 通道量化 + sink token 高精度 + 前几层保持稠密</td><td>4-bit</td><td>面向超长上下文（百万 token 级）</td></tr>
+  <tr><td><b>MLA 架构</b>（DeepSeek）</td><td>不改精度，改架构：KV 存成低秩潜向量</td><td>—</td><td>与量化正交，可叠加；见本站 KV cache 专文</td></tr>
+</table>
+
+<h2>3. 量化 kernel：W4A16 的速度从哪来</h2>
+
+<p>第 0 讲埋的账现在算清。模型 decode（逐 token 生成）时，每一步都要把<b>全部权重</b>从显存搬进计算单元——搬的时间远超算的时间（memory-bound）。权重量化到 4-bit 后：</p>
+
+<ul>
+  <li><b>搬运量变成 1/4</b> → decode 速度在带宽受限时接近 4 倍（batch 小、单请求时最明显）；</li>
+  <li>计算时用「<b>边搬边解包反量化</b>」（dequant-on-the-fly）：INT4 权重在进入计算单元前的最后一刻才展开成 FP16——从显存到运算器的路上始终保持 4-bit；</li>
+  <li><b>Marlin</b>（2024）把这条路走到接近理论极限：精心重排的权重布局 + 位级解包 + 流水线，batch 16~64 时对 FP16 基线提速约 3.9 倍；vLLM 的 <b>Machete</b> 是 Hopper 架构上的同类 W4A16 kernel。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 940 290" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m5b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="40" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">decode 阶段：瓶颈在「搬」，不在「算」——量化的速度来源</text>
+
+  <!-- FP16 path -->
+  <rect x="60" y="60" width="220" height="64" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="170" y="88" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">FP16 权重</text>
+  <text x="170" y="108" font-size="10.5" text-anchor="middle" fill="#5a6272">70B 模型：140 GB</text>
+  <line x1="280" y1="92" x2="618" y2="92" stroke="#5a6272" stroke-width="8" marker-end="url(#m5b)"/>
+  <text x="450" y="78" font-size="10.5" text-anchor="middle" fill="#2456c4">每生成 1 token 搬 140 GB</text>
+  <rect x="630" y="60" width="220" height="64" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="740" y="88" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">FP16 计算</text>
+  <text x="740" y="108" font-size="10.5" text-anchor="middle" fill="#5a6272">计算单元大半时间在等数据</text>
+
+  <!-- W4 path -->
+  <rect x="60" y="180" width="220" height="64" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="170" y="208" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">INT4 权重</text>
+  <text x="170" y="228" font-size="10.5" text-anchor="middle" fill="#5a6272">70B 模型：35 GB</text>
+  <line x1="280" y1="212" x2="398" y2="212" stroke="#5a6272" stroke-width="3" marker-end="url(#m5b)"/>
+  <rect x="400" y="184" width="180" height="56" rx="10" fill="#fbe3cc" stroke="#c9d2e0"/>
+  <text x="490" y="208" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">解包 + 反量化</text>
+  <text x="490" y="226" font-size="10" text-anchor="middle" fill="#5a6272">融合进 kernel，几乎白送</text>
+  <line x1="580" y1="212" x2="618" y2="212" stroke="#5a6272" stroke-width="3" marker-end="url(#m5b)"/>
+  <rect x="630" y="180" width="220" height="64" rx="10" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="740" y="208" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">FP16 计算（不变）</text>
+  <text x="740" y="228" font-size="10.5" text-anchor="middle" fill="#5a6272">Marlin：小 batch ≈ 3.9× 提速</text>
+
+  <text x="40" y="278" font-size="11" fill="#1a1f2e">粗线与细线代表搬运带宽的差异：权重压到 1/4，「搬运瓶颈」直接松绑——这就是 W4A16 的速度来源。</text>
+</svg>
+</div>
+<p class="cap"><b>图 5-3</b>｜两条数据通路对照。batch 小时瓶颈在搬运（W4 大赢）；batch 大时瓶颈转向计算——那就需要 INT8/FP8 tensor core 亲自上阵（W8A8/FP8，吞吐 2×）。</p>
+
+<h2>4. QServe：W4A8KV4 的组合拳</h2>
+
+<p>服务场景的最优解要两头兼顾：权重要 4-bit（省搬运、塞得下），激活要 8-bit（算得快），KV 也要 4-bit（并发翻倍）。QServe（Lin 等，2024）就是这个组合：<b>W4A8KV4</b>。它的技术亮点是把 W4A8 的矩阵乘法重构为「大部分乘法在 4-bit 单元、少量在 8-bit 单元」的渐进式量化计算，让低精度硬件单元物尽其用——在 L40S 级 GPU 上吞吐比 Marlin W4A16 还能再提高约 3 倍量级（论文最高 3.47×）。</p>
+
+<div class="box">
+<span class="bt">系统观点</span>QServe 的教训值得记一辈子：<b>量化格式的设计必须与硬件算力单元、kernel 实现、集群拓扑共同设计</b>。W4A8 在纸面上不一定赢 W4A16，但把「格式 × kernel × 硬件」作为一个系统看，它赢了。这就是「量化工程师」和「量化研究员」的分水岭。
+</div>
+
+<h2>5. 文件格式与框架生态</h2>
+
+<h3>5.1 llama.cpp 与 GGUF k-quants：本机玩家的世界</h3>
+
+<p>llama.cpp 的 GGUF 格式发明了一套自己的量化家族（名字里 Q 后面跟位宽）：</p>
+
+<ul>
+  <li><b>k-quants（Q4_K_M 等）</b>：把「每 32 个数一组共享 scale」再套一层「super-block 共享二级 scale」——正是第 1 讲粒度思想的极致压缩；<code>Q4_K_M</code> 里 M 是混合精度变体（敏感层用更高位宽）。</li>
+  <li><b>i-quants（IQ2/IQ3/IQ4_XS 等）</b>：用 importance matrix（imatrix，用校准数据统计「哪些权重对输出影响大」）+ 类矢量量化的编码，把 2~3-bit 做到可用——第 4 讲思想的本机化。</li>
+</ul>
+
+<h3>5.2 服务框架选型速查</h3>
+
+<table>
+  <tr><th>需求</th><th>推荐组合</th><th>原理课对应</th></tr>
+  <tr><td>本机/笔记本跑模型</td><td>llama.cpp / Ollama + <code>Q4_K_M</code> GGUF</td><td>第 1、2 讲 + 本讲 §5.1</td></tr>
+  <tr><td>云端低延迟单请求</td><td>vLLM + AWQ/GPTQ（Marlin/Machete kernel）</td><td>第 2 讲 + 本讲 §3</td></tr>
+  <tr><td>云端高吞吐服务</td><td>vLLM / TensorRT-LLM + FP8 / W8A8 / NVFP4</td><td>第 3、4 讲 + 本讲 §4</td></tr>
+  <tr><td>超长上下文 / 高并发</td><td>+ KV 量化（KIVI 类）或 MLA 架构模型</td><td>本讲 §1~2</td></tr>
+</table>
+
+<div class="box">
+<span class="bt">一条实用的经验</span>选格式时先问三个问题：① 我的瓶颈是显存容量（塞不下）、搬运带宽（decode 慢）还是算力（batch 大跑不快）？② 目标硬件支持哪些低比特单元（有没有 FP8/FP4 tensor core）？③ 模型作者官方发布了哪种格式？三个答案的交集，就是你的默认选择。
+</div>
+
+<h2>6. 自查清单</h2>
+
+<ol class="checklist">
+  <li>KV cache 是什么、为什么随上下文线性增长？（答：每层每步的 K/V 存档供注意力复用；每 token 固定 KB~MB 级增量，乘上下文长度和并发数）</li>
+  <li>KIVI 的非对称策略是什么、为什么有效？（答：key 沿通道量化、value 按 token 量化——key 的 outlier 在通道维，沿通道分组把 outlier 关进自己组）</li>
+  <li>attention sink 是什么现象？（答：softmax 泄压阀——开头 token 恒定吃掉注意力份额，其 K/V 幅值大且被全场依赖，需保留高精度）</li>
+  <li>W4A16 在什么条件下接近 4 倍提速？（答：decode 阶段 memory-bound、batch 小；靠 dequant-on-the-fly 保持 4-bit 搬运）</li>
+  <li>Marlin/Machete 在优化什么？（答：W4A16 kernel 的权重布局、解包与流水线，让反量化融合几乎零成本）</li>
+  <li>QServe 的 W4A8KV4 各对应哪个瓶颈？（答：W4 省搬运与显存、A8 用 INT8 算力提吞吐、KV4 翻倍并发）</li>
+  <li>GGUF 的 Q4_K 和 IQ 系列各自的思路？（答：k-quants 是多级共享 scale 的粒度压缩；i-quants 用 importance matrix + 类 VQ 编码）</li>
+  <li>选量化配置的三个问题？（答：瓶颈是什么、硬件支持什么、作者发布了什么）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="quant-t6-qat-roadmap.html">第 6 讲：QAT、量化 scaling law 与成长路线图</a>——收官讲回到训练侧：量化感知训练（STE、LSQ）为什么能以十倍成本换回更多精度、量化 scaling law 说的「后训练量化退化与训练量有关」是怎么回事，以及一份从零到专家的具体路线：必读论文、上手项目、面试考点。
+</div>
+
+<footer>本页为个人学习笔记 · 大模型量化零基础七讲系列 · 生成于 2026-09-20 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 叙述以主流实践与经典论文为准，细节以原始文献为最终依据</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

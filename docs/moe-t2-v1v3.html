@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoE 零基础五讲 · 第 2 讲：DeepSeek V1→V3 演进细讲</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>MoE 零基础五讲 · 第 2 讲：DeepSeek V1→V3 演进细讲</h1>
+
+<div class="series-nav">
+  <a href="moe-t0-foundation.html">0 前置知识</a>
+  <a href="moe-t1-basics.html">1 MoE 基本原理</a>
+  <a class="here">2 V1→V3 演进</a>
+  <a href="moe-t3-v4.html">3 V4/V4.1</a>
+  <a href="moe-t4-code.html">4 代码逐行</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>前置：</b><a href="moe-t0-foundation.html">第 0 讲</a>（FFN / softmax / sigmoid / top-k）、<a href="moe-t1-basics.html">第 1 讲</a>（MoE 三件套、负载不均、辅助损失的两难）</p>
+  <p style="margin:4px 0"><b>论文依据：</b>DeepSeekMoE（V1，arXiv:2401.06066）、DeepSeek-V2（arXiv:2405.04434）、DeepSeek-V3（arXiv:2412.19437）、DeepSeek-V3.2（paper/deepseek_v32.pdf）、Auxiliary-Loss-Free Load Balancing（Wang et al., arXiv:2408.15664）</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>把 DeepSeek MoE 地基的三次浇筑逐块讲透。① <b>V1 双引擎</b>：细粒度专家（同参数量下组合数从 120 → 约 44 亿）＋ 共享专家隔离（共性加工不再浪费路由竞争）；② <b>V2 工程化</b>：模型变大后专家分住不同 GPU，通信成为新瓶颈，用「设备限制路由」做交换；③ <b>V2.5→V3 均衡革命</b>：bias 门控把均衡信号藏进「梯度失明区」，<b>辅助损失不再伤模型</b>——配两轮完整手算；④ V3 的 sigmoid 亲和度与序列级保险丝；⑤ V3.2 的 Keep Routing（RL 场景的路由一致性）。</p>
+</div>
+
+<h2>1. V1 的靶子：经典粗专家 MoE 的两个毛病</h2>
+
+<p>2024 年 1 月的 DeepSeekMoE 论文开篇先点名了 GShard / Switch 式经典 MoE 的两个结构性毛病：</p>
+
+<ol>
+  <li><b>组合灵活性差</b>：专家少而粗（比如 16 个大 FFN 选 2 个）。每个大专家内部要同时处理「语法」「常识」「代码」……一堆混合职责，特化程度上不去。</li>
+  <li><b>共性知识摊派在路由专家里</b>：像「基础语法处理」这种几乎所有 token 都需要的加工，本不该占用「按需分配」的路由名额，却不得不混在各个大专家里——每个专家都得自带一份「通用底料」，重复存储、挤占特化容量。</li>
+</ol>
+
+<p>V1 的两个创新分别对着这两个毛病。</p>
+
+<h2>2. 创新一：细粒度专家分割（fine-grained expert segmentation）</h2>
+
+<h3>2.1 机制：把大专家切小</h3>
+
+<p>论文的做法用一句话就能说完：<b>把每个专家 FFN 切成 \(m\) 个小专家，同时把激活数从 \(K\) 提到 \(mK\)，激活参数量保持不变</b>。\(m\) 叫分割比（16B 模型取 \(m=4\)）。专家变小 = 每个专家的中间维缩到原来的 \(1/m\)，职责可以更单一。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 330" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="t2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">等激活参数量的对比：16 个大专家 top-2 → 切成 64 个小专家 top-8</text>
+
+  <!-- top row: 16 big experts top-2 -->
+  <text x="40" y="56" font-size="11.5" fill="#5a6272">GShard 式：16 个大专家，每次激活 2 个（每个大专家 = 中间维 4 单位）</text>
+  <rect x="60" y="70" width="110" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="115" y="97" font-size="11.5" text-anchor="middle" fill="#1a1f2e">大专家 1</text>
+  <rect x="186" y="70" width="110" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="241" y="97" font-size="11.5" text-anchor="middle" fill="#1a1f2e">大专家 2</text>
+  <rect x="312" y="70" width="110" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="367" y="97" font-size="11.5" text-anchor="middle" fill="#1a1f2e">大专家 3</text>
+  <rect x="438" y="70" width="110" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="493" y="97" font-size="11.5" text-anchor="middle" fill="#1a1f2e">大专家 4</text>
+  <text x="562" y="97" font-size="14" fill="#5a6272">…</text>
+  <text x="600" y="97" font-size="11" fill="#5a6272">共 16 个</text>
+  <rect x="700" y="62" width="220" height="60" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="810" y="86" font-size="11.5" text-anchor="middle" fill="#1a1f2e">top-2 组合数</text>
+  <text x="810" y="108" font-size="12" text-anchor="middle" fill="#b4551d" font-weight="bold">C(16,2) = 120 种</text>
+
+  <text x="40" y="160" font-size="12" font-weight="bold" fill="#2456c4">↓ 每个大专家切成 m=4 份小专家（参数缩到 1/4），激活数 2 → 8，激活参数量不变</text>
+
+  <!-- bottom row: 64 small experts top-8 -->
+  <text x="40" y="186" font-size="11.5" fill="#5a6272">DeepSeekMoE：64 个小专家，每次激活 8 个（每个小专家 = 中间维 1 单位）</text>
+  <rect x="60" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="86" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小1</text>
+  <rect x="124" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="150" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小2</text>
+  <rect x="188" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="214" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小3</text>
+  <rect x="252" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="278" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小4</text>
+  <rect x="316" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="342" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小5</text>
+  <rect x="380" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="406" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小6</text>
+  <rect x="444" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="470" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小7</text>
+  <rect x="508" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="534" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小8</text>
+  <text x="574" y="227" font-size="14" fill="#5a6272">…</text>
+  <text x="612" y="227" font-size="11" fill="#5a6272">共 64 个</text>
+  <rect x="700" y="192" width="220" height="60" rx="8" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.5"/>
+  <text x="810" y="216" font-size="11.5" text-anchor="middle" fill="#1a1f2e">top-8 组合数</text>
+  <text x="810" y="238" font-size="12" text-anchor="middle" fill="#2f9e63" font-weight="bold">C(64,8) ≈ 44.3 亿种</text>
+
+  <text x="40" y="290" font-size="11" fill="#5a6272">同样的激活参数量，专家团队的搭配方案从 120 种涨到 44.3 亿种（约 3688 万倍）——「每个 token 定制专属加工团队」的自由度彻底放开。</text>
+  <text x="40" y="310" font-size="11" fill="#5a6272">代价：单个专家变小变多，负载不均的风险被放大（第 1 讲的矛盾更尖锐），均衡机制必须跟上——这是后面几代反复打磨均衡的原因。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-1</b>｜细粒度分割的交换逻辑：专家数量 ×m、单个规模 ÷m、激活数 ×m → 激活参数与计算量不变，组合空间指数级放大。</p>
+
+<h3>2.2 V1-16B 的真实配置</h3>
+
+<table>
+  <tr><th>项目</th><th>数值</th><th>备注</th></tr>
+  <tr><td>路由专家数 \(N_r\)</td><td>64</td><td>分割比 \(m=4\)，相当于「16 个大专家切出来」</td></tr>
+  <tr><td>激活路由专家数 \(K_r\)</td><td>6</td><td>按 FLOPs 对齐稠密模型调定（大专家 top-2 ≈ 小专家 top-8，再减去共享专家占的份额）</td></tr>
+  <tr><td>共享专家数 \(K_s\)</td><td>2</td><td>见下一节</td></tr>
+  <tr><td>单个路由专家中间维</td><td>标准专家的 1/4</td><td>论文原文：每个 FFN 分成 \(m\) 份</td></tr>
+  <tr><td>组合数 \(\binom{64}{6}\)</td><td>74,974,368</td><td>约 7500 万种团队方案</td></tr>
+</table>
+
+<h3>2.3 成绩单</h3>
+
+<ul>
+  <li>DeepSeekMoE <b>2B</b> 的效果匹敌 GShard <b>2.9B</b>——后者专家参数与计算量都是它的 1.5 倍（V1 论文摘要原文）；</li>
+  <li>DeepSeekMoE <b>16B</b> 以约 <b>40% 的计算量</b>达到与 LLaMA2 7B 相当的性能（V1 论文摘要原文）。</li>
+</ul>
+
+<div class="box">
+<span class="bt">为什么切小有效</span>大专家像一个「一人分饰八角」的演员，切小后每个小专家只需演好一个角色，路由器再把 8 个角色临时组队。同一个 token 拿到的不再是一个「什么都沾一点的加工」，而是 8 项精准服务叠加。
+</div>
+
+<h2>3. 创新二：共享专家隔离（shared expert isolation）</h2>
+
+<h3>3.1 机制</h3>
+
+<p>再设 \(K_s\) 个「共享专家」：<b>无论路由器怎么打分，每个 token 恒定经过它们</b>（恒激活），并且它们不参与 top-k 竞争、不占路由名额。层的输出变成：</p>
+
+<div class="formula">\[
+\underbrace{\sum_{i=1}^{K_s} \mathrm{FFN}_{s,i}(x)}_{\text{共享专家：恒激活，处理共性}}
+\;+\;
+\underbrace{\sum_{i=1}^{K_r} g_i\, \mathrm{FFN}_{r,i}(x)}_{\text{路由专家：top-k 加权，处理个性}}
+\]</div>
+
+<div class="fig">
+<svg viewBox="0 0 940 320" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="t2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="t2c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    </marker>
+  </defs>
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">V1-16B：2 个共享专家恒激活 + 64 个路由专家选 6 个</text>
+
+  <rect x="40" y="134" width="110" height="52" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="95" y="155" font-size="11.5" text-anchor="middle" fill="#1a1f2e">token x</text>
+  <text x="95" y="173" font-size="10" text-anchor="middle" fill="#5a6272">[T, 7168]</text>
+  <polyline points="150,160 170,160 170,90 196,90" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2b)"/>
+  <polyline points="170,160 170,230 196,230" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2b)"/>
+
+  <!-- shared branch -->
+  <rect x="202" y="64" width="210" height="52" rx="8" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="307" y="85" font-size="11.5" text-anchor="middle" fill="#1a1f2e">共享专家 ×2</text>
+  <text x="307" y="104" font-size="10" text-anchor="middle" fill="#2f9e63">恒激活 · 不参与路由竞争</text>
+  <line x1="412" y1="90" x2="584" y2="90" stroke="#2f9e63" stroke-width="1.5" marker-end="url(#t2c)"/>
+
+  <circle cx="598" cy="90" r="12" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="598" y="95" font-size="13" text-anchor="middle" fill="#2456c4">+</text>
+
+  <!-- routed branch -->
+  <rect x="202" y="206" width="120" height="48" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="262" y="226" font-size="11.5" text-anchor="middle" fill="#1a1f2e">门控打分</text>
+  <text x="262" y="244" font-size="10" text-anchor="middle" fill="#5a6272">64 个分数</text>
+  <line x1="322" y1="230" x2="350" y2="230" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2b)"/>
+  <rect x="354" y="206" width="104" height="48" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="406" y="226" font-size="11.5" text-anchor="middle" fill="#1a1f2e">top-6 选择</text>
+  <text x="406" y="244" font-size="10" text-anchor="middle" fill="#5a6272">bias 只进选择</text>
+  <line x1="458" y1="230" x2="486" y2="230" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2b)"/>
+  <rect x="490" y="192" width="140" height="76" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-dasharray="5,3"/>
+  <text x="560" y="220" font-size="11.5" text-anchor="middle" fill="#1a1f2e">被选中的 6 个</text>
+  <text x="560" y="240" font-size="10" text-anchor="middle" fill="#5a6272">路由专家各按权重 g 输出</text>
+  <text x="560" y="258" font-size="10" text-anchor="middle" fill="#5a6272">g = 选中分数归一化</text>
+
+  <polyline points="630,230 650,230 650,90 612,90" fill="none" stroke="#2f9e63" stroke-width="1.5" marker-end="url(#t2c)"/>
+
+  <line x1="610" y1="90" x2="696" y2="90" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2b)"/>
+  <rect x="700" y="64" width="110" height="52" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="755" y="94" font-size="11.5" text-anchor="middle" fill="#1a1f2e">层输出</text>
+
+  <text x="40" y="300" font-size="11" fill="#5a6272">输出 = 共享专家输出之和 + Σ gᵢ·路由专家输出。共性加工由共享专家兜底，路由专家的名额（384 选 6 / 64 选 6）留给真正的差异化加工。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-2</b>｜共享 / 路由解耦结构。这个「恒激活支路 + 路由支路」的两段式结构从 V1 一直沿用到 V4，从未动摇。</p>
+
+<h3>3.2 为什么有效</h3>
+
+<div class="box">
+<span class="bt">课程比喻</span>把专家想象成课程：「读写能力」是每个学生都要的<b>必修课</b>（共享专家，人人自动 enrolled）；「古埃及文字」「量子场论」是<b>选修课</b>（路由专家，按需选）。不隔离的话，每门选修课都得先讲一遍读写基础——重复、低效，选课名额还浪费。隔离之后，选修课容量全部用于真正的差异化内容。
+</div>
+
+<p>回到负载均衡视角：共享专家把「人人都要」的巨大流量接走了，路由专家池里的流量竞争只剩「差异化部分」，热门/冷门的分布更接近真实需求差异，而不是被通用需求淹没。</p>
+
+<h3>3.3 V1 留下的债</h3>
+
+<p>细粒度专家把 \(N\) 从 16 量级抬到 64–384 量级，第 1 讲讲过的「赢者通吃」正反馈在小专家上更凶猛（单个专家的接待面更窄，更容易被冷落）。所以 V1 时代只能用老办法——辅助均衡损失——而且得加大剂量。<b>均衡与特化的矛盾，从此从「隐忧」升级为「主线剧情」。</b></p>
+
+<h2>4. V2：模型放大 15 倍后，通信成了新老板</h2>
+
+<h3>4.1 专家并行（EP）：专家分住不同 GPU</h3>
+
+<p>V2 总参数 236B、每 token 激活 21B，每层 160 个路由专家 + 2 个共享专家。这么多的专家显然放不进一张 GPU，解决办法是<b>专家并行（Expert Parallelism）</b>：把专家拆到不同卡上，每张卡只持有一部分专家。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 350" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="t2d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#e8862a"/>
+    </marker>
+    <marker id="t2e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    </marker>
+  </defs>
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">专家并行下，一个 MoE 层的两次全卡大快递（all-to-all）</text>
+
+  <!-- GPU frames -->
+  <rect x="40" y="60" width="250" height="210" rx="10" fill="#fafbfd" stroke="#c9d2e0"/>
+  <text x="56" y="84" font-size="12" font-weight="bold" fill="#1a1f2e">GPU 0</text>
+  <rect x="60" y="110" width="90" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="105" y="135" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E1</text>
+  <rect x="60" y="165" width="90" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="105" y="190" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E2</text>
+  <text x="60" y="245" font-size="10" fill="#5a6272">只画 2 个，实际每卡几十个</text>
+
+  <rect x="350" y="60" width="250" height="210" rx="10" fill="#fafbfd" stroke="#c9d2e0"/>
+  <text x="366" y="84" font-size="12" font-weight="bold" fill="#1a1f2e">GPU 1</text>
+  <rect x="370" y="110" width="90" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="415" y="135" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E3</text>
+  <rect x="370" y="165" width="90" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="415" y="190" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E4</text>
+
+  <rect x="660" y="60" width="250" height="210" rx="10" fill="#fafbfd" stroke="#c9d2e0"/>
+  <text x="676" y="84" font-size="12" font-weight="bold" fill="#1a1f2e">GPU 2</text>
+  <rect x="680" y="110" width="90" height="40" rx="6" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.5"/>
+  <text x="725" y="135" font-size="11" text-anchor="middle" fill="#1a1f2e">热门专家 E5</text>
+  <rect x="680" y="165" width="90" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="725" y="190" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E6</text>
+
+  <!-- dispatch line -->
+  <line x1="290" y1="296" x2="654" y2="296" stroke="#e8862a" stroke-width="2" marker-end="url(#t2d)"/>
+  <text x="40" y="288" font-size="11" fill="#b4551d">① Dispatch（送出去）</text>
+  <text x="330" y="288" font-size="10.5" fill="#5a6272">把每个 token 快递给「拥有它目标专家」的那张卡</text>
+
+  <!-- combine line -->
+  <line x1="660" y1="326" x2="296" y2="326" stroke="#2f9e63" stroke-width="2" stroke-dasharray="7,4" marker-end="url(#t2e)"/>
+  <text x="40" y="344" font-size="11" fill="#2f9e63">② Combine（取回来）</text>
+  <text x="330" y="344" font-size="10.5" fill="#5a6272">专家算完的结果送回原卡，按权重加起来</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-3</b>｜每次过 MoE 层，每个 token 都要跨网络两次（Dispatch / Combine），这在 V2 论文里被称为 all-to-all 通信——2000 亿参数模型的训练里，它贵得惊人。</p>
+
+<h3>4.2 设备限制路由（device-limited routing，M=3）</h3>
+
+<p>跨卡快递贵，那少寄几家就是了。V2 的做法：<b>每个 token 的 top-6 专家，最多允许分布在 3 台设备上</b>。具体做法是先按「设备累计分数」挑出最优的 3 台设备，再在这 3 台内选满 6 个专家。</p>
+
+<ul>
+  <li><b>收益</b>：每 token 的 Dispatch / Combine 对象从「最多 6 卡」缩到「最多 3 卡」，跨机流量大减；</li>
+  <li><b>代价</b>：路由自由度被硬性削减——每个 token 能看见的专家从全池缩到 3 卡的子集，<b>特化被牺牲了一部分</b>（第 1 讲矛盾的又一次现身：为工程让渡质量）；</li>
+  <li><b>配套</b>：辅助均衡损失升级为三重——专家级、设备级（每台设备接收的 token 数均衡）、通信级（每设备发出的 token 数均衡）。均衡这一侧的「管制」越来越多。</li>
+</ul>
+
+<div class="box">
+<span class="bt">一句话记住 V2</span>V2 把 V1 的架构原封不动放大到 236B，为了喂饱跨卡通信开始给路由「上枷锁」。枷锁能换效率，但每一道都在蚕食路由自由——后面 V3 加一道、V4 全拆掉。
+</div>
+
+<h2>5. V2.5 → V3：bias 门控——「辅助损失免费」的均衡革命</h2>
+
+<p>这是全系列<b>最值得精读的一节</b>。第 1 讲说过：辅助均衡损失的梯度直接改写门控分数，强迫 token 去次优专家，与特化打架。V2.5 起采用的 Wang et al. 2024 方案（V3 论文 §2.1.2）给出了漂亮的解法。</p>
+
+<h3>5.1 机制：一个「只在选择时生效」的偏置</h3>
+
+<p>每个专家维护一个标量偏置 \(b_i\)，参与 top-k 比较，<b>但不参与加权</b>：</p>
+
+<div class="formula">\[
+g'_{i,t} = \begin{cases} s_{i,t}, &amp; \text{若 } s_{i,t} + b_i \in \mathrm{Topk}\big(\{s_{j,t} + b_j\}_{j=1}^{N_r},\ K_r\big) \\[4pt] 0, &amp; \text{否则} \end{cases}
+\qquad
+g_{i,t} = \frac{g'_{i,t}}{\sum_j g'_{j,t}}
+\]</div>
+
+<p>拆开读：</p>
+<ul>
+  <li><b>选择时</b>：比较的不是原始分数 \(s\)，而是 \(s + b\)——bias 是每个专家的「号牌加成」，让冷门专家的比较值被人为抬高；</li>
+  <li><b>加权时</b>：选中的专家按<b>原始分数 \(s_{i,t}\)</b> 归一化加权——bias 完全不出现在输出里；</li>
+  <li><b>更新时</b>：\(b_i\) 不是可学习参数、不参与反向传播，而是一个「滚动计数器」：训练中持续统计每个专家的实际负载，<b>过载的每步 \(-\gamma\)，欠载的每步 \(+\gamma\)</b>（V3 取 \(\gamma = 0.001\)）。</li>
+</ul>
+
+<h3>5.2 两轮手算：亲眼看 bias 如何「挪门槛」</h3>
+
+<p>设定：6 个路由专家，\(K_r = 2\)。为了看清机制，演示用的步长取 \(\gamma = 0.05\)（真实值 0.001，小步慢滚几万步）。某 token 的原始分数（sigmoid 后）：</p>
+
+<div class="formula">\[
+s = [0.62,\ 0.31,\ 0.47,\ 0.18,\ 0.55,\ 0.10]\quad(\text{E1..E6})
+\]</div>
+
+<table>
+  <tr><th>轮次</th><th>bias 向量 b</th><th>比较键 s+b</th><th>top-2 选中</th><th>实际加权（用原始 s！）</th></tr>
+  <tr>
+    <td>第 1 轮</td>
+    <td>[0, 0, 0, 0, 0, 0]</td>
+    <td>[0.62, 0.31, 0.47, 0.18, 0.55, 0.10]</td>
+    <td><b>E1（0.62）、E5（0.55）</b></td>
+    <td>g = [0.62, 0.55] / 1.17 = <b>[0.530, 0.470]</b></td>
+  </tr>
+  <tr>
+    <td>负载更新</td>
+    <td colspan="4">全局统计：E1、E5 过载 → 各 −0.05；E3 长期欠载 → +0.05。其余不变。<br>b 变为 [<b>−0.05</b>, 0, <b>+0.05</b>, 0, <b>−0.05</b>, 0]</td>
+  </tr>
+  <tr>
+    <td>第 2 轮</td>
+    <td>[−0.05, 0, +0.05, 0, −0.05, 0]</td>
+    <td>[0.57, 0.31, <b>0.52</b>, 0.18, 0.50, 0.10]</td>
+    <td><b>E1（0.57）、E3（0.52）</b>，E5 被挤出</td>
+    <td>g = [0.62, 0.47] / 1.09 = <b>[0.569, 0.431]</b></td>
+  </tr>
+</table>
+
+<p>三个观察，每一个都是设计精髓：</p>
+
+<ol>
+  <li><b>E1 连任</b>：bias 只压了 0.05，而 E1 的真实分数 0.62 遥遥领先——bias <b>不会强行翻盘</b>，只改变边际竞争。它惩罚的是「靠 bias 混进来的水分」，不是「真正的实力」。</li>
+  <li><b>E5 让位给 E3</b>：E5 与 E3 的真实分数只差 0.08，一点 bias 就足以翻转边际结果。挤出的名额流向欠载专家——均衡目的达成。</li>
+  <li><b>加权值与 bias 无关</b>：两轮的加权都来自原始分数。语言建模的梯度只看得见「分数 → 输出 → 损失」这条链，bias 在链条之外。<b>门控对「谁最好用」的学习完全干净</b>。</li>
+</ol>
+
+<h3>5.3 为什么叫「辅助损失免费」（auxiliary-loss-free）</h3>
+
+<p>回忆第 1 讲结尾的伏笔：「top-k 选择对梯度失明」。现在这个「失明区」有了用武之地：</p>
+
+<ul>
+  <li><b>老方案</b>：均衡信号以损失形式混进主目标 → 梯度穿透门控分数 → 特化被污染；</li>
+  <li><b>新方案</b>：均衡信号以「+b 后再排序」的形式存在于<b>离散选择环节</b>——恰好是梯度失明的角落 → 主目标梯度毫无察觉；bias 自己由「负载统计」驱动，连反向传播都不需要。</li>
+</ul>
+
+<p>均衡与特化第一次真正地「分居」：一个住在梯度看不见的房间里，一个住在梯度看得见的客厅里，互不干扰。V3 论文给出的训练全程 γ=0.001、每步滚动，全程稳定。</p>
+
+<div class="box">
+<span class="bt">代价也要说</span>这个机制是「开环控制」：γ 固定、没有收敛性证明，靠「小步长 + 长时间」慢慢滚。而且 bias 只在<b>全局（batch）粒度</b>上起效——它马上会遇到管不到的地方，见 §7。
+</div>
+
+<h2>6. V3：Sigmoid 替换 Softmax——从「全局耦合」到「独立打分」</h2>
+
+<h3>6.1 改动</h3>
+
+<p>V3（671B / 37B，每层 256 路由 + 1 共享，激活 8）把亲和度从 softmax 换成 sigmoid，并对<b>被选中的分数</b>做行归一化：</p>
+
+<div class="formula">\[
+s_{i,t} = \mathrm{Sigmoid}(x_t^\top e_i), \qquad
+g_{i,t} = \frac{s_{i,t}}{\sum_{j \in \mathrm{Topk}} s_{j,t}}\ (\text{仅对选中者归一})
+\]</div>
+
+<h3>6.2 手算对比：softmax 的「牵一发动全身」</h3>
+
+<p>取 3 个专家的 logits \(z = [3,\ 1,\ -1]\)，两种函数的输出：</p>
+
+<table>
+  <tr><th>专家</th><th>z</th><th>softmax（分母含所有分数）</th><th>sigmoid（各自独立）</th></tr>
+  <tr><td>E1</td><td>3</td><td>\(e^3/\Sigma = 20.09/23.17 = \mathbf{0.867}\)</td><td>\(\sigma(3) = \mathbf{0.953}\)</td></tr>
+  <tr><td>E2</td><td>1</td><td>\(2.718/23.17 = \mathbf{0.117}\)</td><td>\(\sigma(1) = \mathbf{0.731}\)</td></tr>
+  <tr><td>E3</td><td>-1</td><td>\(0.368/23.17 = \mathbf{0.016}\)</td><td>\(\sigma(-1) = \mathbf{0.269}\)</td></tr>
+</table>
+
+<p>假如某个专家的 logit 异常飙升到 10（万亿模型训练里离群值是常态），softmax 的分母 \(e^{10} = 22026\) 会把其他所有专家的输出压扁到近零——<b>一家爆雷，全行业加权被压</b>。sigmoid 没有分母，E5 爆炸也不影响 E3 的 0.269。</p>
+
+<p>另一个值得注意的数值对比（观察为推断，V3 论文未展开）：top-2 选中 E1、E2 时，softmax 版内部权重是 0.867 : 0.117 ≈ 7.4 : 1（赢家通吃，第二名近乎陪跑）；sigmoid 版归一化后是 0.953 : 0.731 ≈ 1.3 : 1（两位专家贡献接近对半）。<b>后者让「多专家组队」真正有意义</b>——对 V3 这种一次激活 8 个专家的模型，8 个合伙人每人都该出力，而不是一个独裁者加七个观众。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 240" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">耦合 vs 独立：V3 换 sigmoid 的核心差异</text>
+
+  <rect x="40" y="56" width="420" height="130" rx="10" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="60" y="84" font-size="12.5" font-weight="bold" fill="#1a1f2e">Softmax（V1 / V2 门控）</text>
+  <text x="60" y="110" font-size="12" fill="#1a1f2e">sᵢ = e^(zᵢ) / Σⱼ e^(zⱼ)</text>
+  <text x="60" y="136" font-size="11" fill="#5a6272">分母含全部专家分数 → 全局耦合：</text>
+  <text x="60" y="156" font-size="11" fill="#5a6272">一家分数爆炸，其余所有权重被压扁</text>
+  <text x="60" y="176" font-size="11" fill="#5a6272">万亿规模下，离群值会被这个机制放大成不稳定</text>
+
+  <rect x="480" y="56" width="420" height="130" rx="10" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="500" y="84" font-size="12.5" font-weight="bold" fill="#1a1f2e">Sigmoid（V3 起的门控）</text>
+  <text x="500" y="110" font-size="12" fill="#1a1f2e">sᵢ = 1 / (1 + e^(−zᵢ))</text>
+  <text x="500" y="136" font-size="11" fill="#5a6272">无分母 → 每个专家独立打分，互不干扰</text>
+  <text x="500" y="156" font-size="11" fill="#5a6272">选中后仅在 top-k 内归一化，恢复「占比」含义</text>
+  <text x="500" y="176" font-size="11" fill="#5a6272">组队混合更均衡：8 个合伙人，不是 1 个独裁者</text>
+
+  <text x="40" y="222" font-size="11" fill="#5a6272">sigmoid 的新代价：输出封顶在 1、大分数饱和失去区分度——V4 换 √Softplus 的伏笔（第 3 讲）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-4</b>｜三代亲和度演化的中间站。注意「独立打分 + 局部归一化」的两段式结构自此定型。</p>
+
+<h3>6.3 V3 全家福</h3>
+
+<table>
+  <tr><th>项目</th><th>V3 配置</th></tr>
+  <tr><td>规模</td><td>671B 总参 / 37B 激活</td></tr>
+  <tr><td>专家配置</td><td>每层 256 路由 + 1 共享，激活 8，专家中间维 2048</td></tr>
+  <tr><td>亲和度</td><td>Sigmoid + 选中后行归一化</td></tr>
+  <tr><td>均衡</td><td>bias 门控（γ=0.001）＋ 序列级辅助损失（α=0.0001，见 §7）</td></tr>
+  <tr><td>通信限制</td><td>节点限制：每 token 至多发往 \(M=4\) 个节点（比 V2 的设备级略放宽）</td></tr>
+  <tr><td>结构例外</td><td>前 3 层保留稠密 FFN（浅层语义分工不明显，见第 3 讲 Hash 路由一节）</td></tr>
+</table>
+
+<h2>7. V3 的保险丝：序列级均衡损失（权重 0.0001）</h2>
+
+<h3>7.1 bias 的盲区</h3>
+
+<p>bias 按全局负载滚动——它管的是「整个 batch 里每个专家的总量」。但设想一批训练数据里混了一段长代码：这 2000 个 token 全都天然需要「代码专家」。即使全局看每个专家都不算过载，<b>这条序列内部</b>的流量也是极端倾斜的：其他专家在这条序列上颗粒无收，「序列级」的均衡破产。</p>
+
+<h3>7.2 公式逐项拆</h3>
+
+<div class="formula">\[
+\mathcal{L}_{Bal} = \alpha \sum_{i=1}^{N_r} f_i P_i, \qquad
+f_i = \frac{N_r}{K_r T}\sum_{t=1}^{T}\mathbb{1}\big(s_{i,t}+b_i \in \mathrm{Topk}\big), \qquad
+P_i = \frac{1}{T}\sum_{t=1}^{T} s'_{i,t}
+\]</div>
+
+<ul>
+  <li>\(T\)：这条序列的 token 数；\(\mathbb{1}(\cdot)\)：选中与否的指示（选中记 1）；</li>
+  <li>\(f_i\)：专家 \(i\) 在<b>这条序列内</b>的接待占比，均衡时恰好等于 1（分母 \(K_r T / N_r\) 正是「平均每人该接的量」）；</li>
+  <li>\(P_i\)：专家 \(i\) 在这条序列内的平均归一化亲和度（\(s'\) 是把分数在专家间归一化后的值，均衡时约为 \(1/N_r\)）。</li>
+</ul>
+
+<p>小演算验证「均匀时最小」（\(N_r=4, K_r=2, T=4, \alpha=1\)）：</p>
+
+<table>
+  <tr><th>情形</th><th>f</th><th>P</th><th>Σ fᵢPᵢ</th></tr>
+  <tr><td>均匀：每 token 选 2 个不同专家，轮流光顾</td><td>[1, 1, 1, 1]</td><td>[0.25, 0.25, 0.25, 0.25]</td><td><b>1.0</b>（最小）</td></tr>
+  <tr><td>偏心：4 个 token 全挤 E1、E2</td><td>[2, 2, 0, 0]</td><td>[0.45, 0.45, 0.05, 0.05]</td><td><b>1.8</b></td></tr>
+</table>
+
+<h3>7.3 为什么权重压到 0.0001</h3>
+
+<p>这一项<b>是</b>真正的辅助损失（梯度会碰门控分数），所以 DeepSeek 给它的角色定位是<b>保险丝</b>而不是均衡主力：0.0001 的权重意味着它平时几乎不影响训练，只在「单序列内极端失衡」这种 bias 够不着的极端情形里施加一点温和的回拉。均衡的主力已经交棒给 bias 门控了。V4 论文原话：保留它「to avoid extreme imbalance within single sequences」（p.25）。</p>
+
+<h2>8. V3.2：Keep Routing——同一个矛盾在 RL 里的投影</h2>
+
+<p>V3.2 的 MoE 结构完全没动，但补了一块对 RL 训练至关重要的拼图。背景：DeepSeek 的 RL 流程是「推理框架生成 → 训练框架算梯度」，两边并行策略、浮点实现不同；再加上训练中策略参数本身在更新。三者叠加的后果：同一个输入，在推理框架里路由到 {E1, E3, E7…}，到训练框架里可能变成 {E2, E3, E9…}。</p>
+
+<p>为什么致命？回忆第 1 讲：「top-k 选中谁」决定了 token 走哪一小撮参数。路由路径一变，<b>token 激活的参数子空间瞬间切换</b>——RL 需要精确衡量「同一策略下新旧输出的差异」，路径一漂移，这个衡量就失真了。</p>
+
+<p><b>Keep Routing</b>：采样时把推理框架算出的路由路径存下来，训练时强制走同一路径。论文说这一操作自 DeepSeek-V3-0324 起采用，「对 MoE 模型的 RL 训练稳定性至关重要」（V3.2 论文 p.8）。值得玩味的是：这套操作与 bias 门控是同一哲学的两次现身——<b>路由路径（谁被选中）是一个需要被小心隔离、小心固定的敏感变量</b>。</p>
+
+<h2>9. V1→V3.2 演进对照表</h2>
+
+<table>
+  <tr><th>代际</th><th>规模（总/激活）</th><th>专家配置（每层）</th><th>亲和度</th><th>均衡机制</th><th>通信枷锁</th></tr>
+  <tr><td>V1（16B）</td><td>16B 级</td><td>64 路由 / 激活 6 / 共享 2</td><td>Softmax</td><td>辅助均衡损失</td><td>—（单机规模）</td></tr>
+  <tr><td>V2</td><td>236B / 21B</td><td>160 路由 / 6 / 2</td><td>Softmax</td><td>专家级 + 设备级 + 通信级三重辅助损失</td><td>设备限制 M=3</td></tr>
+  <tr><td>V2.5</td><td>同 V2</td><td>同 V2</td><td>Softmax</td><td><b>bias 门控</b>（辅助损失免费）</td><td>设备限制</td></tr>
+  <tr><td>V3</td><td>671B / 37B</td><td>256 路由 / 8 / 1（中间维 2048）</td><td><b>Sigmoid + 行归一化</b></td><td>bias（γ=0.001）＋ 序列级保险丝（0.0001）</td><td>节点限制 M=4；前 3 层稠密</td></tr>
+  <tr><td>V3.2</td><td>同 V3</td><td>同 V3</td><td>同 V3</td><td>同 V3；RL 侧加 Keep Routing</td><td>同 V3</td></tr>
+</table>
+
+<p class="cap">演进的旋律已经清晰：<b>架构侧</b>（V1 细粒度+共享隔离）一锤定音后不再大动；<b>均衡侧</b>从「重税收」走到「免费管制」；<b>通信侧</b>的枷锁越戴越多——等着 V4 一把全拆。</p>
+
+<h2>10. 自查清单</h2>
+
+<ol class="checklist">
+  <li>细粒度专家在「激活参数不变」的前提下改变了什么？（专家数 ×m、单个规模 ÷m、激活数 ×m → 组合数从 \(\binom{N}{K}\) 涨到 \(\binom{mN}{mK}\)）</li>
+  <li>16 选 2 → 64 选 8，组合数各是多少？（120 → 约 44.3 亿）</li>
+  <li>共享专家隔离解决什么问题？（共性加工不再摊派到路由专家里重复存储、挤占特化名额）</li>
+  <li>bias 门控的三条规则？（只在 top-k 比较时加 b；加权用原始分数；b 不参与反向传播、按负载 ±γ 滚动）</li>
+  <li>为什么说它「辅助损失免费」？（均衡信号藏在梯度失明的离散选择环节，主目标梯度无污染）</li>
+  <li>softmax 门控的两个毛病？（分母全局耦合，离群值殃及全体；输出悬殊，多专家组队变独角戏）</li>
+  <li>序列级损失为什么是「保险丝」？（bias 只管全局总量，管不了单序列内极端倾斜；权重 0.0001 只防极端）</li>
+  <li>Keep Routing 保住的是什么？（RL 中训练/推理两侧路由路径一致 → 激活参数子空间稳定）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="moe-t3-v4.html">第 3 讲：DeepSeek V4/V4.1 细讲</a>——√Softplus 为什么温和、384 个专家的显存账、拆掉通信枷锁后如何用 MegaMoE 波级流水把通信藏进计算、FP4 量化、Hash 路由，以及 V4.1 的图文双套 bias。
+</div>
+
+<footer>本页为个人学习笔记 · MoE 零基础五讲系列 · 生成于 2026-09-16 · 事实依据：arXiv:2401.06066 / 2405.04434 / 2412.19437 / 2408.15664 与本地 paper/deepseek_v32.pdf（Keep Routing，p.8）· sigmoid「组队协商」的数值观察与本节演示手算的 γ 取值为教学推断，已标注</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

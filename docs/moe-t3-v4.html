@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoE 零基础五讲 · 第 3 讲：DeepSeek V4/V4.1 细讲</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>MoE 零基础五讲 · 第 3 讲：DeepSeek V4/V4.1 细讲</h1>
+
+<div class="series-nav">
+  <a href="moe-t0-foundation.html">0 前置知识</a>
+  <a href="moe-t1-basics.html">1 MoE 基本原理</a>
+  <a href="moe-t2-v1v3.html">2 V1→V3 演进</a>
+  <a class="here">3 V4/V4.1</a>
+  <a href="moe-t4-code.html">4 代码逐行</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>前置：</b><a href="moe-t2-v1v3.html">第 2 讲</a>（细粒度/共享专家、bias 门控、sigmoid 亲和度、EP 与 all-to-all）</p>
+  <p style="margin:4px 0"><b>论文依据：</b>DeepSeek-V4（arXiv:2606.19348，本地 <code>paper/deepseek_v4.pdf</code>）、DeepSeek-V4.1（<code>paper/deepseek_v41.pdf</code>）；代码对照 <code>DeepSeek-V4-Pro inference/</code></p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>V4 的 MoE 是「地基不变、六处翻新」：① 亲和度换 \(\sqrt{\mathrm{Softplus}}\)（手算对比）；② 拆掉 V2 以来的节点数限制——通信枷锁全部解除；③ 用 <b>MegaMoE</b> 波级流水把 all-to-all 通信藏进计算（1.50–1.73×，RL rollout 最高 1.96×）；④ 专家权重压到 <b>FP4</b>（配 QAT），显存与带宽骤降；⑤ 前 3 层改 <b>Hash 路由</b>，61 层全 MoE；⑥ 训练稳定性三件套（Anticipatory Routing / SwiGLU clamping / 既有 bias 保险丝）。V4.1 再补一刀：图文各一套 bias。每一处都回答「改了什么、为什么、代价是什么」。</p>
+</div>
+
+<h2>1. V4 改动清单与配置</h2>
+
+<table>
+  <tr><th>项目</th><th>V3</th><th>V4</th><th>一句话动机</th></tr>
+  <tr><td>亲和度</td><td>Sigmoid + 行归一化</td><td><b>\(\sqrt{\mathrm{Softplus}}\)</b> + 行归一化</td><td>解耦保持，去掉饱和封顶（§2）</td></tr>
+  <tr><td>均衡</td><td>bias（γ=0.001）＋序列级 0.0001</td><td>不变</td><td>上一代的答案已足够好</td></tr>
+  <tr><td>路由目标限制</td><td>至多 4 个节点</td><td><b>取消</b></td><td>枷锁伤特化；效率改由 MegaMoE 找回（§5–6）</td></tr>
+  <tr><td>浅层处理</td><td>前 3 层稠密 FFN</td><td><b>前 3 层 Hash 路由 MoE</b></td><td>61 层全 MoE（§8）</td></tr>
+  <tr><td>专家权重精度</td><td>FP8</td><td><b>FP4</b>（MXFP4 QAT）</td><td>384 专家的显存/带宽压力（§7）</td></tr>
+  <tr><td>稳定性</td><td>—</td><td>Anticipatory Routing、SwiGLU clamping</td><td>路由是离群值帮凶（§9）</td></tr>
+</table>
+
+<table>
+  <tr><th>规格</th><th>总参 / 激活</th><th>路由专家 / 激活 / 共享</th><th>专家中间维 \(d\)</th></tr>
+  <tr><td>V4-Pro</td><td>1.6T / 49B</td><td>384 / 6 / 1</td><td>3072</td></tr>
+  <tr><td>V4-Flash</td><td>284B / 13B</td><td>256 / 6 / 1</td><td>2048</td></tr>
+  <tr><td>V4.1-Flash</td><td>552B 主干 / 8B（prefill）–16B（decode）</td><td>384 / 6 / 1</td><td>2304</td></tr>
+</table>
+
+<h2>2. 亲和度换成 √Softplus：三代函数的收官</h2>
+
+<h3>2.1 定义与手算</h3>
+
+<div class="formula">\[
+s_{i,t} = \sqrt{\mathrm{Softplus}(x_t^\top e_i)} = \sqrt{\log(1 + e^{z_i})}
+\]</div>
+
+<p>两步走：先 softplus 光滑化（第 0 讲：ReLU 的光滑版，负半轴不断流），再开根号（把增长放缓）。拿 \(z = [-2, 0, 2, 4, 8]\) 与 sigmoid 并排手算：</p>
+
+<table>
+  <tr><th>原始分 \(z\)</th><th>softplus(\(z\))</th><th>\(\sqrt{\mathrm{softplus}}\)（V4 亲和度）</th><th>sigmoid(\(z\))（V3 亲和度）</th></tr>
+  <tr><td>-2</td><td>0.127</td><td>0.356</td><td>0.119</td></tr>
+  <tr><td>0</td><td>0.693</td><td>0.833</td><td>0.500</td></tr>
+  <tr><td>2</td><td>2.127</td><td>1.458</td><td>0.881</td></tr>
+  <tr><td>4</td><td>4.018</td><td>2.005</td><td>0.982</td></tr>
+  <tr><td>8</td><td>8.000</td><td><b>2.828</b></td><td><b>0.9997（几乎失去区分度）</b></td></tr>
+</table>
+
+<p>一眼可见的分工：sigmoid 在 \(z=8\) 时挤死在 0.9997——再大的分数也只值 1，<b>区分度没了</b>；√Softplus 还在增长（2.83），分数之间永远有差距。</p>
+
+<h3>2.2 三条性质与动机</h3>
+
+<div class="fig">
+<svg viewBox="0 0 940 170" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="t3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">门控亲和度函数的三代演化</text>
+
+  <rect x="40" y="52" width="260" height="84" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="170" y="78" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">Softmax（V1–V2）</text>
+  <text x="170" y="102" font-size="10.5" text-anchor="middle" fill="#5a6272">全局耦合 · 指数放大差距</text>
+  <text x="170" y="122" font-size="10.5" text-anchor="middle" fill="#5a6272">一家爆雷，全行业被压</text>
+
+  <line x1="304" y1="94" x2="334" y2="94" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3a)"/>
+
+  <rect x="340" y="52" width="260" height="84" rx="10" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="470" y="78" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">Sigmoid＋行归一化（V3–V3.2）</text>
+  <text x="470" y="102" font-size="10.5" text-anchor="middle" fill="#5a6272">独立打分 · 但封顶饱和</text>
+  <text x="470" y="122" font-size="10.5" text-anchor="middle" fill="#5a6272">大分数区分度丧失，需局部归一化</text>
+
+  <line x1="604" y1="94" x2="634" y2="94" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3a)"/>
+
+  <rect x="640" y="52" width="260" height="84" rx="10" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="770" y="78" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">√Softplus（V4–V4.1）</text>
+  <text x="770" y="102" font-size="10.5" text-anchor="middle" fill="#2a3040">独立 · 无上界 · 零点光滑</text>
+  <text x="770" y="122" font-size="10.5" text-anchor="middle" fill="#2a3040">增长放缓的「温和放大」</text>
+
+  <text x="40" y="158" font-size="11" fill="#5a6272">V3→V4 换函数的动机论文均未详述；性质与数值行为为本讲分析（推断已标注）。「独立 + 局部归一化」的两段式结构三代未变。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-1</b>｜三代亲和度。形状对比见第 0 讲图 0-2，耦合对比见第 2 讲图 2-4。</p>
+
+<ul>
+  <li><b>独立</b>：没有 softmax 式分母，逐专家打分互不干扰——V3 确立的优点全盘继承；</li>
+  <li><b>无上界</b>：不像 sigmoid 封顶在 1，大分数仍有区分度；开根号让增长比线性更慢（\(z\) 大时近似 \(\sqrt{z}\)），<b>天然压住极端值</b>——配合 V4 面对的「路由放大离群值」问题（§9）看，这个选择很合理；</li>
+  <li><b>零点光滑</b>：负半轴平滑趋 0 不为 0、处处可导，训练梯度不会像 ReLU 那样在某处断流。</li>
+</ul>
+
+<div class="infer">√Softplus 的动机分析：V4 论文只写了「把 Sigmoid 换成 √Softplus」一句话（§2.1，p.7），未给原因。上述性质分析（尤其「配合离群值治理」的关联）为推断。</div>
+
+<p>代码一瞥（V4-Pro 推理代码 <code>model.py</code>，详见第 4 讲）：<code>config.json</code> 里 <code>"score_func": "sqrtsoftplus"</code>，实现一行 <code>scores = F.softplus(scores).sqrt()</code>。归一化与 route_scale 见 §3。</p>
+
+<h2>3. 均衡机制：不动，但在 384 个专家上继续滚</h2>
+
+<p>V4 的均衡与 V3 完全同款：bias 门控（更新速度 0.001）主责 + 序列级损失（0.0001）保险丝（第 2 讲 §5、§7 已精讲，不再重复）。第 4 讲会看到代码里对应的 <code>self.bias</code> 与 <code>weights /= weights.sum(...)</code>，以及最后乘上的 <code>route_scale = 2.5</code>（把归一化后平均 1/6 的权重量级放大回 SwiGLU 习惯的幅度，校准残差流的尺度）。</p>
+
+<h2>4. 384 个专家的显存账：为什么必须谈 FP4</h2>
+
+<p>先算账。一个路由专家的参数：三个矩阵，\(3 \times d_{model} \times d_{expert} = 3 \times 7168 \times 3072 \approx 66.1M\)。</p>
+
+<table>
+  <tr><th>项</th><th>计算</th><th>结果</th></tr>
+  <tr><td>单个路由专家</td><td>\(3 \times 7168 \times 3072\)</td><td>≈ 66.1M 参数</td></tr>
+  <tr><td>全部路由专家</td><td>\(66.1M \times 384 \times 61\) 层</td><td><b>≈ 1.55T</b></td></tr>
+  <tr><td>对照官方总参</td><td>1.6T</td><td>路由专家占绝对大头（共享专家/注意力/embedding 补足余量）✓</td></tr>
+</table>
+
+<p>这 1.55T 参数<b>每个 token 只用其中 6/384</b>，但推理时全部要驻留显存。FP8 存不下（1.55T × 1 字节 ≈ 1.55TB，任何单机都放不下，卡数与带宽都吃不消），V4 把路由专家压到 <b>FP4</b>——直接砍半。FP4 是什么、为什么敢压这么狠，见 §7。</p>
+
+<h2>5. 通信成本模型：一笔可以算清楚的账</h2>
+
+<p>拆掉节点限制（V2 的 M=3、V3 的 M=4）意味着每个 token 的 6 个专家可以分布在<b>任何</b>设备上——通信路径完全放开。敢这么做的前提，是把通信成本算到笔笔清楚。V4 论文 §3.1 把 MoE 层拆成五段：</p>
+
+<div class="formula">\[
+\underbrace{\text{Dispatch}}_{\text{送出}} \to \underbrace{\text{Linear-1}}_{\text{升维}} \to \underbrace{\text{Act}}_{\text{SwiGLU}} \to \underbrace{\text{Linear-2}}_{\text{降维}} \to \underbrace{\text{Combine}}_{\text{取回}}
+\]</div>
+
+<p>对每个「token-专家对」（一个 token 被分给一个专家，就叫一对）：</p>
+<ul>
+  <li><b>计算量</b>：SwiGLU 三次矩阵乘 = \(6hd\) FLOPs（\(h=7168\) 模型维、\(d=3072\) 专家中间维；系数 6 = 三次投影 × 每次乘加 2 FLOPs）；</li>
+  <li><b>通信量</b>：Dispatch 送 \(h\) 字节（FP8 隐状态）+ Combine 回 \(2h\) 字节（BF16 结果）= <b>\(3h\) 字节</b>。</li>
+</ul>
+
+<p>把「计算/通信」比上「带宽」得到判据：只要硬件的算力-带宽比满足</p>
+
+<div class="formula">\[
+C/B \le 2d = 6144\ \text{FLOPs/Byte}
+\]</div>
+
+<p>（\(C\) = 每 token-专家对 6hd FLOPs 除以 \(h\)、\(B\) = 带宽；直觉版：<b>传 1 字节的时间里，GPU 能算 6144 次乘加，而每个字节的活儿只值 \(2d=6144\) 次乘加</b>——刚好收支平衡，带宽就不再是瓶颈），通信就可以被计算完全盖住。论文的结论：V4 的硬件配置过了这条线，「继续堆带宽收益递减」——这就是拆掉节点限制的底气：通信不用躲，盖住它就行。</p>
+
+<div class="box">
+<span class="bt">一句话记住这个判据</span>这是「算术强度」思想：通信延迟能不能藏进计算时间，取决于「每字节数据配套的计算量」是否 ≥ 硬件「每字传输时间内能完成的计算量」。V4 的配置刚好达标。
+</div>
+
+<h2>6. MegaMoE：波级流水，让通信彻底「隐身」</h2>
+
+<p>道理上「通信可以盖住」，工程上要靠调度。先看不做调度的惨状：</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 330" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="t3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="t3c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    </marker>
+  </defs>
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">从「等齐再算」到「来一波算一波」</text>
+
+  <text x="40" y="58" font-size="12" font-weight="bold" fill="#1a1f2e">（a）逐层同步：通信与计算完全串行</text>
+  <rect x="60" y="70" width="80" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="100" y="88" font-size="11" text-anchor="middle" fill="#1a1f2e">Dispatch</text>
+  <rect x="140" y="70" width="110" height="26" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="195" y="88" font-size="11" text-anchor="middle" fill="#1a1f2e">Linear-1</text>
+  <rect x="250" y="70" width="50" height="26" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="275" y="88" font-size="11" text-anchor="middle" fill="#1a1f2e">Act</text>
+  <rect x="300" y="70" width="110" height="26" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="355" y="88" font-size="11" text-anchor="middle" fill="#1a1f2e">Linear-2</text>
+  <rect x="410" y="70" width="90" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="455" y="88" font-size="11" text-anchor="middle" fill="#1a1f2e">Combine</text>
+  <text x="60" y="120" font-size="11" fill="#5a6272">Dispatch / Combine 期间 GPU 计算完全空闲 → 整层耗时 = 通信 + 计算，两头都白等</text>
+
+  <text x="40" y="168" font-size="12" font-weight="bold" fill="#1a1f2e">（b）MegaMoE 波级流水：专家分波（wave），稳态下三件事并发</text>
+
+  <text x="40" y="206" font-size="11" fill="#5a6272">通信 all-to-all</text>
+  <rect x="240" y="192" width="70" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="275" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">W1</text>
+  <rect x="310" y="192" width="70" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="345" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">W2</text>
+  <rect x="380" y="192" width="70" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="415" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">W3</text>
+  <rect x="450" y="192" width="60" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="480" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">回传</text>
+  <rect x="570" y="192" width="60" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="600" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">回传</text>
+  <rect x="690" y="192" width="60" height="26" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="720" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">回传</text>
+
+  <text x="40" y="252" font-size="11" fill="#5a6272">计算 L1·Act·L2</text>
+  <rect x="310" y="238" width="140" height="26" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="380" y="256" font-size="11" text-anchor="middle" fill="#1a1f2e">W1 计算</text>
+  <rect x="450" y="238" width="140" height="26" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="520" y="256" font-size="11" text-anchor="middle" fill="#1a1f2e">W2 计算</text>
+  <rect x="590" y="238" width="140" height="26" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="660" y="256" font-size="11" text-anchor="middle" fill="#1a1f2e">W3 计算</text>
+
+  <line x1="275" y1="218" x2="345" y2="234" stroke="#2f9e63" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#t3c)"/>
+  <line x1="345" y1="218" x2="485" y2="234" stroke="#2f9e63" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#t3c)"/>
+  <line x1="415" y1="218" x2="625" y2="234" stroke="#2f9e63" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#t3c)"/>
+
+  <line x1="60" y1="286" x2="870" y2="286" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3b)"/>
+  <text x="878" y="290" font-size="11" fill="#5a6272">时间</text>
+
+  <text x="40" y="316" font-size="11" fill="#5a6272">W1/W2/W3 = 384 个专家切出的三个波。稳态下并发三件事：算当前波、传下一波、回传已完成波。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-2</b>｜波级流水示意（对应 V4 论文图 5 的思想）：<b>把 384 个专家切成若干「波」</b>，每波的 Dispatch 一完成就立刻开算，不等其他波。稳态下「计算、传输、回传」三条流水并发，整层耗时被压缩到接近纯计算时间。实测：通用推理加速 1.50–1.73×，RL rollout（生成量极大、通信占比高的场景）最高 1.96×。</p>
+
+<div class="box">
+<span class="bt">生活比喻</span>洗衣店接了三批订单。逐层同步 = 等 3 批衣服全部收齐 → 全部洗完 → 全部送回，三次等待三次闲聊。波级流水 = 第 1 批衣服进洗衣机的同时，店员出门收第 2 批；第 1 批烘上，第 2 批进洗，第 3 批在收——任何时刻「洗、收、送」三线并行。MegaMoE 就是这个流水线的 CUDA 实现名（开源在 DeepGEMM 中）。
+</div>
+
+<h2>7. FP4：把 1.55T 参数塞进 4 个比特</h2>
+
+<h3>7.1 五分钟浮点数课</h3>
+
+<p>计算机存小数用「科学计数法的二进制版」：一个浮点数 = <b>符号位 × 尾数位 × 指数位</b>。FP32 给 8 位指数 + 23 位尾数（约 7 位十进制精度）；FP16/BF16 各给 5/8 位指数；<b>FP4（E2M1 格式）总共只有 4 个比特：1 符号 + 2 指数 + 1 尾数</b>，能表示的值一共 15 个：</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 260" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="t3d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">FP4（E2M1）的全部可表示值：0, ±0.5, ±1, ±1.5, ±2, ±3, ±4, ±6</text>
+
+  <text x="40" y="100" font-size="11" fill="#5a6272">1 位符号 + 2 位指数 + 1 位尾数 → 全部 15 个值（另有 1 个 NaN 编码），最大值 fp4_max = 6.0</text>
+
+  <!-- axis: x = 470 + v*60 -->
+  <line x1="60" y1="150" x2="880" y2="150" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3d)"/>
+  <text x="886" y="154" font-size="11" fill="#5a6272">值</text>
+
+  <line x1="110" y1="144" x2="110" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="110" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-6</text>
+  <line x1="230" y1="144" x2="230" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="230" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-4</text>
+  <line x1="290" y1="144" x2="290" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="290" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-3</text>
+  <line x1="350" y1="144" x2="350" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="350" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-2</text>
+  <line x1="410" y1="144" x2="410" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="410" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-1</text>
+  <line x1="440" y1="144" x2="440" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="440" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-0.5</text>
+  <line x1="470" y1="144" x2="470" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="470" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">0</text>
+  <line x1="500" y1="144" x2="500" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="500" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">0.5</text>
+  <line x1="530" y1="144" x2="530" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="530" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">1</text>
+  <line x1="560" y1="144" x2="560" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="560" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">1.5</text>
+  <line x1="590" y1="144" x2="590" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="590" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">2</text>
+  <line x1="650" y1="144" x2="650" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="650" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">3</text>
+  <line x1="710" y1="144" x2="710" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="710" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">4</text>
+  <line x1="830" y1="144" x2="830" y2="156" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="830" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">6</text>
+
+  <text x="40" y="212" font-size="11" fill="#5a6272">读法：数值分布「近密远疏」——0 附近步长 0.5，4 到 6 一步跳 2。小权重存得准，大权重存得糙。</text>
+  <text x="40" y="234" font-size="11" fill="#5a6272">量化 = 把真实权重四舍五入到最近的可表示值；每 1×32 个权重共享一个缩放因子（MXFP4），适配实际权重的量级。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-3</b>｜E2M1 的表示能力。单个数糙成这样，怎么敢拿去存 1.55T 参数？两个答案：分组缩放（把值域先挪到合适的量级再取整）＋ 量化感知训练。</p>
+
+<h3>7.2 QAT：让模型「提前适应穷日子」</h3>
+
+<p>训练完成后再把 FP32/FP8 权重硬压到 FP4（训后量化，PTQ），误差会直接砸进前向计算——MoE 的矩阵乘是「分组 GEMM」，每组 batch 小，误差没法互相平均，掉点明显。V4 的做法是 <b>QAT（量化感知训练）</b>，post-training 阶段：</p>
+
+<ol>
+  <li><b>前向：模拟量化</b>——权重先「假装」被压到 FP4（乘 scale、四舍五入到 15 个值、再乘回 scale），模型看到的永远是「穷日子版的自己」，学习过程自动把重要参数挪到 FP4 表示得准的位置上；</li>
+  <li><b>反向：STE 直通</b>——「四舍五入」没有梯度，反传时假装这一步是恒等映射（straight-through estimator），梯度照常流回 FP32 主权重；</li>
+  <li><b>部署：原生 FP4</b>——训练定型后直接用 FP4 权重推理，显存与加载带宽兑现减半收益。</li>
+</ol>
+
+<p>代码佐证：<code>kernel.py</code> 的 <code>fp4_gemm_kernel</code> 文档写明 <code>B is stored as [N, K//2] in float4_e2m1fn_x2</code>（两个 FP4 打包进 1 字节）、片上把 FP4 上转 FP8/FP32 做乘累加；量化核按 1×32 tile 求 amax 定 scale，<code>fp4_max = 6.0</code>——与上面的数轴完全对应。论文 §5.2.1（p.33–34）补了一个精巧结论：FP4 → FP8 的反量化可以做到<b>无损</b>，因为 FP8（E4M3）比 E2M1 多 2 个指数位，只要 128×128 块内子块 scale 的比值不超阈值，FP4 的舍入误差能被 FP8 完全吸收。</p>
+
+<h2>8. Hash 路由：前 3 层不学「去哪儿」，只学「用多少」</h2>
+
+<h3>8.1 机制</h3>
+
+<p>V3 把前 3 层留成稠密 FFN；V4 改成「前 3 层也用 MoE，但路由不学习」——<b>Hash 路由</b>：按 token ID 查一张预计算好的固定映射表 <code>tid2eid</code>（形状 [词表 129280 × 6]），直接给出 6 个目标专家号。论文原话：「Hash routing determines the target experts of each token according to a predefined hash function with regard to the input token ID」（p.7）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="t3e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="t3f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">两种路由并存：58 层学习路由 vs 前 3 层 Hash 查表</text>
+
+  <text x="40" y="62" font-size="11.5" font-weight="bold" fill="#2456c4">后 58 层：学习路由（含 bias 门控）</text>
+  <rect x="60" y="76" width="120" height="44" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="120" y="94" font-size="11" text-anchor="middle" fill="#1a1f2e">token 隐状态 x</text>
+  <text x="120" y="112" font-size="10" text-anchor="middle" fill="#5a6272">语义向量</text>
+  <line x1="180" y1="98" x2="216" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3e)"/>
+  <rect x="220" y="76" width="130" height="44" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="285" y="94" font-size="11" text-anchor="middle" fill="#1a1f2e">门控打分（学习）</text>
+  <text x="285" y="112" font-size="10" text-anchor="middle" fill="#5a6272">Wg·x → 384 分</text>
+  <line x1="350" y1="98" x2="386" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3e)"/>
+  <rect x="390" y="76" width="120" height="44" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="450" y="94" font-size="11" text-anchor="middle" fill="#1a1f2e">＋bias 比较</text>
+  <text x="450" y="112" font-size="10" text-anchor="middle" fill="#5a6272">s + b → top-6</text>
+  <line x1="510" y1="98" x2="546" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3e)"/>
+  <rect x="550" y="76" width="110" height="44" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="605" y="102" font-size="11" text-anchor="middle" fill="#1a1f2e">6 个专家</text>
+
+  <text x="40" y="182" font-size="11.5" font-weight="bold" fill="#163a86">前 3 层：Hash 路由（固定映射，无 bias）</text>
+  <rect x="60" y="196" width="120" height="44" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="120" y="214" font-size="11" text-anchor="middle" fill="#1a1f2e">token ID</text>
+  <text x="120" y="232" font-size="10" text-anchor="middle" fill="#5a6272">词表序号（离散）</text>
+  <line x1="180" y1="218" x2="216" y2="218" stroke="#2456c4" stroke-width="1.5" marker-end="url(#t3f)"/>
+  <rect x="220" y="196" width="190" height="44" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="315" y="214" font-size="11" text-anchor="middle" fill="#1a1f2e">tid2eid 查表（预计算）</text>
+  <text x="315" y="232" font-size="10" text-anchor="middle" fill="#5a6272">整型查找表 [129280 × 6]</text>
+  <line x1="410" y1="218" x2="446" y2="218" stroke="#2456c4" stroke-width="1.5" marker-end="url(#t3f)"/>
+  <rect x="450" y="196" width="130" height="44" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="515" y="218" font-size="11" text-anchor="middle" fill="#1a1f2e">6 个专家号</text>
+  <text x="515" y="236" font-size="10" text-anchor="middle" fill="#2f9e63">固定 · 无 bias · 无 topk</text>
+
+  <text x="40" y="282" font-size="11" fill="#5a6272">关键细节：Hash 层的「加权」仍用门控学出的分数——「去哪儿」交给哈希，「用多少」仍归模型（代码 model.py:576–583，第 4 讲逐行看）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-4</b>｜两条路由流水线。查表是 <code>requires_grad=False</code> 的整型张量、随 checkpoint 分发，哈希函数本身不在开源推理代码里。</p>
+
+<h3>8.2 为什么前 3 层可以不学（推断链）</h3>
+
+<p>论文未解释动机。可拼出的理由链：</p>
+<ul>
+  <li><b>浅层没有可学的分工</b>：语言的专业分工是深层语义现象（「这段是化学」要到几层之后才明朗），浅层 token 该去哪个专家的信号本来就弱——自由路由在浅层要么学成接近均匀（白养 384 个专家的路由器），要么被早期噪声带偏；</li>
+  <li><b>稳定性</b>：V4 自己发现路由与主干同步更新是 loss spike 温床（§9）；前 3 层换成无参数选择，等于在最不稳的地方直接切断这条反馈回路；</li>
+  <li><b>负载天然均匀</b>：每个 token ID 恒定映射 6 个专家、表是预计算平衡表，热门 token 也分流量，浅层不需要均衡机制（没有 bias）；</li>
+  <li><b>零路由开销</b>：查表即可，与「批不变、逐位确定」的工程目标一致；</li>
+  <li><b>不是全弃学习</b>：加权仍走学习分数——「用多少」的表达力保留。</li>
+</ul>
+<div class="infer">以上五条均为推断；可核实的事实只有：前 3 层 Hash、无 bias、表在 checkpoint 里（model.py:556–562）。「浅层不特化」与 V1 论文的专家可视化观察方向一致，但该引文未逐字核对。</div>
+
+<h2>9. 训练稳定性：路由是离群值的「帮凶」</h2>
+
+<p>V4 论文 §4.2.3 承认：万亿 MoE 训练的 loss spike 与 MoE 层激活离群值强相关，而且「the routing mechanism itself appears to exacerbate the emergence of these outliers」（论文原话）。恶性循环是：</p>
+
+<div class="formula">\[
+\text{某专家权重异常} \to \text{它的亲和度异常} \to \text{token 涌向它} \to \text{它的激活进一步异常} \to \cdots
+\]</div>
+
+<p>注意这与 √Softplus 的选择（无上界、温和放大）以及第 2 讲 bias 门控（均衡信号隔离）其实是同一个主题的三次变奏：<b>路由是全网络最敏感、最容易正反馈的部分，一切手段都在给它「减震」</b>。V4 的两个实招（论文坦承机理未完全理解）：</p>
+
+<ul>
+  <li><b>Anticipatory Routing（预判路由）</b>：路由索引用 \(\Delta t\) 步之前的旧参数 \(\theta_{t-\Delta t}\) 预计算——主干和路由的更新解耦，token 的流向在 spike 形成前就被「旧地图」定住；代价是约 20% 额外墙钟开销，由 spike 检测器<b>动态启用</b>（平时不开）；</li>
+  <li><b>SwiGLU Clamping</b>：专家的 up 分量夹到 \([-10, 10]\)、gate 分量夹上界 10（代码 <code>torch.clamp(up, -10, 10)</code>）——训练期把 MoE 层的离群值物理按住。</li>
+</ul>
+
+<h2>10. V4.1：均衡的多模态化——图文各一套 bias</h2>
+
+<p>V4.1-Flash 保持 1 共享 + 384 路由（中间维 2304）的 DeepSeekMoE 结构，唯一的 MoE 级变更是<b>多模态辅助损失免费均衡</b>。问题：图像 token 与文本 token 的路由偏好天然不同（图像像素块需要的加工与「法律条文」毫无交集），如果混在一个 bias 体系里均衡，<b>两模态各自的失衡会互相掩盖</b>——图像侧挤爆的专家，可能恰好是文本侧冷清的，全局统计看起来岁月静好，模态内早已旱涝两重天。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 320" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="t3g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="t3h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    </marker>
+  </defs>
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">V4.1：同一个门控打分，两套 bias 分开选择，同一池专家服务</text>
+
+  <rect x="40" y="70" width="130" height="44" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="105" y="96" font-size="11.5" text-anchor="middle" fill="#1a1f2e">文本 token</text>
+  <rect x="40" y="190" width="130" height="44" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="105" y="216" font-size="11.5" text-anchor="middle" fill="#1a1f2e">图像 token</text>
+
+  <polyline points="170,92 200,92 200,138 216,138" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3g)"/>
+  <polyline points="170,212 200,212 200,162 216,162" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3g)"/>
+
+  <rect x="220" y="124" width="130" height="52" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="285" y="146" font-size="11.5" text-anchor="middle" fill="#1a1f2e">同一门控打分 s</text>
+  <text x="285" y="166" font-size="10" text-anchor="middle" fill="#5a6272">不管什么模态，分一套</text>
+
+  <polyline points="350,138 370,138 370,92 406,92" fill="none" stroke="#e8862a" stroke-width="1.5"/>
+  <polyline points="350,162 370,162 370,212 406,212" fill="none" stroke="#e8862a" stroke-width="1.5"/>
+
+  <rect x="410" y="70" width="150" height="44" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="485" y="90" font-size="11.5" text-anchor="middle" fill="#1a1f2e">＋ bias（文本套）</text>
+  <text x="485" y="108" font-size="10" text-anchor="middle" fill="#b4551d">按文本负载独立更新</text>
+  <rect x="410" y="190" width="150" height="44" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="485" y="210" font-size="11.5" text-anchor="middle" fill="#1a1f2e">＋ bias（图像套）</text>
+  <text x="485" y="228" font-size="10" text-anchor="middle" fill="#b4551d">按图像负载独立更新</text>
+
+  <polyline points="560,92 590,92 590,138 606,138" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3g)"/>
+  <polyline points="560,212 590,212 590,162 606,162" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3g)"/>
+
+  <rect x="610" y="124" width="110" height="52" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="665" y="146" font-size="11.5" text-anchor="middle" fill="#1a1f2e">top-6 选择</text>
+  <text x="665" y="166" font-size="10" text-anchor="middle" fill="#5a6272">各自用各自的 bias</text>
+
+  <line x1="720" y1="150" x2="752" y2="150" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3g)"/>
+  <rect x="756" y="116" width="150" height="68" rx="8" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="831" y="142" font-size="11.5" text-anchor="middle" fill="#1a1f2e">384 路由专家</text>
+  <text x="831" y="162" font-size="10" text-anchor="middle" fill="#2f9e63">＋共享专家（同一池）</text>
+
+  <polyline points="285,176 285,262 790,262 790,188" fill="none" stroke="#2f9e63" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#t3h)"/>
+  <text x="470" y="284" font-size="11" fill="#2f9e63">原始分数 s 绕过两套 bias，直接用于加权——「辅助损失免费」原则原样保留（绿虚线）</text>
+
+  <text x="40" y="308" font-size="11" fill="#5a6272">两套 bias 按各自模态的专家负载独立 ±γ；文本/图像各自「雨露均沾」，互不掩盖。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-5</b>｜V4.1 双模态 bias。门控、专家池、加权规则全部共用，<b>只有「选择时的加成」按模态分家</b>——最小改动解决「混着均衡掩盖模态内失衡」的问题。</p>
+
+<h2>11. V4 小结：枷锁与解锁的完整清单</h2>
+
+<table>
+  <tr><th>枷锁（V2/V3 时代为效率戴上的）</th><th>V4 的解锁方式</th></tr>
+  <tr><td>节点数限制（M=3/4）压路由自由度</td><td>取消限制 + §5 成本模型 + §6 MegaMoE 把通信藏进计算</td></tr>
+  <tr><td>浅层不敢用 MoE（V3 前 3 层稠密）</td><td>Hash 路由：不学习的 MoE，负载天然均匀、零风险</td></tr>
+  <tr><td>1.55T 专家参数的显存/带宽压力</td><td>FP4 + MXFP4 QAT（§7）</td></tr>
+  <tr><td>万亿训练的路由离群值</td><td>√Softplus 温和放大 + Anticipatory Routing + SwiGLU clamp（§9）</td></tr>
+</table>
+
+<p>而 V1 定下的地基——细粒度专家、共享隔离、bias 门控——一件没动，只是规模从 64 专家滚到 384。这就是「演进」的实感：<b>范式 2024 年就定了，之后五年全是在给范式扫清工程障碍</b>。</p>
+
+<h2>12. 自查清单</h2>
+
+<ol class="checklist">
+  <li>√Softplus 相比 sigmoid 保住了什么、改进了什么？（保住独立打分；改进：无上界、大分数有区分度、负半轴光滑不断流）</li>
+  <li>「通信可以被计算盖住」的判据是什么？（\(C/B \le 2d = 6144\) FLOPs/Byte：每字节的活儿 ≥ 每字节传输时间内能算的量）</li>
+  <li>波级流水稳态下并发的三件事？（算当前波、传下一波、回传已完成波）</li>
+  <li>为什么 FP4 必须 QAT 而不是训后硬压？（分组 GEMM 组内 batch 小、误差无法平均；QAT 让权重提前适应低精度）</li>
+  <li>Hash 路由层「学习」的是什么、「不学习」的是什么？（加权分数仍学习；选哪 6 个专家不学习——查固定表）</li>
+  <li>为什么图文要各一套 bias？（混着均衡会互相掩盖模态内的失衡）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="moe-t4-code.html">第 4 讲：代码逐行走读</a>——把本系列所有概念落到 DeepSeek-V4-Pro 官方推理代码上：Gate / Expert / MoE 三个类逐行拆解 + 张量形状追踪，最后用一个 8 专家小例子手动模拟整个 forward。
+</div>
+
+<footer>本页为个人学习笔记 · MoE 零基础五讲系列 · 生成于 2026-09-16 · 事实依据：arXiv:2606.19348（§2.1 p.7、§3.1 p.15–16、§4.2 p.24–26、§5.2.1 p.33–34）与本地 paper/deepseek_v41.pdf §2.1 · √Softplus 动机、Hash 层动机为推断并已标注</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

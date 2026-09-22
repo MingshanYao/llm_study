@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大模型量化零基础七讲 · 第 3 讲：激活量化与 FP8</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>大模型量化零基础七讲 · 第 3 讲：激活量化与 FP8</h1>
+
+<div class="series-nav">
+  <a href="quant-t0-foundation.html">0 全景图</a>
+  <a href="quant-t1-basics.html">1 量化数学</a>
+  <a href="quant-t2-ptq.html">2 GPTQ·AWQ</a>
+  <a class="here">3 激活与FP8</a>
+  <a href="quant-t4-ultra-low-bit.html">4 极低比特</a>
+  <a href="quant-t5-kv-systems.html">5 KV与系统</a>
+  <a href="quant-t6-qat-roadmap.html">6 QAT·路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>大模型量化零基础七讲（本篇为第 3 讲）</p>
+  <p style="margin:4px 0"><b>前置：</b>第 1 讲的均匀/非均匀格子与校准；第 2 讲的「等效变换」思想（AWQ 用过一次，本讲它还要唱主角）。</p>
+  <p style="margin:4px 0"><b>本讲地位：</b>前两讲解决「存得省」（W4A16），本讲解决「算得省」（W8A8 / FP8）——这是云端高吞吐服务和 FP8 训练的原理课，也是量化领域公认最有嚼头的一块：outlier 问题。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>① 为什么激活比权重难量化得多——离群通道（outlier）现象；② 工业界四大对策逐一拆解：混合精度拆分（LLM.int8()）、难度搬家（SmoothQuant）、旋转消解（QuaRot/SpinQuant）、换浮点格子（FP8）；③ FP8 的两种格式（E4M3/E5M2）与 DeepSeek-V3 的 FP8 训练方案。读完你能解释「为什么量化激活是块硬骨头」，以及每味药各自的代价。</p>
+</div>
+
+<h2>1. 从「存得省」到「算得省」</h2>
+
+<p>第 2 讲的 W4A16 有个隐藏细节：权重虽然存成 4 位，但<b>计算时</b>要先反量化回 FP16，矩阵乘法本身还是 16 位的。这省了显存和搬运（第 0 讲的 decode 提速红利），但没省「计算」本身。</p>
+
+<p>要真省计算，就得让激活也变成低位宽——即 <b>W8A8</b>（权重和激活都 INT8）或 <b>FP8</b>。收益是实打实的：现代 GPU 的低比特张量核心（tensor core）吞吐约为 FP16 的 2 倍（H100 上 FP8 ≈ 2 × BF16），且激活减半直接省一半激活显存和跨卡通信量。训练侧同理：把训练中天文数字量的矩阵乘法换成 FP8，就是 DeepSeek-V3 把训练成本打下来的关键一招。</p>
+
+<p>但激活量化比权重难一个量级。原因只有一个词：<b>outlier</b>。</p>
+
+<h2>2. 头号敌人：离群通道（outlier）</h2>
+
+<p>回忆第 2 节课的结论：权重分布规整、以 0 为中心、离群值少——所以好量化。<b>激活完全是另一副面孔</b>：LLM.int8()（Dettmers 等，2022）系统地发现，从约 6.7B 参数规模开始，激活里出现「离群特征」——</p>
+
+<ul>
+  <li><b>极少</b>：不到千分之一的隐藏维度；</li>
+  <li><b>极大</b>：幅值是其他维度的 20 倍上下；</li>
+  <li><b>极稳定</b>：同样的维度在不同样本、不同层、甚至不同数据集上都大——它们是模型学到的某些系统性特征（论文里举过与特定语义/颜色词相关的例子），<b>不是噪声，是有信息量、删不得的</b>。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 940 260" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">激活的离群通道：少数维度幅值远超其他（示意）</text>
+
+  <line x1="112" y1="66" x2="112" y2="210" stroke="#5a6272" stroke-width="1"/>
+  <text x="112" y="56" font-size="10.5" text-anchor="middle" fill="#5a6272">幅值</text>
+  <line x1="112" y1="210" x2="860" y2="210" stroke="#5a6272" stroke-width="1"/>
+
+  <rect x="120" y="196" width="16" height="14" fill="#2456c4"/>
+  <rect x="142" y="188" width="16" height="22" fill="#2456c4"/>
+  <rect x="164" y="200" width="16" height="10" fill="#2456c4"/>
+  <rect x="186" y="194" width="16" height="16" fill="#2456c4"/>
+  <rect x="208" y="80" width="16" height="130" fill="#e8862a"/>
+  <rect x="230" y="192" width="16" height="18" fill="#2456c4"/>
+  <rect x="252" y="186" width="16" height="24" fill="#2456c4"/>
+  <rect x="274" y="198" width="16" height="12" fill="#2456c4"/>
+  <rect x="296" y="40" width="16" height="170" fill="#e8862a"/>
+  <rect x="318" y="195" width="16" height="15" fill="#2456c4"/>
+  <rect x="340" y="190" width="16" height="20" fill="#2456c4"/>
+  <rect x="362" y="199" width="16" height="11" fill="#2456c4"/>
+  <rect x="384" y="70" width="16" height="140" fill="#e8862a"/>
+  <rect x="406" y="194" width="16" height="16" fill="#2456c4"/>
+  <rect x="428" y="188" width="16" height="22" fill="#2456c4"/>
+  <rect x="450" y="197" width="16" height="13" fill="#2456c4"/>
+  <rect x="472" y="60" width="16" height="150" fill="#e8862a"/>
+  <rect x="494" y="191" width="16" height="19" fill="#2456c4"/>
+  <rect x="516" y="200" width="16" height="10" fill="#2456c4"/>
+  <rect x="538" y="193" width="16" height="17" fill="#2456c4"/>
+  <rect x="560" y="198" width="16" height="12" fill="#2456c4"/>
+  <rect x="582" y="189" width="16" height="21" fill="#2456c4"/>
+  <rect x="604" y="196" width="16" height="14" fill="#2456c4"/>
+  <rect x="626" y="50" width="16" height="160" fill="#e8862a"/>
+  <rect x="648" y="192" width="16" height="18" fill="#2456c4"/>
+  <rect x="670" y="199" width="16" height="11" fill="#2456c4"/>
+  <rect x="692" y="195" width="16" height="15" fill="#2456c4"/>
+  <rect x="714" y="197" width="16" height="13" fill="#2456c4"/>
+  <rect x="736" y="190" width="16" height="20" fill="#2456c4"/>
+  <rect x="758" y="194" width="16" height="16" fill="#2456c4"/>
+  <rect x="780" y="198" width="16" height="12" fill="#2456c4"/>
+  <rect x="802" y="192" width="16" height="18" fill="#2456c4"/>
+
+  <text x="486" y="236" font-size="10.5" text-anchor="middle" fill="#5a6272">隐藏维度（示意画 32 个，真实模型几千个；橙 = 离群通道）</text>
+  <text x="40" y="254" font-size="11" fill="#1a1f2e">不到千分之一的维度贡献了最大幅值 —— min-max 校准的格子区间被它们撑大 20 倍，其余 99.9% 的值全部挤进粗格子。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-1</b>｜outlier 现象示意。致命之处在于：这些大值<b>系统性存在且带信息</b>，不能简单砍掉——第 1 讲的 percentile/MSE 校准只对「噪声型离群值」有效，对这种「信息型离群值」治标不治本。</p>
+
+<div class="box">
+<span class="bt">算一笔账</span>INT8 有 256 个格子。若 per-tensor 量化、区间被 outlier 撑到 ±1400，而正常值都在 ±20 以内：格子间距变成 1400/128 ≈ 11，正常值的误差可达 ±5.5——相对正常值幅值（~20）是 27% 的误差。激活一错，这层的输出全错。这就是 W8A8 不能直接 RTN 的原因。
+</div>
+
+<h2>3. 对策一：混合精度拆分（LLM.int8()）</h2>
+
+<p>最直接的思路：既然 outlier 只占千分之一维度，那就<b>把矩阵乘法拆成两半</b>——outlier 维度对应的列用 FP16 精算，其余 99.9% 的维度放心用 INT8 算，最后把两半结果相加。数学上就是 \( WX = W_{\text{outlier}}X_{\text{outlier}} + W_{\text{normal}}X_{\text{normal}} \)（按维度列拆开求和，完全等价）。</p>
+
+<ul>
+  <li><b>效果</b>：精度几乎无损，第一次证明大模型 INT8 推理可行。</li>
+  <li><b>代价</b>：一次矩阵乘法变成两条数据通路（INT8 张量核心 + FP16 张量核心）再归并，kernel 复杂、实际加速有限，硬件利用率低。</li>
+  <li><b>历史地位</b>：它的真正贡献是<b>确诊了病因</b>——outlier 是激活量化的核心障碍。后面的对策都在回答「能不能不拆，把 outlier 本身处理掉」。</li>
+</ul>
+
+<h2>4. 对策二：难度搬家（SmoothQuant）</h2>
+
+<p>SmoothQuant（Xiao 等，2022）注意到一个不对称：<b>激活难量化，权重好量化</b>。那就把难度搬过去——用的正是第 2 讲 AWQ 那个乘法结合律，只是方向相反：</p>
+
+<div class="formula">
+
+\[ y = \sum_j w_j x_j \;=\; \sum_j (\underbrace{s_j w_j}_{\text{权重变难}})\cdot(\underbrace{x_j / s_j}_{\text{激活变乖}}) \]
+
+</div>
+
+<p>选择 \(s_j\) 让每个激活通道除以自己通道的幅值——大 outlier 通道除以大数，被削成正常值；权重则乘上对应的 \(s_j\)，稍微变宽，但权重本来家底厚（分布规整、还可以 per-channel 细粒度），扛得住。变换后激活分布被「抹平」，普通 per-tensor/per-channel INT8 就能拿下。缩放因子取 \( s_j = \max|x_j|^{\alpha} / \max|w_j|^{1-\alpha} \)，\( \alpha \in [0,1] \) 控制搬多少（常取 0.5）。整个变换离线一次完成，之后跑的是标准 INT8 GEMM，无任何特殊 kernel。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="40" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">SmoothQuant：把激活的「长尾」搬给权重（橙 = 激活，蓝 = 权重）</text>
+
+  <!-- left panel -->
+  <text x="240" y="62" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">变换前</text>
+  <text x="240" y="80" font-size="10" text-anchor="middle" fill="#e8862a">激活：长尾 + 高耸离群</text>
+  <line x1="70" y1="170" x2="410" y2="170" stroke="#c9d2e0"/>
+  <polyline points="70,166 130,163 190,165 250,164 310,165 340,162 365,150 390,134 410,122" fill="none" stroke="#e8862a" stroke-width="2"/>
+  <text x="240" y="192" font-size="10" text-anchor="middle" fill="#2456c4">权重：规整对称，好量化</text>
+  <line x1="70" y1="272" x2="410" y2="272" stroke="#c9d2e0"/>
+  <polyline points="70,270 130,262 190,240 240,238 290,244 350,264 410,270" fill="none" stroke="#2456c4" stroke-width="2"/>
+
+  <line x1="452" y1="170" x2="488" y2="170" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <text x="470" y="158" font-size="10" text-anchor="middle" fill="#5a6272">×s / ÷s</text>
+
+  <!-- right panel -->
+  <text x="700" y="62" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">变换后</text>
+  <text x="700" y="80" font-size="10" text-anchor="middle" fill="#e8862a">激活：被削平，INT8 轻松装下</text>
+  <line x1="530" y1="170" x2="870" y2="170" stroke="#c9d2e0"/>
+  <polyline points="530,166 600,164 670,165 740,163 810,165 870,164" fill="none" stroke="#e8862a" stroke-width="2"/>
+  <text x="700" y="192" font-size="10" text-anchor="middle" fill="#2456c4">权重：稍宽，但仍规整可控</text>
+  <line x1="530" y1="272" x2="870" y2="272" stroke="#c9d2e0"/>
+  <polyline points="530,270 590,258 650,238 700,232 750,240 810,258 870,270" fill="none" stroke="#2456c4" stroke-width="2"/>
+
+  <text x="40" y="294" font-size="11" fill="#1a1f2e">输出数学上完全不变；「量化难度」从激活搬到权重。横轴均为数值通道示意，纵轴为幅值轮廓。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-2</b>｜SmoothQuant 的等效变换（分布轮廓为示意）。与 AWQ 对照记忆：<b>同一个乘法结合律，两个方向</b>——AWQ 把难度从权重搬走（激活不动），SmoothQuant 把难度搬给权重（激活变乖）。</p>
+
+<h2>5. 对策三：旋转消解（QuaRot / SpinQuant）</h2>
+
+<p>前两个对策都在「绕开」outlier。2024 年的一批工作（QuaRot、SpinQuant 等）给出了更釜底抽薪的答案：<b>让 outlier 不再存在</b>。</p>
+
+<p>关键观察：outlier 是「少数<b>固定维度</b>上幅值大」，但整个向量的总能量并不大。就像一屋子人挤在门口——房间整体不挤，只是站位不对。解法是<b>旋转坐标系</b>：给激活向量乘一个正交旋转矩阵 \(R\)，让能量均匀摊到所有维度，每个维度的大小都变得接近——没有大个子，就没有 outlier。</p>
+
+<p>怎么保证结果不变？在权重两端成对插入 \(R\) 和 \(R^\top\)：</p>
+
+<div class="formula">
+
+\[ y = Wx \;=\; (W R)\,(R^\top x) \]
+
+</div>
+
+<p>先旋转激活（\(R^\top x\)，没有 outlier，放心量化），再用预先融合了 \(R\) 的权重计算（\(WR\) 可以离线合并进权重，不增加推理计算量）。\(R\) 的经典选择是 <b>Hadamard 矩阵</b>——元素只有 ±1，乘它只是加减法，硬件上几乎白送。SpinQuant 进一步证明：与其用固定的随机/Hadamard 旋转，不如<b>少量训练学出最优旋转</b>，低比特下还能再涨点。这套「旋转去离群」如今已是低比特量化（第 4 讲的 QuIP# 还会用它）和端到端低精度训练的标配工具。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 316" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">旋转的直觉（2 维示意）：把「少数方向独大」摊成「所有方向均匀」</text>
+
+  <!-- left: before rotation -->
+  <text x="260" y="58" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">旋转前：能量集中在 x 轴</text>
+  <line x1="120" y1="160" x2="400" y2="160" stroke="#c9d2e0"/>
+  <line x1="260" y1="40" x2="260" y2="280" stroke="#c9d2e0"/>
+  <circle cx="370" cy="180" r="4" fill="#e8862a"/>
+  <circle cx="340" cy="135" r="4" fill="#2456c4"/>
+  <circle cx="315" cy="175" r="4" fill="#2456c4"/>
+  <circle cx="290" cy="150" r="4" fill="#2456c4"/>
+  <circle cx="260" cy="165" r="4" fill="#2456c4"/>
+  <circle cx="225" cy="145" r="4" fill="#2456c4"/>
+  <circle cx="200" cy="170" r="4" fill="#2456c4"/>
+  <circle cx="165" cy="180" r="4" fill="#2456c4"/>
+  <circle cx="135" cy="145" r="4" fill="#2456c4"/>
+  <circle cx="110" cy="152" r="4" fill="#e8862a"/>
+  <rect x="106" y="126" width="268" height="58" fill="none" stroke="#8a94a8" stroke-dasharray="5 4"/>
+  <text x="260" y="302" font-size="10.5" text-anchor="middle" fill="#5a6272">x 方向最大分量 150，y 方向只有 ±30</text>
+
+  <!-- right: after rotation -->
+  <text x="700" y="58" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">旋转 45° 后：两个方向都温和</text>
+  <line x1="560" y1="160" x2="840" y2="160" stroke="#c9d2e0"/>
+  <line x1="700" y1="40" x2="700" y2="280" stroke="#c9d2e0"/>
+  <circle cx="764" cy="208" r="4" fill="#2456c4"/>
+  <circle cx="752" cy="199" r="4" fill="#2456c4"/>
+  <circle cx="720" cy="210" r="4" fill="#2456c4"/>
+  <circle cx="720" cy="174" r="4" fill="#2456c4"/>
+  <circle cx="696" cy="164" r="4" fill="#2456c4"/>
+  <circle cx="686" cy="195" r="4" fill="#2456c4"/>
+  <circle cx="650" cy="196" r="4" fill="#2456c4"/>
+  <circle cx="619" cy="213" r="4" fill="#2456c4"/>
+  <circle cx="622" cy="259" r="4" fill="#2456c4"/>
+  <circle cx="800" cy="272" r="4" fill="#e8862a"/>
+  <circle cx="600" cy="48" r="4" fill="#e8862a"/>
+  <rect x="596" y="44" width="208" height="232" fill="none" stroke="#8a94a8" stroke-dasharray="5 4"/>
+  <text x="700" y="302" font-size="10.5" text-anchor="middle" fill="#5a6272">最大分量 150 → 106：高维 Hadamard 旋转把这个摊薄做得更彻底</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-3</b>｜旋转的 2 维示意。outlier（橙点）在旧坐标系里横行霸道，旋转后它的能量分散到两个坐标上，谁的分量都不再离谱——高维里 Hadamard 旋转把「千分之一维度独大」摊成「所有维度均摊」。</p>
+
+<h2>6. 对策四：换格子——FP8</h2>
+
+<p>INT 格子是均匀的，而激活分布是长尾的——天生不匹配（第 1 讲 §6 埋的伏笔）。FP8 换成<b>非均匀的浮点格子</b>：0 附近极密、大值区间照样盖住，outlier 不再把别人挤进粗格子。业界定义了两种口味：</p>
+
+<table>
+  <tr><th></th><th>FP8 E4M3</th><th>FP8 E5M2</th><th>INT8</th></tr>
+  <tr><td><b>位分配</b></td><td>1 符号 + 4 指数 + 3 尾数</td><td>1 符号 + 5 指数 + 2 尾数</td><td>8 位整数</td></tr>
+  <tr><td><b>格子特点</b></td><td>精度稍高，范围 ±448</td><td>范围大（±57344），精度糙</td><td>均匀，−128~+127</td></tr>
+  <tr><td><b>典型分工</b></td><td>前向激活/权重</td><td>反向梯度（范围大不易溢出）</td><td>传统 W8A8 推理</td></tr>
+  <tr><td><b>适合</b></td><td colspan="2">长尾分布的激活；硬件原生支持后吞吐 2×FP16</td><td>分布规整的权重；成熟生态</td></tr>
+</table>
+
+<h3>6.1 DeepSeek-V3 的 FP8 训练：细粒度 + 挑着来</h3>
+
+<p>FP8 训练的两大难点：① 格子粗，直接全模型 FP8 精度崩；② 累加误差——浮点乘加链长了误差滚雪球。DeepSeek-V3（2024 底）的方案给出了一套工程范式：</p>
+
+<ul>
+  <li><b>细粒度量化</b>：激活按 1×128 的小块、权重按 128×128 的小块，<b>每块单独配 scale</b>——相当于把第 1 讲的 per-group 粒度搬到 FP8 上，误差被隔离在小块内（离群值最多坑自己那一块）。</li>
+  <li><b>敏感环节保留 BF16</b>：embedding、输出头、MoE 门控、归一化层、attention 的部分核心计算不走 FP8——「低精度是机会，不是信仰」，敏感的地方寸步不让。</li>
+  <li><b>FP32 累加</b>：张量核心内部乘法 FP8，累加结果用 FP32 记账，遏制误差滚雪球。</li>
+</ul>
+
+<div class="box">
+<span class="bt">推理 vs 训练</span>推理只走前向，量化一次到位就行；训练要反复前向 + 反向 + 累加，对数值误差敏感得多——所以 FP8 训练必须「细粒度 + 混合精度 + 高精度累加」三件套齐上，而推理端 FP8/W8A8 可以更激进。看懂这个区别，你就能理解为什么各家论文的量化方案长得不一样。
+</div>
+
+<h2>7. 四大对策总账</h2>
+
+<table>
+  <tr><th>对策</th><th>一句话</th><th>代价</th><th>代表</th></tr>
+  <tr><td><b>混合精度拆分</b></td><td>outlier 维度 FP16 精算，其余 INT8</td><td>两套通路，kernel 效率低</td><td>LLM.int8()（2022）</td></tr>
+  <tr><td><b>难度搬家</b></td><td>等效变换把激活的长尾挪给权重</td><td>权重稍难（家底厚，扛得住）</td><td>SmoothQuant（2022）</td></tr>
+  <tr><td><b>旋转消解</b></td><td>正交旋转把 outlier 摊匀到所有维度</td><td>插入旋转的开销（可离线融合）</td><td>QuaRot / SpinQuant（2024）</td></tr>
+  <tr><td><b>换浮点格子</b></td><td>非均匀格子天然适配长尾分布</td><td>依赖硬件 FP8 支持；精度低于 INT8 同位宽</td><td>FP8（H100/DeepSeek-V3）</td></tr>
+</table>
+
+<p>实践中这些手段<b>经常组合出现</b>：FP8 checkpoint 配 per-block scale（对策四 + 粒度），W4A8 服务用 SmoothQuant 变换打底再配 4-bit 权重 kernel（对策二 + 第 5 讲的 QServe 思路），2-bit 权重方案先做 Hadamard 旋转再量化（对策三 + 第 4 讲的 QuIP#）。认识「单一武器」不难，识别「组合拳」才是读论文的日常。</p>
+
+<h2>8. 自查清单</h2>
+
+<ol class="checklist">
+  <li>激活比权重难量化的根本原因？（答：少数隐藏维度存在幅值 ~20 倍、系统性、带信息的离群通道，把均匀格子区间撑爆）</li>
+  <li>为什么 percentile/MSE 校准治不了 outlier？（答：outlier 不是噪声尾部而是信息性特征，砍掉伤模型、留着撑爆区间）</li>
+  <li>LLM.int8() 怎么做的，代价是什么？（答：outlier 维度拆出来 FP16 精算 + 其余 INT8；代价是双通路 kernel 效率低）</li>
+  <li>SmoothQuant 与 AWQ 的关系？（答：同一个等效变换（乘法结合律），SmoothQuant 把量化难度从激活搬到权重，AWQ 把难度从权重搬离/重新分配）</li>
+  <li>旋转为什么能消 outlier 且不改结果？（答：outlier 集中在固定维度；正交旋转把能量摊匀；成对插入 R 与 Rᵀ 保证数学等价，R 可融合进权重）</li>
+  <li>E4M3 和 E5M2 各自的取舍与分工？（答：E4M3 精度好范围小→前向；E5M2 范围大精度糙→反向梯度）</li>
+  <li>DeepSeek-V3 FP8 训练的三件套？（答：细粒度 per-block scale（1×128 / 128×128）、敏感模块保留 BF16、FP32 累加）</li>
+  <li>W4A16、W8A8、FP8 训练分别主要省什么？（答：W4A16 省显存和权重搬运；W8A8/FP8 省计算吞吐与激活显存/通信；FP8 训练三重收益都有）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="quant-t4-ultra-low-bit.html">第 4 讲：极低比特——2-bit 与 1.58-bit</a>——4-bit 是「甜点」，但总有人想把每个数压到 2 位甚至 1.58 位。这一讲看两派 extreme 操作：训练后量化的极限派（AQLM 的加性量化、QuIP# 的「旋转 + 格子设计」）与原生低比特训练派（BitNet b1.58：干脆从训练第一天就用三值权重），以及 Blackwell 时代硬件原生的 MXFP4/NVFP4 格式。
+</div>
+
+<footer>本页为个人学习笔记 · 大模型量化零基础七讲系列 · 生成于 2026-09-20 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 叙述以主流实践与经典论文为准，细节以原始文献为最终依据</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

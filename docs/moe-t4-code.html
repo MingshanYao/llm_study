@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoE 零基础五讲 · 第 4 讲：代码逐行走读</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>MoE 零基础五讲 · 第 4 讲：代码逐行走读</h1>
+
+<div class="series-nav">
+  <a href="moe-t0-foundation.html">0 前置知识</a>
+  <a href="moe-t1-basics.html">1 MoE 基本原理</a>
+  <a href="moe-t2-v1v3.html">2 V1→V3 演进</a>
+  <a href="moe-t3-v4.html">3 V4/V4.1</a>
+  <a class="here">4 代码逐行</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>前置：</b><a href="moe-t2-v1v3.html">第 2 讲</a>（bias 门控）、<a href="moe-t3-v4.html">第 3 讲</a>（√Softplus / Hash / clamp / FP4）</p>
+  <p style="margin:4px 0"><b>代码来源：</b>DeepSeek-V4-Pro 官方推理代码 <code>inference/model.py</code>、<code>kernel.py</code>、<code>config.json</code>（huggingface.co/deepseek-ai/DeepSeek-V4-Pro，commit <code>b5968e9</code>）；行号以该版本为准</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>把前四讲的所有概念落到 DeepSeek-V4-Pro 官方推理代码上。逐行拆解 <code>Gate</code>（路由器）、<code>Expert</code>（专家）、<code>MoE</code>（组装层）三个类的 <code>forward</code>，每行标注张量形状；最后用一个 8 专家、4 token 的迷你批次<b>手动模拟整个 forward</b>——把每一行代码在纸上演算一遍，这一讲读完，「MoE 是什么」将不再是概念，而是你能徒手执行的过程。</p>
+</div>
+
+<h2>1. 全局地图：config.json 关键字段</h2>
+
+<p>所有谜底先摆在桌面上。以下是 V4-Pro 配置中与本系列相关的字段（省略注意力侧字段）：</p>
+
+<table>
+  <tr><th>字段</th><th>值</th><th>含义（对应前几讲的哪个概念）</th></tr>
+  <tr><td><code>dim</code></td><td>7168</td><td>模型宽度 \(d\)（第 0 讲）</td></tr>
+  <tr><td><code>n_layers</code></td><td>61</td><td>层数</td></tr>
+  <tr><td><code>n_routed_experts</code></td><td>384</td><td>每层路由专家数 \(N_r\)（第 1 讲三件套）</td></tr>
+  <tr><td><code>n_activated_experts</code></td><td>6</td><td>top-k 的 \(K_r\)（第 0 讲 top-k）</td></tr>
+  <tr><td><code>n_shared_experts</code></td><td>1</td><td>共享专家数（第 2 讲隔离）</td></tr>
+  <tr><td><code>moe_inter_dim</code></td><td>3072</td><td>专家中间维 \(d_{ffn}\)（第 0 讲 SwiGLU）</td></tr>
+  <tr><td><code>score_func</code></td><td>"sqrtsoftplus"</td><td>亲和度函数（第 3 讲 §2）</td></tr>
+  <tr><td><code>route_scale</code></td><td>2.5</td><td>归一化后权重的放大系数（第 3 讲 §3）</td></tr>
+  <tr><td><code>n_hash_layers</code></td><td>3</td><td>前 3 层 Hash 路由（第 3 讲 §8）</td></tr>
+  <tr><td><code>swiglu_limit</code></td><td>10.0</td><td>SwiGLU clamping 的夹取值（第 3 讲 §9）</td></tr>
+  <tr><td><code>expert_dtype</code></td><td>"fp4"</td><td>专家权重精度（第 3 讲 §7）</td></tr>
+</table>
+
+<p>代码骨架是三个类：<code>Gate</code>（打分 + 选择 + 加权）→ <code>Expert</code>（单个专家的 SwiGLU）→ <code>MoE</code>（把它们组装起来）。逐个来。</p>
+
+<h2>2. <code>Gate.__init__</code>：路由器长什么样</h2>
+
+<pre><code class="language-python"># inference/model.py:556-562（Gate.__init__，节选）
+self.hash = layer_id &lt; args.n_hash_layers          # 层号 &lt; 3 → Hash 层
+self.weight = nn.Parameter(torch.empty(args.n_routed_experts, args.dim))
+                                                    # 门控矩阵 Wg: [384, 7168]
+if self.hash:
+    # token ID → 6 个专家号的预计算映射；随 checkpoint 分发，不学习
+    self.tid2eid = nn.Parameter(torch.empty(args.vocab_size, args.n_activated_experts,
+                                            dtype=torch.int32), requires_grad=False)
+    self.bias = None                                # Hash 层没有 bias
+else:
+    self.bias = nn.Parameter(torch.empty(args.n_routed_experts, dtype=torch.float32))</code></pre>
+
+<p>四个值得停一停的地方：</p>
+<ul>
+  <li><b>门控矩阵只有 [384, 7168]</b>：约 275 万参数。整个 1.6T 模型里，「决定谁上场」的部分只占百万分之一——路由器是个小公务员，不是大老板。</li>
+  <li><b>Hash 层也保留 <code>self.weight</code></b>：看似矛盾，实则精妙——第 3 讲说过，Hash 层「去哪儿」不学习，但「用多少」仍按学习出的分数加权，所以门控矩阵照留（第 3 讲图 3-4 的绿路径）。</li>
+  <li><b><code>tid2eid</code> 是 <code>requires_grad=False</code> 的整型表</b>：它根本不是「参数」，只是搭 checkpoint 顺风车的一张静态查找表。哈希函数本身不在开源推理代码里（<code>inference/</code> 中 grep <code>tid2eid</code> 仅 4 处命中，均为定义与加载）。</li>
+  <li><b>bias 是 <code>float32</code> 标量向量 [384]</b>：每个专家一个数。它是全模型最便宜的「均衡机构」。</li>
+</ul>
+
+<h2>3. <code>Gate.forward</code>：路由的完整流水线</h2>
+
+<div class="fig">
+<svg viewBox="0 0 940 380" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="t4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="t4b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    </marker>
+    <marker id="t4c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">Gate.forward 数据流与张量形状（V4-Pro：d=7168、N=384、K=6；T = token 数）</text>
+
+  <!-- row 1 -->
+  <rect x="40" y="60" width="150" height="48" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="115" y="80" font-size="11.5" text-anchor="middle" fill="#1a1f2e">输入 x</text>
+  <text x="115" y="98" font-size="10" text-anchor="middle" fill="#5a6272">[T, 7168]</text>
+  <line x1="190" y1="84" x2="236" y2="84" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t4a)"/>
+
+  <rect x="240" y="60" width="190" height="48" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="335" y="80" font-size="11.5" text-anchor="middle" fill="#1a1f2e">线性层 Wg（可学习）</text>
+  <text x="335" y="98" font-size="10" text-anchor="middle" fill="#5a6272">[384, 7168] → [T, 384]</text>
+  <line x1="430" y1="84" x2="476" y2="84" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t4a)"/>
+
+  <rect x="480" y="60" width="200" height="48" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="580" y="80" font-size="11.5" text-anchor="middle" fill="#1a1f2e">√Softplus 亲和度</text>
+  <text x="580" y="98" font-size="10" text-anchor="middle" fill="#2f9e63">s = sqrt(softplus(·))</text>
+  <line x1="680" y1="84" x2="726" y2="84" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t4a)"/>
+
+  <rect x="730" y="60" width="180" height="48" rx="8" fill="#d9f0e2" stroke="#2f9e63" stroke-dasharray="5,3"/>
+  <text x="820" y="80" font-size="11.5" text-anchor="middle" fill="#1a1f2e">original_scores</text>
+  <text x="820" y="98" font-size="10" text-anchor="middle" fill="#5a6272">[T, 384]（加权用）</text>
+
+  <!-- s -> bias (row2) -->
+  <polyline points="820,108 820,136 335,136 335,166" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t4a)"/>
+
+  <!-- row 2 -->
+  <rect x="240" y="170" width="190" height="48" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="335" y="190" font-size="11.5" text-anchor="middle" fill="#1a1f2e">＋ bias b（仅选择）</text>
+  <text x="335" y="208" font-size="10" text-anchor="middle" fill="#b4551d">过载 −γ / 欠载 +γ 滚动</text>
+  <line x1="430" y1="194" x2="476" y2="194" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t4a)"/>
+
+  <rect x="480" y="170" width="200" height="48" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="580" y="190" font-size="11.5" text-anchor="middle" fill="#1a1f2e">top-6 选择</text>
+  <text x="580" y="208" font-size="10" text-anchor="middle" fill="#b4551d">indices [T, 6]</text>
+
+  <!-- hash branch -->
+  <polyline points="115,170 115,150 580,150 580,166" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#t4c)"/>
+  <rect x="40" y="170" width="150" height="48" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="115" y="190" font-size="11.5" text-anchor="middle" fill="#1a1f2e">前 3 层：查表</text>
+  <text x="115" y="208" font-size="10" text-anchor="middle" fill="#2456c4">tid2eid[input_ids]</text>
+
+  <!-- topk -> gather -->
+  <polyline points="580,218 580,258 420,258 420,276" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t4a)"/>
+
+  <!-- s -> gather (green) -->
+  <polyline points="770,108 770,246 370,246 370,276" fill="none" stroke="#2f9e63" stroke-width="1.5" marker-end="url(#t4b)"/>
+
+  <!-- row 3 -->
+  <rect x="240" y="280" width="260" height="48" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="370" y="300" font-size="11.5" text-anchor="middle" fill="#1a1f2e">gather(原始分, indices)</text>
+  <text x="370" y="318" font-size="10" text-anchor="middle" fill="#2f9e63">按 indices 取 original_scores</text>
+
+  <line x1="500" y1="304" x2="556" y2="304" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t4a)"/>
+  <rect x="560" y="280" width="160" height="48" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="640" y="300" font-size="11.5" text-anchor="middle" fill="#1a1f2e">归一化</text>
+  <text x="640" y="318" font-size="10" text-anchor="middle" fill="#5a6272">÷ 行和 → ×2.5</text>
+  <line x1="720" y1="304" x2="766" y2="304" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t4a)"/>
+  <rect x="770" y="280" width="140" height="48" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="840" y="300" font-size="11.5" text-anchor="middle" fill="#1a1f2e">weights</text>
+  <text x="840" y="318" font-size="10" text-anchor="middle" fill="#5a6272">[T, 6]</text>
+
+  <text x="40" y="362" font-size="11" fill="#5a6272">三色路径：绿 = 原始分数（加权用，绕过 bias）；橙 = bias 只进 top-k 比较；蓝 = Hash 层分支（无 bias，权重仍走绿路径）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 4-1</b>｜<code>Gate.forward</code> 的三色路径图。与第 2 讲图 2-2、第 3 讲图 3-4 对齐着看。</p>
+
+<pre><code class="language-python"># inference/model.py:564-584（Gate.forward，逐行注解）
+def forward(self, x, input_ids=None):
+    # ① 打分：[T, 7168] × [7168, 384] → [T, 384] 原始 logits
+    scores = linear(x.float(), self.weight.float())
+    if self.score_func == "softmax":
+        scores = scores.softmax(dim=-1)          # 兼容旧代（V1/V2 权重）
+    elif self.score_func == "sigmoid":
+        scores = scores.sigmoid()                # 兼容 V3
+    else:
+        scores = F.softplus(scores).sqrt()       # ② V4：√Softplus 亲和度
+    original_scores = scores                     # ③ 备份！加权要用原始分
+    # Bias shifts scores for expert selection (topk) but does not affect routing weights.
+    if self.bias is not None:
+        scores = scores + self.bias              # ④ bias 只污染这份副本
+    if self.hash:
+        indices = self.tid2eid[input_ids]        # ⑤ Hash 层：查表得 indices
+    else:
+        indices = scores.topk(self.topk, dim=-1)[1]   # ⑥ 普通层：带 bias 的 top-6
+    weights = original_scores.gather(1, indices) # ⑦ 加权用原始分（bias 不在场！）
+    if self.score_func != "softmax":
+        weights /= weights.sum(dim=-1, keepdim=True)  # ⑧ 选中 6 个内归一化
+    weights *= self.route_scale                  # ⑨ ×2.5 校准量级
+    return weights, indices</code></pre>
+
+<p>逐段解释（编号对应注释）：</p>
+<ul>
+  <li><b>①</b> 一行普通矩阵乘。注意 <code>.float()</code>：门控永远用高精度算（路由是稳定性敏感区，第 3 讲 §9），专家权重才是 FP4。</li>
+  <li><b>②</b> V4 新增的分支，就是 \(\sqrt{\mathrm{Softplus}}\)，一行完事。同一段代码还保留着 softmax / sigmoid 分支——一份代码兼容五代权重。</li>
+  <li><b>③ + ⑦</b> 是「辅助损失免费」的代码化身：<code>original_scores</code> 先备份，等 top-k 选完人，再回头<b>用原始分数 gather</b>。bias 加在 ④ 的副本上，只决定「谁进名单」；名单里的人按 ③ 的原始分领权重。两份数据，井水不犯河水。</li>
+  <li><b>⑤ vs ⑥</b>：Hash 层直接查表拿 indices（无 bias——<code>self.bias is None</code>，④ 自动跳过）；普通层走带 bias 的 topk。</li>
+  <li><b>⑧</b> softmax 天然归一所以跳过；sigmoid / √Softplus 都需要选中后局部归一（第 2 讲 §6）。</li>
+  <li><b>⑨</b> <code>route_scale=2.5</code>：归一化把权重平均压到 1/6 ≈ 0.167，×2.5 后平均 ≈ 0.417，把残差流的量级校准回 SwiGLU 舒服的区间。</li>
+</ul>
+
+<div class="box">
+<span class="bt">对应公式</span>⑦ + ⑧ 合起来就是第 2 讲 §5.1 的 \(g_{i,t} = \dfrac{s_{i,t}}{\sum_{j\in\mathrm{Topk}} s_{j,t}}\)（选中者按原始分归一化），④ 就是 \(s_{i,t}+b_i \in \mathrm{Topk}\) 的比较键。公式与代码逐字符对应。
+</div>
+
+<h2>4. <code>Expert.forward</code>：一个专家的 SwiGLU</h2>
+
+<pre><code class="language-python"># inference/model.py:596-606（Expert.forward，逐行注解）
+def forward(self, x, weights=None):
+    gate = self.w1(x).float()                        # ① 升维：[B, 3072]
+    up = self.w3(x).float()                          # ② 升维：[B, 3072]
+    if self.swiglu_limit &gt; 0:
+        up = torch.clamp(up, min=-self.swiglu_limit, max=self.swiglu_limit)   # ③ 夹到 [-10, 10]
+        gate = torch.clamp(gate, max=self.swiglu_limit)                       # ④ gate 只夹上界
+    x = F.silu(gate) * up                            # ⑤ 开关 × 特征
+    if weights is not None:
+        x = weights * x                              # ⑥ 路由权重乘在这里（down 之前！）
+    return self.w2(x.to(dtype))                      # ⑦ 降维：[B, 7168]</code></pre>
+
+<ul>
+  <li><b>①②⑤</b> 是标准 SwiGLU（第 0 讲 §3.2 的 \( \mathrm{SiLU}(xW_1) \odot (xW_3) \cdot W_2 \)）。一个专家 = 三个矩阵 \(w_1, w_3, w_2\)，各 [7168, 3072] 方向。</li>
+  <li><b>③④</b> SwiGLU Clamping（第 3 讲 §9）：up 分量对称夹 \([-10,10]\)，gate 分量只夹上界 10（SiLU 对强负值输出接近 0，本就自灭，无需下界）。</li>
+  <li><b>⑥</b> 是容易看漏的关键：路由权重 \(g_{i,t}\) 在<b>降维投影之前</b>乘进专家输出——即论文口径 \(g_{i,t} \cdot \mathrm{FFN}_{r,i}(x)\)。先混合再投影 vs 先投影再混合，数学上因线性可交换，但代码选择在 down 投影前乘，可以让降维矩阵共享处理已缩放的值。</li>
+</ul>
+
+<h2>5. <code>MoE.forward</code>：把专家们组装起来</h2>
+
+<pre><code class="language-python"># inference/model.py:629-644（MoE.forward，节选 + 逐行注解）
+weights, indices = self.gate(x, input_ids.flatten())   # ① 路由：[T,6] 权重 + [T,6] 专家号
+y = torch.zeros_like(x, dtype=torch.float32)           # ② 输出累加器
+counts = torch.bincount(indices.flatten(),
+                        minlength=self.n_routed_experts).tolist()  # ③ 每个专家分到几个 token
+for i in range(self.experts_start_idx, self.experts_end_idx):
+    if counts[i] == 0:
+        continue                                       # ④ 无人问津的专家：跳过（零计算）
+    idx, top = torch.where(indices == i)               # ⑤ 谁分到了专家 i？（token 行号, 槽位）
+    y[idx] += expert(x[idx], weights[idx, top, None])  # ⑥ 聚 batch 过 FFN，加权累加
+if world_size &gt; 1:
+    dist.all_reduce(y)                                 # ⑦ 教学版用 all_reduce 模拟 EP 合并
+y += self.shared_experts(x)                            # ⑧ 共享专家恒激活，最后相加</code></pre>
+
+<ul>
+  <li><b>③ <code>bincount</code></b>：统计每个专家的接待量——第 1 讲图 1-2 负载分布的原始数据就是它。</li>
+  <li><b>④</b> <code>counts[i]==0</code> 跳过：冷专家零成本；同时这也是「batch 聚合」的最小样本——⑤⑥ 把散落在各 token 的同一专家请求<b>聚成一批</b>再算，凑大 batch 才能吃满 GPU。</li>
+  <li><b>⑦</b> 参考实现跑在单机多卡模拟下，用 all_reduce 合并各 rank 的部分和；生产实现是 Dispatch all-to-all → 分组 GEMM → Combine all-to-all 的融合流水（第 3 讲 §6 的 MegaMoE）。</li>
+  <li><b>⑧</b> 共享专家最后无条件相加——第 2 讲图 2-2 的结构在这行收口。</li>
+</ul>
+
+<h2>6. 压轴：手动模拟一次完整 forward</h2>
+
+<p>造一个迷你批次：<b>T=4 个 token、N=8 个专家、K=2</b>（忽略 Hash 分支；真实模型是 384 选 6，工序完全相同）。门控已算出 sigmoid 风格的原始分数矩阵 \(s\)（行 = token，列 = E1..E8），并设全局负载统计给出的 bias 为：</p>
+
+<div class="formula">\[
+b = [0,\ -0.02,\ +0.03,\ +0.08,\ 0,\ +0.06,\ +0.02,\ 0]
+\]</div>
+
+<h3>6.1 第一步：比较键 s+b 与 top-2 选择</h3>
+
+<table>
+  <tr><th>token</th><th>原始分 s（E1..E8）</th><th>比较键 s+b</th><th>top-2（带 bias）</th><th>若不加 bias 的 top-2</th></tr>
+  <tr><td>t0</td><td>[.90, .10, .30, .20, <b>.50</b>, .10, .20, .40]</td><td>[.90, .08, .33, .28, .50, .16, .22, .40]</td><td><b>E1, E5</b></td><td>E1, E5（相同）</td></tr>
+  <tr><td>t1</td><td>[.20, <b>.80</b>, .10, .30, .20, <b>.40</b>, .10, .10]</td><td>[.20, .78, .13, .38, .20, .46, .12, .10]</td><td><b>E2, E6</b></td><td>E2, E6（相同）</td></tr>
+  <tr><td>t2</td><td>[<b>.50</b>, .10, .40, .10, .30, .10, <b>.60</b>, .20]</td><td>[.50, .08, .43, .18, .30, .16, .62, .20]</td><td><b>E7, E1</b></td><td>E7, E1（相同）</td></tr>
+  <tr><td>t3</td><td>[.10, .30, .20, <b>.70</b>, .10, .20, .30, .10]</td><td>[.10, .28, .23, .78, .10, .26, .32, .10]</td><td><b>E4, E7</b></td><td><span style="color:#b4551d">E4, E2（被 bias 改变！）</span></td></tr>
+</table>
+
+<p>注意 t3：E2 的原始分 0.30 本来排第二，但 E2 全局略过载（bias −0.02）、E7 欠载（bias +0.02），比较键变成 E7 0.32 &gt; E2 0.28——<b>边际被翻转</b>，正如第 2 讲 §5.2 的手算。而 t0/t1/t2 的头两名优势明显，bias 撼不动。<code>indices</code> 与 <code>weights</code> 形状均为 [4, 2]。</p>
+
+<h3>6.2 第二步：gather 原始分 + 归一化（代码 ⑦⑧⑨）</h3>
+
+<table>
+  <tr><th>token</th><th>选中的原始分</th><th>行和</th><th>归一化权重（×2.5 前）</th></tr>
+  <tr><td>t0</td><td>E1 .90，E5 .50</td><td>1.40</td><td>[0.643, 0.357]</td></tr>
+  <tr><td>t1</td><td>E2 .80，E6 .40</td><td>1.20</td><td>[0.667, 0.333]</td></tr>
+  <tr><td>t2</td><td>E7 .60，E1 .50</td><td>1.10</td><td>[0.545, 0.455]</td></tr>
+  <tr><td>t3</td><td>E4 .70，E7 .30</td><td>1.00</td><td>[0.700, 0.300]</td></tr>
+</table>
+
+<p>（乘 2.5 后量级 [1.6, 0.9] 左右——教学演示里我们略去这步，把 2.5 当乘数 1 处理，不影响机制理解。）</p>
+
+<h3>6.3 第三步：bincount 与按专家聚 batch（代码 ③④⑤）</h3>
+
+<table>
+  <tr><th>专家</th><th>分到的 (token, 槽位)</th><th>counts</th><th>对应权重</th></tr>
+  <tr><td>E1</td><td>(t0, 槽0)、(t2, 槽1)</td><td>2</td><td>0.643、0.455</td></tr>
+  <tr><td>E2</td><td>(t1, 槽0)</td><td>1</td><td>0.667</td></tr>
+  <tr><td>E3</td><td>—</td><td><b>0</b></td><td><code>continue</code>（代码 ④：零计算）</td></tr>
+  <tr><td>E4</td><td>(t3, 槽0)</td><td>1</td><td>0.700</td></tr>
+  <tr><td>E5</td><td>(t0, 槽1)</td><td>1</td><td>0.357</td></tr>
+  <tr><td>E6</td><td>(t1, 槽1)</td><td>1</td><td>0.333</td></tr>
+  <tr><td>E7</td><td>(t2, 槽0)、(t3, 槽1)</td><td>2</td><td>0.545、0.300</td></tr>
+  <tr><td>E8</td><td>—</td><td><b>0</b></td><td><code>continue</code></td></tr>
+</table>
+
+<p>8 选 2 × 4 token = 8 个名额，分布在 6 个专家上；E3、E8 颗粒无收。这就是第 1 讲「负载不均」与第 5 讲式「batch 聚合」在纸面上的样子——规模放大到 384 选 6、batch 数千 token 时，分布的均匀与否直接决定 GPU 吃几分饱。</p>
+
+<h3>6.4 第四步：专家计算与累加（代码 ⑥⑧）</h3>
+
+<p>假设各专家对相应 token 的 SwiGLU 输出（真实值由权重矩阵决定，这里直接给定便于演算）：</p>
+
+<table>
+  <tr><th>专家执行</th><th>batch 内容</th><th>专家原始输出</th><th>×权重后累加进 y</th></tr>
+  <tr><td>E1</td><td>{x0, x2}</td><td>E1(x0)=1.0；E1(x2)=0.8</td><td>y0 += 0.643；y2 += 0.364</td></tr>
+  <tr><td>E2</td><td>{x1}</td><td>E2(x1)=0.5</td><td>y1 += 0.333</td></tr>
+  <tr><td>E4</td><td>{x3}</td><td>E4(x3)=0.3</td><td>y3 += 0.210</td></tr>
+  <tr><td>E5</td><td>{x0}</td><td>E5(x0)=0.4</td><td>y0 += 0.143</td></tr>
+  <tr><td>E6</td><td>{x1}</td><td>E6(x1)=0.2</td><td>y1 += 0.067</td></tr>
+  <tr><td>E7</td><td>{x2, x3}</td><td>E7(x2)=0.6；E7(x3)=0.5</td><td>y2 += 0.327；y3 += 0.150</td></tr>
+  <tr><td>共享专家</td><td>{x0, x1, x2, x3}</td><td>恒 0.1</td><td>每个 y += 0.1（代码 ⑧）</td></tr>
+</table>
+
+<h3>6.5 终局</h3>
+
+<table>
+  <tr><th>token</th><th>路由部分合计</th><th>＋ 共享专家</th><th>层输出 y</th></tr>
+  <tr><td>t0</td><td>0.643 (E1) + 0.143 (E5) = 0.786</td><td>+0.1</td><td><b>0.886</b></td></tr>
+  <tr><td>t1</td><td>0.333 (E2) + 0.067 (E6) = 0.400</td><td>+0.1</td><td><b>0.500</b></td></tr>
+  <tr><td>t2</td><td>0.364 (E1) + 0.327 (E7) = 0.691</td><td>+0.1</td><td><b>0.791</b></td></tr>
+  <tr><td>t3</td><td>0.210 (E4) + 0.150 (E7) = 0.360</td><td>+0.1</td><td><b>0.460</b></td></tr>
+</table>
+
+<p>这 4 个数字就是 4 个 token 走完一个 MoE 层的全部结果——每一步都对应 <code>MoE.forward</code> 的一行代码。把这个流程在脑子里放大 1 万倍（T=4万、N=384、K=6、61 层），就是 V4 的一次前向传播。</p>
+
+<h2>7. 从教学版到生产版：差在哪里</h2>
+
+<table>
+  <tr><th>环节</th><th>教学版（inference/model.py）</th><th>生产版（第 3 讲）</th></tr>
+  <tr><td>专家分配</td><td><code>bincount</code> + <code>where</code> 单机模拟</td><td>Dispatch all-to-all 跨卡快递（EP）</td></tr>
+  <tr><td>专家计算</td><td>逐专家 Python 循环</td><td>分组 GEMM / FP4 内核（<code>kernel.py</code>）融合成 mega-kernel</td></tr>
+  <tr><td>结果合并</td><td><code>all_reduce</code> 部分和</td><td>Combine all-to-all + 波级流水，藏进计算</td></tr>
+  <tr><td>专家权重</td><td>逻辑上 FP4（<code>expert_dtype</code>）</td><td><code>float4_e2m1fn_x2</code> 打包 + 片上上转（第 3 讲 §7）</td></tr>
+</table>
+
+<p>教学版的价值不在速度而在<b>保真</b>：路由语义（bias 旁路、归一化、route_scale、Hash 查表、共享专家）与生产完全一致——读懂教学版，就读懂了 DeepSeek MoE 的全部「决策逻辑」，剩下的只是把它跑快的工程艺术。</p>
+
+<h2>8. 自查清单（全系列收官）</h2>
+
+<ol class="checklist">
+  <li><code>Gate.forward</code> 里 bias 污染的是哪份数据、绕过了哪份数据？（污染 <code>scores</code> 副本只做 topk；绕过 <code>original_scores</code>——gather 加权用它）</li>
+  <li>Hash 层为什么也要保留门控矩阵？（「去哪儿」查表，但「用多少」仍按学习出的分数加权）</li>
+  <li>路由权重乘在专家的哪一步？（down 投影 <code>w2</code> 之前）</li>
+  <li><code>counts[i]==0</code> 的专家遭遇什么？（<code>continue</code> 零计算——但参数仍占显存，这正是负载不均的浪费）</li>
+  <li>手动模拟里 t3 的路由为什么变了？（E2 略过载 bias −0.02、E7 欠载 +0.02，比较键 0.28 vs 0.32 边际翻转；加权仍用原始分，输出不受 bias 污染）</li>
+  <li>教学版与生产版的本质差异属于哪一类？（通信与调度的工程实现；路由与加权的语义完全一致）</li>
+</ol>
+
+<div class="box">
+<span class="bt">系列完结</span>五讲至此。回到浓缩版 <a href="deepseek-moe.html">DeepSeek MoE 进化史</a>再读一遍——那时你会发现：每一段「不明觉厉」都能对上这五讲里的某一次手算、某一张图、某一行代码。
+</div>
+
+<footer>本页为个人学习笔记 · MoE 零基础五讲系列 · 生成于 2026-09-16 · 代码引自 DeepSeek-V4-Pro 官方 inference 目录（commit b5968e9），行号与原文以该版本为准 · 手动模拟中的分数/专家输出为教学设定数值，流程与代码语义一致</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

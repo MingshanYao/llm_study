@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大模型量化零基础七讲 · 第 2 讲：训练后量化——GPTQ 与 AWQ</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>大模型量化零基础七讲 · 第 2 讲：训练后量化——GPTQ 与 AWQ</h1>
+
+<div class="series-nav">
+  <a href="quant-t0-foundation.html">0 全景图</a>
+  <a href="quant-t1-basics.html">1 量化数学</a>
+  <a class="here">2 GPTQ·AWQ</a>
+  <a href="quant-t3-activation.html">3 激活与FP8</a>
+  <a href="quant-t4-ultra-low-bit.html">4 极低比特</a>
+  <a href="quant-t5-kv-systems.html">5 KV与系统</a>
+  <a href="quant-t6-qat-roadmap.html">6 QAT·路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>大模型量化零基础七讲（本篇为第 2 讲）</p>
+  <p style="margin:4px 0"><b>前置：</b>第 1 讲的量化公式、per-group 粒度、舍入/裁剪误差。本讲有一处用到「矩阵乘法」，会当场解释。</p>
+  <p style="margin:4px 0"><b>本讲地位：</b>GPTQ 和 AWQ 是今天下载量最大的 4-bit 开源模型的两大主流格式（Hugging Face 上搜 GPTQ / AWQ 后缀的就是它们）。看懂这两篇，等于看懂了当前权重量化的「普通话方言」。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>① 训练后量化（PTQ）的完整流程——不重新训练，拿训好的模型直接压；② 一个灵魂观点：量化的目标不是「权重本身偏差小」，而是「这一层的<b>输出</b>偏差小」；③ GPTQ 怎么用「逐列量化 + 误差分摊」实现这个目标；④ AWQ 怎么用「等效缩放」保护那 1% 最重要的权重；⑤ 两者怎么选、怎么亲手跑一遍。</p>
+</div>
+
+<h2>1. PTQ 全景：不训练，只「翻译」</h2>
+
+<p>训练后量化（PTQ, Post-Training Quantization）的定义就藏在名字里：<b>模型练完之后</b>，再把它转成低比特。不碰训练数据、不跑反向传播、不动损失函数——整个过程更像「翻译」而不是「重修」。</p>
+
+<p>输入输出清单：</p>
+
+<ul>
+  <li><b>输入</b>：训练好的 FP16 模型；几百到几千条有代表性的文本（<b>校准集</b>，不需要标签，维基百科/对话样例都行）。</li>
+  <li><b>输出</b>：低比特模型文件——INT4 权重矩阵 + 一组 scale/zero-point。</li>
+  <li><b>过程</b>：一层一层处理模型里的每个线性层（Linear）。对每一层：先用校准样本「过一遍」，拿到这一层的真实输入，再决定怎么量化这一层。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 940 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">PTQ 流程：逐层「翻译」，全程不训练</text>
+
+  <rect x="40" y="105" width="190" height="110" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="135" y="150" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">FP16 模型</text>
+  <text x="135" y="174" font-size="10.5" text-anchor="middle" fill="#5a6272">训练完、冻结不动</text>
+  <text x="135" y="194" font-size="10.5" text-anchor="middle" fill="#5a6272">+ 几百条校准文本</text>
+
+  <line x1="230" y1="160" x2="292" y2="160" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+
+  <rect x="300" y="56" width="360" height="208" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="480" y="84" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">逐层处理（重复几十~几百次）</text>
+  <text x="320" y="116" font-size="10.5" fill="#2a3040">① 跑校准样本，收集这一层的真实输入 X</text>
+  <text x="320" y="146" font-size="10.5" fill="#2a3040">② 按输入分布，给每 128 个数定一组 (s, z)</text>
+  <text x="320" y="176" font-size="10.5" fill="#2a3040">③ 优化：GPTQ 误差分摊 / AWQ 缩放搜索</text>
+  <text x="320" y="206" font-size="10.5" fill="#2a3040">④ 写出这一层的 INT4 权重 + scales</text>
+  <text x="480" y="242" font-size="10" text-anchor="middle" fill="#5a6272">第 ③ 步是 GPTQ 与 AWQ 的分岔口，本讲主角</text>
+
+  <line x1="660" y1="160" x2="722" y2="160" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+
+  <rect x="730" y="105" width="180" height="110" rx="10" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.5"/>
+  <text x="820" y="146" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">4-bit 模型</text>
+  <text x="820" y="170" font-size="10.5" text-anchor="middle" fill="#5a6272">INT4 权重 + scales</text>
+  <text x="820" y="190" font-size="10.5" text-anchor="middle" fill="#5a6272">体积约原来的 1/4</text>
+
+  <text x="40" y="288" font-size="11" fill="#5a6272">一句话：校准集负责「告诉你数据长什么样」，逐层优化负责「让翻译后的层输出尽量像原来」。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-1</b>｜PTQ 流程。校准集不是训练集：它只用来<b>观察</b>每层输入的分布，用来定 scale 和指导优化；模型权重在这个阶段从不被「学习」，只被「改写」。</p>
+
+<h2>2. 基线 RTN 与它的失败原因</h2>
+
+<p>最朴素的 PTQ 叫 <b>RTN（Round To Nearest，就近取整）</b>——就是第 1 讲手算的那个：每个权重直接就近入座，不搞任何优化。8-bit 下 RTN 表现不错（第 0 讲的底牌足够用）；但压到 4-bit，RTN 的模型开始明显变笨。为什么？</p>
+
+<p>关键在于<b>权重之间不是各过各的</b>。回忆线性层在算什么：输出 \( y = w_1 x_1 + w_2 x_2 + \cdots + w_n x_n \)（一个「加权求和」——每个权重乘上对应输入再全加起来）。量化误差对输出的影响是 \(\Delta w_1 x_1 + \Delta w_2 x_2 + \cdots\)——是<b>所有列的误差的加权和</b>。这意味着：</p>
+
+<div class="box">
+<span class="bt">灵魂观点</span>既然输出只看「误差的总和」，那么某一列的误差大一点没关系——只要其他列的误差方向相反、把它抵消掉就行。<b>单看每个权重都量化得不好，但加起来可以恰好没错。</b>RTN 让每列独立就近入座，白白放弃了这个「互相打配合」的机会。
+</div>
+
+<p>一个最小的数值演示：输入 \(x_1 = x_2 = 1\)，真实权重 \(w_1 = 0.9,\ w_2 = 0.1\)，真实输出 \(y = 1.0\)。用格子间距 0.125 的对称 4-bit（格子 \(\{\ldots, -0.125, 0, 0.125, \ldots\}\)）：</p>
+
+<ul>
+  <li>RTN：\(w_1 \to 0.875\)（差 −0.025），\(w_2 \to 0.125\)（差 +0.025）。输出 \(0.875 + 0.125 = 1.0\)——两列误差<b>恰好抵消</b>，输出分毫不差。</li>
+  <li>反例：若 \(x_2 = -1\)，则 \(y = 0.8\)，量化后 \(0.875 - 0.125 = 0.75\)，误差 +0.05——同样的权重误差，因为输入变了，抵消关系就变了。</li>
+</ul>
+
+<p>所以「误差能不能互相抵消」取决于<b>校准输入的统计规律</b>（哪些方向常出现、列与列是否相关）。要把「打配合」从碰运气变成系统方法，就需要知道：哪些误差组合代价大、往哪个方向补偿收益大。这就是 GPTQ 登场的地方。</p>
+
+<h2>3. GPTQ：逐列量化 + 误差分摊</h2>
+
+<p>GPTQ（Frantar 等，2022，ICLR 2023）把「让输出误差最小」写成一个明确的优化问题。对一层：</p>
+
+<div class="formula">
+
+\[ \min_{W_q} \; \| WX - W_q X \|_2^2 \]
+
+</div>
+
+<p>其中 \(W\) 是原始权重矩阵，\(W_q\) 是量化后的版本，\(X\) 是校准样本在这一层的输入（每一列是一条样本展开成的向量）。\(WX\) 是原始层的输出，\(W_qX\) 是量化层的输出——目标就是<b>两种输出尽量一样</b>，权重本身偏多少不直接管。</p>
+
+<p>直接解这个「每个变量只能取 16 个格子值」的优化问题是天文数字级的组合爆炸。GPTQ 的策略是<b>贪心逐列</b>，来自剪枝领域的「最优脑损伤（OBS/OBD）」一脉，其量化版叫 OBQ。整层处理循环如下：</p>
+
+<ol>
+  <li><b>算统计量（Hessian）</b>：\(H = 2XX^\top\)。名字唬人，直觉很简单：它记录「校准输入在哪些方向上分量重」——在这些方向上弄出误差，输出代价就大；冷门方向上出错则无所谓。\(H\) 一层只要算一次。</li>
+  <li><b>挑一列，就近量化</b>：默认按 \(H\) 对角线<b>从大到小</b>的顺序处理（即先处理「代价最重」的列，术语 act-order / desc_act）。</li>
+  <li><b>把这一列的误差分摊出去</b>：这一列量化后产生的偏差，不憋在自己身上，而是按一个由 \(H\) 决定的最优比例，加到所有<b>尚未量化</b>的列上——后面的列入座时会带着这份「修正量」就座，从而在整体上把输出误差吃回去。</li>
+  <li><b>重复</b>，直到所有列处理完。</li>
+</ol>
+
+<div class="fig">
+<svg viewBox="0 0 940 240" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">GPTQ 的一步：量化第 1 列，误差分摊给后面的列</text>
+
+  <text x="130" y="100" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">w₁</text>
+  <text x="280" y="100" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">w₂</text>
+  <text x="430" y="100" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">w₃</text>
+  <text x="580" y="100" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">w₄</text>
+  <text x="730" y="100" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">w₅</text>
+
+  <rect x="70" y="110" width="120" height="56" rx="8" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.5"/>
+  <text x="130" y="134" font-size="10" text-anchor="middle" fill="#1a1f2e">就座 0.875</text>
+  <text x="130" y="152" font-size="10" text-anchor="middle" fill="#1a1f2e">误差 −0.025</text>
+
+  <rect x="220" y="110" width="120" height="56" rx="8" fill="#eef3fc" stroke="#c9d2e0"/>
+  <text x="280" y="142" font-size="10" text-anchor="middle" fill="#5a6272">待量化</text>
+  <rect x="370" y="110" width="120" height="56" rx="8" fill="#eef3fc" stroke="#c9d2e0"/>
+  <text x="430" y="142" font-size="10" text-anchor="middle" fill="#5a6272">待量化</text>
+  <rect x="520" y="110" width="120" height="56" rx="8" fill="#eef3fc" stroke="#c9d2e0"/>
+  <text x="580" y="142" font-size="10" text-anchor="middle" fill="#5a6272">待量化</text>
+  <rect x="670" y="110" width="120" height="56" rx="8" fill="#eef3fc" stroke="#c9d2e0"/>
+  <text x="730" y="142" font-size="10" text-anchor="middle" fill="#5a6272">待量化</text>
+
+  <path d="M150 108 Q215 58 280 108" stroke="#8a94a8" fill="none" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <path d="M150 108 Q290 44 430 108" stroke="#8a94a8" fill="none" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <path d="M150 108 Q365 32 580 108" stroke="#8a94a8" fill="none" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <path d="M150 108 Q440 22 730 108" stroke="#8a94a8" fill="none" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="400" y="52" font-size="10.5" fill="#5a6272">+0.025 按 Hessian 提示的最优比例分摊 →</text>
+
+  <text x="40" y="200" font-size="11" fill="#1a1f2e">之后处理 w₂（带着分摊来的修正量就近入座）、w₃……每列的「座」都不再是孤立选的。</text>
+  <text x="40" y="222" font-size="11" fill="#5a6272">逐列做完，这一层的输出误差被系统性压低——这是 RTN 完全没有的「团队配合」。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-2</b>｜GPTQ 的核心一步（列数仅为示意，真实的 \(W\) 每列有几千行）。橙色列刚量化完，误差顺着校准输入的相关性流向右侧未量化列。</p>
+
+<h3>3.1 两个工程细节（读模型卡时会遇到）</h3>
+
+<ul>
+  <li><b><code>group_size</code>（常为 128）</b>：每 128 行共用一组 (s, z)。组越小精度越高、scale 存储越多——128 是公认甜点。</li>
+  <li><b><code>desc_act</code>（act-order）</b>：上面第 2 步的「按重要性排序列」。对均匀 4-bit 有可观增益，代价是 kernel 实现更绕。模型卡上看到 <code>desc_act: true</code> 就是开了这个开关。</li>
+</ul>
+
+<pre><code># GPTQ 单层处理（极简示意，非真实实现）
+X = collect_inputs(calib_data, layer)        # 校准输入
+H = 2 * X @ X.T + lam * I                    # Hessian + 阻尼
+order = argsort(diag(H), descending=True)    # act-order: 重的列先来
+for i in order:
+    s, z = group_params(W[:, i])             # per-group 128
+    Wq[:, i] = round(W[:, i] / s) + z        # 本列就近入座
+    err = (W[:, i] - dequant(Wq[:, i])) / H[i, i]
+    W[:, order_after(i)] -= err * H[i, order_after(i)]
+                                             # 误差分摊给未量化列</code></pre>
+
+<div class="box">
+<span class="bt">快不快</span>GPTQ 不需要反向传播、不需要显卡训练，本质是「一层内的矩阵运算循环」——原论文量化 175B 模型只用约 4 个 GPU·小时。校准集几百条就够。这是 PTQ 能成为工业标配的根本原因：几乎免费。
+</div>
+
+<h2>4. AWQ：先把重要的权重保护起来</h2>
+
+<p>GPTQ 的思路是「量化后补救」（误差分摊）。AWQ（Lin 等，2023）换了个思路：<b>量化前改造坐标</b>，让重要的权重天生不容易被量化伤到。</p>
+
+<h3>4.1 前提观察：重要性极不均匀</h3>
+
+<p>一个权重「重要」，说的是它出错时输出受的影响大——由第 2 节的公式 \(\Delta w \cdot x\) 可见：误差乘上的是<b>输入的大小</b>。AWQ 团队实测：少数通道（约 0.1%~1%）对应的激活幅值远大于其他通道，这些通道上的权重误差会被放大很多倍——它们是「显著权重」。直接想到的办法是显著权重保留 FP16（混合精度），但那会让 GPU kernel 几乎没法高效写。</p>
+
+<h3>4.2 关键招式：等效缩放（不伤输出的「挪动」）</h3>
+
+<p>AWQ 对每个通道乘一个系数 \(s\)，同时把输入除回同一个 \(s\)：</p>
+
+<div class="formula">
+
+\[ y = \sum_j w_j x_j \;=\; \sum_j (s_j w_j)\cdot\Big(\frac{x_j}{s_j}\Big) \]
+
+</div>
+
+<p>输出<b>数学上完全不变</b>（就是乘法结合律），但量化的「难度分布」变了：</p>
+
+<ul>
+  <li>显著通道的权重被<b>放大</b>：同样半格宽的量化偏差，相对放大的权重而言占比更小；</li>
+  <li>对应的激活被<b>缩小</b>：即使剩点误差，乘上的 \(x/s\) 也变小了；</li>
+  <li>不显著通道几乎不受影响。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 940 210" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">AWQ 的等效缩放：输出不变，难度搬家（s = 1.2）</text>
+
+  <rect x="80" y="60" width="300" height="104" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="230" y="88" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">缩放前</text>
+  <text x="230" y="112" font-size="10.5" text-anchor="middle" fill="#2a3040">w = 0.9（显著通道）  x = 2.0</text>
+  <text x="230" y="134" font-size="10.5" text-anchor="middle" fill="#2a3040">y = 0.9 × 2.0 = 1.8</text>
+  <text x="230" y="156" font-size="10" text-anchor="middle" fill="#5a6272">w 的量化误差会 × 2.0 放大输出</text>
+
+  <line x1="392" y1="112" x2="548" y2="112" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2b)"/>
+  <text x="470" y="100" font-size="10.5" text-anchor="middle" fill="#2456c4">×1.2 / ÷1.2</text>
+  <text x="470" y="132" font-size="10" text-anchor="middle" fill="#5a6272">输出不变</text>
+
+  <rect x="560" y="60" width="300" height="104" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="710" y="88" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">缩放后（再量化）</text>
+  <text x="710" y="112" font-size="10.5" text-anchor="middle" fill="#2a3040">w' = 1.08（更「满」）  x' = 1.67（更小）</text>
+  <text x="710" y="134" font-size="10.5" text-anchor="middle" fill="#2a3040">w' × x' = 1.8（不变）</text>
+  <text x="710" y="156" font-size="10" text-anchor="middle" fill="#5a6272">同样粗细的格子，相对误差更小</text>
+
+  <text x="40" y="196" font-size="11" fill="#1a1f2e">s 不用手调：在 α ∈ [0,1] 里网格搜索 s = s_x^α，选「量化后这层输出 MSE 最小」的即可——全程无反向传播。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-3</b>｜AWQ 等效变换一例。数字为示意；严格表述是：搜索每通道缩放系数，最小化 \(\|Q(W\cdot \mathrm{diag}(s))\,\mathrm{diag}(s)^{-1}X - WX\|^2\)。</p>
+
+<div class="infer">「放大权重 → 相对误差变小」是简化说法；严格机制是缩放后显著权重在量化格子中的相对位置更优、且其输入被等比缩小，两者共同降低该通道对输出的误差贡献。工程结论不变：AWQ 对激活分布不友好的模型（outlier 多）通常比 RTN/GPTQ 更稳，且几乎不增加量化成本。</div>
+
+<h2>5. GPTQ vs AWQ：怎么选</h2>
+
+<table>
+  <tr><th></th><th>GPTQ</th><th>AWQ</th></tr>
+  <tr><td><b>核心思想</b></td><td>逐列量化 + 误差分摊（事后补救）</td><td>等效缩放保护显著权重（事前预防）</td></tr>
+  <tr><td><b>优化目标</b></td><td>层输出 MSE（Hessian 加权贪心）</td><td>层输出 MSE（搜索缩放系数）</td></tr>
+  <tr><td><b>需要校准集</b></td><td>要（算 H）</td><td>要（搜 s）</td></tr>
+  <tr><td><b>需要反向传播</b></td><td>不要</td><td>不要</td></tr>
+  <tr><td><b>量化耗时</b></td><td>很快（175B ≈ 4 GPU·h）</td><td>很快（同量级）</td></tr>
+  <tr><td><b>4-bit 质量</b></td><td>近无损</td><td>近无损，outlier 多的模型更稳</td></tr>
+  <tr><td><b>常见参数</b></td><td><code>group_size=128</code>, <code>desc_act</code></td><td><code>w_bit=4</code>, <code>group_size=128</code>, <code>zero_point</code></td></tr>
+  <tr><td><b>工具生态</b></td><td>AutoGPTQ / GPTQModel</td><td>AutoAWQ（vLLM、llama.cpp 均支持）</td></tr>
+</table>
+
+<p>选型建议（实践者版本）：<b>优先用模型作者官方发布的版本</b>（发布 AWQ 就用 AWQ，发布 GPTQ 就用 GPTQ——作者的校准配置通常最靠谱）；自己压且关心鲁棒性时，两者都试、用困惑度和下游任务分数定夺；两者质量在 4-bit 下通常都在伯仲之间，工程生态的成熟度往往比论文数字更影响体验。</p>
+
+<h2>6. 亲手跑一遍</h2>
+
+<p>拿一个 7B 开源模型压成 4-bit（需要一块 ~20 GB 显存的卡，7B 模型量化时以 FP16 加载）：</p>
+
+<pre><code># 方案 A：AutoAWQ
+from awq import AutoAWQForCausalLM
+from transformers import AutoTokenizer
+
+model_path = "Qwen/Qwen3-8B-Base"
+model = AutoAWQForCausalLM.from_pretrained(model_path)
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+quant_config = {"w_bit": 4, "group_size": 128,
+                "zero_point": True, "version": "GEMM"}
+model.quantize(tokenizer, quant_config=quant_config)
+model.save_quantized("./qwen3-8b-awq")</code></pre>
+
+<pre><code># 方案 B：GPTQModel（AutoGPTQ 的活跃后继）
+from gptqmodel import GPTQModel, QuantizeConfig
+
+model_path = "Qwen/Qwen3-8B-Base"
+quant_config = QuantizeConfig(bits=4, group_size=128, desc_act=True)
+model = GPTQModel.load(model_path, quant_config)
+model.quantize(calib_dataset)          # 几百条文本即可
+model.save("./qwen3-8b-gptq")</code></pre>
+
+<pre><code># 用 vLLM 起服务（自动识别 GPTQ/AWQ 格式）
+# vllm serve ./qwen3-8b-awq
+# 或 transformers 直接加载量化模型推理</code></pre>
+
+<div class="box">
+<span class="bt">验收</span>量化完成后做三件事：① 比较量化前后模型文件大小（应约 1/4）；② 用同一批 prompt 对比生成质量（肉眼 + 困惑度）；③ 跑一个基准（如 MMLU 子集）看掉点是否在 1 个点以内。第 5 讲会讲怎么在 vLLM/llama.cpp 里把 4-bit 模型跑出真正的速度收益。
+</div>
+
+<h2>7. 自查清单</h2>
+
+<ol class="checklist">
+  <li>PTQ 的输入输出各是什么？校准集的作用是什么？（答：输入=训好的模型+几百条校准文本；输出=低比特权重+scales；校准集只用来观察每层输入分布、指导 scale 和优化，从不训练权重）</li>
+  <li>为什么量化目标是「层输出误差」而不是「权重本身误差」？（答：输出是所有列误差的加权和，列间可以互相抵消；权重误差小≠输出误差小）</li>
+  <li>GPTQ 的 Hessian \(H=2XX^\top\) 直觉上记录了什么？（答：校准输入在哪些方向分量重——这些方向上出错代价大，分摊补偿时按它走）</li>
+  <li>GPTQ 处理一层的三步循环？（答：挑一列就近量化 → 计算该列误差 → 按 Hessian 最优比例分摊给未量化列；重要列先处理 = act-order）</li>
+  <li>AWQ 的「显著权重」由什么定义？（答：对应激活幅值大的通道——误差乘 |x| 被放大；约占 0.1%~1%）</li>
+  <li>AWQ 的等效缩放为什么不改变输出？（答：\(y=\sum (s_jw_j)(x_j/s_j)=\sum w_jx_j\)，纯乘法结合律）</li>
+  <li>两算法的共同点？（答：都基于校准集、都不需要反向传播、都优化层输出 MSE、量化都快）</li>
+  <li>拿到一个新模型，格式怎么选？（答：优先作者官方发布的格式；都自己压则按困惑度/下游分数定夺，4-bit 下通常伯仲之间）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="quant-t3-activation.html">第 3 讲：激活量化与 FP8</a>——GPTQ/AWQ 只把权重压到 4 位，激活还保持 16 位。要进一步省算力（W8A8/FP8），就必须量化激活——而激活里藏着整个领域最难缠的对手：少数幅值比平均值大几十倍的离群通道。这一讲讲工业界的四大对策：混合精度拆分（LLM.int8()）、等效变换搬家（SmoothQuant）、旋转消解（QuaRot/SpinQuant）、以及干脆换浮点格子（FP8，DeepSeek-V3 的选择）。
+</div>
+
+<footer>本页为个人学习笔记 · 大模型量化零基础七讲系列 · 生成于 2026-09-20 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 叙述以主流实践与经典论文为准，细节以原始文献为最终依据</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大模型量化零基础七讲 · 第 1 讲：量化数学基础</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>大模型量化零基础七讲 · 第 1 讲：量化数学基础</h1>
+
+<div class="series-nav">
+  <a href="quant-t0-foundation.html">0 全景图</a>
+  <a class="here">1 量化数学</a>
+  <a href="quant-t2-ptq.html">2 GPTQ·AWQ</a>
+  <a href="quant-t3-activation.html">3 激活与FP8</a>
+  <a href="quant-t4-ultra-low-bit.html">4 极低比特</a>
+  <a href="quant-t5-kv-systems.html">5 KV与系统</a>
+  <a href="quant-t6-qat-roadmap.html">6 QAT·路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>大模型量化零基础七讲（本篇为第 1 讲）</p>
+  <p style="margin:4px 0"><b>前置：</b>第 0 讲的三个词——位宽、浮点数三段、有损压缩。本讲需要的数学只有四则运算和四舍五入，所有公式都会配手算例子。</p>
+  <p style="margin:4px 0"><b>本讲地位：</b>scale / zero-point / 对称非对称 / 粒度 / 误差 / 校准——这六个词是整个量化领域的「普通话」，后面五讲的所有算法都在用它们说话。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>把第 0 讲的「就近入座」变成能写能算的公式。① 量化和反量化的通用公式——只涉及一个缩放系数 \(s\)、一个偏移 \(z\) 和四舍五入；② 对称 / 非对称两种格子怎么选；③ per-tensor / per-channel / per-group 粒度谱系——4-bit 模型的标配是哪一档；④ 量化误差的两种来源（舍入、裁剪）及其权衡；⑤ scale 怎么定——四种校准准则。最后手算一个完整例子：把 6 个真实权重量到 INT4 再还原。</p>
+</div>
+
+<h2>1. 量化公式：一次仿射变换</h2>
+
+<p>先把场景说小：给你一堆真实值（比如某个权重矩阵里的数），要存成 \(b\) 位整数。\(b=4\) 时只有 0~15 共 16 个格子可用。怎么把「真值」和「格子编号」对应起来？</p>
+
+<p>一个生活原型：摄氏度和华氏度的换算 \(F = 1.8C + 32\)。两个刻度不同的温度轴，靠「乘一个系数、加一个偏移」互转——数学上叫<b>仿射变换（affine transform）</b>。量化做的正是这件事：把「真值轴」映射到「整数轴」。</p>
+
+<div class="formula">
+
+\[ q = \mathrm{clip}\big(\mathrm{round}(x / s) + z,\; 0,\; 2^b - 1\big) \]
+
+\[ \hat{x} = s \cdot (q - z) \]
+
+</div>
+
+<p>两个公式、三个新符号，逐个拆：</p>
+
+<ul>
+  <li>\(s\)（<b>scale，缩放系数</b>）：一个格子代表多大的真值。\(s\) 越小，格子越细密，精度越高。它是个小数，用量化后的数据一起保存。</li>
+  <li>\(z\)（<b>zero-point，零点</b>）：真值 0 对应第几号格子。它的作用是让「0 这个特殊的数」能被精确表示——神经网络里 0 无处不在（padding、ReLU 输出），0 量化错了会连环出错。</li>
+  <li>\(\mathrm{round}\)：四舍五入到最近整数——「就近入座」。\(\mathrm{clip}\)：超出 0~\(2^b-1\) 的强制压回边界（防止溢出）。</li>
+  <li>\(\hat{x}\)：反量化恢复出来的值。注意 \( \hat{x} \neq x \)——差的那一点就是量化误差。</li>
+</ul>
+
+<div class="box">
+<span class="bt">手算</span>设 \(s=0.1\)、\(z=8\)（16 个格子覆盖真值区间 \([-0.8,\, 0.7]\)）。权重 \(x = 0.7843\)：<br>
+量化：\(\mathrm{round}(0.7843/0.1) = \mathrm{round}(7.843) = 8\)，\(q = 8 + 8 = 16\)——超出 15，clip 到 15。<br>
+反量化：\(\hat{x} = 0.1 \times (15 - 8) = 0.7\)。误差 0.0843，而且主要来自<b>裁剪</b>（超出区间被砍），不是舍入。
+</div>
+
+<p>存盘时，整个矩阵只存两样东西：<b>整数矩阵 \(q\)</b>（每数 4 位）和<b>一小撮 \((s, z)\)</b>。给谁配一对 \((s,z)\)，就是下一节的「粒度」；\((s,z)\) 具体取多少，就是第 4、5 节的「误差与校准」。</p>
+
+<h2>2. 对称 vs 非对称：格子怎么摆</h2>
+
+<h3>2.1 对称量化：0 居中</h3>
+
+<p>让真值 0 精确落在格子区间正中央（\(z\) 固定在 \(2^{b-1}\)），区间取 \([-s \cdot 2^{b-1},\, +s \cdot 2^{b-1}]\)，公式简化为：</p>
+
+<div class="formula">
+
+\[ q = \mathrm{clip}\big(\mathrm{round}(x/s),\, -2^{b-1},\, 2^{b-1}-1\big), \qquad \hat{x} = s \cdot q \]
+
+</div>
+
+<p>好处：公式少一个减法，kernel 跑得快；0 精确无误。代价：如果数据其实全在正半轴（比如某层激活都 > 0），负半轴的格子全浪费。</p>
+
+<h3>2.2 非对称量化：区间贴着数据走</h3>
+
+<p>让 16 个格子贴着数据的实际范围 \([\min, \max]\) 铺开：</p>
+
+<div class="formula">
+
+\[ s = \frac{\max - \min}{2^b - 1}, \qquad z = \mathrm{round}\!\left(-\frac{\min}{s}\right) \]
+
+</div>
+
+<p>好处：一个格子都不浪费，同样的位宽下误差更小。代价：多存一个 \(z\)、计算多一步。一个直观对比：数据全在 \([0,\, 2]\) 时，对称量化只能把区间定在 \([-2, 2]\)——一半格子白给；非对称量化正好铺满 \([0, 2]\)。</p>
+
+<table>
+  <tr><th></th><th>对称（symmetric）</th><th>非对称（asymmetric）</th></tr>
+  <tr><td><b>格子布局</b></td><td>关于 0 对称，负正各半</td><td>贴着 \([\min, \max]\)，0 不一定居中</td></tr>
+  <tr><td><b>公式</b></td><td>\(\hat{x} = s \cdot q\)，无需 \(z\)</td><td>\(\hat{x} = s(q-z)\)，多一步减法</td></tr>
+  <tr><td><b>适合</b></td><td>权重（分布近似关于 0 对称）</td><td>激活（分布常偏一侧、有正无负）</td></tr>
+  <tr><td><b>常见于</b></td><td>GPTQ、AWQ 的权重（INT4/INT8）</td><td>激活量化、端侧 INT8 部署</td></tr>
+</table>
+
+<div class="box">
+<span class="bt">记忆</span>权重像「身高误差表」——正负都有、以 0 为中心，对称格子刚好；激活像「年龄分布」——全在正半轴，硬用对称格子等于扔掉一半格子。实际系统经常两者混用：权重对称、激活非对称。
+</div>
+
+<div class="fig">
+<svg viewBox="0 0 940 260" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8a94a8"/>
+    </marker>
+  </defs>
+  <text x="40" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">4-bit 非对称量化：真实值 → 整数格子（s=0.125, z=8，区间 [−1, 1]）</text>
+
+  <text x="120" y="62" font-size="11" fill="#5a6272">真实权重 x（大多数挤在 0 附近）</text>
+
+  <!-- top axis -->
+  <line x1="120" y1="95" x2="820" y2="95" stroke="#1a1f2e" stroke-width="1.5"/>
+  <line x1="120" y1="90" x2="120" y2="100" stroke="#1a1f2e"/>
+  <line x1="295" y1="90" x2="295" y2="100" stroke="#1a1f2e"/>
+  <line x1="470" y1="90" x2="470" y2="100" stroke="#1a1f2e"/>
+  <line x1="645" y1="90" x2="645" y2="100" stroke="#1a1f2e"/>
+  <line x1="820" y1="90" x2="820" y2="100" stroke="#1a1f2e"/>
+  <text x="120" y="84" font-size="10.5" text-anchor="middle" fill="#5a6272">−1</text>
+  <text x="295" y="84" font-size="10.5" text-anchor="middle" fill="#5a6272">−0.5</text>
+  <text x="470" y="84" font-size="10.5" text-anchor="middle" fill="#5a6272">0</text>
+  <text x="645" y="84" font-size="10.5" text-anchor="middle" fill="#5a6272">0.5</text>
+  <text x="820" y="84" font-size="10.5" text-anchor="middle" fill="#5a6272">1</text>
+
+  <!-- sample points -->
+  <circle cx="155" cy="95" r="4" fill="#2456c4"/>
+  <text x="164" y="91" font-size="10" fill="#2456c4">−0.9</text>
+  <circle cx="418" cy="95" r="4" fill="#2456c4"/>
+  <circle cx="453" cy="95" r="4" fill="#2456c4"/>
+  <circle cx="505" cy="95" r="4" fill="#2456c4"/>
+  <text x="514" y="91" font-size="10" fill="#2456c4">0.1</text>
+  <circle cx="540" cy="95" r="4" fill="#2456c4"/>
+  <circle cx="803" cy="95" r="4" fill="#e8862a"/>
+  <text x="795" y="91" font-size="10" text-anchor="end" fill="#e8862a">0.95</text>
+
+  <!-- mapping arrows -->
+  <line x1="155" y1="100" x2="165" y2="200" stroke="#8a94a8" stroke-width="1" marker-end="url(#m1a)"/>
+  <line x1="418" y1="100" x2="445" y2="200" stroke="#8a94a8" stroke-width="1" marker-end="url(#m1a)"/>
+  <line x1="453" y1="100" x2="492" y2="200" stroke="#8a94a8" stroke-width="1" marker-end="url(#m1a)"/>
+  <line x1="505" y1="100" x2="540" y2="200" stroke="#8a94a8" stroke-width="1" marker-end="url(#m1a)"/>
+  <line x1="540" y1="100" x2="586" y2="200" stroke="#8a94a8" stroke-width="1" marker-end="url(#m1a)"/>
+  <line x1="803" y1="100" x2="819" y2="200" stroke="#e8862a" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#m1a)"/>
+
+  <!-- bottom axis -->
+  <text x="120" y="176" font-size="11" fill="#5a6272">整数格子 q（0 ~ 15，共 16 格）</text>
+  <line x1="120" y1="205" x2="820" y2="205" stroke="#1a1f2e" stroke-width="1.5"/>
+  <line x1="120" y1="200" x2="120" y2="210" stroke="#1a1f2e"/>
+  <line x1="167" y1="200" x2="167" y2="210" stroke="#1a1f2e"/>
+  <line x1="213" y1="200" x2="213" y2="210" stroke="#1a1f2e"/>
+  <line x1="260" y1="200" x2="260" y2="210" stroke="#1a1f2e"/>
+  <line x1="307" y1="200" x2="307" y2="210" stroke="#1a1f2e"/>
+  <line x1="353" y1="200" x2="353" y2="210" stroke="#1a1f2e"/>
+  <line x1="400" y1="200" x2="400" y2="210" stroke="#1a1f2e"/>
+  <line x1="447" y1="200" x2="447" y2="210" stroke="#1a1f2e"/>
+  <line x1="493" y1="200" x2="493" y2="210" stroke="#1a1f2e"/>
+  <line x1="540" y1="200" x2="540" y2="210" stroke="#1a1f2e"/>
+  <line x1="587" y1="200" x2="587" y2="210" stroke="#1a1f2e"/>
+  <line x1="633" y1="200" x2="633" y2="210" stroke="#1a1f2e"/>
+  <line x1="680" y1="200" x2="680" y2="210" stroke="#1a1f2e"/>
+  <line x1="727" y1="200" x2="727" y2="210" stroke="#1a1f2e"/>
+  <line x1="773" y1="200" x2="773" y2="210" stroke="#1a1f2e"/>
+  <line x1="820" y1="200" x2="820" y2="210" stroke="#1a1f2e"/>
+  <text x="120" y="228" font-size="10.5" text-anchor="middle" fill="#5a6272">q=0</text>
+  <text x="493" y="228" font-size="10.5" text-anchor="middle" fill="#5a6272">q=8（z，真值 0）</text>
+  <text x="820" y="228" font-size="10.5" text-anchor="middle" fill="#5a6272">q=15</text>
+
+  <text x="40" y="252" font-size="11" fill="#1a1f2e">橙色点 0.95 超出区间上限，被 clip 压到最后一格 —— 由此产生「裁剪误差」；其余点的误差只来自格子间距。</text>
+</svg>
+</div>
+<p class="cap"><b>图 1-1</b>｜非对称量化的映射全景。注意两个细节：① 真值 0 精确落在 \(z=8\) 号格——这就是 zero-point 存在的意义；② 真实分布又窄又挤（第 0 讲的底牌一），0.95 这样的离群点才会撞上边界。</p>
+
+<h2>3. 粒度：给谁配一对 (s, z)</h2>
+
+<p>公式里的 \((s, z)\) 不是全模型共用一对——「给谁配一对」决定了量化的<b>粒度（granularity）</b>。粒度是所有量化配置里最重要的一个旋钮：</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 240" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <!-- matrix A: per-tensor -->
+  <text x="216" y="60" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">per-tensor</text>
+  <rect x="120" y="80" width="192" height="48" fill="#eef3fc" stroke="#c9d2e0"/>
+  <path d="M144 80 V128 M168 80 V128 M192 80 V128 M216 80 V128 M240 80 V128 M264 80 V128 M288 80 V128 M120 104 H312" stroke="#c9d2e0" fill="none"/>
+  <rect x="118" y="78" width="196" height="52" fill="none" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="216" y="150" font-size="10.5" text-anchor="middle" fill="#5a6272">整个矩阵共用 1 对 (s,z)</text>
+
+  <!-- matrix B: per-channel -->
+  <text x="516" y="60" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">per-channel</text>
+  <rect x="420" y="80" width="192" height="24" fill="#eef3fc" stroke="#c9d2e0"/>
+  <path d="M444 80 V104 M468 80 V104 M492 80 V104 M516 80 V104 M540 80 V104 M564 80 V104 M588 80 V104" stroke="#c9d2e0" fill="none"/>
+  <rect x="418" y="78" width="196" height="28" fill="none" stroke="#2456c4" stroke-width="1.6"/>
+  <rect x="420" y="108" width="192" height="24" fill="#eef3fc" stroke="#c9d2e0"/>
+  <path d="M444 108 V132 M468 108 V132 M492 108 V132 M516 108 V132 M540 108 V132 M564 108 V132 M588 108 V132" stroke="#c9d2e0" fill="none"/>
+  <rect x="418" y="106" width="196" height="28" fill="none" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="516" y="150" font-size="10.5" text-anchor="middle" fill="#5a6272">每一行（输出通道）1 对</text>
+
+  <!-- matrix C: per-group -->
+  <text x="816" y="60" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">per-group (g=4)</text>
+  <rect x="720" y="80" width="192" height="24" fill="#eef3fc" stroke="#c9d2e0"/>
+  <path d="M744 80 V104 M768 80 V104 M792 80 V104 M816 80 V104 M840 80 V104 M864 80 V104 M888 80 V104" stroke="#c9d2e0" fill="none"/>
+  <rect x="718" y="78" width="100" height="28" fill="none" stroke="#2456c4" stroke-width="1.6"/>
+  <rect x="822" y="78" width="100" height="28" fill="none" stroke="#2456c4" stroke-width="1.6"/>
+  <rect x="720" y="108" width="192" height="24" fill="#eef3fc" stroke="#c9d2e0"/>
+  <path d="M744 108 V132 M768 108 V132 M792 108 V132 M816 108 V132 M840 108 V132 M864 108 V132 M888 108 V132" stroke="#c9d2e0" fill="none"/>
+  <rect x="718" y="106" width="100" height="28" fill="none" stroke="#2456c4" stroke-width="1.6"/>
+  <rect x="822" y="106" width="100" height="28" fill="none" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="816" y="150" font-size="10.5" text-anchor="middle" fill="#5a6272">每连续 4 个数 1 对</text>
+
+  <text x="40" y="196" font-size="11" fill="#1a1f2e">粒度越细 → 每对 (s,z) 只负责一小撮数 → 格子区间贴得更近 → 误差越小；代价：scale 变多、kernel 更复杂。</text>
+  <text x="40" y="220" font-size="11" fill="#5a6272">主流配置：GPTQ / AWQ 的 4-bit 权重用 per-group，group_size = 128（每 128 个数一对）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 1-2</b>｜粒度谱系（示意矩阵远小于真实尺寸）。真实模型还有更细的变体：激活按<b>每个 token</b> 现算一对 scale（per-token dynamic），FP8 训练按 1×128 / 128×128 的小块配 scale（第 3 讲）。</div>
+
+<table>
+  <tr><th>粒度</th><th>(s,z) 数量</th><th>典型场景</th><th>额外开销</th></tr>
+  <tr><td><b>per-tensor</b></td><td>整个张量 1 对</td><td>激活的粗粒度量化、端侧静态 INT8</td><td>几乎为零</td></tr>
+  <tr><td><b>per-channel</b></td><td>每行（输出通道）1 对</td><td>权重量化的基本盘</td><td>极小（通道数个 scale）</td></tr>
+  <tr><td><b>per-group</b></td><td>每 group_size 个数 1 对（常 64 或 128）</td><td>4-bit 权重量化标配（GPTQ/AWQ）</td><td>scale 存储涨到可感知，但相对 4-bit 权重仍小</td></tr>
+  <tr><td><b>per-token / per-block</b></td><td>每个 token / 小块现算 1 对</td><td>激活量化（W8A8、FP8 训练）</td><td>需在线统计 min/max，kernel 要融合这个操作</td></tr>
+</table>
+
+<div class="box">
+<span class="bt">为什么激活偏爱细粒度</span>激活的分布随输入变化剧烈：这个 token 平平无奇，下个 token 冒出离群大值。固定一整套格子容易「爆表」，所以激活宁可每次现算 scale（动态量化），或把切分粒度做细（per-token / per-block）——粒度细一点，离群值的影响就被隔离在一小块里。第 3 讲会把这条线走完。
+</div>
+
+<h2>4. 量化误差：舍入与裁剪</h2>
+
+<p>量化误差只有两个来源，所有的「误差分析」都在围绕它们做文章：</p>
+
+<ol>
+  <li><b>舍入误差（rounding error）</b>：就近入座的差价。上界是半个格子间距 \(s/2\)——格子越细（\(s\) 小、粒度细）误差越小。</li>
+  <li><b>裁剪误差（clipping error）</b>：区间外的值被强行压回边界。单个误差可能很大（差出一整个区间），但只要分布尾部数据少，发生率就低。</li>
+</ol>
+
+<p>两者构成一对<b>跷跷板</b>：区间取大一点 → 几乎没人被裁剪，但格子铺得稀疏，舍入误差变大；区间取小一点 → 格子细密，但尾部数据被砍。怎么取区间，没有免费午餐，只能按数据的实际形状权衡。</p>
+
+<h3>4.1 手算一个完整例子</h3>
+
+<p>取 6 个权重 \(\{-0.9,\ -0.15,\ -0.05,\ 0.1,\ 0.2,\ 0.95\}\)，4-bit 非对称量化，区间 \([-1, 1]\)：\(s = (1-(-1))/15 = 0.125\)，\(z = 8\)。逐个走公式 \(q = \mathrm{clip}(\mathrm{round}(x/0.125)+8,\,0,\,15)\)、\(\hat{x} = 0.125(q-8)\)：</p>
+
+<table>
+  <tr><th>真实值 x</th><th>x / s</th><th>round</th><th>q（含 clip）</th><th>反量化 x̂</th><th>误差 x − x̂</th><th>误差类型</th></tr>
+  <tr><td>−0.9</td><td>−7.2</td><td>−7</td><td>1</td><td>−0.875</td><td>−0.025</td><td>舍入</td></tr>
+  <tr><td>−0.15</td><td>−1.2</td><td>−1</td><td>7</td><td>−0.125</td><td>−0.025</td><td>舍入</td></tr>
+  <tr><td>−0.05</td><td>−0.4</td><td>0</td><td>8</td><td>0</td><td>−0.05</td><td>舍入</td></tr>
+  <tr><td>0.1</td><td>0.8</td><td>1</td><td>9</td><td>0.125</td><td>−0.025</td><td>舍入</td></tr>
+  <tr><td>0.2</td><td>1.6</td><td>2</td><td>10</td><td>0.25</td><td>−0.05</td><td>舍入</td></tr>
+  <tr><td><b>0.95</b></td><td>7.6</td><td>8</td><td><b>16 → clip 15</b></td><td>0.875</td><td><b>+0.075</b></td><td><b>裁剪</b></td></tr>
+</table>
+
+<div class="cap"><b>表 1-1</b>｜逐数手算。6 个数里 5 个的误差都不超过半个格子（0.0625），只有撞界的 0.95 吃到了裁剪误差——真实矩阵里「0.95 型」的数是少数，所以整体误差可控。反过来，如果区间为了容纳 0.95 而放宽到 [−1.2, 1.2]，格子间距变成 0.16，所有人舍入误差都变大——这就是跷跷板。</div>
+
+<h2>5. 校准：区间怎么定</h2>
+
+<p>「按数据实际形状定区间」听起来要未卜先知，实际操作叫<b>校准（calibration）</b>：拿几百条有代表性的样本喂给模型，记录每层的数据分布，然后选一种准则把区间定下来。权重是静态的（训练完就固定），直接统计即可；激活随输入变化，所以校准的意义主要在激活，以及端侧「静态量化」场景（离线把激活的 scale 也定死）。</p>
+
+<table>
+  <tr><th>准则</th><th>做法</th><th>优点</th><th>缺点 / 适用</th></tr>
+  <tr><td><b>Min-Max</b></td><td>区间 = 恰好覆盖 \([\min, \max]\)</td><td>零裁剪误差，简单到不可能出错</td><td>一个离群值就能把区间撑爆，剩下所有数陪它用粗格子——权重常用，激活慎用</td></tr>
+  <tr><td><b>Percentile</b></td><td>砍掉分布两端各 0.1%~1% 的尾部，区间盖住其余 99%+</td><td>在 min-max 基础上免疫离群值</td><td>被砍的尾部吃裁剪误差；阈值要调</td></tr>
+  <tr><td><b>MSE 最小化</b></td><td>网格搜索多个候选区间，选「量化再还原后与原值差的平方和」最小的</td><td>直接优化最终关心的量，鲁棒</td><td>多算几遍量化-反量化，校准慢一点；许多 SOTA 管线的默认</td></tr>
+  <tr><td><b>熵 / KL 散度</b></td><td>把分布直方图压成 \(2^b\) 桶，选「压完与原分布差异（KL）最小」的切法</td><td>保留分布形状信息</td><td>TensorRT 经典方案；实现稍复杂</td></tr>
+</table>
+
+<div class="box">
+<span class="bt">直觉</span>校准准则的选择，本质是回答「更怕哪种错」：几乎不想裁坏任何数 → Min-Max；愿意牺牲尾部换取整体更细的格子 → Percentile / MSE；在乎输出分布整体不走样 → KL。GPTQ、AWQ 这类算法则在「定区间」之外更进一步——直接优化「量化后这一层的输出误差」，第 2 讲展开。
+</div>
+
+<h2>6. 一瞥非均匀量化：为什么还有 FP8</h2>
+
+<p>本讲的格子是<b>均匀</b>的——每格一样宽。但第 0 讲的浮点数天然是<b>非均匀</b>的：指数结构让 0 附近格子极密、远离 0 处格子极宽。这恰好匹配神经网络数据的形状：<b>绝大多数值挤在 0 附近，少数离群值很大</b>——均匀格子要在「照顾 0 附近」和「盖住离群值」之间挣扎，浮点格子两头都占了便宜。</p>
+
+<p>这就是 FP8（E4M3 / E5M2）在激活量化里越来越流行的原因之一：不用特判离群值，格子自动「近 0 密、远 0 疏」。代价是浮点格子的乘法硬件比整数格子贵——所以 INT8 在成熟部署里依然是主力。两种格子各有地盘：权重（分布规整）用 INT，激活（分布长尾）用 FP 或细粒度 INT。第 3 讲的 W8A8 和 FP8 训练会把这个权衡讲透。</p>
+
+<div class="infer">严格说，浮点量化的「格子宽度」随数量级指数变化（相邻可表示数之比近似 \(2^{1/\text{尾数位数}}\)），并非严格「每格等比」，但「近 0 密、远 0 疏」的定性结论成立。</div>
+
+<h2>7. 自查清单</h2>
+
+<p>下面 8 个问题都能答上来（最好动笔算），第 1 讲就过关了：</p>
+
+<ol class="checklist">
+  <li>写出反量化公式，并说明 \(s\) 和 \(z\) 各管什么。（答：\(\hat{x}=s(q-z)\)；\(s\) 是格子间距，\(z\) 是真值 0 所在的格子号）</li>
+  <li>为什么一定要让 0 被精确表示？（答：网络里 0 无处不在——padding、ReLU 输出、对称结构；0 有偏差会系统性传播）</li>
+  <li>权重量化常用对称还是非对称？激活呢？为什么？（答：权重对称——分布以 0 为中心且省一步减法；激活常非对称/细粒度——分布偏一侧且随输入变化）</li>
+  <li>GPTQ/AWQ 4-bit 权重的标准粒度配置？（答：per-group，group_size = 128）</li>
+  <li>量化误差的两种来源，上界各是多少量级？（答：舍入 ≤ s/2；裁剪可达一整个区间，但发生率低）</li>
+  <li>区间取大取小的代价各是什么？（答：大→格子稀、舍入误差大；小→尾部被裁、裁剪误差大）</li>
+  <li>四种校准准则分别适合什么顾虑？（答：零裁剪→Min-Max；免疫离群→Percentile；直接优化还原误差→MSE；保分布形状→KL/熵）</li>
+  <li>激活量化里 FP8 相对均匀 INT 的先天优势？（答：非均匀格子近 0 密远 0 疏，天然匹配长尾分布，离群值不吃掉全场分辨率）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="quant-t2-ptq.html">第 2 讲：训练后量化——GPTQ 与 AWQ</a>——有了公式和粒度，还差最后一块拼图：怎么让「量化后的矩阵」算出来的结果尽量接近「量化前」？GPTQ 的答案是「逐列处理、后面的列补偿前面的误差」；AWQ 的答案是「先把重要的权重保护起来再量化」。这两个如今应用最广的算法，思想都能用本讲的词汇说清楚。
+</div>
+
+<footer>本页为个人学习笔记 · 大模型量化零基础七讲系列 · 生成于 2026-09-20 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 叙述以主流实践与经典论文为准，细节以原始文献为最终依据</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

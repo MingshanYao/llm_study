@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大模型量化零基础七讲 · 第 0 讲：全景图</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>大模型量化零基础七讲 · 第 0 讲：全景图</h1>
+
+<div class="series-nav">
+  <a class="here">0 全景图</a>
+  <a href="quant-t1-basics.html">1 量化数学</a>
+  <a href="quant-t2-ptq.html">2 GPTQ·AWQ</a>
+  <a href="quant-t3-activation.html">3 激活与FP8</a>
+  <a href="quant-t4-ultra-low-bit.html">4 极低比特</a>
+  <a href="quant-t5-kv-systems.html">5 KV与系统</a>
+  <a href="quant-t6-qat-roadmap.html">6 QAT·路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>大模型量化零基础七讲（本篇为第 0 讲，<b>零数学</b>，只搭全景、定地图）</p>
+  <p style="margin:4px 0"><b>读者假设：</b>不需要任何 GPU 或底层知识；知道「模型有大有小、下载模型要占硬盘空间」就够了。所有行话第一次出现都会解释。</p>
+  <p style="margin:4px 0"><b>系列目标：</b>读完七讲，你能看懂量化论文和工具 README 里的行话、亲手把一个开源模型压到 4-bit 跑起来，并知道想成为量化专家下一步该深入哪里。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>在进入任何数学之前，先回答四个问题：① 一个大模型为什么那么占显存——参数与「显存账本」；② 量化到底对数字做了什么——把精确的小数换成「粗格子上的近似值」，一次有损压缩；③ 为什么砍掉 75% 甚至更多的信息，模型还能照常工作——神经网络的两张底牌；④ 这个领域的人每天在干什么、七讲怎么带你入门。这一讲几乎没有公式，但每个概念都会在后面某一讲展开——把它当作系列的总目录。</p>
+</div>
+
+<h2>1. 模型是一大袋小数：显存账本</h2>
+
+<p>一个大模型「学会」的一切——语法、事实、推理套路——都以数字的形式存在，这些数字叫<b>参数（parameter）</b>，也叫权重（weight）。所谓 7B 模型，就是里面装着约 <b>70 亿个</b>小数。每个小数默认用 2 个字节（FP16 格式，下一节细讲）存储，于是有一个简单到不好意思的算术：</p>
+
+<p style="text-align:center">70 亿 × 2 字节 = <b>140 亿字节 ≈ 14 GB</b></p>
+
+<p>这就是「7B 模型 FP16 版要 14 GB」的全部来源——没有魔法，就是乘法。把模型装进显存（GPU 的高速内存）才能跑得快，所以参数量和存储精度直接决定了你需要什么硬件：</p>
+
+<table>
+  <tr><th>模型规模</th><th>FP16 权重</th><th>INT8 权重</th><th>INT4 权重</th><th>FP16 下需要的卡</th><th>INT4 下需要的卡</th></tr>
+  <tr><td>7B</td><td>14 GB</td><td>7 GB</td><td>3.5 GB</td><td>一张 24 GB 消费卡</td><td>一张 8 GB 卡</td></tr>
+  <tr><td>32B</td><td>64 GB</td><td>32 GB</td><td>16 GB</td><td>一张 80 GB（A100）</td><td>一张 24 GB 消费卡</td></tr>
+  <tr><td>70B</td><td>140 GB</td><td>70 GB</td><td>35 GB</td><td>2 × 80 GB</td><td>2 × 24 GB</td></tr>
+  <tr><td>671B（DeepSeek-V3 级）</td><td>约 1.3 TB</td><td>约 0.67 TB</td><td>约 0.34 TB</td><td>16 × 80 GB 起步</td><td>约 8 张 48 GB 卡</td></tr>
+</table>
+
+<div class="cap"><b>表 0-1</b>｜显存账本。同一个人马，换一种存数字的方式，硬件门槛差 4 倍——这就是量化的第一推动力。</div>
+
+<div class="box">
+<span class="bt">预告</span>推理时显存里不止有权重，还有 <b>KV cache</b>（模型边读边记的「笔记」，随对话长度增长）和一层层的中间计算结果（激活值）。长对话下 KV cache 可以反超权重成为显存大头——它是第 5 讲的主角，那时你会看到 KV 也能量化。
+</div>
+
+<h2>2. 这些小数是怎么存的：浮点数速成</h2>
+
+<h3>2.1 二进制的科学计数法</h3>
+
+<p>计算机存小数用的是<b>浮点数（floating point）</b>，可以理解为「二进制版的科学计数法」。回忆十进制：123400 可以写成 \(1.234 \times 10^5\)——一个有效数字部分（1.234）乘一个数量级（10⁵）。浮点数同理，只是底数换成 2：</p>
+
+<p style="text-align:center">数值 ≈ （−1）<sup>符号</sup> × 尾数 × 2<sup>指数</sup></p>
+
+<p>存储时拆成三段：<b>符号</b>（正负号，1 位）、<b>指数</b>（管「能表示多大的数」，即范围）、<b>尾数</b>（管「有效数字有多少位」，即精度）。给定总位数，指数和尾数就是一对跷跷板：<b>指数多分几位 → 范围大但精度糙；尾数多分几位 → 精度高但范围窄</b>。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 380" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">常见数值格式：总位数怎么分（一格 = 1 bit）</text>
+  <text x="40" y="52" font-size="10.5" fill="#5a6272">橙 = 符号位，蓝 = 指数位（管范围），绿 = 尾数位（管精度）</text>
+
+  <!-- FP32 -->
+  <text x="180" y="95" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">FP32</text>
+  <rect x="190" y="76" width="22" height="28" fill="#fbe3cc" stroke="#c9d2e0"/>
+  <rect x="212" y="76" width="176" height="28" fill="#eef3fc" stroke="#c9d2e0"/>
+  <rect x="388" y="76" width="506" height="28" fill="#d9f0e2" stroke="#c9d2e0"/>
+  <text x="190" y="122" font-size="10" fill="#5a6272">符号 1 · 指数 8 · 尾数 23 —— 约 7 位十进制有效数字，范围 ±3.4×10³⁸</text>
+
+  <!-- FP16 -->
+  <text x="180" y="151" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">FP16</text>
+  <rect x="190" y="132" width="22" height="28" fill="#fbe3cc" stroke="#c9d2e0"/>
+  <rect x="212" y="132" width="110" height="28" fill="#eef3fc" stroke="#c9d2e0"/>
+  <rect x="322" y="132" width="220" height="28" fill="#d9f0e2" stroke="#c9d2e0"/>
+  <text x="190" y="178" font-size="10" fill="#5a6272">符号 1 · 指数 5 · 尾数 10 —— 约 3 位有效数字，最大只到 65504</text>
+
+  <!-- BF16 -->
+  <text x="180" y="207" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">BF16</text>
+  <rect x="190" y="188" width="22" height="28" fill="#fbe3cc" stroke="#c9d2e0"/>
+  <rect x="212" y="188" width="176" height="28" fill="#eef3fc" stroke="#c9d2e0"/>
+  <rect x="388" y="188" width="154" height="28" fill="#d9f0e2" stroke="#c9d2e0"/>
+  <text x="190" y="234" font-size="10" fill="#5a6272">符号 1 · 指数 8 · 尾数 7 —— 砍尾数换范围：范围与 FP32 相同，精度更糙</text>
+
+  <!-- FP8 -->
+  <text x="180" y="263" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">FP8</text>
+  <rect x="190" y="244" width="22" height="28" fill="#fbe3cc" stroke="#c9d2e0"/>
+  <rect x="212" y="244" width="88" height="28" fill="#eef3fc" stroke="#c9d2e0"/>
+  <rect x="300" y="244" width="66" height="28" fill="#d9f0e2" stroke="#c9d2e0"/>
+  <text x="190" y="290" font-size="10" fill="#5a6272">E4M3 变体：符号 1 · 指数 4 · 尾数 3，最大 ±448 —— 8 位也能当浮点数</text>
+
+  <!-- INT8 -->
+  <text x="180" y="319" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">INT8</text>
+  <rect x="190" y="300" width="176" height="28" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="190" y="346" font-size="10" fill="#5a6272">8 位普通整数：−128 ~ +127。没有指数和尾数之分，格子均匀、范围很小</text>
+
+  <text x="40" y="371" font-size="11" fill="#1a1f2e">规律：指数管「能表示多大范围」，尾数管「数得有多精确」——两者分抢总位数，此消彼长。</text>
+</svg>
+</div>
+<p class="cap"><b>图 0-1</b>｜五种常见格式的位分配。FP16 和 BF16 位数相同但分配相反：FP16 精度高、容易溢出；BF16 范围大、精度糙——训练偏爱 BF16，正是不怕糙、只怕溢出。</p>
+
+<table>
+  <tr><th>格式</th><th>位分配（符号+指数+尾数）</th><th>有效十进制数字</th><th>范围</th><th>典型用途</th></tr>
+  <tr><td><b>FP32</b></td><td>1 + 8 + 23</td><td>约 7 位</td><td>±3.4×10³⁸</td><td>训练的「账本精度」：梯度累加、loss 计算</td></tr>
+  <tr><td><b>FP16</b></td><td>1 + 5 + 10</td><td>约 3 位</td><td>±65504</td><td>传统的推理权重格式（发布模型常见）</td></tr>
+  <tr><td><b>BF16</b></td><td>1 + 8 + 7</td><td>约 2 位</td><td>±3.4×10³⁸</td><td>现代训练默认格式（范围大不易溢出）</td></tr>
+  <tr><td><b>FP8 (E4M3/E5M2)</b></td><td>1+4+3 / 1+5+2</td><td>约 1 位</td><td>±448 / ±57344</td><td>新一代训练与推理（第 3 讲）</td></tr>
+  <tr><td><b>INT8</b></td><td>8 位整数</td><td>—</td><td>−128 ~ +127</td><td>W8A8 推理（第 3 讲）</td></tr>
+  <tr><td><b>INT4</b></td><td>4 位整数（打包存储）</td><td>—</td><td>16 个格子</td><td>W4A16 权重量化主流（第 2 讲）</td></tr>
+</table>
+
+<div class="box">
+<span class="bt">术语</span>「精度 / 位宽」指一个数用多少比特存：FP32 是 32 位，FP16/BF16 是 16 位，FP8 是 8 位，INT4 是 4 位。位宽越低，存得越小、算得越省，但每个数越「糙」。<b>量化的全部艺术，就是在「糙到不能用之前」尽量压低位宽。</b>
+</div>
+
+<h2>3. 量化：一次「有损压缩」</h2>
+
+<p>现在可以给量化下定义了：<b>量化（quantization）= 把每个参数从精确的浮点数，换成低比特格式上「最近的可用值」，并接受这一点点误差</b>。</p>
+
+<p>如果觉得抽象，想想两个你天天在用的东西：JPEG 把图像压缩到原来的 1/10，你基本看不出差别；MP3 把音乐压缩到原来的 1/10，你基本听不出差别。它们都是<b>有损压缩</b>——扔掉人不太感知的那部分信息，保住「看起来一样、听起来一样」的部分。量化就是给模型做 JPEG：把 14 GB 的 FP16 权重压成 3.5 GB 的 INT4，希望模型「答起来还是那个模型」。</p>
+
+<p>具体发生了什么？低比特格式（如 INT4）能表示的数非常少——只有 16 个格子。量化就是两步：</p>
+
+<ol>
+  <li><b>量化（压缩时）</b>：给这 16 个格子定一个覆盖区间（比如 [−1, 1]），每个真实权重就近入座。0.7843 坐进 0.766 那个格子，记下格子编号。</li>
+  <li><b>反量化（使用时）</b>：计算时按编号查回格子的值——拿到的不是原来的 0.7843，而是 0.766，差了 0.018。这点误差就是量化的「损」。</li>
+</ol>
+
+<p>顺带说清一个贯穿全系列的小账：存储时只存<b>格子编号</b>（INT4，每数 4 位）和<b>一组很小的缩放系数</b>（scale，告诉每个格子代表多大），计算时再展开。所以「INT4 模型」并不是「数只有 4 位精度」，而是「数的<b>存储</b>是 4 位，用时临时还原成 16 位再算」——这个「还原后怎么算」的门道，正是第 2、5 讲的主线。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 260" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">同一个 7B 模型，不同位宽下的权重体积</text>
+
+  <text x="90" y="82" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">FP32</text>
+  <rect x="100" y="64" width="700" height="26" fill="#163a86"/>
+  <text x="808" y="82" font-size="11" font-weight="bold" fill="#1a1f2e">28 GB</text>
+
+  <text x="90" y="126" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">FP16 / BF16</text>
+  <rect x="100" y="108" width="350" height="26" fill="#2456c4"/>
+  <text x="458" y="126" font-size="11" font-weight="bold" fill="#1a1f2e">14 GB</text>
+
+  <text x="90" y="170" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">INT8</text>
+  <rect x="100" y="152" width="175" height="26" fill="#6f9be0"/>
+  <text x="283" y="170" font-size="11" font-weight="bold" fill="#1a1f2e">7 GB</text>
+
+  <text x="90" y="214" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">INT4</text>
+  <rect x="100" y="196" width="88" height="26" fill="#b9d0f2"/>
+  <text x="196" y="214" font-size="11" font-weight="bold" fill="#1a1f2e">3.5 GB</text>
+
+  <text x="100" y="248" font-size="11" fill="#5a6272">位宽每降一半，体积减半：INT4 下 3.5 GB，一张 8 GB 显存的卡就能把 7B 模型装进 GPU。</text>
+</svg>
+</div>
+<p class="cap"><b>图 0-2</b>｜位宽与体积的关系是纯算术：体积 = 参数量 × 每参数位数 ÷ 8。量化社区常说的 Q4 / Q8，指的就是 4 位 / 8 位这一栏。</p>
+
+<h2>4. 为什么砍掉 75% 的信息还能用？</h2>
+
+<p>INT4 只保留 4 位，等于把每个参数的信息砍掉 75%——按常识这模型应该「失忆」，为什么实际只掉一两个百分点的准确率？因为神经网络有两张底牌：</p>
+
+<h3>底牌一：参数分布又窄又挤</h3>
+
+<p>训练好的模型里，绝大多数参数都挤在 0 附近一个很窄的区间（大约 ±0.1 之内），又大又离谱的值极少。这意味着：为 [−1, 1] 准备的 16 个格子，实际几乎全用来刻画 0 附近这一小撮密集的值——<b>格子虽少，但都花在了刀刃上</b>。加上还可以按 128 个数一组各自定格子（per-group，第 1 讲细讲），窄区间的分辨率进一步提高。</p>
+
+<h3>底牌二：海量冗余，单点误差被平均掉</h3>
+
+<p>模型几千万至上亿个「神经元」分工重叠、互相兜底。单个参数差一点点，输出几乎无感——就像把合唱队里某个人的音量调小 5%，整体效果听不出变化。量化误差正是这样被几十亿个参数<b>平均稀释</b>掉的。这也解释了为什么量化对「整体统计规律」友好，而个别结构（比如异常大的激活值）出问题时需要特殊处理——那是后面几讲的故事。</p>
+
+<div class="box">
+<span class="bt">换个脑子</span>量化不是「把模型变小变笨」，而是「换一种更省的记账方式」。模型的能力在训练时已经写进了几十亿个数字的<b>整体分布</b>里，而不是藏在某个数字的第 15 位小数里。
+</div>
+
+<h3>还有一张意外的红利卡：速度</h3>
+
+<p>量化不只省显存，还<b>直接提速</b>。模型生成文字时（一次一个 token），每一步都要把全部权重从显存搬到计算单元——这个「搬运」往往比「计算」还耗时（术语叫 memory-bound，访存受限）。权重压到 1/4，搬运量就是 1/4，解码速度最高能接近 4 倍。省显存 + 提速度 + 降成本，这就是量化成为部署标配的完整理由。第 5 讲会把这个账算细。</p>
+
+<h3>当然，也有不平凡的地方</h3>
+
+<ul>
+  <li><b>激活值里有「巨无霸」</b>：权重温和，但中间计算结果（激活）的少数通道会出现比平均大几十倍的离群值（outlier），把格子区间撑爆。LLM.int8() 发现这类通道占比不到 0.1% 却能毁掉整个量化——第 3 讲专门讲怎么治它。</li>
+  <li><b>误差会层层累积</b>：几十层网络层层量化，小误差可能滚成大偏差，越低的位宽越危险——第 4 讲讲 4-bit 以下的极限操作。</li>
+  <li><b>不是所有环节都能省</b>：KV cache、attention 里的 softmax 等环节各有各的敏感点——第 5 讲逐一拆。</li>
+</ul>
+
+<h2>5. 名词表：把行话一次说清</h2>
+
+<p>下面这些词会贯穿全系列，混个脸熟即可，以后翻回来查：</p>
+
+<table>
+  <tr><th style="width:22%">术语</th><th>一句话解释</th><th style="width:14%">哪讲细讲</th></tr>
+  <tr><td><b>精度 / 位宽</b></td><td>一个数用多少比特存：FP32=32 位、FP16=16 位、INT8=8 位、INT4=4 位</td><td>第 0 讲</td></tr>
+  <tr><td><b>权重 / 激活</b></td><td>权重 = 模型里存好的参数；激活 = 数据流过网络时产生的中间计算结果。量化难点在激活</td><td>第 3 讲</td></tr>
+  <tr><td><b>W4A16 / W8A8</b></td><td>记号：Weight 几位 × Activation 几位。W4A16 = 权重 4 位存储、激活保持 16 位计算</td><td>第 2 讲</td></tr>
+  <tr><td><b>PTQ</b></td><td>Post-Training Quantization，训练后量化：模型练完再压，不动训练流程。主流做法</td><td>第 2 讲</td></tr>
+  <tr><td><b>QAT</b></td><td>Quantization-Aware Training，量化感知训练：训练时就「假装」自己被量化，精度更高但成本高</td><td>第 6 讲</td></tr>
+  <tr><td><b>校准（calibration）</b></td><td>用几百条样本「探一探」数据分布，决定每个格子的区间怎么定</td><td>第 1 讲</td></tr>
+  <tr><td><b>scale / 缩放系数</b></td><td>记录「格子间距」的小数，反量化时靠它把整数换算回真值</td><td>第 1 讲</td></tr>
+  <tr><td><b>粒度</b></td><td>一组数共用一套格子还是各用各的：per-tensor / per-channel / per-group，粒度越细精度越高、开销越大</td><td>第 1 讲</td></tr>
+  <tr><td><b>反量化 dequant</b></td><td>计算时把低比特整数按 scale 还原成浮点的过程</td><td>第 2 讲</td></tr>
+  <tr><td><b>kernel</b></td><td>GPU 上真正干活的计算函数；量化推理快不快，一半看 kernel 写得好不好</td><td>第 5 讲</td></tr>
+  <tr><td><b>GGUF / k-quants</b></td><td>llama.cpp 生态的模型文件格式与量化方案，本地跑模型的默认选择</td><td>第 5 讲</td></tr>
+  <tr><td><b>outlier / 离群值</b></td><td>激活中少数幅值极大的通道，是低比特量化的头号敌人</td><td>第 3 讲</td></tr>
+</table>
+
+<h2>6. 谁在用量化：四个真实场景</h2>
+
+<table>
+  <tr><th style="width:24%">场景</th><th>典型做法</th><th>你在哪见过它</th></tr>
+  <tr><td><b>笔记本 / 手机跑大模型</b></td><td>4-bit 权重量化（GGUF 的 Q4_K_M 等格式）</td><td>llama.cpp、Ollama、LM Studio——下载一个 4 GB 多的 Q4 模型在本机跑</td></tr>
+  <tr><td><b>云端高吞吐服务</b></td><td>W4A16 / W4A8 权重量化 + 量化 kernel</td><td>vLLM、TensorRT-LLM 部署 GPTQ/AWQ 模型，一张卡塞更多用户</td></tr>
+  <tr><td><b>端侧 NPU / 手机厂商</b></td><td>INT8 静态量化</td><td>手机上的相册搜索、输入法联想、本地小模型</td></tr>
+  <tr><td><b>训练降本</b></td><td>FP8 混合精度训练</td><td>DeepSeek-V3 等新一代模型用 FP8 把训练成本打下来</td></tr>
+</table>
+
+<p>注意这四个场景横跨「存储—推理—训练」全链路，本系列也按这个脉络展开：第 1~2 讲是权重量化（存得小），第 3 讲是激活量化（算得省），第 4 讲是极限压缩，第 5 讲是系统落地（跑得快），第 6 讲回到训练侧并给出成长路线。</p>
+
+<h2>7. 本系列地图：七讲怎么读</h2>
+
+<table>
+  <tr><th style="width:18%">讲次</th><th>主题</th><th>读完你能</th></tr>
+  <tr><td><b>第 0 讲</b>（本篇）</td><td>全景图：显存账本、浮点数、有损压缩直觉</td><td>听懂行话，知道量化在整个 LLM 版图的位置</td></tr>
+  <tr><td><b>第 1 讲</b></td><td>量化数学：scale、对称/非对称、粒度、误差与校准</td><td>亲手算一遍量化与反量化，理解所有量化论文的「普通话」</td></tr>
+  <tr><td><b>第 2 讲</b></td><td>训练后量化：GPTQ 与 AWQ</td><td>看懂 GPTQ 的误差补偿思想和 AWQ 的「保护重要权重」，亲手量化一个模型</td></tr>
+  <tr><td><b>第 3 讲</b></td><td>激活量化与 FP8：outliers、SmoothQuant、旋转魔法</td><td>解释「为什么激活难量化」及工业界四大对策</td></tr>
+  <tr><td><b>第 4 讲</b></td><td>极低比特：AQLM、QuIP#、BitNet b1.58</td><td>理解 2-bit / 1.58-bit 的极限操作与「原生低比特训练」路线</td></tr>
+  <tr><td><b>第 5 讲</b></td><td>KV Cache 量化与推理系统落地</td><td>算清显存账，看懂 Marlin kernel 和 vLLM/llama.cpp 的量化选项</td></tr>
+  <tr><td><b>第 6 讲</b></td><td>QAT、量化 scaling law 与成长路线图</td><td>知道 QAT 何时值得用，拿到成为量化专家的具体学习路线</td></tr>
+</table>
+
+<p>读法建议：<b>顺序读，不要跳</b>。第 1 讲的 scale/粒度/误差是后面一切故事的语法；第 2、3 讲是应用最广的两大算法流派（权重量化、激活量化）；第 4、5 讲是前沿与落地；第 6 讲收束成路线图。每讲都有手算例题和自查清单，数学量被刻意压到「能在纸上跟着算」的程度。</p>
+
+<h2>8. 自查清单</h2>
+
+<p>下面 8 个问题都能答上来，第 0 讲就过关了：</p>
+
+<ol class="checklist">
+  <li>7B 模型 FP16 要占多少显存？（答：70 亿 × 2 字节 = 14 GB；显存里还有 KV cache 和激活值）</li>
+  <li>浮点数的三段各管什么？（答：符号管正负、指数管范围、尾数管精度）</li>
+  <li>FP16 和 BF16 都是 16 位，差别是什么？（答：FP16 尾数多精度高但范围小，BF16 指数多范围大精度糙；训练偏爱 BF16 怕溢出不怕糙）</li>
+  <li>用一句话说量化是什么？（答：把精确浮点换成低比特格式上最近的可用值，接受小误差的有损压缩）</li>
+  <li>为什么砍掉 75% 的信息模型还能用？（答：参数分布窄且集中 + 网络冗余平均掉单点误差）</li>
+  <li>W4A16 是什么意思？（答：权重 4 位存储、激活保持 16 位计算的量化配置）</li>
+  <li>除了省显存，量化还有什么直接收益？（答：推理要反复搬权重，权重变小搬运变快，解码提速）</li>
+  <li>低比特量化的头号敌人是谁？（答：激活里的少数巨大离群值通道，outlier）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="quant-t1-basics.html">第 1 讲：量化数学基础</a>——把「就近入座」变成能写能算的公式：scale 和 zero-point 是怎么定义的，对称和非对称格子怎么选，per-tensor / per-channel / per-group 粒度差在哪，舍入误差和裁剪误差各何时出现。最后手算一个完整例子：把一个真实权重矩阵量化到 INT4 再还原，看误差到底长什么样。读完这一讲，任何量化论文里的公式你都能读懂一半。
+</div>
+
+<footer>本页为个人学习笔记 · 大模型量化零基础七讲系列 · 生成于 2026-09-20 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 叙述以主流实践与经典论文为准，细节以原始文献为最终依据</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

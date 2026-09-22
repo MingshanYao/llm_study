@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoE 零基础五讲 · 第 0 讲：读懂 MoE 的前置知识</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>MoE 零基础五讲 · 第 0 讲：读懂 MoE 的前置知识</h1>
+
+<div class="series-nav">
+  <a class="here">0 前置知识</a>
+  <a href="moe-t1-basics.html">1 MoE 基本原理</a>
+  <a href="moe-t2-v1v3.html">2 V1→V3 演进</a>
+  <a href="moe-t3-v4.html">3 V4/V4.1</a>
+  <a href="moe-t4-code.html">4 代码逐行</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>DeepSeek MoE 零基础五讲（本篇为第 0 讲，不含任何 DeepSeek 内容，只打地基）</p>
+  <p style="margin:4px 0"><b>读者假设：</b>不需要深度学习背景；会一点 Python 更好，不会也能读。所有数学都从零手算。</p>
+  <p style="margin:4px 0"><b>浓缩版对照：</b>读完本系列再看 <a href="deepseek-moe.html">DeepSeek MoE 进化史</a>（浓缩版），它读起来就会顺畅很多。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>MoE（Mixture of Experts，混合专家）是对 Transformer 里 <b>FFN 层</b>的改造。要把 MoE 的每个细节讲明白，得先搞懂 6 件事：① Transformer 的一层长什么样、FFN 在哪；② 矩阵乘法就是「一堆加权求和」；③ FFN（尤其是 SwiGLU 版本）在算什么；④ <b>参数量</b>和<b>计算量</b>是两码事——这一条是整个 MoE 故事的起点；⑤ softmax、sigmoid、softplus 三个函数各自的手算与脾气（DeepSeek 三代模型正好各用了其中一个）；⑥ top-k 选择是怎么回事、为什么它「不可导」。这 6 件事任何一个含糊，后面讲「细粒度专家」「bias 门控」「√Softplus」都会变成听天书。</p>
+</div>
+
+<h2>1. 一个 token 在 Transformer 里怎么流动</h2>
+
+<p>语言模型处理文字的第一步是<b>分词（tokenize）</b>：把文本切成一个个「token」。你可以先粗暴地把 token 理解为「一个词或词的一部分」。比如「我喜欢吃火锅」可能被切成「我 / 喜欢 / 吃 / 火锅」4 个 token。每个 token 会查一张大表（词表，embedding 表），变成一个固定长度的向量——DeepSeek-V4 里这个向量的长度是 <b>7168</b> 个数。也就是说，一个 token 进了模型，就是一个装着 7168 个数字的列表。</p>
+
+<p>然后这个向量会<b>依次穿过 61 层结构完全相同的模块</b>（DeepSeek-V4 是 61 层），每过一层，向量被更新一次。每一层的内部结构是：</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 260" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="t0a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="t0b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="40" y="36" font-size="13" font-weight="bold" fill="#1a1f2e">Transformer 一层的最小结构（⊕ 表示残差相加）</text>
+
+  <!-- input -->
+  <rect x="30" y="100" width="110" height="52" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="85" y="121" font-size="12" text-anchor="middle" fill="#1a1f2e">输入 x</text>
+  <text x="85" y="139" font-size="10" text-anchor="middle" fill="#5a6272">[T, 7168]</text>
+
+  <line x1="140" y1="126" x2="168" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t0a)"/>
+
+  <!-- attention -->
+  <rect x="172" y="100" width="150" height="52" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="247" y="121" font-size="12" text-anchor="middle" fill="#1a1f2e">Self-Attention</text>
+  <text x="247" y="139" font-size="10" text-anchor="middle" fill="#5a6272">token 之间交换信息</text>
+
+  <line x1="322" y1="126" x2="352" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t0a)"/>
+
+  <!-- add 1 -->
+  <circle cx="366" cy="126" r="12" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="366" y="131" font-size="13" text-anchor="middle" fill="#2456c4">+</text>
+  <!-- residual 1 -->
+  <polyline points="247,100 247,72 366,72 366,112" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#t0b)"/>
+  <text x="300" y="64" font-size="10" fill="#2456c4">残差：直接把输入原样搬过来相加</text>
+
+  <line x1="378" y1="126" x2="406" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t0a)"/>
+
+  <!-- norm -->
+  <rect x="410" y="100" width="96" height="52" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="458" y="121" font-size="12" text-anchor="middle" fill="#1a1f2e">RMSNorm</text>
+  <text x="458" y="139" font-size="10" text-anchor="middle" fill="#5a6272">把数值大小捋顺</text>
+
+  <line x1="506" y1="126" x2="534" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t0a)"/>
+
+  <!-- FFN highlight -->
+  <rect x="538" y="88" width="196" height="76" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-width="1.8"/>
+  <text x="636" y="118" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">FFN / MoE</text>
+  <text x="636" y="138" font-size="10" text-anchor="middle" fill="#2456c4">本系列的主角：MoE 改的就是这块</text>
+
+  <line x1="734" y1="126" x2="762" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t0a)"/>
+
+  <!-- add 2 -->
+  <circle cx="776" cy="126" r="12" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="776" y="131" font-size="13" text-anchor="middle" fill="#2456c4">+</text>
+  <!-- residual 2 -->
+  <polyline points="458,88 458,44 776,44 776,112" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#t0b)"/>
+
+  <line x1="788" y1="126" x2="816" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t0a)"/>
+
+  <!-- out -->
+  <rect x="820" y="100" width="96" height="52" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="868" y="121" font-size="12" text-anchor="middle" fill="#1a1f2e">送入下一层</text>
+  <text x="868" y="139" font-size="10" text-anchor="middle" fill="#5a6272">…共 61 层</text>
+
+  <text x="40" y="216" font-size="11" fill="#5a6272">T = 序列里的 token 数。Attention 负责「token 之间交换信息」，FFN 负责「单个 token 自己的深度加工」——后者占了模型约 2/3 的参数。</text>
+  <text x="40" y="238" font-size="11" fill="#5a6272">残差线含义：每层只学「增量修正」，原始信息永远可以原封不动地通过（这是深层网络能训得动的前提之一）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 0-1</b>｜一层的结构。本系列所有故事都发生在中间那个蓝色高亮盒子里：稠密模型在这里放一个 FFN，MoE 模型在这里放一群专家 + 一个路由器。</p>
+
+<p>两个小记号约定，后面所有篇幅都会用到：</p>
+<ul>
+  <li><b>\(T\)（序列长度）</b>：这段输入一共有多少个 token。一批输入就是一个 \([T, 7168]\) 的二维数组（表格）：\(T\) 行、每行 7168 个数，一行对应一个 token 的当前状态。</li>
+  <li><b>\(d\)（模型宽度）</b>：这个 7168 叫模型维度，记作 \(d\)。它决定了「一个 token 的状态用多少个数来描述」。</li>
+</ul>
+
+<h2>2. 矩阵乘法：就是「一堆加权求和」同时算</h2>
+
+<p>神经网络里的参数，几乎全部存放在「权重矩阵」\(W\) 里，而矩阵乘法是它们的用法。先看一个 \(2\times 2\) 的手算例子，别怕，一步都不跳：</p>
+
+<div class="formula">\[
+\begin{bmatrix} 1 &amp; 2 \\ 3 &amp; 4 \end{bmatrix}
+\begin{bmatrix} 0 &amp; 1 \\ 1 &amp; 0 \end{bmatrix}
+=
+\begin{bmatrix} \,1{\times}0 + 2{\times}1 \, &amp; \, 1{\times}1 + 2{\times}0 \, \\ \, 3{\times}0 + 4{\times}1 \, &amp; \, 3{\times}1 + 4{\times}0 \, \end{bmatrix}
+=
+\begin{bmatrix} 2 &amp; 1 \\ 4 &amp; 3 \end{bmatrix}
+\]</div>
+
+<p>规则：结果第 \(i\) 行第 \(j\) 列 = 左矩阵第 \(i\) 行 与 右矩阵第 \(j\) 列的<b>对应相乘再求和</b>（点积）。所以矩阵乘法本质上就是「一次性算很多个加权求和」：左边的每一行是「输入」，右边的每一列是「一组权重」。</p>
+
+<div class="box">
+<span class="bt">直觉</span>把 \(W\) 的<b>一列</b>看成一个「打分员」：它对输入的每个分量分配权重，加权求和得到一个输出数。\(W\) 有多少列，就有多少个打分员，就产出多少个输出分量。所谓「训练模型」，调的就是这亿万个权重。
+</div>
+
+<p>把 7168 维的 token 向量乘上一个 \(7168 \times 7168\) 的矩阵，就完成一次「全连接变换」——输出的每个分量都是输入 7168 个数的加权组合。FFN 就是把两三个这样的变换串起来，中间夹一个「激活函数」。</p>
+
+<h2>3. FFN 深讲：token 的「深度加工车间」</h2>
+
+<h3>3.1 最朴素的两层 FFN</h3>
+
+<div class="formula">\[
+\mathrm{FFN}(x) = \mathrm{act}(x W_1)\, W_2
+\]</div>
+
+<p>流程：先把 \(x\)（\(d\) 维）用一个 \(d \times d_{ffn}\) 的矩阵 \(W_1\) <b>升维</b>到 \(d_{ffn}\)（通常是 \(d\) 的好几倍，比如 4 倍），过一个激活函数（逐元素处理，比如把负数压掉），再用 \(d_{ffn} \times d\) 的矩阵 \(W_2\) <b>降维</b>回 \(d\)。</p>
+
+<p>为什么要「先升后降」？直觉：升维是把 token 的含义<b>展开</b>成很多并列的「特征槽位」（每个槽位一个打分员），每个槽位独立判断「这个 token 有没有某种特征、有多强」；激活函数负责把关（弱的置零/压小）；降维再把有用特征<b>汇总</b>回标准尺寸。模型学到的大部分「知识」就存在这两个大矩阵里——这也是为什么 FFN 占了稠密 Transformer 约 <b>2/3 的参数</b>（Attention 部分只占剩下约 1/3）。</p>
+
+<h3>3.2 现代标准答案：SwiGLU（DeepSeek 全系用的版本）</h3>
+
+<p>DeepSeek 用的 FFN 不是最朴素版，而是 SwiGLU。区别是把「一个升维矩阵」拆成「两个并列的升维矩阵 \(W_1\)（gate 分支）和 \(W_3\)（up 分支）」，让两条分支的信息互相调制：</p>
+
+<div class="formula">\[
+\mathrm{SwiGLU}(x) = \big(\underbrace{\mathrm{SiLU}(x W_1)}_{\text{gate：开关信号}} \odot \underbrace{(x W_3)}_{\text{up：原始特征}}\big)\, W_2
+\]</div>
+
+<p>其中 \(\odot\) 是逐元素相乘（两个等长向量，对应位置相乘），\(\mathrm{SiLU}(z) = z \cdot \mathrm{sigmoid}(z)\) 是个温和的「软开关」：输入很负时输出接近 0（关闭），输入为正时输出约等于输入（放行）。</p>
+
+<p>完整手算一个小例子（维度小到能心算）。设 \(d=2\)、\(d_{ffn}=2\)，输入 \(x = [1, 2]\)：</p>
+
+<table>
+  <tr><th>步骤</th><th>算式</th><th>结果</th></tr>
+  <tr><td>gate 分支</td><td>\(x W_1\)，取 \(W_1=\begin{bmatrix}1&amp;0\\0&amp;1\end{bmatrix}\)（恒等矩阵）</td><td>\([1, 2]\)</td></tr>
+  <tr><td>up 分支</td><td>\(x W_3\)，取 \(W_3=\begin{bmatrix}1&amp;1\\1&amp;-1\end{bmatrix}\)，即 \([1{\times}1{+}2{\times}1,\ 1{\times}1{+}2{\times}({-}1)]\)</td><td>\([3, -1]\)</td></tr>
+  <tr><td>SiLU 开关</td><td>\(\mathrm{SiLU}(1)=1{\times}\sigma(1)=0.731\)，\(\mathrm{SiLU}(2)=2{\times}\sigma(2)=1.762\)</td><td>\([0.731, 1.762]\)</td></tr>
+  <tr><td>逐元素相乘</td><td>\([0.731{\times}3,\ 1.762{\times}(-1)]\)</td><td>\([2.193, -1.762]\)</td></tr>
+  <tr><td>降维</td><td>\(\times W_2\)，取恒等矩阵</td><td>\([2.193, -1.762]\)</td></tr>
+</table>
+
+<p>真实模型里 \(d_{ffn}\) 远大于 2（V4 的稠密层中间维是 \(d\) 的数倍；MoE 专家则是 \(d_{ffn}=3072\)），但计算流程一模一样。一个 SwiGLU 专家的参数量是三个矩阵之和：</p>
+
+<div class="formula">\[
+\text{参数量} = 3 \times d \times d_{ffn}, \qquad
+\text{每 token 计算量} = 2 \times 3 \times d \times d_{ffn}\ \text{FLOPs（乘和加各算一次）}
+\]</div>
+
+<p>拿真实数字验算一下（这两个数字后面反复出现）：V4 的一个路由专家 \(d=7168\)、\(d_{ffn}=3072\)，参数量 \(3 \times 7168 \times 3072 \approx 6600\) 万；每个 token 每次用它要 \(2 \times 6600\) 万 \(\approx 1.3\) 亿 FLOPs。</p>
+
+<h2>4. 参数量 ≠ 计算量 ≠ 激活参数：MoE 故事的起点</h2>
+
+<p>这是全系列<b>最重要的一节</b>。三个词天天出现，但说的不是一回事：</p>
+
+<table>
+  <tr><th>概念</th><th>含义</th><th>由什么决定</th><th>比喻（一家餐厅）</th></tr>
+  <tr><td><b>参数量</b>（总参数）</td><td>模型里存了多少权重数字</td><td>结构定义，训练完固定</td><td>餐厅雇了多少厨师</td></tr>
+  <tr><td><b>计算量</b>（FLOPs）</td><td>处理一个 token 要做多少次乘加</td><td>结构 × 每 token 实际走哪些路径</td><td>做一桌菜实际要动用多少厨师工时</td></tr>
+  <tr><td><b>激活参数</b>（activated params）</td><td>处理一个 token 时真正参与计算的参数个数</td><td>路由结果决定</td><td>这一桌菜实际用到的厨师人数</td></tr>
+</table>
+
+<p>稠密模型（dense model）里，这三个量是<b>绑死</b>的：7B 稠密模型每个 token 都要跑全部 70 亿参数，雇 100 个厨师就得每桌菜都让 100 个人上手。想要更多「知识容量」（更多参数），就必须付出同等规模的计算和电费——这就是 MoE 要打破的绑定。</p>
+
+<p>DeepSeek-V4-Pro 的官方数字是：<b>总参数 1.6T（1.6 万亿），每 token 只激活 49B（490 亿）</b>。也就是说餐厅雇了 1.6 万个厨师，但每做一道菜只需要 49 个厨师 simultaneously 干活——其他人在休息室待命。参数量（知识容量）和计算量（推理成本）从此解耦。MoE 的全部魔法与全部麻烦，都从这个解耦开始。</p>
+
+<div class="box">
+<span class="bt">为什么可行</span>「每个 token 只用一小部分参数」成立的假设是：<b>不同 token 需要的加工方式不同</b>。「猫」需要生物学特征加工，「方程」需要符号推理加工——与其让一个大 FFN 兼顾所有模式，不如备多套小 FFN（专家），按需取用。
+</div>
+
+<h2>5. softmax 从零讲：把一堆分数变成「概率感」</h2>
+
+<p>MoE 的门控（路由器）会给每个专家打一个分，然后把分数变成「选择依据」。第一个登场的就是 softmax——它把任意一组实数变成一组<b>非负、总和为 1</b> 的数，从而有了「占比」的含义：</p>
+
+<div class="formula">\[
+\mathrm{softmax}(z_i) = \frac{e^{z_i}}{\sum_j e^{z_j}}
+\]</div>
+
+<p>手算一遍（\(z = [2.0,\ 1.0,\ 0.1]\)，三个专家）：</p>
+
+<table>
+  <tr><th>专家</th><th>分数 \(z_i\)</th><th>\(e^{z_i}\)</th><th>除以总和 11.21</th><th>softmax 输出</th></tr>
+  <tr><td>E1</td><td>2.0</td><td>7.389</td><td>7.389 / 11.21</td><td><b>0.659</b></td></tr>
+  <tr><td>E2</td><td>1.0</td><td>2.718</td><td>2.718 / 11.21</td><td><b>0.242</b></td></tr>
+  <tr><td>E3</td><td>0.1</td><td>1.105</td><td>1.105 / 11.21</td><td><b>0.099</b></td></tr>
+</table>
+
+<p>softmax 的四个关键脾气（后面好几处设计都源于它们）：</p>
+<ol>
+  <li><b>总和恒为 1</b>：输出是「占比」。想让某个专家占比变大，必然压小别人——它是<b>全局耦合</b>的。</li>
+  <li><b>指数放大差距</b>：输入差 1 分，输出占比差 \(e \approx 2.7\) 倍。分数稍有优势，占比就大幅领先（赢者通吃倾向）。</li>
+  <li><b>对平移不变</b>：所有 \(z_i\) 同时加 3，输出完全不变（分子分母同乘 \(e^3\)）。只关心相对差距。</li>
+  <li><b>数值上溢风险</b>：\(z\) 很大时 \(e^z\) 爆炸（\(e^{100}\) 已超出浮点范围）。工程上要「先减最大值再算」，实现里处处是这个细节。</li>
+</ol>
+
+<details>
+<summary>深入：为什么减最大值不影响结果？</summary>
+<p>\(\mathrm{softmax}(z_i) = e^{z_i - m} / \sum_j e^{z_j - m}\)（\(m = \max z\)），分子分母同乘 \(e^m\) 后与原式恒等。减去 \(m\) 后最大的指数值变成 \(e^0 = 1\)，其余都 \(\le 1\)，永远不会溢出。这是所有 softmax 实现的标准姿势。</p>
+</details>
+
+<h2>6. sigmoid 从零讲：每个分数独立过门</h2>
+
+<p>DeepSeek-V3 起改用 sigmoid 计算亲和度。sigmoid 是<b>单输入</b>函数，把任意实数压到 \((0,1)\) 区间：</p>
+
+<div class="formula">\[
+\sigma(z) = \frac{1}{1 + e^{-z}}
+\]</div>
+
+<p>手算几个点：\(\sigma(0) = 0.5\)（对称中心）；\(\sigma(2) = 1/(1+e^{-2}) = 1/(1+0.135) = 0.881\)；\(\sigma(-2) = 0.119\)。</p>
+
+<p>和 softmax 比，sigmoid 的根本区别在于<b>没有分母</b>：每个专家的分数各自独立计算，互不影响。E1 的分数再爆炸，也压不到 E2 的输出。代价是输出总和不再为 1（比如三个都打到 0.9），所以 DeepSeek-V3 的做法是：<b>先用 sigmoid 独立打分选专家，选完之后只在被选中的那一小撮内部做归一化</b>，恢复「占比」含义。这个「先独立选择、后局部归一化」的两段式设计，从 V3 一直沿用到 V4（函数换成谁，两段式结构不变）。</p>
+
+<p>另一个重要脾气：<b>饱和</b>。当 \(z\) 很大（比如 10），\(\sigma(z) \approx 0.9999\)，图像水平贴着 1 走——此时输入再怎么变，输出几乎不动，梯度接近 0。饱和既是优点（天然把分数限制住）也是缺点（大分数失去区分度、梯度消失）。</p>
+
+<h2>7. softplus 从零讲：ReLU 的光滑版</h2>
+
+<p>ReLU（\(\max(0, z)\)）是神经网络最常用的激活：负数归零，正数照抄。它简单好用，但有个「尖角」——在 \(z=0\) 处导数突然从 0 跳到 1，不可导。softplus 是它的光滑替身：</p>
+
+<div class="formula">\[
+\mathrm{softplus}(z) = \log(1 + e^{z})
+\]</div>
+
+<p>手算：\(\mathrm{softplus}(0) = \log 2 = 0.693\)；\(\mathrm{softplus}(2) = \log(1+7.389) = \log 8.389 = 2.127\)；\(\mathrm{softplus}(-2) = \log 1.135 = 0.127\)。行为特征：\(z\) 很大时 \(\approx z\)（和 ReLU 重合，<b>无上界</b>）；\(z\) 很负时 \(\approx 0\) 但<b>永不为零、处处光滑</b>。</p>
+
+<p>把本讲三个函数画在同一张图上（外加 ReLU 作参照）——DeepSeek 三代正好把三个都用了一遍：</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 330" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="t0c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="40" y="26" font-size="13" font-weight="bold" fill="#1a1f2e">候选打分函数的形状（横轴：门控分数的原始值 x；纵轴：函数输出）</text>
+
+  <!-- axes -->
+  <line x1="60" y1="260" x2="510" y2="260" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t0c)"/>
+  <line x1="60" y1="260" x2="60" y2="40" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t0c)"/>
+  <!-- x ticks -->
+  <text x="60" y="278" font-size="10" text-anchor="middle" fill="#5a6272">-4</text>
+  <text x="170" y="278" font-size="10" text-anchor="middle" fill="#5a6272">-2</text>
+  <text x="280" y="278" font-size="10" text-anchor="middle" fill="#5a6272">0</text>
+  <text x="390" y="278" font-size="10" text-anchor="middle" fill="#5a6272">+2</text>
+  <text x="500" y="278" font-size="10" text-anchor="middle" fill="#5a6272">+4</text>
+  <!-- y ticks -->
+  <text x="52" y="264" font-size="10" text-anchor="end" fill="#5a6272">0</text>
+  <text x="52" y="214" font-size="10" text-anchor="end" fill="#5a6272">1</text>
+  <text x="52" y="164" font-size="10" text-anchor="end" fill="#5a6272">2</text>
+  <text x="52" y="114" font-size="10" text-anchor="end" fill="#5a6272">3</text>
+  <text x="52" y="64" font-size="10" text-anchor="end" fill="#5a6272">4</text>
+
+  <!-- relu: points (-4,0)(-2,0)(0,0)(1,1)(2,2)(4,4) svg: (60,260)(170,260)(280,260)(335,210)(390,160)(500,60) -->
+  <polyline points="60,260 280,260 335,210 390,160 500,60" fill="none" stroke="#2456c4" stroke-width="1.8"/>
+
+  <!-- sigmoid: v*50 scale: (60,259)(115,258)(170,254)(225,247)(280,235)(335,224)(390,216)(445,211)(500,211) -->
+  <polyline points="60,259 115,258 170,254 225,247 280,235 335,224 390,216 445,211 500,211" fill="none" stroke="#e8862a" stroke-width="1.8"/>
+
+  <!-- softplus: (60,259)(170,254)(225,244)(280,225)(335,194)(390,154)(445,107)(500,58) -->
+  <polyline points="60,259 170,254 225,244 280,225 335,194 390,154 445,107 500,58" fill="none" stroke="#5a6272" stroke-width="1.8" stroke-dasharray="6,3"/>
+
+  <!-- sqrt softplus: (60,253)(170,242)(225,232)(280,218)(335,203)(390,187)(445,173)(500,160) -->
+  <polyline points="60,253 170,242 225,232 280,218 335,203 390,187 445,173 500,160" fill="none" stroke="#2f9e63" stroke-width="2.6"/>
+
+  <!-- legend -->
+  <line x1="66" y1="130" x2="96" y2="130" stroke="#2f9e63" stroke-width="2.6"/>
+  <text x="102" y="134" font-size="11" fill="#1a1f2e">√Softplus（V4 门控用）</text>
+  <line x1="66" y1="152" x2="96" y2="152" stroke="#e8862a" stroke-width="1.8"/>
+  <text x="102" y="156" font-size="11" fill="#1a1f2e">Sigmoid（V3 门控用）</text>
+  <line x1="66" y1="174" x2="96" y2="174" stroke="#2456c4" stroke-width="1.8"/>
+  <text x="102" y="178" font-size="11" fill="#1a1f2e">ReLU（参照物）</text>
+  <line x1="66" y1="196" x2="96" y2="196" stroke="#5a6272" stroke-width="1.8" stroke-dasharray="6,3"/>
+  <text x="102" y="200" font-size="11" fill="#1a1f2e">Softplus（V4 的内层函数）</text>
+
+  <!-- right cards -->
+  <rect x="540" y="52" width="380" height="56" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="556" y="74" font-size="12" fill="#1a1f2e">Sigmoid：输出压进 (0,1)，大 x 饱和贴顶</text>
+  <text x="556" y="94" font-size="10.5" fill="#5a6272">独立打分，无上界问题被「封顶」解决了，但区分度也没了</text>
+
+  <rect x="540" y="122" width="380" height="56" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="556" y="144" font-size="12" fill="#1a1f2e">Softplus：ReLU 的光滑版，无上界</text>
+  <text x="556" y="164" font-size="10.5" fill="#5a6272">x 大时近似直线增长，x 小时平滑趋 0 不断流</text>
+
+  <rect x="540" y="192" width="380" height="56" rx="8" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="556" y="214" font-size="12" font-weight="bold" fill="#1a1f2e">√Softplus：V4 的选择</text>
+  <text x="556" y="234" font-size="10.5" fill="#2a3040">独立 + 无上界 + 零点光滑；增长比线性慢，天然「温和放大」</text>
+
+  <text x="40" y="300" font-size="11" fill="#5a6272">读图要点：绿色曲线（√Softplus）在负半轴平滑抬起（不像 ReLU 卡死在 0），在正半轴持续增长但越涨越慢（不像 Softplus 冲那么猛，又不像 Sigmoid 封顶）。</text>
+  <text x="40" y="320" font-size="11" fill="#5a6272">softmax 无法画进单变量图——它吃的是一组分数，第 2 讲会专门对比它与 sigmoid 的耦合差异。</text>
+</svg>
+</div>
+<p class="cap"><b>图 0-2</b>｜四个函数的曲线与脾气。V4 门控打分先用 Softplus 光滑化，再开根号——具体动机与数值行为在第 3 讲展开。</p>
+
+<h2>8. top-k：从 N 个分数里挑前 k 个</h2>
+
+<p>MoE 门控的最后一道工序是 <b>top-k</b>：有 \(N\) 个专家的分数，只保留最大的 \(k\) 个，其余的<b>一律视为没被选中</b>（输出置 0）。例如 5 个专家的分数是：</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 250" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">5 个专家的亲和度分数 → top-2 选择（k=2）</text>
+
+  <!-- bars: baseline y=190, scale 350px per unit -->
+  <!-- E1 0.30 -> h105 top85 ; E2 0.12 -> h42 top148 ; E3 0.41 -> h144 top46 ; E4 0.08 -> h28 top162 ; E5 0.09 -> h32 top158 -->
+  <rect x="100" y="85" width="90" height="105" rx="4" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.8"/>
+  <text x="145" y="72" font-size="12" text-anchor="middle" fill="#2f9e63" font-weight="bold">0.30 ✓</text>
+  <text x="145" y="212" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E1</text>
+
+  <rect x="230" y="148" width="90" height="42" rx="4" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="275" y="135" font-size="12" text-anchor="middle" fill="#5a6272">0.12</text>
+  <text x="275" y="212" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E2</text>
+
+  <rect x="360" y="46" width="90" height="144" rx="4" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.8"/>
+  <text x="405" y="33" font-size="12" text-anchor="middle" fill="#2f9e63" font-weight="bold">0.41 ✓</text>
+  <text x="405" y="212" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E3</text>
+
+  <rect x="490" y="162" width="90" height="28" rx="4" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="535" y="149" font-size="12" text-anchor="middle" fill="#5a6272">0.08</text>
+  <text x="535" y="212" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E4</text>
+
+  <rect x="620" y="158" width="90" height="32" rx="4" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="665" y="145" font-size="12" text-anchor="middle" fill="#5a6272">0.09</text>
+  <text x="665" y="212" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E5</text>
+
+  <!-- annotation -->
+  <rect x="740" y="60" width="180" height="140" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="756" y="86" font-size="11.5" fill="#1a1f2e">top-2 选中：E3、E1</text>
+  <text x="756" y="108" font-size="10.5" fill="#5a6272">被选中的两个分数</text>
+  <text x="756" y="126" font-size="10.5" fill="#5a6272">再归一化：0.41/0.71=0.58</text>
+  <text x="756" y="144" font-size="10.5" fill="#5a6272">0.30/0.71=0.42</text>
+  <text x="756" y="168" font-size="10.5" fill="#5a6272">落选者输出 = 0，</text>
+  <text x="756" y="186" font-size="10.5" fill="#5a6272">完全不参与计算</text>
+
+  <text x="40" y="244" font-size="11" fill="#5a6272">V4 的真实规模：384 个专家选 6 个（k=6）——但工序一模一样。</text>
+</svg>
+</div>
+<p class="cap"><b>图 0-3</b>｜top-k 是一个「硬选择」：非中即零，没有中间态。</p>
+
+<p>最后一步的「归一化」：被选中的分数 \(0.41, 0.30\) 除以它们的和 \(0.71\)，得到 \(0.58, 0.42\)，重新凑成一组占比，用作混合权重。</p>
+
+<p>注意 top-k 的一个尴尬性质：它是<b>离散选择</b>——「选谁」这个决策没有连续的过渡（0.409 和 0.411 的分数可能选中不同的专家），所以「梯度」这个训练工具对「选谁」这件事是<b>失明</b>的：模型无法通过常规训练信号直接学会「该把 token 送给谁」，只能通过「分数本身」间接学。这个看似技术细节的性质，正是第 2 讲「bias 门控」整个发明的突破口——bias 之所以能做均衡而不伤模型，就是因为均衡信号恰好可以藏进这个「梯度失明」的角落里。</p>
+
+<h2>9. 自查清单</h2>
+
+<p>如果下面 8 个问题都能不假思索地回答，就可以进入第 1 讲了：</p>
+
+<ol class="checklist">
+  <li>Transformer 一层里，哪一块是 MoE 改造的对象？（答：FFN——单个 token 的深度加工模块，占约 2/3 参数）</li>
+  <li>矩阵乘法的物理含义是什么？（答：同时算很多组「加权求和」，每列权重 = 一个打分员）</li>
+  <li>SwiGLU 的三个矩阵 \(W_1, W_3, W_2\) 各干什么？（答：gate 开关信号 / up 原始特征 / down 降维汇总）</li>
+  <li>参数量和计算量的区别？V4-Pro 的两个数是多少？（答：存了多少 vs 每 token 实际用多少；1.6T 总参 / 49B 激活）</li>
+  <li>softmax 为什么是「全局耦合」的？（答：分母含所有分数，一个涨别人就得跌）</li>
+  <li>sigmoid 和 softmax 最根本的区别？（答：无分母、逐专家独立；需要事后局部归一化）</li>
+  <li>softplus 和 ReLU 的关系？（答：光滑版，负半轴不断流、零点不产生尖角）</li>
+  <li>top-k 为什么对梯度「失明」？（答：非中即零的离散决策，没有连续过渡，训练信号进不去）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="moe-t1-basics.html">第 1 讲：MoE 基本原理</a>——把 FFN 复制成 N 份专家、装上门控和 top-k，用一个 3 专家小例子完整演算一遍；然后直面 MoE 的第一个大麻烦：负载不均，以及经典解法「辅助均衡损失」为什么会伤模型。这条「均衡 vs 特化」的矛盾线，将贯穿 DeepSeek 五代模型。
+</div>
+
+<footer>本页为个人学习笔记 · MoE 零基础五讲系列 · 生成于 2026-09-16 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 涉及论文事实处以论文与官方源码为准</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

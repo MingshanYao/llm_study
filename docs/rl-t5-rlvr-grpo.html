@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RL 训练工程师零基础七讲 · 第 5 讲：RLVR 与 GRPO</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>RL 训练工程师零基础七讲 · 第 5 讲：RLVR 与 GRPO</h1>
+
+<div class="series-nav">
+  <a href="rl-t0-foundation.html">0 全景图</a>
+  <a href="rl-t1-policy-gradient.html">1 策略梯度</a>
+  <a href="rl-t2-llm-as-rl.html">2 LLM×RL</a>
+  <a href="rl-t3-ppo.html">3 PPO</a>
+  <a href="rl-t4-rlhf-dpo.html">4 RLHF·DPO</a>
+  <a class="here">5 RLVR·GRPO</a>
+  <a href="rl-t6-systems.html">6 系统与实战</a>
+  <a href="rl-t7-score-centering.html">番外 SC</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>本讲定位：</b>2024 年至今后训练的主战场。o1 / DeepSeek-R1 引爆的「推理模型」浪潮，技术内核就是本讲两件事：RLVR（换奖励来源）+ GRPO（换优势估计）。</p>
+  <p style="margin:4px 0"><b>前置要求：</b>第 1 讲（baseline、优势）、第 2 讲（k3 估计器）、第 3 讲（clip、ratio）必须已读。</p>
+  <p style="margin:4px 0"><b>读完标志：</b>能完整复述 DeepSeek-R1 的训练方案，并能对着训练曲线说出「熵坍缩 / 长度爆炸 / 无梯度组」三种病症和处方。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>对 PPO 这个「重装引擎」做两处换装：① <b>RLVR</b>——奖励不再来自学出来的 reward model（会被 hack），而来自写死的判分程序 verifier（数学对答案、代码跑测试）；② <b>GRPO</b>——优势不再来自昂贵的 critic 网络，而是「同一个问题采一组回答，组内比高下」（第 1 讲 baseline 思想的直接实现，手算归一化）。然后过一遍算法家族（REINFORCE++ / RLOO / DAPO / Dr.GRPO），最后以工程师视角盘点训练四大病症及其处方。</p>
+</div>
+
+<h2>1. 换奖励：RLVR，把打分器从「学的」换成「写的」</h2>
+
+<p>第 4 讲的结论让人不安：RM 是学出来的口味拟合，而 RL 是不知疲倦的漏洞挖掘机。2024 年起主流路线釜底抽薪——<b>凡是有客观答案的任务，不学打分器，直接写程序判分</b>。这就是 RLVR（RL with Verifiable Rewards）：</p>
+
+<table>
+  <tr><th>任务</th><th>verifier 怎么写</th><th>奖励</th></tr>
+  <tr><td>数学</td><td>从回答里抽取最终答案，与标准答案比对（数值容差、分数/小数/根式等价、单位换算）</td><td>对 1 / 错 0</td></tr>
+  <tr><td>代码</td><td>把生成的代码丢进沙箱跑单元测试（隐藏测试用例防背题）</td><td>通过的测试比例</td></tr>
+  <tr><td>格式</td><td>正则检查「思考过程/答案」的结构约定（如 R1 的 <code>&lt;think&gt;</code> 标签）</td><td>小分值</td></tr>
+  <tr><td>Agent 任务</td><td>环境最终状态是否达成目标（文件改对了没有、工具调用序列是否成功）</td><td>任务分 + 中间项</td></tr>
+</table>
+
+<p>verifier 是「程序」而非「模型」：结果可复现、不可被口才说服、成本约等于零。代价是<b>适用面变窄</b>——「这个回答写得是否优雅」没有标准答案，那部分任务仍归 RM 管。所以第 0 讲说两条腿走路。</p>
+
+<h3>1.1 verifier 设计要点（工程师日常）</h3>
+
+<ul>
+  <li><b>只判「对不对」，不判「好不好」</b>：任何「看起来像努力」的分数项（长度、步骤数）都会立刻被放大成作弊方向。</li>
+  <li><b>等价判断要鲁棒</b>：\(1/2\) 和 0.5 和 \(\sin 30°\) 是同一个答案；判错真答案比放过假答案更伤（信号被污染）。</li>
+  <li><b>格式分值要克制</b>：格式分过高，模型会「空有格式、内容乱写」——格式分吃掉正确分的经典病灶（第 4 节）。</li>
+  <li><b>代码测试要防泄漏</b>：模型会在训练中记住公开测试用例的答案形状；隐藏用例 + 随机化输入是底线。</li>
+</ul>
+
+<div class="box">
+<span class="bt">ORM vs PRM</span>按打分粒度分两派：ORM（Outcome RM，只判最终结果，即本讲默认）与 PRM（Process RM，对每个推理步骤打分——更精细但成本高、步骤级 hacking 更隐蔽）。当前主流是 ORM；PRM 在需要精细功劳记账的场景（第 2 讲难题一）仍是有力的候选。
+</div>
+
+<h2>2. 换优势：GRPO，用「组内对比」干掉 critic</h2>
+
+<h3>2.1 动机：critic 是最贵的一件行李</h3>
+
+<p>第 3 讲的四模型架构里，critic 的存在理由只有一个：<b>提供 baseline</b>（以及 GAE 的记账）。可 baseline 的本质只是「预期得分的参考线」——它真的需要一个和策略一样大的神经网络吗？</p>
+
+<h3>2.2 GRPO 的主意：baseline 现场统计，不用预测</h3>
+
+<p>GRPO（Group Relative Policy Optimization，DeepSeekMath 2024 提出、R1 大放异彩）说：对同一个 prompt，<b>采 \(G\) 条回答</b>（比如 4~16 条），它们的平均分就是现成的 baseline——难题的组均值天然低、简单题天然高，参考线自动随题目难度自适应。组内归一化得到优势：</p>
+
+<div class="formula">\[
+A_i = \frac{r_i - \mathrm{mean}(r_1, \dots, r_G)}{\mathrm{std}(r_1, \dots, r_G)}
+\]</div>
+
+<p>手算两个例子（\(G = 4\)）。例一，reward \(= [1, 1, 0, 0]\)：均值 0.5，标准差 0.5，优势 \(A = [+1, +1, -1, -1]\)——两条对的两条错的，对称。例二，\(r = [1, 1, 1, 0]\)：均值 0.75，标准差 0.433，优势 \(A = [+0.577, +0.577, +0.577, -1.732]\)——<b>三对一错时，错的那条被重罚</b>（惩罚力度是对的三倍），组内竞争， minority 被往死里压。这条性质深有含义：模型要学会的是「把少数派的错误路径排除掉」。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 348" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="34" font-size="13" font-weight="bold" fill="#1a1f2e">GRPO 的优势从哪来：同一问题采 4 条回答，组内减均值、除标准差</text>
+
+  <!-- ===== left panel: rewards ===== -->
+  <text x="100" y="64" font-size="12" font-weight="bold" fill="#1a1f2e">组内 reward（例二：r = [1, 1, 1, 0]）</text>
+
+  <!-- bars: baseline y=270, scale 150px/unit -->
+  <rect x="100" y="120" width="90" height="150" rx="4" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="145" y="112" font-size="12" text-anchor="middle" fill="#2f9e63" font-weight="bold">1</text>
+  <rect x="230" y="120" width="90" height="150" rx="4" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="275" y="112" font-size="12" text-anchor="middle" fill="#2f9e63" font-weight="bold">1</text>
+  <rect x="360" y="120" width="90" height="150" rx="4" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="405" y="112" font-size="12" text-anchor="middle" fill="#2f9e63" font-weight="bold">1</text>
+  <rect x="490" y="266" width="90" height="4" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="535" y="258" font-size="12" text-anchor="middle" fill="#5a6272" font-weight="bold">0</text>
+
+  <!-- baseline y for r=1 is 120; mean 0.75 -> y=270-112.5=157.5 -->
+  <line x1="90" y1="158" x2="580" y2="158" stroke="#e8862a" stroke-width="1.4" stroke-dasharray="6,3"/>
+  <text x="586" y="152" font-size="10.5" text-anchor="end" fill="#e8862a">均值 b = 0.75（baseline）</text>
+  <text x="586" y="192" font-size="10.5" text-anchor="end" fill="#5a6272">std = 0.433（尺度）</text>
+
+  <text x="145" y="290" font-size="10" text-anchor="middle" fill="#5a6272">回答 1</text>
+  <text x="275" y="290" font-size="10" text-anchor="middle" fill="#5a6272">回答 2</text>
+  <text x="405" y="290" font-size="10" text-anchor="middle" fill="#5a6272">回答 3</text>
+  <text x="535" y="290" font-size="10" text-anchor="middle" fill="#5a6272">回答 4</text>
+
+  <!-- ===== right panel: advantages ===== -->
+  <text x="640" y="64" font-size="12" font-weight="bold" fill="#1a1f2e">归一化优势 A = (r − 均值) / std</text>
+
+  <!-- zero line y=210; scale 40px/unit: +0.577 -> 23px up; -1.732 -> 69px down -->
+  <line x1="630" y1="210" x2="920" y2="210" stroke="#5a6272" stroke-width="1.2"/>
+
+  <rect x="640" y="187" width="56" height="23" rx="3" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="668" y="179" font-size="10.5" text-anchor="middle" fill="#2f9e63" font-weight="bold">+0.58</text>
+
+  <rect x="714" y="187" width="56" height="23" rx="3" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="742" y="179" font-size="10.5" text-anchor="middle" fill="#2f9e63" font-weight="bold">+0.58</text>
+
+  <rect x="788" y="187" width="56" height="23" rx="3" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="816" y="179" font-size="10.5" text-anchor="middle" fill="#2f9e63" font-weight="bold">+0.58</text>
+
+  <rect x="862" y="210" width="56" height="69" rx="3" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="890" y="250" font-size="10.5" text-anchor="middle" fill="#e8862a" font-weight="bold">−1.73</text>
+
+  <text x="668" y="290" font-size="10" text-anchor="middle" fill="#5a6272">A₁</text>
+  <text x="742" y="290" font-size="10" text-anchor="middle" fill="#5a6272">A₂</text>
+  <text x="816" y="290" text-anchor="middle" font-size="10" fill="#5a6272">A₃</text>
+  <text x="890" y="290" font-size="10" text-anchor="middle" fill="#5a6272">A₄</text>
+
+  <text x="40" y="316" font-size="11" fill="#5a6272">读图：三条正确回答小幅加分（+0.58），唯一错误回答被重罚（−1.73）——组内竞争自动完成「好/坏」的相对标注，</text>
+  <text x="40" y="334" font-size="11" fill="#5a6272">不需要任何 critic 网络。注意：若四条全对（或全错），std = 0，优势全部为 0，这一组白跑（第 4 节病症三）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 5-1</b>｜GRPO 的组内归一化。baseline（橙虚线）是现场统计的均值而非网络预测——第 1 讲「减平均分」思想的最直接实现，且参考线随题目难度自适应。</p>
+
+<h3>2.3 GRPO 的完整目标函数</h3>
+
+<p>优势有了，剩下沿用第 3 讲的全部机械（ratio、clip），KL 缰绳换个挂载点：</p>
+
+<div class="formula">\[
+\mathcal{L} = \frac{1}{G}\sum_{i=1}^{G} \frac{1}{|o_i|} \sum_t \min\big(\rho_{i,t} A_i,\ \mathrm{clip}(\rho_{i,t},\, 1{-}\varepsilon,\, 1{+}\varepsilon)\, A_i\big) \;-\; \beta\, D_{\mathrm{KL}}^{k_3}\big(\pi_\theta \| \pi_{\mathrm{ref}}\big)
+\]</div>
+
+<p>逐项认亲：\(\rho_{i,t} = \pi_\theta / \pi_{\mathrm{old}}\) 是第 3 讲的重要性采样比率；min-clip 一字不改；\(|o_i|\) 是第 \(i\) 条回答的 token 数（长度归一化，下文有争议）；KL 项用的是第 2 讲的 k3 估计器——<b>直接挂在 loss 里</b>，而不是像 InstructGPT 那样逐 token 加进奖励。与 PPO 的对照：</p>
+
+<table>
+  <tr><th></th><th>PPO</th><th>GRPO</th></tr>
+  <tr><td>baseline 来源</td><td>critic 网络预测 \(V(s)\)</td><td>同题 \(G\) 条回答的均值（现场统计）</td></tr>
+  <tr><td>优势粒度</td><td>逐 token（GAE 精细记账）</td><td>逐回答（组内一条一个 \(A_i\)，链上共享）</td></tr>
+  <tr><td>KL 挂载点</td><td>逐 token 加进 reward（InstructGPT 式）</td><td>直接加进 loss（k3 形式）</td></tr>
+  <tr><td>在场模型</td><td>4 个（actor、critic、ref、RM）</td><td>2~3 个（actor、ref；RLVR 时无 RM）</td></tr>
+  <tr><td>显存/工程负担</td><td>重装</td><td>轻装（critic 省下的最狠）</td></tr>
+</table>
+
+<div class="box">
+<span class="bt">出处</span>GRPO 出自 DeepSeekMath（2024.02），在 DeepSeek-R1（2025.01）中作为核心训练算法开源复现后成为社区默认。它砍 critic 的逻辑与第 1 讲的 baseline 理论严丝合缝——「期望不变、方差更优」的减法，从来不需要神经网络。
+</div>
+
+<h2>3. 算法家族速览</h2>
+
+<p>GRPO 不是孤例，而是「无 critic 策略梯度」家族最出名的一员。速览表（都是对第 1~3 讲零件的重组）：</p>
+
+<table>
+  <tr><th>算法</th><th>关键改动</th><th>一句话点评</th></tr>
+  <tr><td><b>REINFORCE++</b></td><td>baseline 取整个 batch 均值（跨问题）；token 级 KL；无多 epoch 复用</td><td>把教科书 REINFORCE 工程强化到能打，OpenRLHF 系主力</td></tr>
+  <tr><td><b>RLOO</b></td><td>baseline = 其余 \(G{-}1\) 条回答的均值（自己不算自己，leave-one-out）</td><td>统计上更干净（无偏）；与 GRPO 是近亲，差在 std 除法</td></tr>
+  <tr><td><b>GRPO</b></td><td>组内减均值除 std；KL(k3) 进 loss</td><td>当前默认答案；R1 同款</td></tr>
+  <tr><td><b>DAPO</b></td><td>四件套：clip-higher、动态采样、token 级 loss、过长截断（见第 4 节）</td><td>针对训练病症逐个下药，开源 50B-A3B 结果</td></tr>
+  <tr><td><b>Dr. GRPO</b></td><td>主张去掉「÷std」和「÷回答长度」两处归一化，认为它们引入难度偏置与长度偏置</td><td>提醒世人：GRPO 的归一化不是免费的，每处除法都在悄悄改变优化目标</td></tr>
+</table>
+
+<div class="infer">这个家族的本质分歧只有三处：baseline 取谁（组均值 / leave-one-out / batch 均值）、除不除 std 和长度（归一化偏置）、KL 放哪（reward / loss）。看懂这三处，新算法论文的摘要就能直接读懂。</div>
+
+<h2>4. 训练病症门诊（工程师视角）</h2>
+
+<p>算法选型只是开始，日常真正的战场是<b>看着曲线诊断训练</b>。四大常见病症：</p>
+
+<table>
+  <tr><th>病症</th><th>症状（看什么曲线）</th><th>病因</th><th>处方</th></tr>
+  <tr><td><b>熵坍缩</b></td><td>熵曲线单调下滑；回答趋同；reward 平台期</td><td>模型分布越来越尖（第 2 讲温度一节的伏笔），采样多样性耗尽 → 探索枯竭 → 无新样本可学</td><td>熵正则；DAPO 的 clip-higher（放宽正优势上界，给低概率 token 留上升通道）；调高温度；混合难度数据</td></tr>
+  <tr><td><b>长度爆炸</b></td><td>平均回答长度持续暴涨；显存/时长超预算</td><td>长回答偶然得分 → 被加强 → 更长；或 reward 里隐含长度项被放大</td><td>token 级 loss（DAPO，消除长度归一化偏置）；长度惩罚；设截断上限。注意：R1 式「自发变长」伴随正确率上升，是能力增长的正常现象——先看正确率再定性</td></tr>
+  <tr><td><b>无梯度组</b></td><td>大量 prompt 的优势全 0，有效 batch 缩水，训练「看起来在跑但没学」</td><td>组内全对或全错 → std = 0 → \(A = 0\)（手算：\(r=[1,1,1,1]\) 均值 1、std 0，减完除完是 0）</td><td>难度过滤：只留 pass rate 约 0.2~0.8 的题（有对有错才有信号）；DAPO 的动态采样：无梯度组重采直到凑满</td></tr>
+  <tr><td><b>KL 爆炸 / hacking</b></td><td>KL 曲线陡升；reward 涨但人工评测跌；格式分占比飙升</td><td>缰绳失效（β 太小 / loss 实现错）或 verifier 有洞（格式分过高、测试太弱）</td><td>检查 β 与 KL 实现；reward 洁癖（第 1 节）；对抗测试用例；必要时回滚 checkpoint</td></tr>
+</table>
+
+<div class="box">
+<span class="bt">监控面板</span>一名 RL 训练工程师的日常仪表盘通常有五条曲线：<b>reward 均值、KL、熵、回答长度、pass rate 分布</b>。四类病症分别在这五条曲线上留下指纹——先看曲线再动超参，是这行的基本修养。
+</div>
+
+<h2>5. 案例串讲：DeepSeek-R1 做对了什么</h2>
+
+<p>把全系列知识对准一个真实案例。R1-Zero 的配方（2025.01）：</p>
+
+<ul>
+  <li><b>起点</b>：直接在基座模型（跳过 SFT）上做 RL——证明推理能力可以纯靠试错长出来；</li>
+  <li><b>算法</b>：GRPO（本讲第 2 节）；<b>奖励</b>：RLVR 规则奖励——答案正确性（verifier）+ 格式分（<code>&lt;think&gt;</code> 结构），无任何神经 RM；</li>
+  <li><b>涌现</b>：训练中自发出现反思（「等等，我重新算一下」）、自我验证、回答长度自然增长——「推理行为是被奖励塑造出来的，不是被示范教出来的」，这是 AlphaGo 时刻在语言模型上的重演（第 0 讲 2.2 节）；</li>
+  <li><b>暴露的问题</b>：可读性差、中英混杂——所以正式版 R1 加了少量冷启动 SFT 再 RL：多阶段配方，RL 仍是主菜。</li>
+</ul>
+
+<p>这份配方开源后，GRPO + RLVR 成为 2025 年开源社区的标准动作。你现在应该能读懂它的每一个组件，并说清每个组件替代了前辈的什么、付出了什么代价。</p>
+
+<h2>6. 自查清单</h2>
+
+<p>下面 9 个问题都能不假思索地回答，就可以进入第 6 讲：</p>
+
+<ol class="checklist">
+  <li>RLVR 的奖励来源是什么？相比 RM 的两大好处？（答：程序判分；可复现、难被口才 hack、零推理成本）</li>
+  <li>verifier 设计要点，说两条？（答：只判对不对；等价判断鲁棒；格式分克制；测试防泄漏）</li>
+  <li>GRPO 的优势公式？\(r = [1,1,1,0]\) 的优势向量？（答：减均值除 std；[+0.58, +0.58, +0.58, −1.73]）</li>
+  <li>GRPO 相对 PPO 砍掉了什么、保留了什么？（答：砍 critic；保留 ratio、clip、KL 缰绳——换个挂载点）</li>
+  <li>为什么全对/全错的组没有梯度？对策？（答：std=0 → A=0；难度过滤 / 动态采样）</li>
+  <li>熵坍缩的症状与两味药？（答：熵降 + reward 平台 + 回答趋同；熵正则 / clip-higher / 调温 / 数据混合）</li>
+  <li>RLOO 与 GRPO 的 baseline 区别？（答：leave-one-out 均值 vs 全组均值；RLOO 无偏更干净）</li>
+  <li>DAPO 四件套？（答：clip-higher、动态采样、token 级 loss、过长截断）</li>
+  <li>Dr.GRPO 提醒我们哪两处归一化有偏？（答：÷std 的难度偏置、÷长度的长度偏置）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="rl-t6-systems.html">第 6 讲：系统与实战</a>——算法讲完了，最后一讲回答「它怎么在机房里跑起来」：rollout 引擎与训练引擎的协奏、权重同步、分布式并行与显存账本、异步与 on-policy 程度、稳定性调试清单、框架生态，以及一条从零开始的实战路线图（跑通你的第一个 GRPO）。这是七讲的落地篇。
+</div>
+
+<footer>本页为个人学习笔记 · RL 训练工程师零基础七讲系列 · 生成于 2026-09-19 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · GRPO 出自 DeepSeekMath (arXiv:2402.03300)，R1 出自 arXiv:2501.12948，DAPO 出自 arXiv:2503.14476，Dr. GRPO 出自 arXiv:2503.20783</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

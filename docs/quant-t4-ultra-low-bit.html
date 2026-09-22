@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大模型量化零基础七讲 · 第 4 讲：极低比特——2-bit 与 1.58-bit</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>大模型量化零基础七讲 · 第 4 讲：极低比特——2-bit 与 1.58-bit</h1>
+
+<div class="series-nav">
+  <a href="quant-t0-foundation.html">0 全景图</a>
+  <a href="quant-t1-basics.html">1 量化数学</a>
+  <a href="quant-t2-ptq.html">2 GPTQ·AWQ</a>
+  <a href="quant-t3-activation.html">3 激活与FP8</a>
+  <a class="here">4 极低比特</a>
+  <a href="quant-t5-kv-systems.html">5 KV与系统</a>
+  <a href="quant-t6-qat-roadmap.html">6 QAT·路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>大模型量化零基础七讲（本篇为第 4 讲）</p>
+  <p style="margin:4px 0"><b>前置：</b>第 1 讲的格子概念；第 2 讲的「输出误差」目标；第 3 讲的旋转去离群（本讲它再挑大梁）。</p>
+  <p style="margin:4px 0"><b>本讲地位：</b>4-bit 是当下的甜点，前沿在 2-bit 与 1.58-bit。这一讲覆盖三条路线：训练后量化的极限操作（AQLM、QuIP#）、原生低比特训练（BitNet b1.58）、硬件原生 FP4（MXFP4/NVFP4）——三条路线的分歧，正是量化领域「下一步往哪走」的争论现场。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>① 为什么从 4-bit 往下走，难度突然指数上升；② 矢量量化——「一组数打包一起量化」如何用同样的比特数刻画多得多的可能性；③ 极限 PTQ 的两个代表：AQLM（加性量化）与 QuIP#（旋转 + 码本设计）；④ 原生低比特训练 BitNet b1.58 的「三值权重」范式；⑤ Blackwell 硬件原生的 MXFP4/NVFP4。读完你能对着任何一个 2-bit 方案，说出它的核心技术选型。</p>
+</div>
+
+<h2>1. 为什么 4-bit 以下突然变难</h2>
+
+<p>从 16-bit 到 8-bit 到 4-bit，每降一步都只是「格子变粗」；但继续往下，难度是指数级的：<b>4-bit 有 16 个格子，3-bit 只有 8 个，2-bit 只剩 4 个</b>。每个数只能在 4 个值里挑——用第 1 讲的 RTN 直觉就能感到：4 个格子根本铺不满权重的分布。</p>
+
+<p>更本质的账：位宽每减 1 bit，每个权重的「信息预算」减掉一截。4-bit 时 GPTQ/AWQ 靠误差补偿和细粒度 scale 还能近无损；2-bit 时误差补偿要补的东西太多、scale 本身的存储占比也变大——<b>标量量化的天花板到了</b>。出路只有两条大方向：</p>
+
+<ol>
+  <li><b>换量化方式</b>：不再「一个数一个格子」，让一组数打包共享比特预算——矢量量化（§2）；</li>
+  <li><b>换训练方式</b>：让模型从出生就活在低比特世界里——原生低比特训练（§5）。</li>
+</ol>
+
+<div class="box">
+<span class="bt">一个背景数据点</span>Dettmers & Zettlemoyer（2023）用系统实验给出过「精度-大小-算力」的 scaling law：给定推理成本预算，<b>4-bit 通常是权衡的甜点</b>——这解释了为什么工业界主力停在 4-bit，而不是盲冲 2-bit。2-bit 的竞争力必须靠更聪明的编码换回来。第 6 讲会把这类 scaling law 正式讲一遍。
+</div>
+
+<h2>2. 矢量量化：从「格子」到「字典」</h2>
+
+<p>标量量化（前几讲的一切）里，每个权重独立地从一个<b>一维格子</b>里挑值。矢量量化（VQ, Vector Quantization）换了个玩法：<b>把 \(k\) 个权重打包成一个向量，从一本「字典」（码本 codebook）里挑一个最像的向量整体替换</b>。</p>
+
+<p>为什么这样能省比特？因为「组合」是指数级的。下面这张图是它的最小直觉：</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 248" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">同样 2 bit / 数：标量格子 vs 打包成向量查字典</text>
+
+  <!-- left: scalar grid -->
+  <text x="240" y="62" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">标量量化</text>
+  <text x="240" y="80" font-size="10.5" text-anchor="middle" fill="#5a6272">每个数独立从 4 个值里挑（2-bit）</text>
+  <line x1="100" y1="140" x2="380" y2="140" stroke="#1a1f2e" stroke-width="1.5"/>
+  <line x1="100" y1="134" x2="100" y2="146" stroke="#1a1f2e"/>
+  <line x1="193" y1="134" x2="193" y2="146" stroke="#1a1f2e"/>
+  <line x1="287" y1="134" x2="287" y2="146" stroke="#1a1f2e"/>
+  <line x1="380" y1="134" x2="380" y2="146" stroke="#1a1f2e"/>
+  <circle cx="146" cy="140" r="4.5" fill="#2456c4"/>
+  <circle cx="240" cy="140" r="4.5" fill="#2456c4"/>
+  <circle cx="333" cy="140" r="4.5" fill="#2456c4"/>
+  <text x="100" y="166" font-size="10" text-anchor="middle" fill="#5a6272">值 1</text>
+  <text x="193" y="166" font-size="10" text-anchor="middle" fill="#5a6272">值 2</text>
+  <text x="287" y="166" font-size="10" text-anchor="middle" fill="#5a6272">值 3</text>
+  <text x="380" y="166" font-size="10" text-anchor="middle" fill="#5a6272">值 4</text>
+
+  <!-- right: vector codebook -->
+  <text x="690" y="62" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">矢量量化（2 个数打包）</text>
+  <text x="690" y="80" font-size="10.5" text-anchor="middle" fill="#5a6272">打包点 (a, b) 从 16 个码字里挑（4-bit 打包 = 2-bit/数）</text>
+  <rect x="520" y="96" width="340" height="96" fill="#eef3fc" stroke="#c9d2e0"/>
+  <g fill="#2456c4">
+    <circle cx="548" cy="122" r="4"/><circle cx="620" cy="122" r="4"/><circle cx="692" cy="122" r="4"/><circle cx="764" cy="122" r="4"/><circle cx="836" cy="122" r="4"/>
+    <circle cx="548" cy="160" r="4"/><circle cx="620" cy="160" r="4"/><circle cx="692" cy="160" r="4"/><circle cx="764" cy="160" r="4"/><circle cx="836" cy="160" r="4"/>
+  </g>
+  <g fill="#e8862a">
+    <circle cx="548" cy="198" r="4"/><circle cx="620" cy="198" r="4"/><circle cx="692" cy="198" r="4"/><circle cx="764" cy="198" r="4"/><circle cx="836" cy="198" r="4"/>
+  </g>
+  <text x="548" y="220" font-size="10" text-anchor="middle" fill="#5a6272">码本维 1</text>
+  <text x="836" y="220" font-size="10" text-anchor="middle" fill="#5a6272">码本维 k</text>
+
+  <text x="40" y="238" font-size="11" fill="#1a1f2e">维度越高，同样比特数的「形状库」组合数指数增长——矢量量化用「组合」换「分辨率」。</text>
+</svg>
+</div>
+<p class="cap"><b>图 4-1</b>｜码本直觉。一维 2-bit 只有 4 种取值；两个数打包后同样预算有 \(2^4=16\) 个「形状」可选；打包 8 个数、用 16 bit 查字典，就是 2-bit/数配 \(2^{16}=65536\) 种形状——比 4 个格子丰富了 1.6 万倍。码字的位置还可以精心设计（贴合权重分布），这是标量格子做不到的。</p>
+
+<h2>3. 极限 PTQ 之一：AQLM（加性量化）</h2>
+
+<p>AQLM（Egiazarian 等，2024）把「查字典」玩到极致：<b>一个权重向量用「多个码本的码字之和」表示</b>——第一本字典给个粗轮廓，第二本字典补残差，第三本再补……像画家先铺底色再层层上细节。例如 8 本字典、每本 8 bit 索引，联合表示一组 8 个权重：总预算 64 bit / 8 权重 = <b>2 bit/权重</b>，但可表达的组合是 \( (2^8)^8 = 2^{64} \) 种——标量量化在同样预算下只有 \(4^8 = 2^{16}\) 种。</p>
+
+<p>配套三件套：① <b>beam search</b> 找码字组合（不逐本贪心，多路并进比一比）；② 量化后<b>微调码本</b>本身，让层输出误差（第 2 讲的目标）进一步下降；③ 分层残差补码本。效果：2-bit AQLM 的质量能摸到 3-bit 乃至 4-bit GPTQ 的水平。代价：量化过程本身算力贵、推理 kernel 是查表型（比矩阵乘难优化）。</p>
+
+<h2>4. 极限 PTQ 之二：QuIP#（旋转 + 格子设计）</h2>
+
+<p>QuIP#（Tseng 等，2024）示范了把前面所有工具组合起来的威力，两大组件：</p>
+
+<ul>
+  <li><b>Incoherence processing（第 3 讲的旋转，再来一次）</b>：先对权重和激活做 Hadamard 旋转——除了消 outlier，旋转后的分布更接近「各向同性」（各个方向均匀），这对码本至关重要：<b>只有分布均匀，一本固定的小字典才能高效覆盖所有方向</b>。</li>
+  <li><b>E8P 码本</b>：基于数学里的 E8 晶格（8 维空间中已知「堆球效率」最高的格点结构）设计 2-bit 码本，再用 Lloyd 算法（k-means 的亲戚）微调码字位置贴合权重分布。</li>
+</ul>
+
+<p>效果：Llama 系 70B 模型 2-bit 量化后质量可用，是 2-bit PTQ 的代表作。和 AQLM 对比着记：<b>AQLM 靠「多字典叠加」堆出表达力，QuIP# 靠「先把分布揉匀 + 一本精心设计的字典」</b>——殊途同归，都在用组合换分辨率。</p>
+
+<div class="infer">GPTVQ、VPTQ 等同期工作同属矢量量化家族：GPTVQ 用 Hessian 信息（第 2 讲的 GPTQ 血统）决定分组和码本；VPTQ 直接用现成 VQ 算法量化再微调。家族共识：矢量量化 + 输出误差导向的微调，是 2-bit 的正确打开方式。</div>
+
+<h2>5. 换范式：BitNet b1.58，从训练第一天就低比特</h2>
+
+<p>前面所有方法都是「先按 FP16 训好，再想办法压」。BitNet（Ma 等，2024）把问题反过来：<b>训练时权重就只有三个值 −1、0、+1</b>，每个权重信息量 \(\log_2 3 \approx 1.58\) bit——这就是「b1.58」的由来。</p>
+
+<p>做法核心是把普通线性层换成 <b>BitLinear</b>：训练的每一步前向里，权重先按绝对值均值（absmean）三值化、激活按 absmax 量化到 8-bit，计算用三值权重；梯度用 straight-through estimator（STE，「假装量化没发生」把梯度直传回去——第 6 讲细讲）照常训练。等效于「模型自己学会了在被量化的身体里生活」。</p>
+
+<p>这条路线的卖点和代价都很鲜明：</p>
+
+<table>
+  <tr><th></th><th>训练后量化（GPTQ/AWQ/AQLM/QuIP#）</th><th>原生低比特训练（BitNet b1.58）</th></tr>
+  <tr><td><b>前提</b></td><td>任何开源 FP16 模型拿来就压</td><td>必须从头训练（算力门槛高）</td></tr>
+  <tr><td><b>极致位宽</b></td><td>2-bit 已是极限边缘</td><td>1.58-bit 天然成立</td></tr>
+  <tr><td><b>推理形态</b></td><td>低比特存储 + 反量化/查表计算</td><td>乘加退化成加减与查表，能耗带宽双降</td></tr>
+  <tr><td><b>生态</b></td><td>成熟（vLLM/llama.cpp 原生支持）</td><td>建设中（官方开源 2B/4B 级模型）</td></tr>
+</table>
+
+<p>BitNet 官方的 2B-4T 模型（2B 参数、4T token 训练）展示出：1.58-bit 训练的模型在常识/数学/代码基准上能与同规模全精度模型掰手腕，能耗显著更低。它代表的观点值得记住：<b>量化的终极形态不是「压缩一个稠密模型」，而是「直接训练一个稀疏模型」</b>——这与第 6 讲的 QAT 一脉相承。</p>
+
+<h2>6. 硬件原生 FP4：MXFP4 与 NVFP4</h2>
+
+<p>当 NVIDIA Blackwell（B200/GB200）把 4-bit 浮点做进 tensor core（吞吐较 FP8 再翻倍）、「原生 FP4」从学术玩具变成硬件指令，格式设计的战场就转移到了「4-bit 浮点 + 什么粒度的 scale」：</p>
+
+<table>
+  <tr><th></th><th>MXFP4</th><th>NVFP4</th></tr>
+  <tr><td><b>元素格式</b></td><td>E2M1（1 符号 + 2 指数 + 1 尾数）</td><td>E2M1（同左）</td></tr>
+  <tr><td><b>共享 scale</b></td><td>每 32 个数 1 个 E8M0（纯 2 的幂）scale</td><td>每 16 个数 1 个 FP8 (E4M3) scale + 张量级二级 scale</td></tr>
+  <tr><td><b>特点</b></td><td>OCP 标准格式，训练/推理通用，硬件简单</td><td>块更小、scale 更灵活，精度通常更好，NVIDIA 原生</td></tr>
+</table>
+
+<p>这是第 1 讲「粒度」概念在硬件层面的延伸：E2M1 的格子极粗（每数量级只有几格），全靠「小团体共享 scale」把精度救回来。新一代模型也开始把 FP4 引入大规模训练与推理（DeepSeek-V4 即宣布在 MoE 核心计算上使用 FP4）。趋势很清楚：<b>位宽战场一路下探（FP16→BF16→FP8→FP4），每一步都靠「更细的 scale 粒度」补精度</b>——你已经在第 1、3 讲见过完全相同的剧本。</p>
+
+<h2>7. 三条路线总览与实用建议</h2>
+
+<div class="fig">
+<svg viewBox="0 0 940 280" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">极低比特的三条路线</text>
+
+  <rect x="40" y="52" width="280" height="196" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <rect x="40" y="52" width="280" height="34" rx="10" fill="#eef3fc" stroke="#c9d2e0"/>
+  <text x="180" y="74" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">训练后极限派（PTQ）</text>
+  <text x="54" y="110" font-size="10.5" fill="#2a3040">手段：矢量量化 / 加性量化 / 旋转</text>
+  <text x="54" y="134" font-size="10.5" fill="#2a3040">代表：AQLM、QuIP#、GPTVQ</text>
+  <text x="54" y="158" font-size="10.5" fill="#2a3040">优点：任何开源模型拿来就压</text>
+  <text x="54" y="182" font-size="10.5" fill="#2a3040">代价：量化贵、kernel 难优化</text>
+  <text x="54" y="214" font-size="10" fill="#5a6272">适用：显存极限下的白嫖方案</text>
+
+  <rect x="340" y="52" width="280" height="196" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <rect x="340" y="52" width="280" height="34" rx="10" fill="#fbe3cc" stroke="#c9d2e0"/>
+  <text x="480" y="74" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">原生低比特训练派</text>
+  <text x="354" y="110" font-size="10.5" fill="#2a3040">手段：训练时权重即三值（STE）</text>
+  <text x="354" y="134" font-size="10.5" fill="#2a3040">代表：BitNet b1.58</text>
+  <text x="354" y="158" font-size="10.5" fill="#2a3040">优点：1.58-bit 成立，能耗极低</text>
+  <text x="354" y="182" font-size="10.5" fill="#2a3040">代价：必须自己从头训</text>
+  <text x="354" y="214" font-size="10" fill="#5a6272">适用：从零造低比特模型</text>
+
+  <rect x="640" y="52" width="280" height="196" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <rect x="640" y="52" width="280" height="34" rx="10" fill="#d9f0e2" stroke="#c9d2e0"/>
+  <text x="780" y="74" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">硬件原生 FP4 派</text>
+  <text x="654" y="110" font-size="10.5" fill="#2a3040">手段：E2M1 + 小块共享 scale</text>
+  <text x="654" y="134" font-size="10.5" fill="#2a3040">代表：MXFP4、NVFP4</text>
+  <text x="654" y="158" font-size="10.5" fill="#2a3040">优点：Blackwell 原生加速</text>
+  <text x="654" y="182" font-size="10.5" fill="#2a3040">代价：需要新硬件配合</text>
+  <text x="654" y="214" font-size="10" fill="#5a6272">适用：新集群的训练与推理</text>
+
+  <text x="40" y="270" font-size="11" fill="#1a1f2e">共同主题：位宽越低，越依赖「聪明的编码 + 更细的 scale 粒度 + 输出误差导向的优化」。</text>
+</svg>
+</div>
+<p class="cap"><b>图 4-2</b>｜三条路线地图。今天（2026）的实践格局：4-bit PTQ 仍是默认；2-bit 在显存极限时用 AQLM/QuIP# 或 llama.cpp 的 IQ2 系列（配合 importance matrix 校准）；FP4 随 Blackwell 铺开；BitNet 是值得跟踪的范式候选。</p>
+
+<h2>8. 自查清单</h2>
+
+<ol class="checklist">
+  <li>为什么 4-bit 往下难度指数上升？（答：格子数 16→8→4 指数减少；误差补偿和 scale 的开销占比上升，标量量化到顶）</li>
+  <li>矢量量化的核心思想？为什么同样的比特数表达力强得多？（答：一组数打包成一个向量查码本；组合数随维数指数增长，用组合换分辨率）</li>
+  <li>AQLM 的「加性」指什么？（答：一个向量 = 多本码本的码字之和，逐本补残差，配合 beam search 与码本微调）</li>
+  <li>QuIP# 的两个组件？（答：Hadamard incoherence 处理（揉匀分布、消 outlier）+ 基于 E8 晶格的 E8P 码本）</li>
+  <li>BitNet b1.58 的 1.58 哪来的？（答：权重取 −1/0/+1 三个值，log₂3 ≈ 1.58 bit）</li>
+  <li>BitLinear 训练时如何让梯度穿过「三值化」？（答：STE 直传，量化视为不可微的直通层；第 6 讲细讲）</li>
+  <li>MXFP4 和 NVFP4 的共同补救手段？（答：E2M1 格子太粗，靠小块共享 scale（32 数/16 数一块）找回精度）</li>
+  <li>今天什么时候考虑 2-bit？（答：显存极限且接受少量质量损失时；默认仍是 4-bit 甜点）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="quant-t5-kv-systems.html">第 5 讲：KV Cache 量化与推理系统落地</a>——权重和激活都讲完了，还剩显存账本里增长最快的一栏：KV cache（长对话下反超权重）。这一讲讲 KV 量化的特殊难点（key 的通道维度 outlier、attention sink）、代表方案 KIVI，以及把一切拼起来的推理系统：Marlin/Machete 量化 kernel、QServe 的 W4A8KV4、vLLM/TensorRT-LLM 的量化选项和 GGUF 的 k-quants。
+</div>
+
+<footer>本页为个人学习笔记 · 大模型量化零基础七讲系列 · 生成于 2026-09-20 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 叙述以主流实践与经典论文为准，细节以原始文献为最终依据</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

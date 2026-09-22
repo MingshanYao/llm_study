@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RL 训练工程师零基础七讲 · 第 1 讲：策略梯度从零讲</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>RL 训练工程师零基础七讲 · 第 1 讲：策略梯度从零讲</h1>
+
+<div class="series-nav">
+  <a href="rl-t0-foundation.html">0 全景图</a>
+  <a class="here">1 策略梯度</a>
+  <a href="rl-t2-llm-as-rl.html">2 LLM×RL</a>
+  <a href="rl-t3-ppo.html">3 PPO</a>
+  <a href="rl-t4-rlhf-dpo.html">4 RLHF·DPO</a>
+  <a href="rl-t5-rlvr-grpo.html">5 RLVR·GRPO</a>
+  <a href="rl-t6-systems.html">6 系统与实战</a>
+  <a href="rl-t7-score-centering.html">番外 SC</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>本讲定位：</b>整个系列的数学地基。后面六讲的每个算法（PPO、DPO、GRPO）都是本讲那条公式 + 不同的修补。</p>
+  <p style="margin:4px 0"><b>读者假设：</b>会加减乘除、知道 \(e^x\) 是指数函数就够了。<b>不需要会微积分</b>——「导数」会先解释成大白话，每个求导结论都配数值验证，你可以只用乘除跟着算。</p>
+  <p style="margin:4px 0"><b>场景收缩：</b>本讲的问题是全系列最小的 RL 问题——只有一次动作、一个打分。第 2 讲再把它放大成「LLM 生成一整段回答」。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>从「怎么让模型偏向高分动作」这个朴素愿望出发，推出 RL 的第一性公式 <b>REINFORCE</b>（策略梯度）：一次完整的手算更新；然后直面它最大的毛病——<b>方差大到没法用</b>——以及第一味药：<b>baseline</b>（减去平均分，把「绝对好坏」变成「比平均好多少」，即优势 advantage）。读完这讲，「好的加强、差的减弱」就不再是一句口号，而是一串你能亲手算出来的数字。</p>
+</div>
+
+<h2>1. 场景：一个只会写标题的小模型</h2>
+
+<p>想象你有个电商产品：给商品起广告标题。你手头有三种风格可选：</p>
+
+<ul>
+  <li>\(A_1\)：疑问式——「还在为洗衣烦恼？」</li>
+  <li>\(A_2\)：数字式——「3 秒去污，10 人 9 夸」</li>
+  <li>\(A_3\)：感叹式——「太好用了吧！！」</li>
+</ul>
+
+<p>每种风格有一个未知的真实点击率 \(r(A_1), r(A_2), r(A_3)\)。<b>关键约束：事先不知道</b>，只有把标题发出去、看用户点没点，才能拿到一次（带运气成分的）观测。没有「标准答案」可以照抄，只有「事后打分」——这正是第 0 讲说的 RL 和 SFT 的分界线。</p>
+
+<p>这个问题在 RL 教材里叫<b>多臂老虎机（bandit）</b>：面对一台有三个拉杆的老虎机，哪个拉杆奖金多，只能拉了才知道。它砍掉了 RL 的全部复杂性（没有时序、没有延迟奖励），只留下最核心的一件事：<b>在不知道各动作价值的前提下，如何调整「选择倾向」，让长期收益最大</b>。策略梯度的一切都从这个最小场景长出来。</p>
+
+<h2>2. 朴素想法及其死胡同</h2>
+
+<p>最直觉的方案：<b>每种风格都试一段时间，记住平均点击率，以后永远选最高的</b>。这叫「贪心」。两个致命问题：</p>
+
+<ol>
+  <li><b>样本会骗人</b>：A2 前三次恰好被点击，平均分虚高——它可能只是运气好。太早下结论会锁死在错误选择上（探索不足）；反过来，永远平均着试、不敢下注，又浪费流量（利用不足）。这就是经典的<b>探索-利用两难</b>，有一堆聪明解法（比如 ε-greedy：90% 选当前最优，10% 随机探索）。</li>
+  <li><b>对 LLM 场景直接失效</b>：候选动作不是 3 种风格，而是<b>所有可能的回答</b>——天文数字，永远「试不完」。靠「每样试到再比较」的思路，在动作空间巨大时彻底破产。</li>
+</ol>
+
+<p>需要换思路：不再「比较后硬选」，而是让<b>「选择倾向」本身成为可学习的参数</b>，用每次打分轻轻推它一把。这就是策略梯度。</p>
+
+<h2>3. 把选择变成概率：softmax 策略</h2>
+
+<p>给每个动作配一个可调的分数（术语叫 logit）：\(z_1, z_2, z_3\)。用第 0 讲提过的 softmax 把分数变成概率——「选择倾向」：</p>
+
+<div class="formula">\[
+\pi(a_i) = \frac{e^{z_i}}{e^{z_1} + e^{z_2} + e^{z_3}}
+\]</div>
+
+<p>手算一遍。取 \(z = [1.0,\ 0.5,\ 0.0]\)：</p>
+
+<table>
+  <tr><th>动作</th><th>分数 \(z_i\)</th><th>\(e^{z_i}\)</th><th>除以总和 5.367</th><th>概率 \(\pi(a_i)\)</th></tr>
+  <tr><td>\(A_1\) 疑问式</td><td>1.0</td><td>2.718</td><td>2.718 / 5.367</td><td><b>0.506</b></td></tr>
+  <tr><td>\(A_2\) 数字式</td><td>0.5</td><td>1.649</td><td>1.649 / 5.367</td><td><b>0.307</b></td></tr>
+  <tr><td>\(A_3\) 感叹式</td><td>0.0</td><td>1.000</td><td>1.000 / 5.367</td><td><b>0.186</b></td></tr>
+</table>
+
+<p>参数 \(z\) 就是模型的可学习参数。所谓「训练」，就是根据每次的打分去微调这三个数。现在的核心问题是：<b>一次观测（选了某个动作、得了某个分）之后，这三个数该往哪边调、调多少？</b></p>
+
+<div class="box">
+<span class="bt">先说清「导数」</span>后文反复出现梯度（记号 \(\nabla\)）。你只需要知道：梯度是一组数，<b>每个参数一个</b>，正号表示「这个参数调大对目标有利」，负号表示「调大不利」，数的绝对值表示「影响多大」。所以「算梯度」= 问每个参数「该往哪边拧」。
+</div>
+
+<h2>4. 推导 REINFORCE：三步走完</h2>
+
+<h3>4.1 目标函数：期望奖励</h3>
+
+<p>我们想最大化的是<b>期望奖励</b>（按选择概率加权的平均得分）：</p>
+
+<div class="formula">\[
+J(\theta) = \sum_{i} \pi(a_i)\, r(a_i)
+\]</div>
+
+<p>\(z\) 概率大、\(r\) 高的动作占的权重就大，\(J\) 就高。麻烦在于：\(r(a_i)\) <b>未知</b>（只能试出来），所以没法直接对 \(J\) 求导。得绕一步。</p>
+
+<h3>4.2 关键变形：log-derivative 技巧</h3>
+
+<p>链式法则说 \(\nabla \log \pi = \frac{\nabla \pi}{\pi}\)，移项得到一个恒等式：</p>
+
+<div class="formula">\[
+\nabla \pi(a_i) = \pi(a_i) \cdot \nabla \log \pi(a_i)
+\]</div>
+
+<p>代入目标函数的梯度：</p>
+
+<div class="formula">\[
+\nabla J = \sum_i \pi(a_i)\, r(a_i)\, \nabla \log \pi(a_i)
+\]</div>
+
+<p>这个变形看着只是换个写法，实则点石成金：右边是<b>「按概率 \(\pi\) 抽一个动作，用它的得分乘它的 \(\nabla\log\pi\)」这种随机量的平均值</b>（数学行话：期望）。期望不用知道全貌，<b>抽样就能估</b>——而「按 \(\pi\) 抽动作、观测得分」，恰好就是我们手上唯一能做的事。于是得到可操作的更新规则，这就是 <b>REINFORCE</b> 算法（1992 年提出，所有策略梯度方法的老祖宗）：</p>
+
+<div class="formula">\[
+\boxed{\; z \leftarrow z + \mathrm{lr} \cdot r \cdot \nabla \log \pi(a) \;}
+\]</div>
+
+<p>大白话：<b>按当前倾向抽一个动作 → 看打分 → 分数越高，越用力把「选中它」的概率往上推；分数为负就反着推。</b>推多狠，既正比于得分 \(r\)，也正比于 lr（学习率，步长旋钮）。</p>
+
+<div class="box">
+<span class="bt">为什么非要绕 log</span>\(\nabla\pi\) 和 \(\pi\nabla\log\pi\) 数学上完全等价，但 log 形式把「梯度 = 可采样的期望」这个结构显式化了：它天然对接「抽一次样就估一次梯度」的工作方式，并且能原封不动推广到「一条回答由几百个 token 连续采样组成」的场景（第 2 讲）。log-derivative 技巧是全部策略梯度方法的阀门。
+</div>
+
+<h3>4.3 softmax 的梯度长什么样（数值验证）</h3>
+
+<p>更新规则里还剩一个零件没算出：\(\nabla\log\pi(a)\)。对 softmax 策略，有个极好记的结论：</p>
+
+<div class="formula">\[
+\nabla_{z_j} \log \pi(a) = \mathbf{1}\{j{=}a\} - \pi(j)
+\]</div>
+
+<p>读法：对第 \(j\) 个分数求导——\(j\) 恰好是被选中的动作时结果是 \(1-\pi(j)\)，否则是 \(-\pi(j)\)。向量形式记作 \(\,e_a - \pi\)（onehot 减概率）。直觉：把被选中者的概率往上顶、其余按各自的体量往下匀，「总和为 1」的守恒。</p>
+
+<p>不用背，我们用乘除<b>验证</b>它。取初始 \(z = [0, 0, 0]\)，则 \(\pi = [1/3, 1/3, 1/3]\)。给 \(z_1\) 加一个很小的 0.1：</p>
+
+<table>
+  <tr><th>步骤</th><th>算式</th><th>结果</th></tr>
+  <tr><td>新概率</td><td>\(e^{0.1} = 1.10517\)，总和 \(= 1.10517 + 1 + 1 = 3.10517\)</td><td>\(\pi_1' = 1.10517/3.10517 = 0.35594\)</td></tr>
+  <tr><td>\(\log\pi_1\) 的变化</td><td>\(\ln(0.35594) - \ln(0.33333) = \ln(1.06782)\)</td><td>\(+0.06564\)</td></tr>
+  <tr><td>数值斜率</td><td>\(0.06564 / 0.1\)</td><td><b>0.656</b></td></tr>
+  <tr><td>公式预测</td><td>\(1 - \pi_1 = 1 - 1/3\)</td><td><b>0.667</b> ✓（小差值来自 0.1 不够小）</td></tr>
+</table>
+
+<p>交叉项也验一下：\(z_1\) 上涨时 \(\log\pi_2\) 怎么变？新 \(\pi_2 = 1/3.10517 = 0.32204\)，\(\ln(0.32204/0.33333) = -0.03447\)，斜率 \(-0.345\)，公式预测 \(-\pi_2 = -1/3 = -0.333\) ✓。两个方向都吻合，\(\,e_a - \pi\) 这个结论可以放心用。</p>
+
+<h2>5. 完整手算一次 REINFORCE 更新</h2>
+
+<p>万事俱备，把第 3、4 节的数字串成一次真实更新。设定：当前分数 \(z = [1.0,\ 0.5,\ 0.0]\)，概率 \(\pi = [0.506,\ 0.307,\ 0.186]\)（第 3 节手算的）。这一步<b>抽中了 \(A_2\)</b>（数字式），市场反应好，得分 \(r = +3\)。学习率 \(\mathrm{lr} = 0.1\)。</p>
+
+<table>
+  <tr><th>步骤</th><th>算式</th><th>结果</th></tr>
+  <tr><td>① 梯度向量</td><td>\(e_{A_2} - \pi = [0,1,0] - [0.506, 0.307, 0.186]\)</td><td>\([-0.506,\ 0.693,\ -0.186]\)</td></tr>
+  <tr><td>② 乘上得分</td><td>\(r \times ① = 3 \times [-0.506,\ 0.693,\ -0.186]\)</td><td>\([-1.519,\ 2.079,\ -0.559]\)</td></tr>
+  <tr><td>③ 更新分数</td><td>\(z + 0.1 \times ② = [1.0 - 0.152,\ 0.5 + 0.208,\ 0 - 0.056]\)</td><td>\([0.848,\ 0.708,\ -0.056]\)</td></tr>
+  <tr><td>④ 新概率</td><td>对新 \(z\) 重算 softmax（\(e^{0.848}=2.335\)，\(e^{0.708}=2.030\)，\(e^{-0.056}=0.946\)，总和 5.310）</td><td>\([0.440,\ 0.382,\ 0.178]\)</td></tr>
+</table>
+
+<p>看变化：<b>\(A_2\) 的概率 0.307 → 0.382（上升）</b>；两个落选者都下降，且按原有体量分摊——\(A_1\)（原来概率最大）降得最多（0.506 → 0.440），\(A_3\) 只微降 0.008。这正是 \(e_a - \pi\) 的守恒直觉：加分是定向的（只加给 \(A_2\)），但概率总和必须为 1，多出来的份额按比例从别人那里匀。</p>
+
+<p>用代码验证（数字与手算完全一致，你可以现在就跑）：</p>
+
+<pre><code class="language-python">import numpy as np
+
+z = np.array([1.0, 0.5, 0.0])
+pi = np.exp(z) / np.exp(z).sum()      # [0.506, 0.307, 0.186]
+a, r, lr = 1, 3.0, 0.1                # 采样到动作 1（A2），奖励 +3
+onehot = np.eye(3)[a]
+
+z = z + lr * r * (onehot - pi)        # REINFORCE 一步更新
+print(np.exp(z) / np.exp(z).sum())    # [0.440, 0.382, 0.178]</code></pre>
+
+<div class="fig">
+<svg viewBox="0 0 940 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="m1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">REINFORCE 循环：本讲全部内容的一张图</text>
+
+  <!-- A: policy -->
+  <rect x="60" y="64" width="220" height="74" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="170" y="94" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">策略 π = softmax(z)</text>
+  <text x="170" y="116" font-size="10" text-anchor="middle" fill="#5a6272">例：z = [1.0, 0.5, 0.0]</text>
+
+  <!-- B: sample -->
+  <rect x="660" y="64" width="220" height="74" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="770" y="94" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">按概率采样一个动作</text>
+  <text x="770" y="116" font-size="10" text-anchor="middle" fill="#5a6272">例：抽中 A2（数字式）</text>
+
+  <!-- C: reward -->
+  <rect x="660" y="190" width="220" height="74" rx="10" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="770" y="220" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">环境打分 r</text>
+  <text x="770" y="242" font-size="10" text-anchor="middle" fill="#5a6272">例：用户点了 → r = +3</text>
+
+  <!-- D: update -->
+  <rect x="60" y="190" width="220" height="74" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="170" y="220" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">更新分数 z</text>
+  <text x="170" y="242" font-size="10" text-anchor="middle" fill="#5a6272">z += lr · r · (e_a − π)</text>
+
+  <!-- A -> B -->
+  <line x1="280" y1="101" x2="653" y2="101" stroke="#2456c4" stroke-width="1.6" marker-end="url(#m1b)"/>
+  <text x="470" y="91" font-size="10.5" text-anchor="middle" fill="#2456c4">概率大的动作更容易被抽中</text>
+
+  <!-- B -> C -->
+  <line x1="770" y1="138" x2="770" y2="183" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <text x="786" y="165" font-size="10.5" fill="#5a6272">发出标题</text>
+
+  <!-- C -> D -->
+  <line x1="660" y1="227" x2="287" y2="227" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <text x="470" y="217" font-size="10.5" text-anchor="middle" fill="#5a6272">r 越大，推得越狠；r 为负就反着推</text>
+
+  <!-- D -> A -->
+  <line x1="170" y1="190" x2="170" y2="145" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <text x="154" y="172" font-size="10.5" text-anchor="end" fill="#5a6272">概率随之改变</text>
+
+  <text x="470" y="180" font-size="11" text-anchor="middle" fill="#1a1f2e">LLM 版对照：动作 = 一整条回答，打分 = reward / verifier</text>
+  <text x="470" y="202" font-size="10" text-anchor="middle" fill="#5a6272">（第 2 讲展开）</text>
+</svg>
+</div>
+<p class="cap"><b>图 1-1</b>｜REINFORCE 闭环。与第 0 讲图 0-2 逐环对应——只是把「模型」具体化成了「softmax 概率」、把「更新」具体化成了一条能手算的公式。</p>
+
+<h2>6. 最大的敌人：方差</h2>
+
+<p>公式是有了，但直接用它训练会立刻撞墙。两个来源的抖动：</p>
+
+<ol>
+  <li><b>打分本身带运气</b>：\(A_2\) 真实点击率 0.5，但单次投放的结果是「点了 / 没点」二值——同样是发 \(A_2\)，这次更新推 \(+10\)，下次拉 \(-10\)（假设 10 分制），参数被来回猛拽。</li>
+  <li><b>推的方向和力度全靠单次采样</b>：本讲为了简单，一次只抽一个动作；抽到谁，梯度就长什么样。多次采样之间的差异，全部变成了更新的噪声。</li>
+</ol>
+
+<p>「梯度估得很准，但每次估出来的值都在大幅跳动」——这个性质叫<b>高方差</b>。后果是训练曲线剧烈震荡、对学习率极端敏感：步子大了荡秋千，步子小了挪不动。<b>策略梯度研究的一半历史，就是在跟方差作斗争</b>。本讲讲第一味药。</p>
+
+<h2>7. 第一味药：baseline 与优势（advantage）</h2>
+
+<h3>7.1 数学上白送的性质</h3>
+
+<p>把更新公式里的得分 \(r\) 换成 \(r - b\)（\(b\) 是任意一个<b>不依赖于本次抽到哪个动作</b>的数，称为 baseline），梯度期望<b>一模一样</b>。一行证明：添加的那项是 \(-b \sum_i \pi(a_i)(e_{a_i} - \pi)\)，而 \(\sum_i \pi(a_i)\, e_{a_i} = \pi\)（概率自己加权自己），所以整个中括号 \(= \pi - \pi = 0\)。</p>
+
+<p>期望不变，那图什么？<b>图方差变小</b>。数学上可以严格证明（本讲不推），选合适的 \(b\) 能把单次估计的抖动压下来；最常用的选择就是平均分 \(b = \mathbb{E}[r]\)。感受一下效果——沿用 3 动作的设定（\(\pi = [0.5, 0.3, 0.2]\)，三种动作的真实平均分分别是 1、3、5，总体平均 \(\mathbb{E}[r] = 2.4\)），看连续四次采样（抽到 \(A_1, A_3, A_1, A_3\)）各自给出的「更新幅度」：</p>
+
+<table>
+  <tr><th>采样序列</th><th>得分 r</th><th>不减免新幅度 \(\|r \cdot (e_a-\pi)\|\)</th><th>减免新幅度 \(\|(r-2.4)\cdot(e_a-\pi)\|\)</th></tr>
+  <tr><td>抽中 \(A_1\)</td><td>1</td><td>0.62</td><td>0.86</td></tr>
+  <tr><td>抽中 \(A_3\)</td><td>5</td><td>4.95</td><td>2.57</td></tr>
+  <tr><td>抽中 \(A_1\)</td><td>1</td><td>0.62</td><td>0.86</td></tr>
+  <tr><td>抽中 \(A_3\)</td><td>5</td><td>4.95</td><td>2.57</td></tr>
+</table>
+
+<p>不减免新的幅度在 0.62 和 4.95 之间跳（<b>8 倍悬殊</b>）；减免新在 0.86 和 2.57 之间（<b>3 倍</b>）。悬殊小了，参数就不会被单次「大分」甩来甩去。 averaged 之后两者殊途同归（期望相同），但抖动小的那条路走得稳。</p>
+
+<h3>7.2 更重要的是：信号从「全是正」变成「有正有负」</h3>
+
+<p>很多真实场景里打分<b>没有负数</b>（点击 1~10 分、验证通过 1 分、失败 0 分）。不减 baseline 时，<b>每个被抽中的动作都在被「加强」，只是力度不同</b>——所有加强互相抵消，净信号小、噪声大。减掉平均分后，信号立刻有了方向：</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 330" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="34" font-size="13" font-weight="bold" fill="#1a1f2e">减 baseline 前 vs 后：信号从「单向推」变成「有推有拉」（4 次采样，得分 1, 5, 1, 5，平均 3）</text>
+
+  <!-- ===== left panel: b=0 ===== -->
+  <text x="80" y="60" font-size="12" font-weight="bold" fill="#1a1f2e">不减 baseline（b = 0）</text>
+  <text x="80" y="78" font-size="10" fill="#5a6272">每次采样都在「加强」，幅度 1:5 悬殊</text>
+
+  <!-- zero line -->
+  <line x1="70" y1="190" x2="430" y2="190" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="438" y="194" font-size="10" fill="#5a6272">0</text>
+
+  <!-- bars: scale 18px per unit -->
+  <rect x="90" y="172" width="50" height="18" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="115" y="164" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+1</text>
+
+  <rect x="180" y="100" width="50" height="90" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="205" y="92" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+5</text>
+
+  <rect x="270" y="172" width="50" height="18" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="295" y="164" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+1</text>
+
+  <rect x="360" y="100" width="50" height="90" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="385" y="92" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+5</text>
+
+  <!-- ===== right panel: b=3 ===== -->
+  <text x="510" y="60" font-size="12" font-weight="bold" fill="#1a1f2e">减 baseline（b = 平均分 3）</text>
+  <text x="510" y="78" font-size="10" fill="#5a6272">好于平均的加强，差于平均的削弱</text>
+
+  <line x1="500" y1="190" x2="880" y2="190" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="888" y="194" font-size="10" fill="#5a6272">0</text>
+
+  <!-- bars: scale 18px per unit; +2 up, -2 down -->
+  <rect x="520" y="190" width="50" height="36" rx="4" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="545" y="240" font-size="11" text-anchor="middle" fill="#e8862a" font-weight="bold">−2</text>
+
+  <rect x="610" y="154" width="50" height="36" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="635" y="146" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+2</text>
+
+  <rect x="700" y="190" width="50" height="36" rx="4" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="725" y="240" font-size="11" text-anchor="middle" fill="#e8862a" font-weight="bold">−2</text>
+
+  <rect x="790" y="154" width="50" height="36" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="815" y="146" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+2</text>
+
+  <!-- sample labels (shared row) -->
+  <text x="115" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样1</text>
+  <text x="205" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样2</text>
+  <text x="295" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样3</text>
+  <text x="385" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样4</text>
+  <text x="545" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样1</text>
+  <text x="635" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样2</text>
+  <text x="725" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样3</text>
+  <text x="815" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样4</text>
+
+  <text x="40" y="290" font-size="11" fill="#5a6272">左图：得分 1 和 5 都是正数，四个动作全被往上推，只是 1 分的推力小、5 分的推力大——净信号被大量相互抵消的「加强」稀释。</text>
+  <text x="40" y="310" font-size="11" fill="#5a6272">右图：减掉平均分 3 之后，低于平均的变成负信号（削弱），高于平均的保持正信号（加强），方向干净、幅度对称、抖动更小。</text>
+</svg>
+</div>
+<p class="cap"><b>图 1-2</b>｜baseline 的真正价值：把「绝对得分」变成「相对平均的优势」。右图橙条方向向下——差于平均的动作不再被温和加强，而是被明确削弱。「减掉平均后的得分」就叫优势（advantage，\(A = r - b\)）：它回答的不是「这次得分多少」，而是「这次比平均水平好多少」。</p>
+
+<div class="box">
+<span class="bt">术语诞生</span> \(A = r - b\) 叫<b>优势（advantage）</b>。这个名字后面处处出现：第 3 讲里 PPO 用一套精细方法（GAE）估计每个时间步的优势；第 5 讲里 GRPO 的做法朴素直接——<b>同一个问题采样一组回答，用「组内平均分」当 baseline</b>。万变不离本讲。
+</div>
+
+<h2>8. 回望与预告：本讲在这张地图上</h2>
+
+<p>把本讲得到的零件登记一下，后面每一讲都从这里取件：</p>
+
+<table>
+  <tr><th>本讲得到的</th><th>一句话</th><th>后面哪里用到</th></tr>
+  <tr><td>softmax 策略</td><td>分数 \(z\) → 概率，选择倾向可学习</td><td>第 2 讲：softmax over 整个词表，温度控制探索</td></tr>
+  <tr><td>log-derivative 技巧</td><td>把梯度改写成「可采样估计的期望」</td><td>第 2 讲：整条回答的 \(\sum_t \log\pi\) 直接可用</td></tr>
+  <tr><td>REINFORCE</td><td>抽一个动作、乘打分、更新</td><td>第 2 讲：rollout 一整条回答打一个分</td></tr>
+  <tr><td>baseline / 优势</td><td>减平均分：期望不变、方差下降</td><td>第 3 讲：GAE 精细估计优势；第 5 讲：GRPO 用组均值</td></tr>
+</table>
+
+<p>同时登记两笔「欠账」：① 打分只在<b>结尾</b>给一次，而一条回答有几百个 token——功劳怎么分摊到每个 token（第 2 讲引出、第 3 讲 GAE 解决）；② 单次打分带运气、采样带噪声——除了 baseline，还能用「重要性采样」回收旧数据降低成本（第 3 讲 PPO 的出发点）。</p>
+
+<h2>9. 自查清单</h2>
+
+<p>下面 8 个问题都能不假思索地回答，就可以进入第 2 讲：</p>
+
+<ol class="checklist">
+  <li>为什么「试到平均分最高再固定选它」对 LLM 场景失效？（答：动作空间是所有可能回答，天文数字，试不完）</li>
+  <li>softmax 策略里「参数」是什么？（答：每个动作的分数 \(z\)，softmax 把分数变成选择概率）</li>
+  <li>策略梯度为什么要绕道 \(\log\pi\)？（答：log-derivative 恒等式把梯度变成「按 \(\pi\) 采样可估计的期望」，对接「抽一次样更新一次」）</li>
+  <li>REINFORCE 的更新公式？（答：\(z \leftarrow z + \mathrm{lr}\cdot r\cdot(e_a - \pi)\)，softmax 下 \(\nabla_{z}\log\pi(a) = e_a - \pi\)）</li>
+  <li>\(e_a - \pi\) 的直觉？（答：顶高被选中者，按体量匀低其余，总和守恒）</li>
+  <li>策略梯度最大的毛病？（答：方差大——打分带运气、单次采样抖动，训练震荡）</li>
+  <li>baseline 为什么不改变梯度期望、却值得用？（答：\(\sum_i \pi(e_{a_i}-\pi) = 0\)，期望不变；方差显著下降，信号从「全正」变「有正有负」）</li>
+  <li>优势 advantage 的定义和含义？（答：\(A = r - b\)，回答「比平均好多少」而非「绝对得分多少」）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="rl-t2-llm-as-rl.html">第 2 讲：把 LLM 接上 RL</a>——把本讲的「一次动作」放大成「生成一整段回答」：token 是动作、上下文是状态、整条回答共享末尾一个奖励。你会看到 LLM 的 RL 梯度雏形（对每个 token 的 log 概率求梯度、乘同一个奖励），认识两件新装备：当缰绳用的 KL 散度（含工程里真实使用的 k3 估计器）和控制探索的温度。读完它，「语言模型怎么就成了 RL 问题」不再是比喻。
+</div>
+
+<footer>本页为个人学习笔记 · RL 训练工程师零基础七讲系列 · 生成于 2026-09-19 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · REINFORCE 出自 Williams (1992)，叙述以主流教材为准</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

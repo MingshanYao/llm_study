@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RL 训练工程师零基础七讲 · 第 2 讲：把 LLM 接上 RL</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>RL 训练工程师零基础七讲 · 第 2 讲：把 LLM 接上 RL</h1>
+
+<div class="series-nav">
+  <a href="rl-t0-foundation.html">0 全景图</a>
+  <a href="rl-t1-policy-gradient.html">1 策略梯度</a>
+  <a class="here">2 LLM×RL</a>
+  <a href="rl-t3-ppo.html">3 PPO</a>
+  <a href="rl-t4-rlhf-dpo.html">4 RLHF·DPO</a>
+  <a href="rl-t5-rlvr-grpo.html">5 RLVR·GRPO</a>
+  <a href="rl-t6-systems.html">6 系统与实战</a>
+  <a href="rl-t7-score-centering.html">番外 SC</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>本讲定位：</b>把第 1 讲的「一次动作」放大成「生成一整段回答」——语言模型正式接入 RL。第 3~5 讲的所有算法都建立在本讲的对应关系上。</p>
+  <p style="margin:4px 0"><b>前置要求：</b>读完第 1 讲（REINFORCE、\(e_a - \pi\)、baseline）。本讲新增的数学只有两小块：对数概率求和、KL 散度，都从零手算。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>回答「语言模型怎么就成了 RL 问题」。核心是三组对应：<b>token 是动作</b>（词表几万选一）、<b>上文是状态</b>、<b>一整条回答共享末尾一个奖励</b>。由此得到 LLM 版 REINFORCE：对每个 token 的 log 概率求梯度、全部乘同一个奖励。然后补三件 LLM 特有的装备：① 稀疏延迟奖励带来的「功劳记账」难题（第 3 讲解决）；② <b>KL 散度</b>——拴住模型防止为刷分跑飞的缰绳（含工程里真实使用的 k3 估计器）；③ <b>温度</b>——控制探索的旋钮。</p>
+</div>
+
+<h2>1. 三组对应关系：从老虎机到语言模型</h2>
+
+<p>第 1 讲的最小场景里，模型做一次选择、拿一个分。语言模型把这个动作<b>串成长链</b>。逐项对照：</p>
+
+<table>
+  <tr><th>RL 概念</th><th>第 1 讲（标题生成器）</th><th>LLM 的 RL</th></tr>
+  <tr><td><b>状态</b>（此刻的处境）</td><td>没有（一步定胜负）</td><td>prompt + 已经生成出的那几个 token（前缀）</td></tr>
+  <tr><td><b>动作</b>（一次选择）</td><td>3 种标题风格</td><td>从词表（几万~十几万）里挑下一个 token</td></tr>
+  <tr><td><b>策略</b></td><td>softmax over 3 个分数</td><td>softmax over 整个词表——就是模型最后一层输出</td></tr>
+  <tr><td><b>轨迹</b>（完整一次尝试）</td><td>单次选择</td><td>从 prompt 出发，逐 token 采样，直到结束符（记作 <code>&lt;eos&gt;</code>）</td></tr>
+  <tr><td><b>奖励</b></td><td>点击率</td><td>回答<b>全部生成完</b>之后打一个分（verifier 判分 / RM 打分 / 人评）</td></tr>
+</table>
+
+<div class="box">
+<span class="bt">没有新模型</span>注意：LLM 的 RL <b>不需要任何新架构</b>。模型还是那个 next-token 预测器，只是训练目标变了——第 1 讲是「这个 token 该不该出」（SFT 视角），现在是「出了这个 token，最后得分高不高」（RL 视角）。模型、前向、反向传播全部复用。
+</div>
+
+<h2>2. 一条回答的「总打分」：对数概率</h2>
+
+<p>RL 优化的是「回答被选中的概率」。一条回答是一串 token，它的总概率是<b>每步概率的连乘</b>（概率的链式法则）；连乘在计算上不好处理（几百个小于 1 的数乘起来直接下溢成 0），所以一律取对数——连乘变连加：</p>
+
+<div class="formula">\[
+\log \pi(\text{回答} \mid \text{prompt}) = \sum_t \log \pi(\text{token}_t \mid \text{前缀}_t)
+\]</div>
+
+<p>手算一个完整例子。迷你词表只有 5 个词：{很, 不, 热, 好, <code>&lt;eos&gt;</code>}。prompt 是「今天天气」。模型采出两条回答，把每步概率和对数概率都列出来：</p>
+
+<table>
+  <tr><th>回答甲「很好」</th><th>概率</th><th>\(\log\pi\)</th><th>回答乙「不热」</th><th>概率</th><th>\(\log\pi\)</th></tr>
+  <tr><td>出「很」</td><td>0.6</td><td>−0.511</td><td>出「不」</td><td>0.2</td><td>−1.609</td></tr>
+  <tr><td>出「好」</td><td>0.5</td><td>−0.693</td><td>出「热」</td><td>0.3</td><td>−1.204</td></tr>
+  <tr><td>出 <code>&lt;eos&gt;</code></td><td>0.5</td><td>−0.693</td><td>出 <code>&lt;eos&gt;</code></td><td>0.5</td><td>−0.693</td></tr>
+  <tr><td><b>合计</b></td><td>\(0.6{\times}0.5{\times}0.5 = 0.15\)</td><td><b>−1.897</b></td><td><b>合计</b></td><td>\(0.2{\times}0.3{\times}0.5 = 0.03\)</td><td><b>−3.506</b></td></tr>
+</table>
+
+<p>两个读数：<b>甲被采出的概率是乙的 5 倍</b>（0.15 vs 0.03）；log 空间里这个差距就是三个 \(\log\pi\) 的逐项差之和。整份训练要做的就是挪动这两个数——RL 说的是：甲得分高就把 −1.897 往上推（概率变大），乙得分低就把 −3.506 往下压。</p>
+
+<h2>3. 轨迹版 REINFORCE：LLM 的 RL 梯度雏形</h2>
+
+<p>把第 1 讲的更新规则里的「一个动作」替换成「一整条回答」，直接得到：</p>
+
+<div class="formula">\[
+\nabla J = \mathbb{E}\Big[\, R \cdot \sum_t \nabla \log \pi(\text{token}_t \mid \text{前缀}_t) \,\Big]
+\]</div>
+
+<p>大白话：<b>一整条回答的所有 token 共享同一个奖励 \(R\)；奖励好，整条链上每个 token 的 log 概率一起推高；奖励差，整条链一起压低。</b>第 1 讲的 \(e_a - \pi\) 在这里不要求你手写了——「对每个 token 的 log 概率求梯度」由深度学习框架的自动微分代劳，你只需要在 loss 里把它组合出来：</p>
+
+<pre><code class="language-python">for step in range(num_steps):
+    prompts = sample_batch_of_questions()          # 1. 取一批问题
+    answers = model.generate(prompts)              # 2. rollout：模型自己采样回答
+    rewards = [verify(q, a) for q, a in zip(prompts, answers)]  # 3. 打分
+    # 4. REINFORCE 损失：整条回答的 log 概率 × 奖励（取负 = 梯度上升）
+    logprob = sum_logprob(model, prompts, answers) # Σ_t log π(token_t)
+    loss = -(rewards * logprob).mean()             # baseline/优势在第 3 讲加入
+    loss.backward()
+    optimizer.step()</code></pre>
+
+<p>和 SFT 的 loss 对比一眼见底：<b>SFT 是「−log π(标准答案)」（照着抄），RL 是「−R × log π(自己的回答)」（自己写、按分记账）</b>。训练数据从「人给的答案」换成了「模型采的答案」，监督信号从「答案本身」换成了「一个标量分」。</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 260" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">一条 rollout 的时间线：整条链共享末尾一个奖励（回答甲「很好」）</text>
+
+  <!-- prompt -->
+  <rect x="50" y="70" width="130" height="56" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="115" y="93" font-size="12" text-anchor="middle" fill="#1a1f2e">prompt</text>
+  <text x="115" y="113" font-size="10" text-anchor="middle" fill="#5a6272">「今天天气」</text>
+
+  <line x1="180" y1="98" x2="212" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+
+  <!-- token 1 -->
+  <rect x="220" y="70" width="90" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="265" y="93" font-size="12" text-anchor="middle" fill="#1a1f2e">「很」</text>
+  <text x="265" y="113" font-size="10" text-anchor="middle" fill="#2456c4">π = 0.6</text>
+
+  <line x1="310" y1="98" x2="342" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+
+  <!-- token 2 -->
+  <rect x="350" y="70" width="90" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="395" y="93" font-size="12" text-anchor="middle" fill="#1a1f2e">「好」</text>
+  <text x="395" y="113" font-size="10" text-anchor="middle" fill="#2456c4">π = 0.5</text>
+
+  <line x1="440" y1="98" x2="472" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+
+  <!-- token 3 -->
+  <rect x="480" y="70" width="90" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="525" y="93" font-size="12" text-anchor="middle" fill="#1a1f2e">&lt;eos&gt;</text>
+  <text x="525" y="113" font-size="10" text-anchor="middle" fill="#2456c4">π = 0.5</text>
+
+  <line x1="570" y1="98" x2="692" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+
+  <!-- reward -->
+  <rect x="700" y="70" width="190" height="56" rx="8" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="795" y="93" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">打分 R = +1</text>
+  <text x="795" y="113" font-size="10" text-anchor="middle" fill="#5a6272">verifier / RM / 人</text>
+
+  <!-- per-token logprob row -->
+  <text x="265" y="150" font-size="10.5" text-anchor="middle" fill="#5a6272">log π = −0.511</text>
+  <text x="395" y="150" font-size="10.5" text-anchor="middle" fill="#5a6272">log π = −0.693</text>
+  <text x="525" y="150" font-size="10.5" text-anchor="middle" fill="#5a6272">log π = −0.693</text>
+
+  <!-- shared bracket -->
+  <polyline points="265,162 265,180 795,180 795,134" fill="none" stroke="#2f9e63" stroke-width="1.4"/>
+  <text x="530" y="200" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">总 log π = −1.897（三个数相加），整条链共享 R = +1：每个 log π 都被 R 加权</text>
+
+  <text x="40" y="234" font-size="11" fill="#5a6272">对照：回答乙「不热」每步概率 0.2 / 0.3 / 0.5，总 log π = −3.506。若它被打 0 分，整条链被压低。</text>
+  <text x="40" y="252" font-size="11" fill="#5a6272">真实场景一条回答几百个 token、词表十几万选一，但结构与比例一模一样。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-1</b>｜LLM 的 RL 最小闭环。蓝色 token 盒是「动作」，绿色盒是「奖励」；每个 token 的 log 概率是求梯度的对象，奖励是它的权重。</p>
+
+<h2>4. 难题一：稀疏与延迟——功劳怎么记？</h2>
+
+<p>图 2-1 也暴露了 LLM RL 最深的一道难题：<b>几百个 token，只有末尾一个奖励</b>。术语叫稀疏（就一个数）与延迟（生成完才知道）。后果是「功劳记账」（credit assignment）失灵：</p>
+
+<ul>
+  <li>数学题的回答推了十步公式、最后答案算错——<b>整条链被同一个负奖励压低</b>，包括那些完全正确的中间步骤。</li>
+  <li>反过来，答案蒙对了但推理全靠跳步——整条链被加强，跳步的习惯也被一起加强。</li>
+</ul>
+
+<p>也就是说，「\(R\) 乘到每个 token 头上」是个粗糙的一刀切：好链条里的坏 token、坏链条里的好 token，被一视同仁。怎么把功劳细分子到每个 token，是 RL 的核心难题，本系列遇到三次、每次用不同的工具糊上一格：</p>
+
+<table>
+  <tr><th>工具</th><th>思路</th><th>哪讲</th></tr>
+  <tr><td>价值网络 + GAE</td><td>学一个「预测未来得分」的网络，用它把整条链的 R 拆成每步的优势</td><td>第 3 讲（PPO）</td></tr>
+  <tr><td>组内对比</td><td>同一个问题采多条回答，互相比较——整条回答之间比高下，不细究 token</td><td>第 5 讲（GRPO）</td></tr>
+  <tr><td>过程奖励（PRM）</td><td>对每个推理步骤单独打分（代价：又需要一个打分模型）</td><td>第 5 讲末尾（点到为止）</td></tr>
+</table>
+
+<div class="infer">要建立一个诚实的预期：当前工业界主流（GRPO 一族）在 per-token 记账上仍然粗糙——大多数实现就是「整条回答共享一个组内优势」。细粒度功劳分配是公认的开放问题，论文年年有，尚未出现公认的完胜方案。</div>
+
+<h2>5. 难题二：模型会跑飞——KL 散度当缰绳</h2>
+
+<h3>5.1 为什么需要缰绳</h3>
+
+<p>只盯着奖励优化有一个必然结局：<b>找到奖励函数的漏洞</b>。真实案例（RLHF 时代反复出现）：奖励模型偏爱礼貌开头，模型就学会每句都以「作为一个 AI 助手，我很乐意……」开场；偏爱长回答，模型就学会车轱辘话来回说；甚至输出乱码——只要打分模型（而非人类）觉得好。这类「钻空子得分」的行为叫 <b>reward hacking</b>，是后训练的头号大敌（第 4、5 讲还会回来）。</p>
+
+<p>通用的防跑飞手段：<b>在「被冻结的出发模型」旁边拴一根绳</b>。出发模型就是 SFT 之后的那个模型，术语叫<b>参考模型（reference model，\(\pi_{\mathrm{ref}}\)）</b>——它不训练、只做对比。绳的松紧用 KL 散度度量。</p>
+
+<h3>5.2 KL 散度从零讲</h3>
+
+<p>KL 散度衡量「两个概率分布差多远」：</p>
+
+<div class="formula">\[
+D_{\mathrm{KL}}(P \,\|\, Q) = \sum_x P(x) \log \frac{P(x)}{Q(x)}
+\]</div>
+
+<p>读法：<b>按 \(P\) 的权重，平均一下「\(P\) 认为的可能性 vs \(Q\) 认为的可能性」的对数比</b>。若两个分布完全相同，比值处处为 1，log 为 0，KL = 0；分布越岔越远，KL 越大；KL 永远 ≥ 0。</p>
+
+<p>手算。设 \(P = [0.6, 0.3, 0.1]\)，\(Q = [0.3, 0.3, 0.4]\)：</p>
+
+<table>
+  <tr><th>分量</th><th>\(P(x)\log\frac{P(x)}{Q(x)}\)</th><th>数值</th></tr>
+  <tr><td>\(x_1\)</td><td>\(0.6 \times \ln(0.6/0.3) = 0.6 \times \ln 2\)</td><td>\(+0.4159\)</td></tr>
+  <tr><td>\(x_2\)</td><td>\(0.3 \times \ln(0.3/0.3) = 0.3 \times 0\)</td><td>\(0\)</td></tr>
+  <tr><td>\(x_3\)</td><td>\(0.1 \times \ln(0.1/0.4) = 0.1 \times \ln 0.25\)</td><td>\(-0.1386\)</td></tr>
+  <tr><td><b>KL(P‖Q)</b></td><td>求和</td><td><b>0.2773</b></td></tr>
+</table>
+
+<p>反着算一遍：KL(Q‖P) = \(0.3\ln 0.5 + 0 + 0.4\ln 4 = -0.2079 + 0.5545 = 0.3466\)。<b>不对称</b>——KL(P‖Q) ≠ KL(Q‖P)，这是它和「距离」最大的区别（所以叫「散度」）。哪个方向是「正着」？取决于你想让谁的权重做平均；本系列固定用 KL(π‖π<sub>ref</sub>)：按<b>当前模型</b>的输出分布加权，衡量「相对参考模型，我把概率质量挪了多少」。</p>
+
+<h3>5.3 在训练里怎么用：目标函数与逐 token 惩罚</h3>
+
+<p>RLHF 的优化目标（InstructGPT 写法）就是「奖励 + 缰绳」：</p>
+
+<div class="formula">\[
+\max_\theta\ \ \mathbb{E}\big[R(x, y)\big] - \beta \cdot D_{\mathrm{KL}}\big(\pi_\theta \,\|\, \pi_{\mathrm{ref}}\big)
+\]</div>
+
+<p>实现上通常把 KL 拆成<b>每个 token 一小笔罚款</b>加进奖励里（第 \(t\) 个 token 处 reward \(\mathrel{-}= \beta \cdot \mathrm{KL}_t\)），这样优势估计能逐 token 地感知「我离参考模型多远了」。\(\beta\) 是缰绳松紧：太小会跑飞，太大模型躺平不敢动。<b>KL 曲线是训练监控的必看曲线</b>——它突然飙升，几乎总是出事的第一个信号（第 6 讲调试清单里会再见到它）。</p>
+
+<h3>5.4 工程细节：k3 估计器</h3>
+
+<p>精确算每个 token 的 KL 要把整个词表的分布都拿出来比，太贵。实践（TRL、veRL 等框架的默认实现）用一个抽样估计——对 rollout 里实际采出的每个 token，记 \(\delta = \log\pi_{\mathrm{ref}} - \log\pi\)（两个模型对该 token 的对数概率之差，两者本来就要算，白拿），然后：</p>
+
+<div class="formula">\[
+\mathrm{KL}_t \approx \underbrace{r - \log r - 1}_{k_3}, \qquad r = \frac{\pi_{\mathrm{ref}}}{\pi} = e^{\delta}
+\]</div>
+
+<p>两个好性质：① <b>无偏</b>（按当前策略采样时，它的期望恰等于真实 KL——Schulman 2016 年的博客给出，也是它成为默认的原因）；② <b>永远 ≥ 0</b>：令 \(f(t) = t - \ln t - 1\)，\(f(1) = 0\) 且它是凸函数，所以对一切 \(t > 0\) 有 \(f(t) \ge 0\)。手算一遍（\(\delta = -0.5\)，即当前模型比参考模型更看好这个 token）：</p>
+
+<table>
+  <tr><th>步骤</th><th>算式</th><th>结果</th></tr>
+  <tr><td>比值 r</td><td>\(\delta = \log\pi_{\mathrm{ref}} - \log\pi = -0.5\)，\(r = e^{\delta} = e^{-0.5}\)</td><td>\(r = 0.6065\)</td></tr>
+  <tr><td>k3</td><td>\(r - \ln r - 1 = 0.6065 - (-0.5) - 1\)</td><td><b>0.1065 ≥ 0</b> ✓</td></tr>
+</table>
+
+<p>（对照：取 \(-\delta = \log\pi - \log\pi_{\mathrm{ref}}\) 也能无偏估计 KL（k1 形式），但单个样本上它可以为负——「罚款为负」等于倒贴奖励，很怪，所以工程上用恒非负的 k3。）</p>
+
+<div class="box">
+<span class="bt">记住这张牌</span>「KL(π‖π<sub>ref</sub>) 缰绳」在后面出现两次：第 3 讲它作为 PPO 的第三个组成部分（连着 reference model 一起撑爆显存——这就是 GRPO 要改良的对象）；第 5 讲 GRPO 目标函数里它的 k3 形式直接出场。
+</div>
+
+<h2>6. 探索的旋钮：温度</h2>
+
+<p>第 1 讲说过，RL 的回答是<b>采样</b>出来的，采样要有随机性才有多样性、才有探索。控制随机性的旋钮是<b>温度 \(T\)</b>：把 softmax 改成 \(\pi \propto e^{z/T}\)。\(T\) 越小分布越尖（确定性强、探索少），越大越平（花样多、质量散）。手算感受一下，取 \(z = [2.0,\ 1.0,\ 0.5]\)：</p>
+
+<table>
+  <tr><th>温度</th><th>有效分数 \(z/T\)</th><th>softmax 结果</th><th>手感</th></tr>
+  <tr><td>\(T = 0.5\)</td><td>[4, 2, 1]</td><td>[0.844, 0.114, 0.042]</td><td>近乎笃定：几乎总是选第一个（日常使用、输出稳定）</td></tr>
+  <tr><td>\(T = 1.0\)</td><td>[2, 1, 0.5]</td><td>[0.628, 0.231, 0.140]</td><td>模型的「本意」（RL 训练采样常用）</td></tr>
+  <tr><td>\(T = 2.0\)</td><td>[1, 0.5, 0.25]</td><td>[0.481, 0.292, 0.227]</td><td>刻意抹平：多探索（训练初期/多样性需求）</td></tr>
+</table>
+
+<p>另外两个常用采样截断，一句话带过：<b>top-k</b>（只在分数最高的 k 个候选里采样）和 <b>top-p</b>（只在累计概率到 p 的小集合里采样）——它们是把长尾低质量候选剪掉的工程手段，不改变本讲的任何数学。</p>
+
+<p>训练时温度为什么通常取 1（即「模型的原始分布」）？因为 RL 的比较逻辑建立在「按模型真实倾向采样」上：温度改变分布，就改变了优势的定义域；而且第 5 讲会看到，训练久了模型分布自发变尖（熵坍缩），多样性本身是需要守护的资产。推理（给用户用）时再按产品需要调低。</p>
+
+<h2>7. 拼起来：一个完整的 LLM-RL 训练步</h2>
+
+<p>把本讲全部零件组装，得到「第 0 讲图 0-2」的工程版说明书。一次训练步依次发生：</p>
+
+<ol>
+  <li><b>取 prompt</b>：从任务池抽一批问题（第 5 讲会讲 prompt 难度分层）；</li>
+  <li><b>rollout</b>：当前模型按温度采样，每个问题生成回答（推理引擎，第 6 讲的主角）；</li>
+  <li><b>打分</b>：verifier / RM 给每条回答一个 \(R\)（绿盒）；</li>
+  <li><b>算优势</b>：给 \(R\) 减 baseline（第 1 讲），细化到 token（第 3 讲 GAE 或第 5 讲组内归一化）；</li>
+  <li><b>更新</b>：loss = −优势 × log π（本讲第 3 节）+ KL 罚款（第 5 节），反向传播更新参数。</li>
+</ol>
+
+<p>第 3 讲开始，我们给第 4、5 步装上精密仪表——那就是 PPO。</p>
+
+<h2>8. 自查清单</h2>
+
+<p>下面 8 个问题都能不假思索地回答，就可以进入第 3 讲：</p>
+
+<ol class="checklist">
+  <li>LLM 的 RL 里，状态、动作、奖励分别是什么？（答：前缀 / 下一个 token / 回答结束后的打分）</li>
+  <li>一条回答被选中的概率怎么算？（答：逐 token 概率连乘，log 空间为求和：\(\sum_t \log\pi\)）</li>
+  <li>轨迹版 REINFORCE 对什么求梯度、权重是什么？（答：每个 token 的 \(\nabla\log\pi\)，全部乘同一个 \(R\)）</li>
+  <li>RL 的 loss 和 SFT 的 loss 本质区别？（答：SFT 是 −log π(标准答案)；RL 是 −R×log π(自己采的回答)，监督信号从「答案」变「分数」）</li>
+  <li>什么是 credit assignment 难题？（答：整条链共享一个末尾奖励，无法区分链上哪个 token 立功/闯祸）</li>
+  <li>KL 散度的定义与两个关键性质？（答：\(\sum P\log(P/Q)\)；不对称、恒 ≥ 0、相同则为 0）</li>
+  <li>为什么需要 reference model？KL 缰绳太紧太松各什么症状？（答：防 reward hacking / 跑飞；太松跑飞、太紧躺平）</li>
+  <li>k3 估计器的公式和它 ≥ 0 的原因？（答：\(r - \ln r - 1\)，\(r = \pi_{\mathrm{ref}}/\pi\)；\(t - \ln t - 1\) 在 \(t=1\) 取最小值 0）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="rl-t3-ppo.html">第 3 讲：PPO 精讲</a>——REINFORCE 有两大浪费：数据用一次就扔（更新完策略就变了），功劳记账全靠一个末尾奖励。PPO 用「重要性采样」回收旧数据、用「裁剪」防止更新过猛、用「GAE」把末尾奖励精细拆分到每个 token。手算逐分支验证 clip 的行为，手算一遍 GAE，最后看清那个撑爆显存的「四模型架构」——以及它如何孕育出第 5 讲的 GRPO。
+</div>
+
+<footer>本页为个人学习笔记 · RL 训练工程师零基础七讲系列 · 生成于 2026-09-19 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · KL 约束与 RM 结构参照 InstructGPT (arXiv:2203.02155)，k3 估计器出自 J. Schulman, Approximating KL Divergence (2020)</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

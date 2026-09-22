@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RL 训练工程师零基础七讲 · 第 6 讲：系统与实战</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>RL 训练工程师零基础七讲 · 第 6 讲：系统与实战</h1>
+
+<div class="series-nav">
+  <a href="rl-t0-foundation.html">0 全景图</a>
+  <a href="rl-t1-policy-gradient.html">1 策略梯度</a>
+  <a href="rl-t2-llm-as-rl.html">2 LLM×RL</a>
+  <a href="rl-t3-ppo.html">3 PPO</a>
+  <a href="rl-t4-rlhf-dpo.html">4 RLHF·DPO</a>
+  <a href="rl-t5-rlvr-grpo.html">5 RLVR·GRPO</a>
+  <a class="here">6 系统与实战</a>
+  <a href="rl-t7-score-centering.html">番外 SC</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>本讲定位：</b>系列终篇。前五讲解决「算法」，本讲解决「在机房里把它跑起来」——并给出从零到岗位的实战路线图。本讲工程浓度最高，数学最少。</p>
+  <p style="margin:4px 0"><b>前置要求：</b>前五讲（尤其是第 3 讲的 ratio、第 5 讲的病症门诊）。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>① 看懂一个真实 RL 训练系统的架构：推理引擎与训练引擎的协奏、权重同步这条「反向数据流」；② 补齐分布式训练常识与显存账本（为什么 7B 都单卡训不动）；③ 理解同步/异步的取舍与 off-policy 程度；④ 拿到一张「异常曲线 10 分钟排查」清单；⑤ 认识框架生态；⑥ 领走一份四阶段成长路线。读完它，前五讲的知识就有了落脚点。</p>
+</div>
+
+<h2>1. RL 训练为什么不是「普通训练」</h2>
+
+<p>普通训练（预训练、SFT）的系统图很简单：数据集固定，GPU 循环做「前向 → 反向 → 优化器」。RL 训练多出两样东西：</p>
+
+<ol>
+  <li><b>一条高频推理生产线</b>：训练数据（回答）不是从磁盘读的，是模型<b>现场生成</b>的。LLM 生成慢（逐 token 自回归），这条生产线的耗时通常占整个训练步的 50%~80%。</li>
+  <li><b>一条反向的权重同步流</b>：推理引擎用的权重必须跟训练引擎保持新鲜——每更新一步，新权重就要广播给所有推理卡。普通训练里「模型权重」只活在训练进程里；RL 训练里它要在两类引擎间来回搬运。</li>
+</ol>
+
+<div class="fig">
+<svg viewBox="0 0 940 400" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="m6b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="40" y="34" font-size="13" font-weight="bold" fill="#1a1f2e">一个 GRPO 训练步的完整数据流（蓝箭头 = RL 系统特有的反向权重同步）</text>
+
+  <!-- row 1 -->
+  <rect x="50" y="80" width="180" height="76" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="140" y="108" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">Prompt 池</text>
+  <text x="140" y="130" font-size="10" text-anchor="middle" fill="#5a6272">按难度分层的题库</text>
+
+  <line x1="230" y1="118" x2="292" y2="118" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m6a)"/>
+
+  <rect x="300" y="80" width="220" height="76" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="410" y="106" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">Rollout 引擎</text>
+  <text x="410" y="126" font-size="10" text-anchor="middle" fill="#5a6272">vLLM / SGLang 高吞吐推理</text>
+  <text x="410" y="144" font-size="10" text-anchor="middle" fill="#5a6272">每题采 G 条回答</text>
+
+  <line x1="520" y1="118" x2="632" y2="118" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m6a)"/>
+
+  <rect x="640" y="80" width="250" height="76" rx="10" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="765" y="106" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">奖励服务</text>
+  <text x="765" y="126" font-size="10" text-anchor="middle" fill="#5a6272">verifier 沙箱 / RM 推理</text>
+  <text x="765" y="144" font-size="10" text-anchor="middle" fill="#5a6272">每条回答一个分数</text>
+
+  <!-- rollout -> trainer: polyline -->
+  <polyline points="765,156 765,295 527,295" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m6a)"/>
+  <text x="753" y="215" font-size="10.5" text-anchor="end" fill="#5a6272">(prompt, 回答, reward, logπ_old)</text>
+
+  <!-- trainer -->
+  <rect x="300" y="250" width="220" height="90" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="410" y="278" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">Trainer（FSDP/Megatron）</text>
+  <text x="410" y="300" font-size="10" text-anchor="middle" fill="#5a6272">actor 训练 + π_ref 前向算 KL</text>
+  <text x="410" y="318" font-size="10" text-anchor="middle" fill="#5a6272">组内优势 → clip loss + k3</text>
+
+  <!-- weight sync arrow -->
+  <line x1="410" y1="250" x2="410" y2="164" stroke="#2456c4" stroke-width="2" marker-end="url(#m6b)"/>
+  <text x="398" y="210" font-size="10.5" text-anchor="end" fill="#2456c4" font-weight="bold">权重同步（每步）</text>
+
+  <!-- trainer -> monitor -->
+  <line x1="520" y1="295" x2="633" y2="295" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m6a)"/>
+
+  <!-- monitor -->
+  <rect x="640" y="250" width="250" height="90" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="765" y="278" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">监控面板</text>
+  <text x="765" y="300" font-size="10" text-anchor="middle" fill="#5a6272">reward / KL / 熵 / 长度 / pass rate</text>
+  <text x="765" y="318" font-size="10" text-anchor="middle" fill="#5a6272">五条曲线的指纹诊断（第 5 讲）</text>
+
+  <text x="40" y="368" font-size="11" fill="#5a6272">与普通训练相比多出的东西：一条高频推理生产线（rollout，占总时长 50%~80%）和一条反向的权重同步流（蓝箭头）——</text>
+  <text x="40" y="386" font-size="11" fill="#5a6272">这两样决定了 RL 训练系统的主要工程难度：两类引擎的协同、显存的双倍占用、以及生成与训练互相等待的空转。</text>
+</svg>
+</div>
+<p class="cap"><b>图 6-1</b>｜GRPO 训练系统全景。RLVR 路线下没有 RM 服务（verifier 是纯 CPU 程序，常用容器沙箱执行代码测试）；RLHF 路线则多一台 RM 推理服务。</p>
+
+<h2>2. 组件明细与两个关键机制</h2>
+
+<table>
+  <tr><th>组件</th><th>职责</th><th>要点</th></tr>
+  <tr><td><b>Prompt 池 / dataloader</b></td><td>供给训练问题</td><td>难度分层（pass rate 0.2~0.8 的题最值钱，第 5 讲病症三）；持续淘汰过易/过难题</td></tr>
+  <tr><td><b>Rollout 引擎</b></td><td>批量生成回答</td><td>vLLM：PagedAttention 把 KV cache 像虚拟内存一样分页管理，碎片小、吞吐高；SGLang：RadixAttention 前缀树缓存，同一 prompt 的 G 条回答共享前缀计算</td></tr>
+  <tr><td><b>奖励服务</b></td><td>打分</td><td>verifier：纯程序；代码任务需容器沙箱（资源限额、超时、防删库）。RM：又一份推理显存</td></tr>
+  <tr><td><b>Trainer</b></td><td>算 loss、反向、更新</td><td>FSDP 或 Megatron（第 3 节）；π_ref 冻结副本常驻此处算 KL</td></tr>
+  <tr><td><b>监控</b></td><td>曲线与告警</td><td>W&B / TensorBoard；断点续训是刚需——长训练一定会挂</td></tr>
+</table>
+
+<h3>2.1 权重同步</h3>
+
+<p>每一步更新后，新权重要从 Trainer 流向 Rollout 引擎。三种常见做法：NCCL 集合通信直接广播（卡对卡，最快）、共享内存 / CPU 中转（跨机场景）、参数服务器中转。工程要点是<b>别让同步成为新瓶颈</b>：大模型权重几十 GB，同步一次的代价不低，于是有了下面的架构之争。</p>
+
+<h3>2.2 colocate（同位）vs 分离式</h3>
+
+<table>
+  <tr><th>架构</th><th>做法</th><th>优点</th><th>代价</th></tr>
+  <tr><td><b>colocate</b>（veRL 默认）</td><td>训练卡与推理卡是<b>同一批卡</b>，分时复用：生成时训练引擎让位，训练时推理引擎卸载</td><td>省卡；权重同步几乎零成本（就在本卡）</td><td>两类引擎互相等待；显存要在两者间腾挪（offload）</td></tr>
+  <tr><td><b>分离式</b></td><td>独立推理集群专职 rollout，训练集群专职训练，异步接力</td><td>两套集群各自满载，吞吐高；异步化空间大</td><td>卡数翻倍；权重同步走网络；数据变陈旧（第 4 节）</td></tr>
+</table>
+
+<h2>3. 显存账本：为什么 7B 单卡都训不动</h2>
+
+<p>面试高频题，也是选配置的日常依据。混合精度 + Adam 训练时，<b>每个参数</b>实际占用的显存远不止权重本身：</p>
+
+<table>
+  <tr><th>项</th><th>每参数字节</th><th>7B 模型合计</th></tr>
+  <tr><td>bf16 权重（前向用）</td><td>2</td><td>14 GB</td></tr>
+  <tr><td>fp32 主权重（优化器更新的真身）</td><td>4</td><td>28 GB</td></tr>
+  <tr><td>Adam 一阶矩 m</td><td>4</td><td>28 GB</td></tr>
+  <tr><td>Adam 二阶矩 v</td><td>4</td><td>28 GB</td></tr>
+  <tr><td>梯度（bf16）</td><td>2</td><td>14 GB</td></tr>
+  <tr><td><b>合计（不含激活值）</b></td><td><b>16</b></td><td><b>112 GB</b></td></tr>
+</table>
+
+<p>112 GB 还没算激活值（序列越长越恐怖）——单卡 80 GB 无解。而<b>推理</b>只需要 bf16 权重（14 GB）加 KV cache。这就是「推理单卡能跑、训练必须多卡」的算术。对策阶梯从便宜到贵：</p>
+
+<ol>
+  <li><b>LoRA</b>：冻结原权重，只训插入的低秩小矩阵——优化器状态骤减，单卡变可行（RL 实验起步常用）；</li>
+  <li><b>ZeRO / FSDP 分片</b>：见下；</li>
+  <li><b>offload</b>：把优化器状态甚至参数挪到 CPU 内存 / NVMe（用通信换显存）；</li>
+  <li><b>更多卡 + 更细的并行</b>。</li>
+</ol>
+
+<h3>3.1 四种并行方式（类比版）</h3>
+
+<table>
+  <tr><th>方式</th><th>怎么切</th><th>类比（全班抄书做题）</th></tr>
+  <tr><td><b>数据并行 DP</b></td><td>每卡完整模型，吃不同数据，梯度 all-reduce 平均</td><td>每人抄整本书，各做各的题，最后对答案取平均</td></tr>
+  <tr><td><b>张量并行 TP</b></td><td>单层的大矩阵按行/列切片分卡</td><td>把一道题拆成几步，几个人同时算，中间频繁递纸条（通信最频繁）</td></tr>
+  <tr><td><b>流水线并行 PP</b></td><td>按层切，卡间传激活</td><td>工厂流水线：每人负责几道工序，产品依次传递</td></tr>
+  <tr><td><b>ZeRO / FSDP</b></td><td>数据并行的省内存版：参数/梯度/优化器状态切片，用到时临时聚合</td><td>书包轮流背：书平时分头保管，做题时互相借页</td></tr>
+</table>
+
+<p>ZeRO 的三档（记法：<b>1 切优化器状态、2 加切梯度、3 加切参数</b>，切得越多越省显存、通信越多）。FSDP 是 PyTorch 原生的 ZeRO-3 式实现；Megatron 走 TP+PP 组合路线。<b>真实训练通常是组合拳</b>：TP + PP + DP(FSDP) 叠加，再叠加第 1 节的两条生产线。</p>
+
+<h2>4. 同步还是异步：on-policy 程度的取舍</h2>
+
+<p>理想很纯粹：用<b>最新</b>的策略采样、立刻更新（严格 on-policy，第 1 讲以来的默认设定）。但生成和训练互相等待，GPU 大量空转。工程折中——<b>让 rollout 提前跑</b>：</p>
+
+<ul>
+  <li>训练端不等最新权重，用手头已有的回答凑批开算（数据是「几个版本之前」的模型生成的）；</li>
+  <li>数据变陈旧 = <b>off-policy 程度上升</b>，而第 3 讲的重要性采样 ratio 正是为此准备的修正器——ratio 会自动偏离 1 来加权补偿；</li>
+  <li>但 ratio 偏离 1 太远（陈旧度过高），修正失真、训练不稳——所以要<b>监控 ratio 分布、限制陈旧步数</b>（staleness）。</li>
+</ul>
+
+<div class="box">
+<span class="bt">零件再上岗</span>至此第 3 讲的 ratio 出现了第三个身份：PPO 里是更新保险丝的原料；GRPO 里是目标函数的一部分；异步系统里是「数据新鲜度」的度量衡。一个概念在系统不同层反复出场，是这套技术栈的典型美感。
+</div>
+
+<h2>5. 异常曲线的十分钟排查清单</h2>
+
+<p>把第 5 讲的病症门诊扩展成工程师的 checklist（症状 → 按序排查）：</p>
+
+<table>
+  <tr><th>症状</th><th>按序排查（快 → 慢）</th></tr>
+  <tr><td><b>loss spike</b></td><td>① 梯度范数是否爆炸（clip 没开？）② 数据批次有没有脏样本（回看 spike 时刻的 prompt）③ 学习率/预热配置 ④ bf16 数值溢出（换 fp32 层或调 loss scale）</td></tr>
+  <tr><td><b>reward 不涨</b></td><td>① 无梯度组占比（全对全错太多？→ 难度过滤）② KL 是否锁死（β 过大或实现错 → 模型躺平）③ 抽 20 条人工核对 verifier 判分（判错的真答案比漏判的假答案更致命）④ 熵是否已经坍缩</td></tr>
+  <tr><td><b>KL 爆炸</b></td><td>① β 与 k3 实现核对（符号错了 KL 会是负的）② π_ref 是否加载了正确 checkpoint ③ 学习率 ④ reward 是否有巨大分值（clip 奖励上限）</td></tr>
+  <tr><td><b>显存 OOM</b></td><td>① 长尾超长回答（一条 32k token 的回答能单独爆卡 → 截断 + 长度监控）② batch 拆小 / 梯度累积 ③ 激活值重算（activation checkpointing）④ offload 优化器状态</td></tr>
+  <tr><td><b>生成退化（复读/乱码）</b></td><td>① reward hacking 侦察：抽高分回答人工看（第 4 讲 4 节）② 熵曲线 ③ 采样参数是否被训练带偏 ④ 回滚到上一个正常 checkpoint</td></tr>
+</table>
+
+<div class="infer">纪律：每次只改一个变量；每个实验必存 checkpoint 与完整配置；曲线异常先「复现到最小规模」再上大集群排查。这三条纪律的价值超过任何单点技巧。</div>
+
+<h2>6. 框架生态速览</h2>
+
+<table>
+  <tr><th>框架</th><th>定位</th><th>一句话点评</th></tr>
+  <tr><td><b>TRL</b>（HuggingFace）</td><td>SFT / DPO / GRPO 全家桶</td><td>上手最快，单卡能跑小模型，学习阶段首选</td></tr>
+  <tr><td><b>veRL</b></td><td>HybridFlow 架构，colocate 混合引擎，FSDP/Megatron + vLLM/SGLang</td><td>当前开源社区主力，R1 复现标配；工业形态的代表，源码值得通读</td></tr>
+  <tr><td><b>OpenRLHF</b></td><td>Ray 架构，REINFORCE++ 系</td><td>早期主流，代码干净易读</td></tr>
+  <tr><td><b>NeMo-Aligner</b></td><td>NVIDIA，Megatron 系</td><td>企业级基建配套</td></tr>
+  <tr><td><b>slime</b></td><td>智谱开源，Megatron + SGLang</td><td>Agent RL / 长序列场景强化</td></tr>
+  <tr><td><b>AReaL</b></td><td>蚂蚁开源，全异步架构</td><td>把第 4 节的异步推到极致的代表</td></tr>
+</table>
+
+<h2>7. 从零到 RL 训练工程师：四阶段路线图</h2>
+
+<p>把全系列落成一张可执行的计划（时间按业余投入 10 小时/周估）：</p>
+
+<table>
+  <tr><th>阶段</th><th>做什么</th><th>产出 / 自检标准</th></tr>
+  <tr><td><b>① 跑通</b><br>（1~2 周）</td><td>TRL 的 GRPO 训练 Qwen2.5-0.5B + GSM8K，单卡或 Colab；盯 reward 曲线</td><td>第一条 reward 上升曲线；能逐项解释 GRPOTrainer 的 loss（对照第 5 讲公式）</td></tr>
+  <tr><td><b>② 改造</b><br>（2~4 周）</td><td>自己写 verifier（等价判定 + 难度过滤）；复现 RLOO 与 GRPO 对比；<b>故意制造</b>熵坍缩和格式 hacking，再亲手修好</td><td>一份小项目笔记（发博客）；能回答「我的 reward 为什么不涨」这类问题</td></tr>
+  <tr><td><b>③ 上规模</b><br>（1~2 月）</td><td>veRL 起多卡训练（FSDP + vLLM）；通读主循环源码（worker group / 混合引擎调度）；做一次 profile 找瓶颈并优化</td><td>能对新人讲清整个系统每个组件；吞吐优化有 before/after 数字</td></tr>
+  <tr><td><b>④ 进阶</b><br>（持续）</td><td>复现一篇论文（DAPO 或 Dr.GRPO）；做一个 Agent RL 环境（多轮 + 工具调用 + 沙箱）；整理成作品集</td><td>面试叙事完整：算法、系统、诊断三个维度各有实例</td></tr>
+</table>
+
+<p>配套的<b>面试高频题清单</b>（第 0~5 讲已全部覆盖）：REINFORCE 推导与 baseline 为什么无偏；PPO clip 的分支行为；GRPO 优势怎么算、为什么砍 critic；k3 估计器；DPO 与 PPO 的分界；on-policy vs off-policy；显存账本与 OOM 排查；reward hacking 实例与对抗；熵坍缩处置；同步 vs 异步的取舍。</p>
+
+<h2>8. 系列总结：七讲知识树</h2>
+
+<ul>
+  <li><b>第 0 讲</b>给了地图：三阶段、两条奖励路线、工程师的日常；</li>
+  <li><b>第 1 讲</b>给了语法：策略梯度——「好的加强、差的减弱」+ baseline；</li>
+  <li><b>第 2 讲</b>完成接线：token 是动作，KL 是缰绳，温度是探索；</li>
+  <li><b>第 3 讲</b>装上引擎：ratio、clip、GAE 与四模型架构；</li>
+  <li><b>第 4 讲</b>解决燃料：偏好数据 → RM → reward hacking，以及 DPO 的折叠魔术；</li>
+  <li><b>第 5 讲</b>抵达当下：RLVR 换奖励、GRPO 砍 critic、四大病症；</li>
+  <li><b>第 6 讲</b>（本讲）落进机房：架构、显存、异步、排查，和你的路线图。</li>
+</ul>
+
+<p>核心线索只有一条：<b>「好的加强、差的减弱」这八个字，从第 1 讲到第 6 讲没有被推翻过一个字</b>——变的只是「好」怎么判定（RM → verifier）、「优势」怎么估计（MC → GAE → 组内归一化）、以及这一切怎么在几千张卡上跑得又快又稳。接下来最好的学习材料是你的第一张 reward 曲线。</p>
+
+<h2>9. 自查清单（本讲 + 全系列）</h2>
+
+<p>本讲的 6 个问题：</p>
+
+<ol class="checklist">
+  <li>RL 训练系统比普通训练多出哪两条流？（答：高频推理生产线 + 反向权重同步）</li>
+  <li>colocate 和分离式架构各自的代价？（答：互相等待与显存腾挪 vs 卡数翻倍与数据陈旧）</li>
+  <li>7B 模型 Adam 训练的显存账本？（答：16 字节/参数 ≈ 112 GB + 激活值；推理仅 2 字节/参数 + KV cache）</li>
+  <li>DP / TP / PP / FSDP 一句话各是什么？（答：不同数据 / 层内切矩阵 / 按层流水线 / 切片式数据并行）</li>
+  <li>数据陈旧为什么不是致命问题？（答：重要性采样 ratio 自动补偿，但要监控 ratio、限制 staleness）</li>
+  <li>reward 不涨的排查顺序？（答：无梯度组占比 → KL 锁死 → 人工核对 verifier → 熵）</li>
+</ol>
+
+<p>全系列收官大检查——每讲抽一题：</p>
+
+<ol class="checklist">
+  <li>SFT 与 RL 的学习信号差别？rollout 是什么？（第 0 讲）</li>
+  <li>写出 REINFORCE 更新式，并解释 baseline 为什么无偏降方差。（第 1 讲）</li>
+  <li>轨迹 log 概率怎么算？k3 估计器公式？（第 2 讲）</li>
+  <li>clip 在 A&gt;0 / A&lt;0 各自的刹车行为？（第 3 讲）</li>
+  <li>DPO 的隐式奖励是什么？Z 为什么能消？（第 4 讲）</li>
+  <li>GRPO 优势公式 + 全对全错组为什么无梯度？（第 5 讲）</li>
+  <li>画出 GRPO 训练步的数据流，标出权重同步。（第 6 讲）</li>
+</ol>
+
+<div class="box">
+<span class="bt">系列完结 · 下一步读什么</span>论文四篇打基础：InstructGPT（RLHF 全流程）、DPO、DeepSeekMath（GRPO 出处）、DeepSeek-R1（RLVR 案例）；进阶读 DAPO 与 Dr. GRPO（偏置分析）。代码两条线：TRL 跑通 → veRL 读透。毕业加餐：<a href="rl-t7-score-centering.html">番外篇 Score Centering 精读</a>——用一篇 2026 年 9 月的新论文把第 1/2/3/5/6 讲拧成一个真实工程问题（训练-推理失配与 drift）。祝你的第一条 reward 曲线早日起飞，也祝它崩得早、崩得明白——调试才是最快的老师。
+</div>
+
+<footer>本页为个人学习笔记 · RL 训练工程师零基础七讲系列 · 生成于 2026-09-19 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 系统叙述参照 veRL/HybridFlow、OpenRLHF、TRL 的公开实现与文档，细节以各项目最新文档为准</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

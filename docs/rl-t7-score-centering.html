@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RL 训练工程师零基础七讲 · 番外篇：Score Centering 论文精读</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>RL 训练工程师零基础七讲 · 番外篇：Score Centering</h1>
+
+<div class="series-nav">
+  <a href="rl-t0-foundation.html">0 全景图</a>
+  <a href="rl-t1-policy-gradient.html">1 策略梯度</a>
+  <a href="rl-t2-llm-as-rl.html">2 LLM×RL</a>
+  <a href="rl-t3-ppo.html">3 PPO</a>
+  <a href="rl-t4-rlhf-dpo.html">4 RLHF·DPO</a>
+  <a href="rl-t5-rlvr-grpo.html">5 RLVR·GRPO</a>
+  <a href="rl-t6-systems.html">6 系统与实战</a>
+  <a class="here">番外 SC 精读</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>本篇定位：</b>毕业加餐。用一篇 2026 年 9 月的新论文，把第 1、2、3、5、6 讲的知识点拧成一个真实的工程问题：为什么「训练引擎」和「推理引擎」对不上账时，RL 会崩、SFT 却没事。</p>
+  <p style="margin:4px 0"><b>论文：</b>Score Centering Stabilizes Off-policy Reinforcement Learning，Martin Marek &amp; Max Ryabinin（Together AI），2026-09-17，<a href="https://arxiv.org/abs/2609.20807">arXiv:2609.20807</a>；官方代码 <a href="https://github.com/martin-marek/score-centering">github.com/martin-marek/score-centering</a>。</p>
+  <p style="margin:4px 0"><b>前置要求：</b>第 1 讲（score、REINFORCE 更新式）、第 2 讲（on/off-policy、KL）、第 3 讲（重要性采样、clip）、第 5 讲（GRPO 组内中心化）、第 6 讲（rollout/trainer 分离、权重同步）。全部数学手算，不跳步。</p>
+</div>
+
+<div class="tldr">
+<p><b>本篇目标：</b>RL 训练时，生成样本的是推理引擎、算梯度的是训练引擎——明明「同一个模型」，两个引擎算出的概率却差之毫厘（浮点误差、算子实现、量化、异步旧权重），这叫<b>训练-推理失配（TIM）</b>。本文证明：TIM 之所以能让 RL 崩溃，是因为每步梯度里混进一个 <b>drift（漂移）项</b>——它不带任何学习信号，只负责把训练器一步一口地「蒸馏」向采样器；而采样器每步又被同步成「被拉过」的权重，偏差滚雪球，直到 reward 崩塌。修复出奇地简单：把每个 token 的 score 减去它在<b>采样器分布下</b>的期望（<b>score centering</b>），drift 被精确抵消，学习信号分毫不动。它是加法修正：无超参数、不放大方差，重度量化下比整个重要性采样家族都更能打，还能和 TIS/MIS 叠加组队。全文手算验证每一个关键数字。</p>
+</div>
+
+<h2>一、两个引擎，同一个模型，答案差一点点</h2>
+
+<p>第 6 讲画过 GRPO 训练步的数据流：<b>推理引擎</b>（vLLM/SGLang，追求吞吐）负责生成 rollout，<b>训练引擎</b>负责对生成结果反向传播。两边加载的是<b>同一份权重</b>，理论上对同一个 token 给出的概率应该一模一样——第 3 讲的重要性采样 ratio \(\rho = p/q\) 在理想情况下恒等于 1。</p>
+
+<p>实际上「差之毫厘」，而且<b>没有 bug 也会差</b>。论文列出的四个来源：</p>
+
+<table>
+  <tr><th>来源</th><th>机制</th><th>能否靠工程消除</th></tr>
+  <tr><td>浮点加法不满足结合律</td><td>同一模型、同一权重，只是求和顺序不同，结果就不同（见下方盒子）</td><td>要「批无关 kernel」，代价是 GPU 利用率下降</td></tr>
+  <tr><td>算子实现与输入形状</td><td>推理自回归地逐 token 算，训练按序列并行算——同样的 kernel 吃不同形状，内部求和顺序不同</td><td>难彻底消除；换 fp16 能大幅缩小但仍非零</td></tr>
+  <tr><td>量化</td><td>采样器用 int8/fp4 权重、fp4 KV cache 换吞吐；训练器是 bf16</td><td>量化本身就是目的，只能算法上补偿</td></tr>
+  <tr><td>异步陈旧（staleness）</td><td>为打满 GPU，采样与训练异步跑：一条 rollout 生成时，训练器已经又走了几十步</td><td>等同步会闲置硬件；agentic 长任务下不可接受</td></tr>
+</table>
+
+<div class="box">
+<span class="bt">手算：为什么加法顺序能改结果</span>论文脚注给了一个 fp4（4 位浮点）的例子，高中算术就能验证。fp4_e2m1 能表示的数只有 \(\dots, 0.5, 1, 1.5, 2, 3, 4, 6\)——注意它<b>表示不出 2.5</b>（四舍五入进位到最近的 2 或 3）。于是：<br>
+\((0.5+0.5)+2 = 1+2 = 3\)；但 \(0.5+(0.5+2) = 0.5+2.5\)，先算括号时 \(2.5\) 被舍成 \(2\)，得 \(0.5+2 = 2.5\)，又舍成 \(2\)。<b>同样三个数，3 ≠ 2。</b>GPU 里几十亿个这样的加法并行发生、顺序取决于 kernel 和张量形状——「同一个模型」在两个引擎里给出的概率自然有细微出入。
+</div>
+
+<p>论文标题里的 <b>off-policy</b> 就是第 2、3 讲的语汇：采样分布 \(q\) ≠ 训练分布 \(p\)。TIM 是产生 off-policy 的一种特殊原因——不是策略自己学走了，而是<b>同一个策略的两份实现不一致</b>。它有多致命？先看一组对照事实：<b>SFT 完全不怕</b>——哪怕训练数据全是另一个模型离线生成的（蒸馏/拒绝采样微调），训练照样稳。RL 却会因为这点小差别崩溃甚至 reward 归零。为什么？</p>
+
+<h2>二、破案实验：SFT 不怕、RL 怕的分水岭在哪</h2>
+
+<p>作者的切入点很巧：构造一个「介于 SFT 和 RL 之间」的对照实验。用 Qwen3-1.7B 训 Countdown 游戏，<b>人为给采样器权重加一点固定噪声</b>，制造程度可控的 TIM，然后变动两个旋钮：<b>采样器更不更新</b>（离线 vs 在线）和<b>奖励长什么样</b>。</p>
+
+<table>
+  <tr><th>奖励形式</th><th>离线训练（采样器冻结）</th><th>在线训练（TIM 下）</th></tr>
+  <tr><td>全正奖励 +1/0</td><td>✅ 唯一稳定的</td><td>❌ 最不稳定的</td></tr>
+  <tr><td>全负奖励 0/−1</td><td>❌ 崩：log 概率没有下界，负梯度把「没抽到的 token」的概率无限压向 0，loss 无界 → 模型塌缩</td><td>介于两者之间</td></tr>
+  <tr><td>组内中心化（GRPO 式，正负混合）</td><td>❌ 不稳</td><td>✅ 最稳定的</td></tr>
+</table>
+
+<p>两种坏法，两种病因：<b>离线 + 负奖励</b>崩在「压低别人」（logp 无下界）；<b>在线 + 全正奖励</b>崩在另一件事上——而这件事正是本篇主角。关键观察：在线 +1/0 奖励的 RL，本质上是<b>蒸馏</b>：只把成功的 rollout 喂给训练器做最大似然，老师就是采样器。离线蒸馏之所以稳，是因为<b>老师是固定的</b>，学生收敛到老师的拟合就停了。而在线蒸馏的老师<b>不是别人，是学生自己的一个有偏拷贝</b>，每一步都被学生反向更新——</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 380" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="a1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="a1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="40" y="36" font-size="13" font-weight="bold" fill="#1a1f2e">图 A-1 TIM 反馈回路：训练引擎每一步都被拉向「自己的有偏拷贝」</text>
+
+  <!-- trainer box -->
+  <rect x="80" y="120" width="220" height="96" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="190" y="148" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">训练引擎 Trainer</text>
+  <text x="190" y="168" font-size="11" text-anchor="middle" fill="#5a6272">p_θ · bf16 · 求梯度</text>
+  <text x="190" y="188" font-size="10" text-anchor="middle" fill="#5a6272">修改权重的地方</text>
+
+  <!-- sampler box -->
+  <rect x="640" y="120" width="220" height="96" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="750" y="148" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">推理引擎 Sampler</text>
+  <text x="750" y="168" font-size="11" text-anchor="middle" fill="#5a6272">q_θ · int8/fp4/旧权重</text>
+  <text x="750" y="188" font-size="10" text-anchor="middle" fill="#5a6272">生成 rollout 的地方</text>
+
+  <!-- arrow 1: sync -->
+  <line x1="300" y1="150" x2="638" y2="150" stroke="#2456c4" stroke-width="1.8" marker-end="url(#a1b)"/>
+  <text x="468" y="138" font-size="11" text-anchor="middle" fill="#2456c4">① 同步权重（两边本该一模一样）</text>
+
+  <!-- arrow 2: rollouts -->
+  <line x1="640" y1="186" x2="302" y2="186" stroke="#5a6272" stroke-width="1.8" marker-end="url(#a1a)"/>
+  <text x="468" y="204" font-size="11" text-anchor="middle" fill="#5a6272">② rollout 轨迹 + 奖励 R 回传</text>
+
+  <!-- drift note -->
+  <text x="468" y="168" font-size="12" font-weight="bold" text-anchor="middle" fill="#e8862a">s̄ = q − π ≠ 0（TIM 时）</text>
+
+  <!-- bottom annotations -->
+  <text x="60" y="300" font-size="11" fill="#1a1f2e">把 ② 的样本喂给训练器，梯度里混着 drift：平均奖励 × s̄——把 p 往 q 拉一小步。</text>
+  <text x="60" y="326" font-size="11" fill="#1a1f2e">随后 ① 把「已被拉动」的权重同步给采样器：现在 q 也偏了，且和 p 的偏差同向。</text>
+  <text x="60" y="352" font-size="11" fill="#1a1f2e">下一步又从更偏的 q 采样、又朝更偏的 q 蒸馏……偏差滚雪球，直到 reward 崩塌（轻 TIM 只是滚得慢）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 A-1</b>｜没有 TIM 时 s̄ = 0，回路里没有这股拉力，训练正常；有 TIM 时，每一步的更新都混进「朝采样器的蒸馏」，且采样器同步跟进、偏差代代放大。类比复印机：母本每代都被换成上一代的复印件，每代带一点色偏——越印越歪。</p>
+
+<div class="box">
+<span class="bt">本篇主角登场</span>「在线 + TIM」崩溃的元凶，论文给它起了名字：<b>drift（漂移）</b>——更新里一个恒定指向采样器的偏置项。下一节用两步高中数学把它从梯度里「拆」出来，再一行代码消掉它。
+</div>
+
+<h2>三、数学核心：把每步更新拆成 drift + signal</h2>
+
+<h3>3.1 复习：score 是什么</h3>
+
+<p>第 1 讲定义过：<b>score</b> 就是 \(\log p\) 对参数的梯度，并且对 softmax 策略手算验证过（有限差分）：</p>
+
+<div class="formula">\[
+s_a = \nabla_\theta \log \pi(a) = e_a - \pi
+\]</div>
+
+<p>\(e_a\) 是「选中动作 a」的 one-hot 向量，\(\pi\) 是当前策略的概率分布。REINFORCE 更新式 \(z \leftarrow z + \mathrm{lr}\cdot R\,(e_a - \pi)\) 就是「往实际抽中的方向推、从平均趋势里扣回来」。</p>
+
+<h3>3.2 恒等式一：score 的期望恒为零</h3>
+
+<p>softmax 版直接算：\(\mathbb{E}_p[s] = \sum_a \pi_a\,(e_a - \pi) = \pi - \pi\cdot 1 = 0\)。一般版也一行：\(\sum_v p_v \nabla_\theta \log p_v = \nabla_\theta \sum_v p_v = \nabla_\theta 1 = 0\)——概率总和永远是 1（常数），常数的变化率为零；而「概率总和的变化率」恰好就是 score 的加权平均。<b>所以 on-policy 时，不管在哪个前缀处，期望更新都是零向量场：推高的和压低的恰好抵消。</b></p>
+
+<h3>3.3 TIM 下就不为零了，而且方向精确可算</h3>
+
+<p>TIM 时，token 从采样器 \(q\) 抽、score 却用训练器 \(p\) 算，期望变成 \(\bar{s} = \mathbb{E}_q[s]\neq 0\)。softmax 情形下它精确等于：</p>
+
+<div class="formula">\[
+\bar{s} = \sum_a q_a\,(e_a - \pi) = q - \pi
+\]</div>
+
+<p><b>方向就是「从训练器指向采样器」。</b>第 2 讲算过 KL：\(\mathrm{KL}(q\|p)\) 越小说明两个分布越像，而把它降下去的梯度正是 \(-\bar{s}\)——所以沿 \(+\bar{s}\) 走 = 把 \(p\) 拉向 \(q\) = <b>向采样器蒸馏</b>（蒸馏损失「把概率挪到老师喜欢的 token 上」的下降方向，正是 \(-\bar{s}\)）。</p>
+
+<h3>3.4 恒等式二：把更新拆成 drift + signal</h3>
+
+<p>用到第二个高中级工具——<b>协方差拆分</b>。两个数列 \(A, B\) 的「乘积的平均」等于「平均的乘积」加「协方差」：\(\mathbb{E}[AB] = \mathbb{E}[A]\,\mathbb{E}[B] + \mathrm{Cov}(A,B)\)。先拿具体数字找感觉：\(A=[1,2,3]\)，\(B=[2,0,4]\)：\(\mathbb{E}[A]=2\)，\(\mathbb{E}[B]=2\)，\(\mathbb{E}[AB] = (1{\times}2 + 2{\times}0 + 3{\times}4)/3 = 14/3 \approx 4.67\)；而 \(\mathbb{E}[A]\mathbb{E}[B] = 4\)，差的 \(2/3 \approx 0.67\) 就是协方差——「两者是否一起变」的度量。套到策略梯度上（论文式 3）：</p>
+
+<div class="formula">\[
+\underbrace{\mathbb{E}_q[R\,s]}_{\text{每步的实际更新}} \;=\; \underbrace{\mathbb{E}_q[R]\cdot\bar{s}}_{\text{drift（漂移）}} \;+\; \underbrace{\mathrm{Cov}_q(R,\,s)}_{\text{signal（信号）}}
+\]</div>
+
+<p>两块的性质完全不同：</p>
+
+<table>
+  <tr><th></th><th>drift：\(\mathbb{E}_q[R]\cdot\bar{s}\)</th><th>signal：\(\mathrm{Cov}_q(R,s)\)</th></tr>
+  <tr><td>内容</td><td>平均奖励 × 朝采样器的方向</td><td>「哪个 token 的 score 与高奖励一起出现」</td></tr>
+  <tr><td>携带信息？</td><td>无——它只看平均分，分不清哪条 rollout 成功</td><td>有——这才是真正的学习信号</td></tr>
+  <tr><td>on-policy 时</td><td>\(\bar{s}=0\)，自动消失</td><td>保留（学习全靠它）</td></tr>
+  <tr><td>TIM 时</td><td>\(\neq 0\)：每步都在向采样器蒸馏，幅度 ∝ 平均奖励</td><td>仍在（但有偏）</td></tr>
+</table>
+
+<p>这解释了第二节的现象：<b>全正奖励在线训练最不稳</b>——\(\mathbb{E}_q[R] &gt; 0\) 处处成立，每个前缀处都在把训练器拉向采样器，反馈回路火力全开；组内中心化让平均奖励有正有负，拉力和推力部分相抵，所以最稳——但注意，只是「部分相抵」。</p>
+
+<div class="box">
+<span class="bt">为什么 GRPO 的组内减均值救不了</span>第 5 讲的组内中心化只保证「同一个 prompt 的 G 条 rollout，优势加和为 0」，可 drift 发生在<b>每个前缀处</b>：一个「开头写对了」的前缀，后续答对的期望优势为正 → 此处被拉向采样器；一个「开头就抄错数」的前缀，期望优势为负 → 此处被推离采样器。也就是说，<b>drift 恰好在携带学习信号的前缀处非零</b>，与 token 是否影响得分无关。组中心化能缩小 drift（与 +1/0 相比），但消不掉——这就是它的天花板。
+</div>
+
+<h2>四、一行修复：score centering</h2>
+
+<p>思路顺理成章：既然 drift 的祸根是「TIM 下 score 的期望不再为零」，那就<b>手动把它归零</b>——在每个前缀处，从 score 里减掉它在采样器分布下的期望（论文式 4）：</p>
+
+<div class="formula">\[
+\tilde{s} \;=\; s - \bar{s}, \qquad \bar{s} = \mathbb{E}_q[s]\ \text{（给定前缀，是常向量）}
+\]</div>
+
+<p>代回协方差拆分（论文式 5），逐行看：</p>
+
+<div class="formula">\[
+\mathbb{E}_q[R\,\tilde{s}]
+= \cancel{\mathbb{E}_q[R]\cdot\mathbb{E}_q[\tilde{s}]} + \mathrm{Cov}_q(R,\tilde{s})
+= \mathrm{Cov}_q(R,\tilde{s})
+= \mathrm{Cov}_q(R, s)
+\]</div>
+
+<p>第一项被划掉是因为 \(\mathbb{E}_q[\tilde{s}] = \bar{s} - \bar{s} = 0\)——<b>drift 精确归零</b>（不是缩小，是消失，且不依赖任何近似）。最后一步是因为 \(\tilde{s} = s - \text{常向量}\)：给每个数减同一个常数不改变「一起变动」的程度，<b>signal 分毫不动</b>。对比 on-policy 时的期望更新 \(\mathbb{E}_p[R\,s] = \mathrm{Cov}_p(R,s)\)：唯一剩下的区别只是协方差在哪个分布下测量。没有 TIM（\(p=q\)）时 \(\bar{s}=0\)，修正自动为零——<b>不需要它时它是透明的</b>，因此没有任何超参数。</p>
+
+<h3>4.1 全程手算一遍</h3>
+
+<p>三个 token 的玩具策略：采样器 \(q = [0.5,\ 0.3,\ 0.2]\)，训练器 \(\pi = [0.4,\ 0.35,\ 0.25]\)，某次前缀后的奖励 \(R = [3,\ 1,\ 0]\)（抽中甲得 3 分、乙得 1 分、丙得 0 分）。score 表（\(s_a = e_a - \pi\)）：</p>
+
+<table>
+  <tr><th>token</th><th>\(s_a = e_a - \pi\)</th><th>\(\tilde{s}_a = e_a - q\)</th></tr>
+  <tr><td>甲</td><td>\([0.6,\ -0.35,\ -0.25]\)</td><td>\([0.5,\ -0.3,\ -0.2]\)</td></tr>
+  <tr><td>乙</td><td>\([-0.4,\ 0.65,\ -0.25]\)</td><td>\([-0.5,\ 0.7,\ -0.2]\)</td></tr>
+  <tr><td>丙</td><td>\([-0.4,\ -0.35,\ 0.75]\)</td><td>\([-0.5,\ -0.3,\ 0.8]\)</td></tr>
+</table>
+
+<p><b>原始更新</b>（未修正）：</p>
+
+<div class="formula">\[
+\mathbb{E}_q[R\,s] = 1.5\,s_{\text{甲}} + 0.3\,s_{\text{乙}} + 0 = [0.9,-0.525,-0.375] + [-0.12,0.195,-0.075] = [0.78,\ -0.33,\ -0.45]
+\]</div>
+
+<p><b>拆分</b>：\(\mathbb{E}_q[R] = 0.5{\times}3 + 0.3{\times}1 + 0.2{\times}0 = 1.8\)；\(\bar{s} = q - \pi = [0.1,\ -0.05,\ -0.05]\)；drift \(= 1.8 \times [0.1,-0.05,-0.05] = [0.18,\ -0.09,\ -0.09]\)；signal \(= [0.78,-0.33,-0.45] - [0.18,-0.09,-0.09] = [0.60,\ -0.24,\ -0.36]\)。<b>中心化后的更新</b>：</p>
+
+<div class="formula">\[
+\mathbb{E}_q[R\,\tilde{s}] = 1.5\,\tilde{s}_{\text{甲}} + 0.3\,\tilde{s}_{\text{乙}} = [0.75,-0.45,-0.3] + [-0.15,0.21,-0.06] = [0.60,\ -0.24,\ -0.36]
+\]</div>
+
+<p>与 signal 完全一致——橙色部分被精确剪掉（下图）：</p>
+
+<div class="fig">
+<svg viewBox="0 0 940 360" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="40" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">手算验证：中心化恰好减掉 drift，剩下的与 on-policy 更新完全一致</text>
+
+  <!-- legend -->
+  <rect x="60" y="40" width="32" height="12" fill="#2456c4"/>
+  <text x="100" y="50" font-size="11" fill="#1a1f2e">原始更新（未修正）</text>
+  <rect x="230" y="40" width="32" height="12" fill="#e8862a"/>
+  <text x="270" y="50" font-size="11" fill="#1a1f2e">其中混入的 drift</text>
+  <rect x="400" y="40" width="32" height="12" fill="#2f9e63"/>
+  <text x="440" y="50" font-size="11" fill="#1a1f2e">中心化后的更新</text>
+
+  <!-- zero line -->
+  <line x1="60" y1="190" x2="880" y2="190" stroke="#5a6272" stroke-width="1.2"/>
+  <text x="52" y="194" font-size="10" text-anchor="end" fill="#5a6272">0</text>
+
+  <!-- group 甲: total +0.78, drift +0.18, centered +0.60 -->
+  <rect x="138" y="73" width="36" height="117" fill="#2456c4"/>
+  <text x="156" y="67" font-size="11" text-anchor="middle" fill="#1a1f2e">0.78</text>
+  <rect x="182" y="163" width="36" height="27" fill="#e8862a"/>
+  <text x="200" y="157" font-size="11" text-anchor="middle" fill="#1a1f2e">0.18</text>
+  <rect x="226" y="100" width="36" height="90" fill="#2f9e63"/>
+  <text x="244" y="94" font-size="11" text-anchor="middle" fill="#1a1f2e">0.60</text>
+  <text x="200" y="330" font-size="11" text-anchor="middle" fill="#1a1f2e">token 甲 · R=3</text>
+
+  <!-- group 乙: total -0.33, drift -0.09, centered -0.24 -->
+  <rect x="408" y="190" width="36" height="50" fill="#2456c4"/>
+  <text x="426" y="254" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.33</text>
+  <rect x="452" y="190" width="36" height="14" fill="#e8862a"/>
+  <text x="470" y="218" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.09</text>
+  <rect x="496" y="190" width="36" height="36" fill="#2f9e63"/>
+  <text x="514" y="240" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.24</text>
+  <text x="470" y="330" font-size="11" text-anchor="middle" fill="#1a1f2e">token 乙 · R=1</text>
+
+  <!-- group 丙: total -0.45, drift -0.09, centered -0.36 -->
+  <rect x="678" y="190" width="36" height="68" fill="#2456c4"/>
+  <text x="696" y="272" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.45</text>
+  <rect x="722" y="190" width="36" height="14" fill="#e8862a"/>
+  <text x="740" y="218" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.09</text>
+  <rect x="766" y="190" width="36" height="54" fill="#2f9e63"/>
+  <text x="784" y="258" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.36</text>
+  <text x="740" y="330" font-size="11" text-anchor="middle" fill="#1a1f2e">token 丙 · R=0</text>
+
+  <text x="60" y="352" font-size="11" fill="#5a6272">蓝 = 橙 + 绿（原始更新 = drift + signal）；三根橙条被中心化精确减掉，剩下三根绿条。q=[0.5,0.3,0.2]，π=[0.4,0.35,0.25]。</text>
+</svg>
+</div>
+<p class="cap"><b>图 A-2</b>｜§4.1 手算的可视化：纵轴 1 单位 = 150px，方向沿策略参数的三个坐标分解。绿色（中心化后）= 蓝色（原始）− 橙色（drift），三个坐标全部成立。</p>
+
+<div class="box">
+<span class="bt">一个漂亮的巧合</span>盯着 \(\tilde{s}_a = e_a - q\) 看：中心化后的 score 恰好是「<b>这次实际抽到的 token</b>」减「<b>采样器平均会抽到的 token</b>」。于是加了 SC 之后的更新规则变回第 1 讲的 REINFORCE 形式 \(z \leftarrow z + \mathrm{lr}\cdot R\,(e_a - q)\)——只是把「自己策略 \(\pi\)」换成了「采样器 \(q\)」。也就是说，<b>score centering 让 off-policy 更新长回了 on-policy 更新的模样</b>。名字里也有讲究：第 1 讲的 baseline 减的是<b>奖励</b>的均值（降方差、不改均值），SC 减的是 <b>score</b> 的均值（改均值、消偏差）——它是 bias correction，不是 variance reduction。
+</div>
+
+<h2>五、和重要性采样的正面交锋</h2>
+
+<p>第 3 讲的重要性采样（IS）在<b>期望意义上</b>也能精确消 drift：\(\mathbb{E}_q[\frac{p}{q} R\,s] = \mathbb{E}_p[R\,s]\)。那为什么还需要 SC？对比两张「药方」的药性：</p>
+
+<table>
+  <tr><th></th><th>重要性采样（乘法修正）</th><th>Score Centering（加法修正）</th></tr>
+  <tr><td>修正形式</td><td>每个 score 乘上 ratio \(\rho = p/q\)——依赖<b>抽到了哪个 token</b>，逐样本随机</td><td>每个 score 减去 \(\bar{s}\)——只依赖前缀，<b>逐前缀确定</b></td></tr>
+  <tr><td>方差</td><td>稀有 token 的 ratio 可任意大 → 梯度方差爆炸</td><td>不放大方差（减的是确定量）</td></tr>
+  <tr><td>实现代价</td><td>需要采样器记录 logprob（本来就有）</td><td>需要采样器记录 top-k logprob（新增，但很便宜，见 §6）</td></tr>
+  <tr><td>超参数</td><td>剪裁区间一堆（下表）</td><td>零</td></tr>
+  <tr><td>阿喀琉斯之踵</td><td> ratio 太大必须剪/丢 → <b>被剪掉的地方 drift 漏回来</b></td><td>协方差测在 \(q\) 下而非 \(p\) 下 → 重度 staleness 时吃亏（可组合 IS 弥补）</td></tr>
+</table>
+
+<p>实践里的 IS 家族（论文表 1）全部在「剪多少、丢多少」上做文章，且各有各的剪法：</p>
+
+<table>
+  <tr><th>方法</th><th>作用层级</th><th>ratio 保留区间</th><th>区间外处置</th></tr>
+  <tr><td>裸 IS（Williams 1992）</td><td>token</td><td>\([0, \infty)\)</td><td>不剪 → 方差爆炸，没人敢用</td></tr>
+  <tr><td>TIS</td><td>token</td><td>\(\min(r, 2.0)\)</td><td>截断</td></tr>
+  <tr><td>MIS（IcePop）</td><td>token</td><td>\([0.5, 5.0]\)</td><td>直接丢弃该 token</td></tr>
+  <tr><td>PPO</td><td>token</td><td>\([0.8, 1.2]\)</td><td>悲观剪裁（第 3 讲的 clip）</td></tr>
+  <tr><td>DAPO</td><td>token</td><td>\([0.8, 1.28]\)</td><td>clip-higher + 双侧剪裁</td></tr>
+  <tr><td>GSPO</td><td>序列</td><td>\([0.9997, 1.0004]\)</td><td>整条丢弃</td></tr>
+  <tr><td>TOPR</td><td>序列</td><td>上限 1.0</td><td>只修负优势</td></tr>
+  <tr><td>DPPO</td><td>token</td><td>全变差阈值 0.2</td><td>丢弃</td></tr>
+  <tr><td><b>Score Centering</b></td><td colspan="3">加法、无区间、无超参——与上表所有方法的工作原理正交</td></tr>
+</table>
+
+<p><b>关键洞察：它们还能组队。</b>SC 可以叠在任何 IS 方法上——先用 IS 加权 score，再减去「加权 score 的期望」\(R\,(w\,s - \mathbb{E}_q[w\,s])\)。有个优雅的自检：取纯 IS（\(f(r)=r\)）时，加权 score 的期望本来就为零，SC 项自动消失（没什么可中心化的）；而 TIS/MIS 剪掉了一部分，SC 恰好把剪漏的 drift 补上。§7 的实验会看到：重度 staleness 下组队最强。</p>
+
+<h2>六、实现：存不下 15 万维，就存 top-128</h2>
+
+<p>精确的 SC 需要「采样器对每个已采样 token 的<b>完整</b>下一 token 分布」——算 \(\bar{s}\) 要对整个词表求和。但 Qwen3 词表 15.2 万：fp32 存一个 token 的全量 logprob 约 608KB；1024 条 rollout × 3.2 万长度 ≈ <b>20 TB</b>，不可行。论文的解法分两步：</p>
+
+<p><b>第一步：只记 top-\(k\) logprob（\(k=128\)）。</b>vLLM/SGLang 原生支持，几乎零开销。头部覆盖不了的「尾部概率质量」用训练器自己的分布按比例缩放来补：记头部集合为 \(H\)，</p>
+
+<div class="formula">\[
+\hat{q}_v = \begin{cases} q_v &amp; v \in H \\ \rho\, p_v &amp; v \notin H \end{cases}
+\qquad \rho = \frac{1-\sum_{v\in H} q_v}{1-\sum_{v\in H} p_v}\ \text{（采样器尾部质量 ÷ 训练器尾部质量）}
+\]</div>
+
+<p><b>第二步：尾部期望不用真算。</b>利用恒等式一（\(\mathbb{E}_p[s] = 0\)，尾部期望 = 零 − 头部期望），求和缩到头部 \(k\) 个 token（论文式 10）：</p>
+
+<div class="formula">\[
+\mathbb{E}_{\hat{q}}[s] = \sum_{v\in H} (q_v - \rho\, p_v)\, s_v
+\]</div>
+
+<p>再把它写成可自动微分的标量损失——中心化项里的系数全部加 <code>stop_gradient</code>（sg，当常数用、不参与求导——修正必须是「平移」，不能自己也被梯度推着走）：</p>
+
+<div class="formula">\[
+L = -R\,\Big(\log p_{y_t} - \sum_{v\in H} \mathrm{sg}\big[q_v - \rho\, p_v\big]\,\log p_v\Big)
+\qquad\Longrightarrow\qquad -\nabla_\theta L = R\,(s_{y_t} - \bar{s}) = R\,\tilde{s}_{y_t}
+\]</div>
+
+<p>单个 token 的最小实现（论文原码，10 行 JAX）：</p>
+
+<pre><code class="language-python">import jax.numpy as jnp
+from jax.lax import stop_gradient
+
+def score_centering_loss(train_logp, samp_logp, topk_ids, sampled_token, advantage):
+    train_head_logp = train_logp[topk_ids]
+    tail_mass_ratio = (1 - jnp.exp(samp_logp).sum()) / (1 - jnp.exp(train_head_logp).sum())
+    head_prob_residual = jnp.exp(samp_logp) - tail_mass_ratio * jnp.exp(train_head_logp)
+    logp_correction = (stop_gradient(head_prob_residual) * train_head_logp).sum()
+    return -advantage * (train_logp[sampled_token] - logp_correction)</code></pre>
+
+<p>效果与代价：\(k=128\) 甚至 \(k=32\) 在所有实验里与全量 SC 打平（头部覆盖 &gt;99.9% 概率质量）；整个修正的墙钟开销在 baseline 方法的 <b>1% 以内</b>。</p>
+
+<h2>七、实验：从 0.6B 到 30B，从加噪声到真量化</h2>
+
+<p>所有对比都钉在同一目标函数上（REINFORCE + 组内中心化奖励），每次只叠加一种修正，公平对照。模型：Qwen3-0.6B（Countdown 游戏）与 Qwen3-30B-A3B-Base（MoE，INTELLECT-2 数学数据）。</p>
+
+<table>
+  <tr><th>设置</th><th>TIM 怎么造的</th><th>结果</th></tr>
+  <tr><td>合成权重噪声（0.6B）</td><td>采样器权重 + 固定高斯偏移 \(\Delta\theta\)，三档强度</td><td>噪声越大崩得越早（DPPO 三档分别崩在 ≈160 / 80 / 20 步）；<b>最重噪声下只有 SC 及 SC+MIS/TIS 存活</b></td></tr>
+  <tr><td>int8 量化采样器（0.6B）</td><td>采样器权重/激活/KV 全 int8，训练器 bf16</td><td>SC 单用与 SC+IS 并列最好</td></tr>
+  <tr><td>重度 staleness（0.6B）</td><td>推理引擎<b>每 64 步</b>才同步一次</td><td><b>SC+TIS/MIS 最佳，超过 SC 单用</b>（原因见 §5：IS 先把分布拉近，SC 再消残余 drift）；PPO/DAPO 靠 clip 也能活</td></tr>
+  <tr><td>30B MoE · FP8 采样器</td><td>轻失配</td><td>连<b>裸 PG</b> 都稳（58% 训练准确率）——轻 TIM 下各方法短期拉不开差距</td></tr>
+  <tr><td>30B MoE · FP4 KV cache</td><td>KV cache 量化到 fp4</td><td>裸 PG 200 步内崩，MIS 训练后期崩；<b>SC 52%、TIS 51% 稳住</b></td></tr>
+  <tr><td>30B MoE · INT8 权重激活 + INT4 KV</td><td>重度失配</td><td><b>SC 30%，TIS 12%，其余全部 &lt;5%</b>——差距随失配加重而拉开</td></tr>
+</table>
+
+<p>两个值得记住的旁证：<b>① PPO/DAPO 在 staleness 下活着、在量化/噪声下崩</b>——它们的 clip 区间是为「策略自己走远」产生的 ratio 设计的，数值误差造成的偏差不沿这个区间活动，clip 管不着；<b>② 轻失配短期看不出差别</b>——drift 是逐步累积的，轻 TIM 只是滚得慢。这也调和了此前文献的分歧（有人 fp8 稳、有人 bf16 都崩）：看的训练步数不一样。</p>
+
+<div class="infer">什么时候该上 SC？——如果你的系统 bf16 对 bf16、每步同步、序列短，大概率感觉不到 TIM（FP8 采样器下连裸 PG 都稳）。但如果 rollout 引擎做了量化（int8/fp4 KV）、或异步更新（长 rollout、agentic 任务），SC 是便宜的保险：开销 &lt;1%、零超参、on-policy 时自动失效；异步越重越该和 TIS/MIS 组队。MoE 还有一处论文没有重放的 TIM 源：两个引擎的路由不一致——实践中建议重放路由索引。</div>
+
+<h2>八、局限与边界</h2>
+
+<ul>
+  <li><b>SC 只保证消 drift，不保证完全回到 on-policy 更新</b>：剩下的更新在 \(q\) 下测协方差，而非 \(p\) 下。p 和 q 离得越远（重度 staleness）失真越大——实验里 SC+IS 组合正好补这块短板。</li>
+  <li><b>头条数字来自故意加重的 TIM + 短序列</b>，作为「轻 TIM × 长训练」的代理。结论方向可信，具体倍数别外推。</li>
+  <li><b>负奖励那条病（离线崩）本文没治</b>：SC 治的是「在线 + 漂移」，「离线 + 负奖励把 logp 压向 −∞」是另一个机制（另一条研究线）。</li>
+</ul>
+
+<h2>九、和系列各讲的连接</h2>
+
+<table>
+  <tr><th>讲次</th><th>本篇用到 / 扩展了什么</th></tr>
+  <tr><td>第 1 讲</td><td>score = \(e_a - \pi\) 与 REINFORCE 更新式——加 SC 后更新规则回到同一形式（\(\pi\) 换成 \(q\)）；「减均值」从奖励侧换到 score 侧</td></tr>
+  <tr><td>第 2 讲</td><td>on/off-policy 的精确定义（采样分布 ≠ 训练分布）；\(\mathrm{KL}(q\|p)\) 的下降方向 = 蒸馏方向 = drift 方向</td></tr>
+  <tr><td>第 3 讲</td><td>IS ratio 与 clip：整个剪裁家族一览；PPO 的 clip 抗「策略走远」、不抗「数值误差」</td></tr>
+  <tr><td>第 4 讲</td><td>蒸馏视角的呼应：SFT = 对固定老师做最大似然（稳）；drift = 对会动的老师蒸馏（崩）</td></tr>
+  <tr><td>第 5 讲</td><td>GRPO 组内中心化的能力边界：降方差救不了偏差；训练病症清单新增一个病因「TIM drift」，药方就是 SC</td></tr>
+  <tr><td>第 6 讲</td><td>rollout/trainer 分离、权重同步、异步 staleness、量化——TIM 的全部现实来源；「ratio 监控」之外的第三条稳定思路：加法修正</td></tr>
+</table>
+
+<h2>十、自查清单</h2>
+
+<ol class="checklist">
+  <li>TIM 的四个来源？哪两个「没有 bug 也存在」？（浮点不结合律、算子与输入形状）</li>
+  <li>为什么 SFT 对数据来源不敏感、RL 敏感？（老师固定 vs 老师随学生移动：蒸馏收敛 vs 反馈回路）</li>
+  <li>写出拆分式 \(\mathbb{E}_q[R\,s] = \mathbb{E}_q[R]\,\bar{s} + \mathrm{Cov}_q(R,s)\)，指出哪块是学习信号、哪块是漂移。</li>
+  <li>softmax 策略下 \(\bar{s}\) 精确等于什么？方向朝哪？（\(q - \pi\)，指向采样器）</li>
+  <li>为什么 GRPO 组内中心化消不掉 drift？（drift 按前缀产生；前缀处期望优势 ≠ 0）</li>
+  <li>SC 的定义与两重保证？（\(\tilde{s} = s - \bar{s}\)：drift 精确归零；\(\tilde{s}=s-\)常向量 → 协方差不变）</li>
+  <li>SC 与 IS 的本质区别？为什么能组队、纯 IS 时 SC 项为何自动消失？（乘法随机 vs 加法确定；\(f(r)=r\) 时加权 score 期望本来就是零）</li>
+  <li>为什么 top-128 logprob 就够？（尾部用 \(p\) 按质量比 \(\rho\) 缩放；\(\mathbb{E}_p[s]=0\) 让尾部期望 = −头部期望；头部覆盖 &gt;99.9% 质量）</li>
+</ol>
+
+<div class="box">
+<span class="bt">一句话带走</span>RL 怕 TIM，不是因为两引擎差得多，而是因为差的方向<b>永远一致</b>、还会被同步回路代代放大。score centering 用一行加法（score 减去它在采样器下的期望）把这个方向精确抹平——零超参、零方差代价、on-policy 时自动隐身。第 6 讲调试清单里的「reward 不涨/训练崩」分支，从此多了一味药。
+</div>
+
+<footer>本页为个人学习笔记 · RL 训练工程师零基础七讲系列 · 生成于 2026-09-20 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 论文：Marek &amp; Ryabinin (Together AI), arXiv:2609.20807；官方实现 github.com/martin-marek/score-centering；相关：IcePop (arXiv:2510.18855)、GSPO (arXiv:2507.18071)、DAPO (arXiv:2503.14476)、Defeating nondeterminism in LLM inference (Thinking Machines Lab)</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

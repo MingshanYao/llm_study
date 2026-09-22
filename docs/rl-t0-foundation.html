@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RL 训练工程师零基础七讲 · 第 0 讲：全景图</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px dashed var(--line); margin-bottom: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>RL 训练工程师零基础七讲 · 第 0 讲：全景图</h1>
+
+<div class="series-nav">
+  <a class="here">0 全景图</a>
+  <a href="rl-t1-policy-gradient.html">1 策略梯度</a>
+  <a href="rl-t2-llm-as-rl.html">2 LLM×RL</a>
+  <a href="rl-t3-ppo.html">3 PPO</a>
+  <a href="rl-t4-rlhf-dpo.html">4 RLHF·DPO</a>
+  <a href="rl-t5-rlvr-grpo.html">5 RLVR·GRPO</a>
+  <a href="rl-t6-systems.html">6 系统与实战</a>
+  <a href="rl-t7-score-centering.html">番外 SC</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>RL 训练工程师零基础七讲（本篇为第 0 讲，<b>零数学</b>，只搭全景、定地图）</p>
+  <p style="margin:4px 0"><b>读者假设：</b>不需要任何机器学习背景；知道 ChatGPT 这类模型「输入文字、输出文字」就够了。所有行话第一次出现都会解释。</p>
+  <p style="margin:4px 0"><b>系列目标：</b>读完七讲，你能看懂 RL 训练工程师的日常对话、跑通第一个 RL 训练 demo，并知道下一步该深入哪里。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲目标：</b>在进入任何数学之前，先回答四个问题：① 一个 LLM 是怎么被「造」出来的——预训练、SFT、RL 三个阶段各干什么；② 为什么有了 SFT 还需要 RL——模仿学习和试错学习差在哪；③ RLHF、RLVR、reward model、rollout 这些天天出现的名词到底指什么；④ RL 训练工程师每天的工作长什么样、本系列怎么带你入门。这一讲没有任何公式，但每个概念都会在后面某一讲展开——把它当作系列的总目录。</p>
+</div>
+
+<h2>1. 一个 LLM 的一生：三个阶段</h2>
+
+<p>市面上的对话模型（GPT、DeepSeek、Qwen……）都不是一次训练出来的，而是<b>三棒接力</b>。用「学做菜」来类比，三棒分别是：</p>
+
+<ul>
+  <li><b>预训练（pretraining）</b>：读遍全世界的菜谱、食材科普、食客点评——把<b>语言和知识</b>塞进模型。它学会了「接龙」：给半句话，预测下一个字大概率是什么。</li>
+  <li><b>SFT（supervised fine-tuning，监督微调）</b>：看师傅做菜——喂给模型几万到几百万条人写的高质量问答示范，让它<b>模仿</b>「被提问时该怎么回应」。</li>
+  <li><b>RL（reinforcement learning，强化学习）</b>：自己上手做菜、请试吃员打分——模型<b>自己生成</b>大量回答，每个回答被打一个分数，分数高的回答今后更可能出现，分数低的被压制。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 940 310" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m0a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">LLM 训练的三个阶段：读书 → 看示范 → 被打分</text>
+
+  <!-- box 1: pretrain -->
+  <rect x="50" y="56" width="250" height="190" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <rect x="50" y="56" width="250" height="34" rx="10" fill="#eef3fc" stroke="#c9d2e0"/>
+  <text x="175" y="79" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">① 预训练 Pretraining</text>
+  <text x="64" y="118" font-size="10.5" fill="#2a3040">数据：全网万亿 token 文本</text>
+  <text x="64" y="140" font-size="10.5" fill="#2a3040">信号：预测下一个词</text>
+  <text x="64" y="162" font-size="10.5" fill="#2a3040">学到：语言 + 世界知识</text>
+  <text x="64" y="184" font-size="10.5" fill="#2a3040">产物：基座模型（base）</text>
+  <text x="64" y="214" font-size="10" fill="#5a6272">成本最高：几千~几万卡月</text>
+
+  <line x1="300" y1="151" x2="338" y2="151" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m0a)"/>
+
+  <!-- box 2: sft -->
+  <rect x="345" y="56" width="250" height="190" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <rect x="345" y="56" width="250" height="34" rx="10" fill="#fbe3cc" stroke="#c9d2e0"/>
+  <text x="470" y="79" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">② SFT 监督微调</text>
+  <text x="359" y="118" font-size="10.5" fill="#2a3040">数据：人工写的高质量问答</text>
+  <text x="359" y="140" font-size="10.5" fill="#2a3040">信号：模仿示范答案</text>
+  <text x="359" y="162" font-size="10.5" fill="#2a3040">学到：指令格式与套路</text>
+  <text x="359" y="184" font-size="10.5" fill="#2a3040">产物：会听指令的模型</text>
+  <text x="359" y="214" font-size="10" fill="#5a6272">几万~几百万条示范</text>
+
+  <line x1="595" y1="151" x2="633" y2="151" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m0a)"/>
+
+  <!-- box 3: rl -->
+  <rect x="640" y="56" width="250" height="190" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <rect x="640" y="56" width="250" height="34" rx="10" fill="#d9f0e2" stroke="#c9d2e0"/>
+  <text x="765" y="79" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">③ RL 强化学习</text>
+  <text x="654" y="118" font-size="10.5" fill="#2a3040">数据：prompt 池（自生成）</text>
+  <text x="654" y="140" font-size="10.5" fill="#2a3040">信号：奖励打分（试错）</text>
+  <text x="654" y="162" font-size="10.5" fill="#2a3040">学到：高奖励回答的概率 ↑</text>
+  <text x="654" y="184" font-size="10.5" fill="#2a3040">产物：对齐 / 推理模型</text>
+  <text x="654" y="214" font-size="10" fill="#5a6272">本系列全部内容都在这一格</text>
+
+  <text x="40" y="282" font-size="11" fill="#5a6272">一句话：预训练买来「潜力」，SFT 教会「格式」，RL 逼出「能力」——三棒接力，缺一不可。</text>
+  <text x="40" y="300" font-size="11" fill="#5a6272">习惯叫法：前两阶段的产物叫 SFT 模型，第三阶段的产物叫对齐模型 / 推理模型。本系列只讲第三棒。</text>
+</svg>
+</div>
+<p class="cap"><b>图 0-1</b>｜LLM 训练三阶段。注意第③格的数据来源变了：示范数据是人写的，RL 的回答是<b>模型自己生成</b>的——这个区别是后面一切故事的开端。</p>
+
+<div class="box">
+<span class="bt">术语</span>预训练之后的所有阶段（SFT + RL）合称<b>后训练（post-training）</b>，也叫<b>对齐（alignment）</b>。招聘里说的「RL 训练工程师 / 后训练算法工程师」，主战场就是第三棒，兼管第二棒。
+</div>
+
+<h2>2. SFT 已经很好了，为什么还要 RL？</h2>
+
+<p>这是整个系列最重要的一问。SFT（模仿学习）有三个<b>结构性的天花板</b>，恰好是 RL 能补的：</p>
+
+<h3>2.1 SFT 只知道「答案长什么样」，不知道「答案好不好」</h3>
+
+<p>SFT 的训练信号是「照着这个答案说」。它见过一百万个标准答案，但没被告诉过：<b>错答案错在哪、好答案好在哪、好和更好之间差多少</b>。就像只看师傅的成品菜，从没被试吃员点评过——点评本身就是信息，而且是模仿给不了的信息。</p>
+
+<h3>2.2 SFT 的上限被示范数据封死，RL 可以超越示范</h3>
+
+<p>模仿的上限就是示范本身。最著名的例子：AlphaGo 的第 37 手——那步棋人类几千年围棋史里从没人下过，胜率评估一度接近 0，事后被证明是妙手。它下得出来，恰恰因为它不是学人类棋谱（模仿），而是<b>自己下、自己赢、自己总结</b>（试错）。LLM 的 RL 同理：数学题的新解法、代码的新写法，可以来自模型自己的探索，而不必先存在于任何人的示范里。</p>
+
+<h3>2.3 训练时照抄标准答案，考试时只能照抄自己——SFT 的「脱轨」问题</h3>
+
+<p>SFT 训练时，模型永远在「标准答案的上文」里预测下一个词——每一步都有人纠偏。可推理时，上文是<b>它自己刚生成的</b>：一旦某一步说岔了，它是在自己造成的岔路上继续预测，没人拉回来，而且训练时根本没见过这种岔路。RL 没有这个错位：训练时模型就在走自己生成的路，好的坏的都经历过、都被打过分——<b>训练条件和考试条件一致</b>。</p>
+
+<div class="box">
+<span class="bt">直觉</span>学开车：SFT 是看教学视频（看得到正确操作，摸不到方向盘）；RL 是真上车（开歪了自己知道、被扣分，下次调整）。视频看得再多，也要上路才能学会——尤其是「从歪的地方拉回来」这件事，视频里根本看不到。
+</div>
+
+<h2>3. RL 问题的三个零件：策略、奖励、更新</h2>
+
+<p>把第三阶段抽象到最简，只有三个零件在循环：</p>
+
+<ol>
+  <li><b>策略（policy）</b>：就是模型本身。给它一个问题，它输出的是「每个候选回答的概率」——回答不是背出来的，是<b>按概率采样</b>出来的。同一个问题问两遍，答案可能不同，因为采样有随机性。</li>
+  <li><b>奖励（reward）</b>：对一次生成的回答打一个分。打分的可以是程序（数学题对答案、代码跑测试）、可以是学出来的打分模型，也可以是人。它是 RL <b>唯一的目标信号</b>。</li>
+  <li><b>更新</b>：根据分数调整模型参数——高分的回答，下次遇到类似问题更可能出现；低分的被压制。仅此而已，所有 RL 算法（PPO、GRPO……）都是这句话的不同实现方式。</li>
+</ol>
+
+<div class="fig">
+<svg viewBox="0 0 940 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <defs>
+    <marker id="m0b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="m0c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">RL 训练的一圈：一个迭代步（step）的完整闭环</text>
+
+  <!-- A: model -->
+  <rect x="60" y="70" width="210" height="72" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="165" y="100" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">模型 π（当前策略）</text>
+  <text x="165" y="122" font-size="10" text-anchor="middle" fill="#5a6272">唯一被训练的东西</text>
+
+  <!-- B: rollout -->
+  <rect x="670" y="70" width="210" height="72" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="775" y="100" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">采样一批回答</text>
+  <text x="775" y="122" font-size="10" text-anchor="middle" fill="#5a6272">术语叫 rollout（试错）</text>
+
+  <!-- C: reward -->
+  <rect x="670" y="190" width="210" height="72" rx="10" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="775" y="220" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">打分（reward）</text>
+  <text x="775" y="242" font-size="10" text-anchor="middle" fill="#5a6272">规则判分 / 打分模型 / 人</text>
+
+  <!-- D: update -->
+  <rect x="60" y="190" width="210" height="72" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="165" y="220" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">更新参数</text>
+  <text x="165" y="242" font-size="10" text-anchor="middle" fill="#5a6272">好回答概率 ↑，差的 ↓</text>
+
+  <!-- A -> B -->
+  <line x1="270" y1="106" x2="663" y2="106" stroke="#2456c4" stroke-width="1.6" marker-end="url(#m0c)"/>
+  <text x="470" y="96" font-size="10.5" text-anchor="middle" fill="#2456c4">按概率生成完整回答（几百个 token）</text>
+
+  <!-- B -> C -->
+  <line x1="775" y1="142" x2="775" y2="183" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m0b)"/>
+  <text x="790" y="167" font-size="10.5" fill="#5a6272">逐条打分</text>
+
+  <!-- C -> D -->
+  <line x1="670" y1="226" x2="277" y2="226" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m0b)"/>
+  <text x="470" y="216" font-size="10.5" text-anchor="middle" fill="#5a6272">按分数调整参数</text>
+
+  <!-- D -> A -->
+  <line x1="165" y1="190" x2="165" y2="149" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m0b)"/>
+  <text x="150" y="172" font-size="10.5" text-anchor="end" fill="#5a6272">下一轮</text>
+
+  <text x="470" y="170" font-size="11" text-anchor="middle" fill="#1a1f2e">一圈 = 一个训练步（step）</text>
+  <text x="470" y="192" font-size="10" text-anchor="middle" fill="#5a6272">真实训练要跑几百~几万圈</text>
+</svg>
+</div>
+<p class="cap"><b>图 0-2</b>｜RL 训练的最小闭环。蓝色的模型是唯一被更新的东西；绿色打分环节怎么实现（人 / 规则 / 打分模型），决定了是 RLHF 还是 RLVR——第 5 节展开。</p>
+
+<div class="box">
+<span class="bt">换个脑子</span>预训练和 SFT 的「训练数据」是人准备好的、<b>固定的</b>；RL 的训练数据（回答）是模型<b>现场生成</b>的，每一圈都在变。所以 RL 训练系统天生比普通训练多一条「高频推理」的生产线——这是第 6 讲系统工程的主线，也是这个岗位偏工程的根源。
+</div>
+
+<h2>4. 名词表：把行话一次说清</h2>
+
+<p>下面这些词会贯穿全系列。现在不必记住定义，混个脸熟即可——但以后每讲用到时，可以翻回这张表：</p>
+
+<table>
+  <tr><th style="width:22%">术语</th><th>一句话解释</th><th style="width:14%">哪讲细讲</th></tr>
+  <tr><td><b>策略</b> policy</td><td>正在被训练的模型本身，输出「每一步该说什么」的概率分布</td><td>第 1 讲</td></tr>
+  <tr><td><b>奖励</b> reward</td><td>对一个回答的打分，RL 唯一的目标信号</td><td>第 1、5 讲</td></tr>
+  <tr><td><b>rollout</b></td><td>让当前模型实际生成一遍回答（试错的过程）；生成的每条回答也叫一条 rollout</td><td>第 2 讲</td></tr>
+  <tr><td><b>轨迹</b> trajectory</td><td>一次完整生成：问题 + 逐个 token + 末尾奖励</td><td>第 2 讲</td></tr>
+  <tr><td><b>RLHF</b></td><td>Reinforcement Learning from Human Feedback：人给偏好 → 训出打分模型 → 用它当奖励跑 RL</td><td>第 3、4 讲</td></tr>
+  <tr><td><b>RLAIF</b></td><td>同上，但偏好来自 AI 打标而不是人（便宜、量大）</td><td>第 4 讲</td></tr>
+  <tr><td><b>RLVR</b></td><td>RL with Verifiable Rewards：奖励来自程序判分（对答案、跑测试），不再训练打分模型</td><td>第 5 讲</td></tr>
+  <tr><td><b>reward model</b>（RM）</td><td>从人类偏好数据里学出来的「打分模型」，模仿人的口味</td><td>第 4 讲</td></tr>
+  <tr><td><b>verifier</b></td><td>程序化判分器：数学对答案、代码跑单元测试。写不好 verifier，RLVR 就白练</td><td>第 5 讲</td></tr>
+  <tr><td><b>reference model</b>（<b>π</b><sub>ref</sub>）</td><td>冻结不动的 SFT 模型，当作「锚」：训练中的模型不许漂离它太远（算 KL 散度用）</td><td>第 2、3 讲</td></tr>
+  <tr><td><b>KL 散度</b></td><td>衡量两个概率分布差多远的数；RL 里当「缰绳」，防止模型为了刷分忘了怎么说话</td><td>第 2 讲</td></tr>
+  <tr><td><b>PPO</b></td><td>经典 RL 算法（2017 年提出），靠「裁剪」保稳定；RLHF 时代的引擎</td><td>第 3 讲</td></tr>
+  <tr><td><b>DPO</b></td><td>绕过 RL 循环直接从偏好数据微调的简化算法；小团队入门友好</td><td>第 4 讲</td></tr>
+  <tr><td><b>GRPO</b></td><td>DeepSeek 提出的 PPO 简化版：同题采多条回答组内比高下，免掉一个打分网络；当前开源主流</td><td>第 5 讲</td></tr>
+  <tr><td><b>熵 / 熵坍缩</b></td><td>熵 = 采样随机性的大小；训练久了模型越来越「笃定」，多样性耗尽、探索停止，叫熵坍缩</td><td>第 5 讲</td></tr>
+</table>
+
+<h2>5. RLHF vs RLVR：奖励从哪来，决定了练出什么</h2>
+
+<p>图 0-2 里唯一留白的环节是「打分」。当前工业界就两条路线，这也几乎是近三年 LLM 后训练的全部主线：</p>
+
+<table>
+  <tr><th></th><th>RLHF 路线（2022~）</th><th>RLVR 路线（2024~）</th></tr>
+  <tr><td><b>奖励来源</b></td><td>人类偏好数据 → 训练一个打分模型（RM），RM 模仿人的口味</td><td>程序自动判分：数学对标准答案、代码跑测试、格式查正则</td></tr>
+  <tr><td><b>擅长什么</b></td><td>没有标准答案的领域：有帮助度、语气、安全性、写作</td><td>有标准答案的领域：数学、代码、Agent 任务、逻辑推理</td></tr>
+  <tr><td><b>主要风险</b></td><td>RM 只是「人味的拟合」，会被钻空子（reward hacking）：学会写长话、学会谄媚</td><td>verifier 本身写得糙也会被钻空子（格式分吃掉正确分）</td></tr>
+  <tr><td><b>代表工作</b></td><td>InstructGPT、ChatGPT、Constitutional AI</td><td>o1、DeepSeek-R1（GRPO）、各家推理模型</td></tr>
+</table>
+
+<p>时间线帮你串一下：2022 年 InstructGPT 论文确立了 RLHF 三段式，ChatGPT 把它带火；2023-2024 年 DPO 等简化算法流行（嫌 PPO 难跑）；2024 年底 o1 展示「大规模 RL 练推理」的威力，2025 年初 DeepSeek-R1 开源复现，<b>RLVR + GRPO</b> 一跃成为开源社区标配。如今两条腿走路：RLVR 管数学/代码/Agent，RLHF（RM）管开放域体验——<b>训练框架是同一套</b>，只是打分函数不同。这也是为什么本系列从第 1 讲起先打底子（策略梯度、PPO），再分别进入两条路线（第 4、5 讲）。</p>
+
+<h2>6. RL 训练工程师的日常长什么样</h2>
+
+<p>把光环摘掉，这个岗位一周的时间大致这样分布（比例是量级感受，非精确统计）：</p>
+
+<table>
+  <tr><th style="width:26%">工作块</th><th>具体在干什么</th><th style="width:14%">时间占比</th></tr>
+  <tr><td><b>跑实验、看曲线</b></td><td>改 reward 函数 / 超参 / 数据配比，起一个训练，盯 reward 均值、KL、熵、回答长度四条曲线，判断「在学、崩了、还是躺平」</td><td>~40%</td></tr>
+  <tr><td><b>系统工程</b></td><td>让训练跑得快（rollout 吞吐、权重同步、多机并行）且稳（断点续训、失败重跑、显存爆了怎么办）</td><td>~40%</td></tr>
+  <tr><td><b>奖励与数据</b></td><td>写 verifier（数学判分、代码测试沙箱）、构建 prompt 池、按难度分层、清洗脏数据</td><td>~10%</td></tr>
+  <tr><td><b>读论文、复现</b></td><td>新算法（DAPO 这类）出来，读明白、在自家框架里复现出论文曲线</td><td>~10%</td></tr>
+</table>
+
+<p>注意前两行：<b>一半以上的时间在「让训练跑得快、跑得稳」，而不是发明算法</b>。这就是为什么这个岗位叫「训练工程师」而不叫「RL 研究员」——对工程能力（Python/PyTorch/分布式）的要求，往往高于对数学天赋的要求。这既是坏消息（要补的工程课不少），也是好消息（工程是练出来的，不挑出身）。第 6 讲会给一条从零开始的具体路线。</p>
+
+<div class="infer">看招聘 JD 时常见「熟悉 verl / OpenRLHF / TRL 之一」「了解 vLLM」「有 FSDP/Megatron 经验」——对应的就是上面表格里的工程行；「熟悉 PPO/GRPO 原理」对应的是本系列第 1~5 讲的内容。</div>
+
+<h2>7. 本系列地图：七讲怎么读</h2>
+
+<table>
+  <tr><th style="width:18%">讲次</th><th>主题</th><th>读完你能</th></tr>
+  <tr><td><b>第 0 讲</b>（本篇）</td><td>全景图：三阶段、名词表、职业日常</td><td>听懂行话，知道自己在地图的哪里</td></tr>
+  <tr><td><b>第 1 讲</b></td><td>策略梯度从零讲：老虎机 → REINFORCE → baseline</td><td>亲手推出「好的加强、差的减弱」的公式，手算一遍完整更新</td></tr>
+  <tr><td><b>第 2 讲</b></td><td>把 LLM 接上 RL：token 即动作、KL 散度、温度</td><td>说清「语言模型怎么就成了 RL 问题」</td></tr>
+  <tr><td><b>第 3 讲</b></td><td>PPO 精讲：重要性采样、clip、GAE、四模型架构</td><td>看懂任何 PPO 实现的 loss 代码</td></tr>
+  <tr><td><b>第 4 讲</b></td><td>RLHF 与 DPO：偏好数据、奖励建模、KL 缰绳</td><td>理解 ChatGPT 式对齐的来龙去脉，能解释 DPO 为什么能省掉 RL</td></tr>
+  <tr><td><b>第 5 讲</b></td><td>RLVR 与 GRPO：可验证奖励、组内对比、训练病症</td><td>看懂 DeepSeek-R1 的训练方案，能诊断训练曲线的常见病</td></tr>
+  <tr><td><b>第 6 讲</b></td><td>系统与实战：架构、分布式、调试、成长路线</td><td>知道一个真实训练系统长什么样、自己接下来该做什么项目</td></tr>
+</table>
+
+<p>读法建议：<b>顺序读，不要跳</b>。第 1 讲的策略梯度是后面一切的语法，第 2 讲把语法用到 LLM 上，第 3、5 讲是两个最重要的算法，第 4 讲是历史主线，第 6 讲是落地。每讲都有手算例题和自查清单——数学量被刻意压到「能在纸上跟着算」的程度，难点都拆成了加减乘除。</p>
+
+<h2>8. 自查清单</h2>
+
+<p>下面 8 个问题都能答上来，第 0 讲就过关了：</p>
+
+<ol class="checklist">
+  <li>三个训练阶段各自的学习信号是什么？（答：预测下一个词 / 模仿示范答案 / 奖励打分）</li>
+  <li>SFT 和 RL 最本质的区别？（答：学习信号来自「标准答案」还是「对生成结果的打分」；回答是模型自己采样的）</li>
+  <li>为什么说 RL 能超越示范数据？（答：训练信号是「结果好坏」而非「照着谁说」，模型可以探索出示范里没有的解法——AlphaGo 第 37 手）</li>
+  <li>rollout 指什么？（答：让当前模型实际生成一遍回答；也是 RL 训练数据的来源）</li>
+  <li>RLHF 和 RLVR 的奖励分别从哪来？（答：从偏好数据学出的打分模型 / 程序判分如对答案、跑测试）</li>
+  <li>reference model 是干什么的？（答：冻结的锚，用 KL 散度拴住训练中的模型，防止为刷分跑飞）</li>
+  <li>reward model 和 verifier 的区别？（答：学出来的打分器 vs 写死的程序判分器；前者像人、后者像裁判）</li>
+  <li>这个岗位过半时间在干什么？（答：让训练跑得快、跑得稳的工程活，而不是发明算法）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="rl-t1-policy-gradient.html">第 1 讲：策略梯度从零讲</a>——场景收缩到最小：只有一次动作、一个打分。从「怎么让模型偏向高分动作」出发，一步一步推出 RL 的第一性公式 REINFORCE，并手算一次完整更新；然后直面它最大的毛病（方差大到没法用）和第一味药（baseline）。读完这一讲，「好的加强、差的减弱」就不再是一句口号，而是你能亲手算的梯度。
+</div>
+
+<footer>本页为个人学习笔记 · RL 训练工程师零基础七讲系列 · 生成于 2026-09-19 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 叙述以主流实践与经典论文为准，细节以原始文献为最终依据</footer>
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

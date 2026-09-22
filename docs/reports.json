@@ -1,5 +1,121 @@
 [
   {
+    "slug": "rl-t7-score-centering",
+    "title": "RL 训练工程师零基础七讲 · 番外篇：Score Centering 精读（TIM 漂移、一行修复、与重要性采样对比）",
+    "date": "2026-09-20",
+    "paper": "Score Centering Stabilizes Off-policy Reinforcement Learning (arXiv:2609.20807)",
+    "arxiv": "https://arxiv.org/abs/2609.20807",
+    "repo": "https://github.com/martin-marek/score-centering"
+  },
+  {
+    "slug": "quant-t6-qat-roadmap",
+    "title": "大模型量化零基础七讲 · 第 6 讲：QAT、量化 scaling law 与成长路线图（STE、LSQ、4-bit 定理、四阶段专家路线）",
+    "date": "2026-09-20"
+  },
+  {
+    "slug": "quant-t5-kv-systems",
+    "title": "大模型量化零基础七讲 · 第 5 讲：KV Cache 量化与推理系统落地（KIVI、attention sink、Marlin kernel、QServe、GGUF 选型）",
+    "date": "2026-09-20"
+  },
+  {
+    "slug": "quant-t4-ultra-low-bit",
+    "title": "大模型量化零基础七讲 · 第 4 讲：极低比特——2-bit 与 1.58-bit（矢量量化、AQLM、QuIP#、BitNet、MXFP4/NVFP4）",
+    "date": "2026-09-20"
+  },
+  {
+    "slug": "quant-t3-activation",
+    "title": "大模型量化零基础七讲 · 第 3 讲：激活量化与 FP8（outlier 四对策：LLM.int8、SmoothQuant、QuaRot/SpinQuant、FP8）",
+    "date": "2026-09-20"
+  },
+  {
+    "slug": "quant-t2-ptq",
+    "title": "大模型量化零基础七讲 · 第 2 讲：训练后量化——GPTQ 与 AWQ（输出误差目标、逐列误差补偿、激活感知缩放）",
+    "date": "2026-09-20"
+  },
+  {
+    "slug": "quant-t1-basics",
+    "title": "大模型量化零基础七讲 · 第 1 讲：量化数学基础（scale/zero-point、对称非对称、粒度谱系、误差与校准）",
+    "date": "2026-09-20"
+  },
+  {
+    "slug": "quant-t0-foundation",
+    "title": "大模型量化零基础七讲 · 第 0 讲：全景图（显存账本、浮点数速成、有损压缩直觉与术语表）",
+    "date": "2026-09-20"
+  },
+  {
+    "slug": "rl-t6-systems",
+    "title": "RL 训练工程师零基础七讲 · 第 6 讲：系统与实战（rollout 引擎、显存账本、异步训练、调试手册）",
+    "date": "2026-09-16"
+  },
+  {
+    "slug": "rl-t5-rlvr-grpo",
+    "title": "RL 训练工程师零基础七讲 · 第 5 讲：RLVR 与 GRPO（可验证奖励、组内基线、训练病症与药方）",
+    "date": "2026-09-16"
+  },
+  {
+    "slug": "rl-t4-rlhf-dpo",
+    "title": "RL 训练工程师零基础七讲 · 第 4 讲：RLHF 与 DPO（奖励模型、Bradley-Terry、隐式奖励推导）",
+    "date": "2026-09-16"
+  },
+  {
+    "slug": "rl-t3-ppo",
+    "title": "RL 训练工程师零基础七讲 · 第 3 讲：PPO 精讲（重要性采样、clip、GAE、四模型架构）",
+    "date": "2026-09-16"
+  },
+  {
+    "slug": "rl-t2-llm-as-rl",
+    "title": "RL 训练工程师零基础七讲 · 第 2 讲：把 LLM 接上 RL（token 即动作、KL 约束、温度采样）",
+    "date": "2026-09-16"
+  },
+  {
+    "slug": "rl-t1-policy-gradient",
+    "title": "RL 训练工程师零基础七讲 · 第 1 讲：策略梯度从零讲（softmax 策略、REINFORCE、baseline 减方差）",
+    "date": "2026-09-16"
+  },
+  {
+    "slug": "rl-t0-foundation",
+    "title": "RL 训练工程师零基础七讲 · 第 0 讲：全景图（后训练流程、RL 循环、术语表与系列地图）",
+    "date": "2026-09-16"
+  },
+  {
+    "slug": "moe-t4-code",
+    "title": "MoE 零基础五讲 · 第 4 讲：DeepSeek MoE 代码逐行走读（Gate/Expert/MoE + 手动模拟 forward）",
+    "date": "2026-09-16",
+    "paper": "DeepSeek-V4 (paper/deepseek_v4.pdf)",
+    "arxiv": "https://arxiv.org/abs/2606.19348",
+    "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
+  },
+  {
+    "slug": "moe-t3-v4",
+    "title": "MoE 零基础五讲 · 第 3 讲：DeepSeek V4/V4.1 细讲（√Softplus、MegaMoE、FP4、Hash 路由）",
+    "date": "2026-09-16",
+    "paper": "DeepSeek-V4 (paper/deepseek_v4.pdf)",
+    "arxiv": "https://arxiv.org/abs/2606.19348",
+    "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
+  },
+  {
+    "slug": "moe-t2-v1v3",
+    "title": "MoE 零基础五讲 · 第 2 讲：DeepSeek V1→V3 演进细讲（细粒度专家、共享隔离、bias 门控）",
+    "date": "2026-09-16",
+    "paper": "DeepSeekMoE (arXiv:2401.06066) · DeepSeek-V3 (arXiv:2412.19437)",
+    "arxiv": "https://arxiv.org/abs/2412.19437",
+    "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
+  },
+  {
+    "slug": "moe-t1-basics",
+    "title": "MoE 零基础五讲 · 第 1 讲：MoE 基本原理（专家/门控/top-k、负载不均、辅助损失两难）",
+    "date": "2026-09-16",
+    "paper": "DeepSeek-V4 (paper/deepseek_v4.pdf)",
+    "arxiv": "https://arxiv.org/abs/2606.19348"
+  },
+  {
+    "slug": "moe-t0-foundation",
+    "title": "MoE 零基础五讲 · 第 0 讲：前置知识（FFN/SwiGLU、参数vs激活、softmax/sigmoid/softplus、top-k）",
+    "date": "2026-09-16",
+    "paper": "DeepSeek-V4 (paper/deepseek_v4.pdf)",
+    "arxiv": "https://arxiv.org/abs/2606.19348"
+  },
+  {
     "slug": "verilog-crash-course",
     "title": "Verilog 速成：半天写出能仿真的 RTL",
     "date": "2026-09-16"
