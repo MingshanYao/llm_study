@@ -1,5 +1,10 @@
 [
   {
+    "slug": "llm-arch-evolution",
+    "title": "LLM 架构演进技术报告：FFN 与 Attention 的降算/降存主线（短板迁移视角的 2022–2026 全景）",
+    "date": "2026-09-20"
+  },
+  {
     "slug": "deepseek-v41-t0-overview",
     "title": "DeepSeek-V4.1 零基础七讲 · 第 0 讲：总览——为长程 Agent 而生的 KV cache 压缩之作",
     "date": "2026-09-20",

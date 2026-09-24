@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM 架构演进技术报告：FFN 与 Attention 的降算 / 降存主线</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  .cred {
+    background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0; font-size: 0.95em;
+  }
+  .cred::before { content: "⚠ 数据可信度声明"; font-weight: 700; color: #9a7b1c; display: block; margin-bottom: 6px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  nav.toc {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 20px; margin: 20px 0; font-size: 0.92em;
+  }
+  nav.toc b { color: var(--ink); }
+  nav.toc > ol { margin: 6px 0 0; padding-left: 22px; }
+  nav.toc li { margin: 2px 0; }
+  blockquote {
+    border-left: 4px solid var(--line); background: #fafbfd;
+    margin: 14px 0; padding: 10px 18px; border-radius: 0 8px 8px 0;
+  }
+  blockquote p { margin: 6px 0; color: #3a4152; }
+  svg text { font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>LLM 架构演进技术报告</h1>
+<p style="font-size:1.15em;color:var(--muted);margin:0 0 10px">FFN 与 Attention 的降算 / 降存主线</p>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>定位：</b>中等深度技术综述。以「短板转移」为主线，梳理 Attention 与 FFN 两个子模块自 2022 年以来的架构演进，量化每一代技术究竟压掉了哪一种成本（FLOPs / 带宽 / 容量），并解释为什么演进方向会如此。</p>
+  <p style="margin:4px 0"><b>数据来源：</b>各模型公开 Technical Report、开源 <code>config.json</code>、vLLM / SGLang 工程博客，以及本报告基于公开配置做的一阶解析推导（推导过程见第 4 章）。</p>
+  <p style="margin:4px 0"><b>日期：</b>2026-09-20</p>
+</div>
+
+<div class="tldr">
+<p><b>摘要（TL;DR）</b></p>
+<ol>
+  <li><b>架构设计的本质是在给定「卡数 × 数据 × 时间」预算下追求更低 Loss 的 Trade-off</b>。所有架构创新都不是"更聪明"，而是"把资源从已经过剩的短板挪到仍然稀缺的短板"。</li>
+  <li><b>两个子模块攻的是两种不同的成本，分工非常清晰</b>：
+    <ul>
+      <li><b>FFN 是参数量的主战场</b>（Dense 模型中占 82%，MoE 稀疏层中占 98.4%）→ 主攻路线是 <b>MoE：把参数量与计算量解耦</b>。</li>
+      <li><b>Attention 是访存量的主战场</b>（KV Cache 随序列长度线性增长，且每步 decode 都要全量读一遍）→ 主攻路线是 <b>压 KV Cache</b>。</li>
+    </ul>
+  </li>
+  <li><b>瓶颈已经完成两次转移</b>：<code>Compute bound（Dense 训练算力不够）</code> → <code>Bandwidth bound（Decode 读 KV / 读权重）</code> → <code>Capacity bound（Agent 时代 KV Cache 吃掉全部显存）</code>。</li>
+  <li><b>KV Cache 的四条压缩路径可以按"压掉什么"分类</b>：
+    <table>
+      <tr><th>路径</th><th>代表</th><th>压掉的东西</th><th>量级</th></tr>
+      <tr><td>Head 共享</td><td>MQA / GQA</td><td>KV 的<b>份数</b></td><td>8×~16×</td></tr>
+      <tr><td>表示压缩</td><td>MLA</td><td>每份 KV 的<b>维度</b></td><td>3.56×（2048 → 576 元素）</td></tr>
+      <tr><td>Token 稀疏</td><td>NSA / DSA</td><td>需要<b>读取的 token 数</b></td><td>DSA ≈ 5×，NSA ≈ 25~31×</td></tr>
+      <tr><td>机制替换</td><td>GDN / KDA / Lightning</td><td>KV Cache<b>本身</b>（换成 O(1) 状态）</td><td>与 L 无关</td></tr>
+      <tr><td>层间混合</td><td>Hybrid 3:1 / 5:1 / 7:1</td><td>需要存 KV 的<b>层数</b></td><td>3×~8×</td></tr>
+    </table>
+  </li>
+  <li><b>Agent 时代负载发生质变</b>：实测中位输入 142K token、中位输出 444 token、prefix 命中率 &gt;96%。99% 以上的 token 消耗在 Prefill，但其中绝大部分被 Prefix Cache 命中——<b>成本大头不再是计算，而是 KV Cache 的存储与搬运</b>。这直接催生了 Prefill / Decode 解耦，以及"Prefill 降激活、Decode 降 KV"的架构级解耦设计。</li>
+  <li><b>稀疏化与低精度是正交的</b>：Sparse 消除"量级冗余"（只算 k/n），低精度消除"倍数冗余"（每元素字节数）。两者收益近似相乘，工程上必然叠加。</li>
+  <li><b>训推硬件诉求已经分野</b>：推理走向异构专用化（指标从 $/GB·s⁻¹ 转向 $/FLOPS），训练必须坚持同构（Bitwise 一致性 &gt; 一切）。</li>
+  <li><b>2026 年进展（详见 §9）</b>：上述每条主线都又推进了一截——
+    <ul>
+      <li><b>Attention</b>：DeepSeek-V4 用 <b>CSA（压缩+稀疏）+ HCA（重压缩+稠密）</b>把 1M 上下文 KV 压到 V3.2 的 <b>10%</b>（V4-Flash 7%），并用 <b>mHC</b> 把残差连接重构为"双随机约束的多并行流"，开辟"训练稳定性"第三战线。</li>
+      <li><b>模型级 PD 解耦</b>：DeepSeek-V4.1-Flash（2026.09）用<b>非对称 Causal Encoder-Decoder</b> 把"Prefill 降激活、Decode 降 KV"做进权重——prefill 激活 8B / decode 激活 16B，KV 对 HBM 压到 1/4、对 SSD 压到 1/8。PD 解耦从系统层调度下沉为模型结构（§5.3 / §9.1）。</li>
+      <li><b>Hybrid SSM 收敛</b>：Nemotron 3 Nano / Qwen3.5 / Mamba-3 殊途同归到"SSM + 稀疏 MoE"，印证纯 Linear 不取代 Hybrid、但 Linear 占比持续上升。</li>
+      <li><b>低精度</b>：战线从"推理 FP8"推进到"<b>训练 FP4</b>"（NVFP4 预训练 12B/10T token 对标 FP8）；FP8 KV cache 成为长上下文<b>默认起点</b>（decode 延迟斜率降至 54%）。</li>
+      <li><b>Agent 负载</b>：TraceLab 实测 prefix 命中 95.7%，但<b>历史重读占 ~60% 成本</b>——优化重点从"压字节"转向"让重读更便宜"（Mooncake SSD offload 把命中率从 36% 拉到 84%）。</li>
+      <li><b>硬件</b>：进入 <b>HBM4 时代</b>（Rubin 22 TB/s、MI455X 432 GB/23.3 TB/s、TPU v7 Ironwood 9216-chip pod）；NVIDIA <b>Rubin CPX 专用 decode 卡被取消</b>，说明"异构专用化"有上限。</li>
+      <li><b>标配变化</b>：1M 上下文 + 稀疏 MoE 已从"卖点"变成旗舰模型的"入场券"（GPT-5.4/5.5、Gemini 3.1、Claude 4.6、Kimi K2.6、DeepSeek-V4 同窗口对齐）。</li>
+    </ul>
+  </li>
+</ol>
+</div>
+
+<nav class="toc">
+<b>目录</b>
+<ol>
+  <li><a href="#sec1">分析框架：短板转移（Bottleneck Migration）</a></li>
+  <li><a href="#sec2">Attention 演进：从"算得起"到"存得起"</a></li>
+  <li><a href="#sec3">FFN 演进：从"参数即算力"到"参数与算力解耦"</a></li>
+  <li><a href="#sec4">定量账本</a></li>
+  <li><a href="#sec5">Agent 时代的负载重构</a></li>
+  <li><a href="#sec6">训推硬件诉求的分野</a></li>
+  <li><a href="#sec7">工程方法论：掉点是怎么被"买回来"的</a></li>
+  <li><a href="#sec8">开放问题与展望</a></li>
+  <li><a href="#sec9">2026 年进展专题</a></li>
+  <li><a href="#sec10">结论：短板迁移的下一站</a></li>
+  <li><a href="#appa">附录 A · 关键模型参数速查</a> · <a href="#appb">附录 B · 术语表</a> · <a href="#appc">附录 C · 参考资料</a></li>
+</ol>
+</nav>
+
+<!-- ================================================================ -->
+<h2 id="sec1">1. 分析框架：短板转移（Bottleneck Migration）</h2>
+
+<h3>1.1 为什么"演进"是有方向的</h3>
+<p>大模型架构不是自由探索，而是被三条硬约束框死的：</p>
+<pre><code class="nohighlight">给定：卡数 N、数据量 D、时间 T、精度下限 L_max
+求：  架构 A，使 Loss(A) 最小</code></pre>
+<p>在这个约束下，任何时刻系统中<b>只有一块短板真正限制 Loss</b>。把资源投入到非短板维度上是纯浪费。因此架构演进的轨迹 = <b>短板被逐个消除后，资源重新分配的轨迹</b>。</p>
+
+<h3>1.2 三块短板</h3>
+<table>
+  <tr><th>短板</th><th>物理量</th><th>何时成为瓶颈</th><th>对应优化方向</th></tr>
+  <tr><td><b>计算（Compute）</b></td><td>FLOPs</td><td>早期 Dense 预训练：算力决定能训多大模型、多少 token</td><td>MoE（参数量与计算量解耦）</td></tr>
+  <tr><td><b>带宽（Bandwidth）</b></td><td>GB/s</td><td>Decode 阶段：每生成 1 个 token 要流式读完权重 + KV</td><td>GQA / MLA / Sparse Attention / 低精度</td></tr>
+  <tr><td><b>容量（Capacity）</b></td><td>GB</td><td>Agent 长上下文 + 大 Batch：KV Cache 超过权重成为显存第一占用者</td><td>Hybrid / Linear Attention / 多级存储 / PD 解耦</td></tr>
+</table>
+
+<div class="fig">
+<svg viewBox="0 0 880 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="m1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/></marker>
+  </defs>
+  <text x="290" y="38" font-size="11" fill="#5a6272" text-anchor="middle">Dense 撞墙</text>
+  <text x="590" y="38" font-size="11" fill="#5a6272" text-anchor="middle">GQA / MLA 普及</text>
+  <line x1="261" y1="132" x2="319" y2="132" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <line x1="621" y1="132" x2="679" y2="132" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <rect x="25" y="52" width="230" height="160" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="140" y="78" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">① 计算短板</text>
+  <text x="41" y="102" font-size="11" fill="#1a1f2e">物理量：FLOPs</text>
+  <text x="41" y="120" font-size="11" fill="#1a1f2e">早期 Dense 预训练：算力决定</text>
+  <text x="41" y="138" font-size="11" fill="#1a1f2e">能训多大、训多少 token</text>
+  <line x1="41" y1="152" x2="239" y2="152" stroke="#c9d2e0"/>
+  <text x="41" y="174" font-size="11" fill="#1a1f2e">优化：MoE——把参数量与</text>
+  <text x="41" y="192" font-size="11" fill="#1a1f2e">计算量解耦</text>
+  <rect x="325" y="52" width="230" height="160" rx="10" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="440" y="78" font-size="13" font-weight="bold" fill="#b35f10" text-anchor="middle">② 带宽短板</text>
+  <text x="341" y="102" font-size="11" fill="#1a1f2e">物理量：GB/s</text>
+  <text x="341" y="120" font-size="11" fill="#1a1f2e">Decode：每生成 1 个 token</text>
+  <text x="341" y="138" font-size="11" fill="#1a1f2e">要流式读完权重 + KV</text>
+  <line x1="341" y1="152" x2="539" y2="152" stroke="#c9d2e0"/>
+  <text x="341" y="174" font-size="11" fill="#1a1f2e">优化：GQA / MLA / 稀疏注意力</text>
+  <text x="341" y="192" font-size="11" fill="#1a1f2e">/ 低精度</text>
+  <rect x="625" y="52" width="230" height="160" rx="10" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="740" y="78" font-size="13" font-weight="bold" fill="#2f9e63" text-anchor="middle">③ 容量短板</text>
+  <text x="641" y="102" font-size="11" fill="#1a1f2e">物理量：GB（显存容量）</text>
+  <text x="641" y="120" font-size="11" fill="#1a1f2e">Agent 长上下文 + 大 Batch：</text>
+  <text x="641" y="138" font-size="11" fill="#1a1f2e">KV Cache 超过权重，成为</text>
+  <text x="641" y="156" font-size="11" fill="#1a1f2e">显存第一占用者</text>
+  <line x1="641" y1="166" x2="839" y2="166" stroke="#c9d2e0"/>
+  <text x="641" y="184" font-size="11" fill="#1a1f2e">优化：Hybrid / 线性注意力</text>
+  <text x="641" y="202" font-size="11" fill="#1a1f2e">/ 多级存储 / PD 解耦</text>
+  <text x="140" y="236" font-size="11" fill="#5a6272" text-anchor="middle">2022 年以前</text>
+  <text x="430" y="236" font-size="11" fill="#5a6272" text-anchor="middle">2023 – 2024</text>
+  <text x="740" y="236" font-size="11" fill="#5a6272" text-anchor="middle">2025 – 至今</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b> · 三块短板的迁移主线。同一时刻只有一块短板真正限制 Loss：Dense 撞算力墙后，GQA/MLA 把带宽压下来，带宽缓解后 Agent 长上下文又把容量推成新短板。</p>
+
+<h3>1.3 Roofline：判断"该优化什么"的统一工具</h3>
+<p>对任意算子，算术强度 <code>AI = FLOPs / Bytes</code>。当 \( \text{AI} &lt; \text{ridge point} \) 时该算子 memory bound，增加算力无用；反之则 bandwidth bound 之外还有余量。</p>
+<p>主流加速卡的 ridge point（BF16 dense 峰值 / HBM 带宽）：</p>
+<table>
+  <tr><th>硬件</th><th>BF16 峰值</th><th>HBM 带宽</th><th>Ridge Point</th><th>含义</th></tr>
+  <tr><td>H100 SXM</td><td>989 TFLOPS</td><td>3.35 TB/s</td><td><b>295 FLOPs/B</b></td><td>算力相对带宽过剩</td></tr>
+  <tr><td>H200 SXM</td><td>989 TFLOPS</td><td>4.80 TB/s</td><td><b>206 FLOPs/B</b></td><td>带宽改善，ridge 下降</td></tr>
+  <tr><td>B200</td><td>~2250 TFLOPS</td><td>8.00 TB/s</td><td><b>281 FLOPs/B</b></td><td>算力和带宽同步翻倍</td></tr>
+  <tr><td>H20</td><td>148 TFLOPS</td><td>4.00 TB/s</td><td><b>37 FLOPs/B</b></td><td>典型"推理专用"配比</td></tr>
+</table>
+<p><b>这个表本身就解释了硬件路线的分化</b>：H100/H200 是为训练设计的（算力优先），H20 这类卡是为 decode 设计的（带宽优先）。第 6 章会回到这一点。</p>
+
+<h3>1.4 演进时间线</h3>
+<table>
+  <tr><th>时间</th><th>事件</th><th>攻的短板</th></tr>
+  <tr><td>2022</td><td>SwiGLU 成为 FFN 默认；GQA 出现</td><td>表达力 / 带宽</td></tr>
+  <tr><td>2023</td><td>Llama-2-70B 大规模采用 GQA（8 KV heads）</td><td>带宽</td></tr>
+  <tr><td>2024.01</td><td>Mixtral 8x7B 让 MoE 回到主流</td><td>计算</td></tr>
+  <tr><td>2024.01</td><td>DeepSeekMoE：细粒度专家 + 共享专家</td><td>计算（精细化）</td></tr>
+  <tr><td>2024.05</td><td>DeepSeek-V2：MLA 落地（236B / 21B）</td><td>带宽 + 容量</td></tr>
+  <tr><td>2024.07</td><td>Llama-3.1-405B：Dense 路线的算力顶点</td><td>—（正面硬刚计算）</td></tr>
+  <tr><td>2024.07</td><td>Mooncake：KVCache-centric PD 解耦</td><td>容量（系统层）</td></tr>
+  <tr><td>2024.12</td><td>DeepSeek-V3：671B/37B + FP8 训练</td><td>计算 + 训练精度</td></tr>
+  <tr><td>2025.01</td><td>MiniMax-Text-01：Hybrid Lightning Attention（7:1）</td><td>带宽 + 容量</td></tr>
+  <tr><td>2025.02</td><td>NSA：硬件对齐的原生可训练稀疏注意力</td><td>计算 + 带宽</td></tr>
+  <tr><td>2025.09</td><td>Qwen3-Next-80B-A3B：Gated DeltaNet 3:1 + 512 专家</td><td>带宽 + 计算</td></tr>
+  <tr><td>2025.09</td><td>DeepSeek-V3.2-Exp：DSA（Lightning Indexer + top-2048）</td><td>带宽（长上下文）</td></tr>
+  <tr><td>2025.10</td><td>Kimi Linear 48B-A3B：KDA + MLA 3:1，KV −75%</td><td>容量</td></tr>
+  <tr><td>2025.11</td><td>NVFP4 生态成熟，4-bit 推理进入生产</td><td>带宽 + 容量</td></tr>
+  <tr><td>2025.11</td><td>Gemini 3 Pro：sparse MoE + 1M 上下文，原生多模态</td><td>计算 + 容量</td></tr>
+  <tr><td>2025.12</td><td>mHC（Manifold-Constrained Hyper-Connections）论文发布</td><td>训练稳定性</td></tr>
+  <tr><td>2026.01</td><td>Kimi K2.5：1T/32B MoE，长上下文优先</td><td>计算 + 容量</td></tr>
+  <tr><td>2026.02</td><td>Claude Opus 4.6 / Sonnet 4.6：200K 默认 + 1M beta</td><td>容量</td></tr>
+  <tr><td>2026.02</td><td>Gemini 3.1 Pro：sparse MoE，1M in / 64K out</td><td>计算 + 容量</td></tr>
+  <tr><td>2026.02</td><td>Qwen3.5：397B/17B，GDN 3:1 hybrid + MoE（Qwen3-Next 的生产级验证）</td><td>带宽 + 容量</td></tr>
+  <tr><td>2026.03</td><td>GPT-5.4：1M 上下文（922K in / 128K out），MoE &gt;1T，GB200 NVL72</td><td>计算 + 容量</td></tr>
+  <tr><td>2026.04</td><td><b>DeepSeek-V4</b>：CSA + HCA 混合注意力 + mHC，V4-Pro 1.6T/49B、V4-Flash 284B/13B，1M 上下文</td><td><b>带宽 + 容量 + 训练稳定性</b></td></tr>
+  <tr><td>2026.04</td><td>GPT-5.5 / Kimi K2.6 同月发布，1M 上下文成为旗舰标配</td><td>容量</td></tr>
+  <tr><td>2026.04</td><td>TPU v7 Ironwood GA：192 GB HBM3e、9216-chip pod、42.5 EFLOPS FP8</td><td>推理算力</td></tr>
+  <tr><td>2026.04</td><td>vLLM FP8 KV cache 成为长上下文默认起点（decode 延迟斜率降至 54%）</td><td>带宽</td></tr>
+  <tr><td>2026.09</td><td><b>DeepSeek-V4.1-Flash</b>：非对称 Causal Encoder-Decoder（prefill 激活 8B / decode 16B），KV HBM 1/4、SSD 1/8——PD 解耦下沉到模型权重</td><td><b>模型级 PD 解耦 + 容量</b></td></tr>
+  <tr><td>2026 H2</td><td>NVIDIA Vera Rubin NVL72：288 GB HBM4、22 TB/s、50 PFLOPS NVFP4</td><td>带宽 + 算力</td></tr>
+  <tr><td>2026 H2</td><td>AMD MI400 / Helios：432 GB HBM4、23.3 TB/s、40 PFLOPS FP4</td><td>带宽 + 容量</td></tr>
+  <tr><td>2026</td><td>Hybrid SSM+MoE 路线收敛（Nemotron 3 Nano / Qwen3.5 / Mamba-3 殊途同归）</td><td>带宽 + 容量</td></tr>
+  <tr><td>2026</td><td>Mooncake SSD offload + llm-d（CNCF Sandbox）+ NVIDIA ICM：KV 多级存储成为标准件</td><td>容量（系统层）</td></tr>
+</table>
+
+<!-- ================================================================ -->
+<h2 id="sec2">2. Attention 演进：从"算得起"到"存得起"</h2>
+
+<h3>2.1 成本从哪里来</h3>
+<p>标准 Attention 在每个 token、每一层都要缓存 Key 和 Value：</p>
+<pre><code class="nohighlight">KV_Cache_bytes = 2 × L_layers × n_kv × d_head × bpe × T_seq × B_batch
+                 ↑    ↑          ↑       ↑       ↑      ↑        ↑
+              K和V  层数     KV头数  头维度  每元素  序列长度  并发数</code></pre>
+<p>以 <b>Llama-2-70B</b> 为基线（80 层、8 个 KV head、head_dim=128、BF16）：</p>
+<pre><code class="nohighlight">每 token 每层 = 2 × 8 × 128 = 2048 个元素 = 4096 字节
+每 token 全模型 = 80 × 4096 = 320 KB
+32K 上下文单请求 = 10.0 GB</code></pre>
+<p><b>这个 2048，就是后续所有优化的参照原点。</b></p>
+<p>Attention 的成本有两个完全不同的形态，必须分开看：</p>
+<table>
+  <tr><th>阶段</th><th>成本形态</th><th>瓶颈</th></tr>
+  <tr><td><b>Prefill</b></td><td>计算 O(L²)，KV 只需写一次</td><td>Compute bound（长序列时）</td></tr>
+  <tr><td><b>Decode</b></td><td>每生成 1 token，<b>全量重读</b> L 个 token 的 KV</td><td>Memory bandwidth bound</td></tr>
+</table>
+<p>Decode 的残酷之处：生成 1 个 token 的 Attention FLOPs 只有 <code>2·n_h·(d_qk+d_v)·L</code>（Q·Kᵀ + softmax·V 各一次，2 倍 MAC 计入），但必须搬运 <code>L × kv_bytes</code> 字节。序列越长，<b>计算量涨一倍、搬运量也涨一倍，而计算单元本来就没跑满</b>。</p>
+
+<h3>2.2 第一刀 · Head 共享：MHA → MQA → GQA</h3>
+<p><b>思路</b>：KV 的份数不必等于 Query 的份数。多个 Query head 共享一组 KV head。</p>
+<pre><code class="nohighlight">MHA:  n_kv = n_q           → 2 × n_q × d  元素/token/层
+MQA:  n_kv = 1             → 2 × d        元素/token/层
+GQA:  n_kv = n_q / g       → 2 × (n_q/g) × d</code></pre>
+<p><b>收益</b>：Llama-2-70B 从 MHA（64 KV heads）降到 GQA（8 KV heads），KV Cache 直接 <b>÷8</b>。</p>
+<p><b>代价</b>：</p>
+<ul>
+  <li>MQA 过于激进，表达能力损失明显，且需要专门的 uptraining 才能从 MHA checkpoint 转换。</li>
+  <li>GQA（g=8）是工程甜点：几乎无损，但<b>每个 KV head 存的东西一点没变</b>。</li>
+</ul>
+<p><b>关键局限</b>：GQA 压的是"份数"，没压"每份的内容"。当 n_kv 已经降到 8 甚至 4 时，继续降的收益递减、损失陡增。<b>这条路很快走到头了。</b></p>
+
+<h3>2.3 第二刀 · 表示压缩：MLA（Multi-head Latent Attention）</h3>
+<p><b>思路的根本转变</b>：不再问"存几份"，而是问"<b>存什么</b>"。</p>
+<p>MLA 观察到：K 和 V 都可以从一个低秩隐向量重建。于是缓存的不是 <code>K ∈ R^(n×d)</code> 和 <code>V ∈ R^(n×d)</code>，而是：</p>
+<pre><code class="nohighlight">c_t = W_DKV · h_t                    ∈ R^512       (d_c = 512, 低秩联合隐向量)
+k_t^R = W_Dk^R · h_t                 ∈ R^64        (d_r = 64, 解耦的 RoPE 部分)
+
+缓存：[c_t ; k_t^R]  →  512 + 64 = 576 个元素 / token / 层
+
+推理时按 head 上投影重建：
+k_t,h = W_UK^h · c_t  (+ RoPE 部分)   ∈ R^192      (128 nope + 64 rope)
+v_t,h = W_UV^h · c_t                  ∈ R^128</code></pre>
+
+<div class="fig">
+<svg viewBox="0 0 880 264" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="m2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/></marker>
+  </defs>
+  <rect x="30" y="100" width="110" height="44" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="85" y="127" font-size="12" fill="#1a1f2e" text-anchor="middle">隐藏态 h_t</text>
+  <text x="160" y="106" font-size="10" fill="#5a6272" text-anchor="middle">W_DKV</text>
+  <line x1="144" y1="116" x2="176" y2="116" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <polyline points="144,136 156,184 176,184" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <text x="136" y="164" font-size="10" fill="#5a6272" text-anchor="end">W_DkR</text>
+  <rect x="180" y="96" width="120" height="40" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="240" y="121" font-size="11" fill="#1a1f2e" text-anchor="middle">c_t（512 维）</text>
+  <rect x="180" y="168" width="120" height="40" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="240" y="193" font-size="11" fill="#1a1f2e" text-anchor="middle">k_tᴿ（64 维）</text>
+  <line x1="304" y1="116" x2="336" y2="116" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <line x1="304" y1="188" x2="336" y2="188" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <rect x="340" y="88" width="140" height="128" rx="10" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.5"/>
+  <text x="410" y="112" font-size="12" font-weight="bold" fill="#b35f10" text-anchor="middle">KV Cache</text>
+  <text x="410" y="136" font-size="11" fill="#1a1f2e" text-anchor="middle">[c_t ; k_tᴿ]</text>
+  <text x="410" y="158" font-size="11" fill="#1a1f2e" text-anchor="middle">576 元素/token/层</text>
+  <text x="410" y="182" font-size="10" fill="#5a6272" text-anchor="middle">FP8 量化后 656 B</text>
+  <line x1="484" y1="120" x2="536" y2="116" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <line x1="484" y1="180" x2="536" y2="176" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <text x="520" y="150" font-size="10" fill="#5a6272" text-anchor="middle">按头上投影重建</text>
+  <rect x="540" y="96" width="180" height="36" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="630" y="119" font-size="11" fill="#1a1f2e" text-anchor="middle">W_UK ⟶ k_h（192 维）</text>
+  <rect x="540" y="160" width="180" height="36" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="630" y="183" font-size="11" fill="#1a1f2e" text-anchor="middle">W_UV ⟶ v_h（128 维）</text>
+  <text x="736" y="152" font-size="11" fill="#1a1f2e">⟶ 128 头 Attention</text>
+  <text x="30" y="234" font-size="11" fill="#1a1f2e">GQA 基线（Llama-3-405B）：4096 B/token/层 · AI = 16 FLOPs/B —— 距 H200 ridge（206）差 13×</text>
+  <text x="30" y="252" font-size="11" fill="#1a1f2e">MLA（V3 FP8）：656 B/token/层 · AI = 125 FLOPs/B（ridge 的 60%）—— 多付的 FLOPs 几乎免费</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b> · MLA 机制示意：缓存低秩联合隐向量 c_t（512 维）与解耦的 RoPE key k_tᴿ（64 维），推理时按头上投影重建 k/v。RoPE 部分不压缩——位置相关的旋转会破坏低秩子空间，这是 MLA 能成立的关键工程细节。下方两行对比 decode 算术强度。</p>
+
+<p><b>为什么 RoPE 要解耦？</b>因为 RoPE 是<b>位置相关的旋转</b>，如果对 <code>c_t</code> 施加 RoPE，低秩压缩就会被破坏（旋转后的向量不再落在同一个低秩子空间里）。DeepSeek-V2 把 RoPE 部分单独拎出来不压缩，是 MLA 能成立的关键工程细节。</p>
+<p><b>量化收益</b>（以 DeepSeek-V3 config 为准：61 层、<code>kv_lora_rank=512</code>、<code>qk_rope_head_dim=64</code>）：</p>
+<table>
+  <tr><th></th><th>Llama-2/3 GQA 基线</th><th>DeepSeek-V3 MLA</th><th>压缩比</th></tr>
+  <tr><td>元素 / token / 层</td><td>2048</td><td><b>576</b></td><td><b>3.56×</b></td></tr>
+  <tr><td>BF16 字节 / token / 层</td><td>4096</td><td>1152</td><td>3.56×</td></tr>
+  <tr><td>FP8 字节 / token / 层</td><td>2048</td><td><b>656</b> ¹</td><td>3.12×</td></tr>
+  <tr><td>字节 / token（全模型）</td><td>320~504 KB</td><td><b>39 KB</b></td><td><b>8.2~12.9×</b></td></tr>
+  <tr><td>32K 单请求</td><td>10~15.8 GB</td><td><b>1.22 GB</b></td><td></td></tr>
+  <tr><td>1M 单请求</td><td>320~504 GB</td><td><b>39 GB</b></td><td></td></tr>
+</table>
+<blockquote><p>¹ vLLM 实测口径：512 B（FP8 量化的 NoPE 部分）+ 16 B（scale factor）+ 128 B（BF16 未量化的 RoPE 部分）= <b>656 B/token/layer</b>。RoPE 部分不量化是因为它只占 64 维、量化收益小而精度风险大。</p></blockquote>
+
+<h4>MLA 的隐藏红利：算术强度大幅提升</h4>
+<p>这是 MLA 最被低估的一点。Decode 时 Attention 的算术强度：</p>
+<pre><code class="nohighlight">AI_attn = FLOPs / Bytes = 2 · n_h · (d_qk + d_v) / kv_bytes_per_token_per_layer</code></pre>
+<table>
+  <tr><th>架构</th><th>FLOPs / (query, ctx-token)</th><th>Bytes / ctx-token</th><th>AI</th></tr>
+  <tr><td>GQA (Llama-3-405B, 128h × d128, 8 KV)</td><td>65,536</td><td>4,096</td><td><b>16 FLOPs/B</b></td></tr>
+  <tr><td>MLA (DeepSeek-V3, 128h, 192+128)</td><td>81,920</td><td>656</td><td><b>125 FLOPs/B</b></td></tr>
+</table>
+<p>对照 H200 的 ridge point 206 FLOPs/B：</p>
+<ul>
+  <li>GQA 的 Attention 在 <b>16 FLOPs/B</b>，比 ridge 低 <b>13 倍</b>——彻底被带宽卡死，算力利用率不到 8%。</li>
+  <li>MLA 的 Attention 在 <b>125 FLOPs/B</b>，接近 ridge 的 60%。</li>
+</ul>
+<p><b>MLA 是典型的"用算力换带宽"</b>：多付出了 128 个 head 各自上投影的 FLOPs（+25%），换来了 6.25× 的 KV 读取减少。而在 memory bound 的 decode 场景里，<b>那些多出来的 FLOPs 几乎是免费的</b>（Tensor Core 本来就在空转）。这是 MLA 在工程上如此成功的深层原因。</p>
+<p><b>MLA 的代价</b>：</p>
+<ul>
+  <li>上投影 <code>W_UK</code>、<code>W_UV</code> 让每层的 Attention 参数量上升（DeepSeek-V3 每层 MLA ≈ 187M 参数）。</li>
+  <li>Prefill 阶段计算量增加；且上投影的中间结果需要额外显存。</li>
+  <li>实现复杂度高：需要专门优化的 kernel（vLLM/SGLang 都为 MLA 写了独立的 attention kernel，无法直接复用 FlashAttention）。</li>
+</ul>
+
+<h3>2.4 第三刀 · Token 稀疏：NSA → DSA</h3>
+<p>MLA 把每 token 的成本压到了 576 元素，但<b>读取量仍然是 O(L)</b>。128K 上下文下，每 decode 一个 token 仍要搬 4.88 GB KV。这时候必须动"读多少个 token"。</p>
+
+<h4>2.4.1 NSA（Native Sparse Attention，2025.02）</h4>
+<p>NSA 的设计哲学是 <b>"硬件对齐 + 原生可训练"</b>——这两点缺一不可：</p>
+<ul>
+  <li><b>硬件对齐</b>：所有稀疏操作都按 GPU tile 尺寸（64×128）成块进行，避免出现"理论上 FLOPs 少了但 kernel 跑不快"的伪稀疏。NSA 论文报告在 64K 序列上相比 Full Attention 获得数倍加速（prefill / decode / 前向 / 反向均提速），且序列越长加速比越高。</li>
+  <li><b>原生可训练</b>：不是推理期的后处理剪枝，而是端到端预训练阶段就带着稀疏结构学。这避免了"训练时看全量、推理时看稀疏"的分布错配。</li>
+</ul>
+<p>三分支结构（门控加权融合）：</p>
+<pre><code class="nohighlight">1. 压缩分支 (Compression)：把每 l=32 个 token 的 K/V 池化成 1 个粗粒度 token
+   → 全序列扫描成本降为 L/32
+2. 选择分支 (Selection)：基于压缩表示打分，选出 top-n 个 64-token 块做细粒度 attention
+   → 精读成本 = n × 64 × kv_bytes，与 L 无关
+3. 滑窗分支 (Sliding Window)：保留最近 s 个 token
+   → 局部性兜底，成本 O(1)</code></pre>
+<p><b>一阶带宽估算</b>（DeepSeek-V3 口径，L=1M）：</p>
+<pre><code class="nohighlight">Full MLA : 1,048,576 × 656 B × 61 层 = 39.1 GB / decoded token
+NSA 近似 : (L/32 × 656 + 16×64×656 + 16×656) × 61 ≈ 1.26 GB / decoded token
+                                                          → ≈ 31× 减少</code></pre>
+<p>NSA 的本质是<b>把"精读"的成本从 O(L) 变成 O(1)，把"粗筛"的成本从 O(L) 变成 O(L/l)</b>——用块级池化把粗筛也降了 32 倍。这是稀疏路线里最彻底的一种。</p>
+
+<h4>2.4.2 DSA（DeepSeek Sparse Attention，V3.2-Exp，2025.09）</h4>
+<p>DSA 是 NSA 思路的<b>保守工业化版本</b>：不改 attention 的结构，只加一个轻量索引器。</p>
+<pre><code class="nohighlight">Lightning Indexer（每层附加模块）：
+  q_I = W_I^Q · h_t          → 64 heads × 128 dim   (index_n_heads=64, index_head_dim=128)
+  k_I = W_I^K · c_kv,t       → 128 dim，64 个 head 共享（MQA 式）
+  score(t, s) = Σ_h q_I,t,h · k_I,s / √128 · scale
+  → 取 top-k = 2048 个历史 token 送给主 MLA 做完整 attention</code></pre>
+<p><b>关键工程细节</b>：Indexer 只缓存 <code>k_I</code>（128 个 FP8 值 = 128 B/token/层），<b>不缓存 v</b>，也不缓存 64 份 q。这让它成为一个极便宜的"粗筛器"。</p>
+<p><b>训练方式</b>：Indexer 用 KL 散度对齐 Full Attention 的注意力分布（warmup 阶段），使其学会"预测主 attention 会关注谁"。DeepSeek-V3.2 为此投入了 <b>超过预训练成本 10% 的后训练算力</b>，其中稀疏化训练阶段处理了 <b>943.7B token</b>。</p>
+<p><b>量化收益</b>：</p>
+<table>
+  <tr><th>上下文 L</th><th>Full MLA 读取</th><th>DSA 读取</th><th>减少</th></tr>
+  <tr><td>32K</td><td>1.22 GB / token</td><td>0.31 GB</td><td><b>3.9×</b></td></tr>
+  <tr><td>128K</td><td>4.88 GB / token</td><td>1.03 GB</td><td><b>4.75×</b></td></tr>
+  <tr><td>1M</td><td>39.1 GB / token</td><td>7.70 GB</td><td><b>5.07×</b></td></tr>
+</table>
+<p>复杂度从 O(L²) 降到 O(L·k)，k=2048。第三方复现报告 128K 下 decode 加速约 3.2×、attention 激活显存降 71%、总显存降 19%。</p>
+<p><b>DSA 的一个重要局限（必须点明）</b>：</p>
+<blockquote><p>Indexer 本身的扫描是 <b>O(L)</b> 的，且它每 (query, context-token) 对消耗 16,384 FLOPs / 128 Bytes，而主 MLA attention 消耗 81,920 FLOPs / 656 Bytes。<b>两者比值恰好都是 1/5。</b></p></blockquote>
+<p>也就是说，DSA 把全量读取的成本转化成了 Top-K indexer 的成本，而这个转化<b>只能带来约 5× 的常数折扣，渐近阶数并没有变</b>：</p>
+<pre><code class="nohighlight">DSA 总成本 ≈ L × (indexer成本) + k × (主attention成本)
+           = L × 1/5 × C_full + O(1)</code></pre>
+<p>当 L → ∞，DSA 的加速比收敛到 <b>5×</b>，不会更多。想要更大收益，只有两条路：</p>
+<ol>
+  <li>进一步压小 indexer 维度（128 → 32），或让 indexer 也做块级压缩（这就走向 NSA）；</li>
+  <li>彻底换掉机制（这就走向 Linear Attention）。</li>
+</ol>
+<p><b>这不是批评，而是理解成本结构的必要视角</b>：DSA 用最小的架构改动（保留 MLA、只加索引器）换来了 5× 长上下文收益，并且<b>没有引入 KV Cache 结构的碎片化</b>（vLLM/SGLang 可以 day-0 支持）。这是典型的工程权衡。</p>
+
+<h3>2.5 第四刀 · 机制替换：Linear Attention / Gated DeltaNet / KDA</h3>
+<p>前三刀都在优化"如何更便宜地存/读 KV"。第四刀直接问：<b>能不能不存 KV？</b></p>
+
+<h4>2.5.1 从 Softmax Attention 到线性递推</h4>
+<p>Softmax attention 的根本问题是 <code>softmax(QK^T)</code> 无法写成递推形式——必须保留所有历史 K/V 才能算归一化分母。Linear Attention 用核函数近似去掉 softmax：</p>
+<div class="formula">
+\[
+o_t = \sum_{s\le t} \phi(q_t)\cdot\phi(k_s)^T \cdot v_s \,\Big/\, \sum_{s\le t} \phi(q_t)\cdot\phi(k_s)^T
+    = \phi(q_t)^T \cdot S_t \,\big/\, (\phi(q_t)^T \cdot z_t)
+\]
+\[
+S_t = \sum_{s\le t} \phi(k_s)\, v_s^T \in \mathbb{R}^{d_k \times d_v} \quad (\text{状态矩阵}), \qquad
+z_t = \sum_{s\le t} \phi(k_s) \in \mathbb{R}^{d_k}
+\]
+</div>
+<p><b>\( S_t \) 是一个 O(1) 的固定大小状态，与序列长度无关。</b>这就是全部的魔法：把 O(L) 的 KV Cache 换成 O(1) 的 recurrent state，把 O(L) 的每步读取换成 O(1) 的状态读写。</p>
+
+<h4>2.5.2 Delta Rule 与门控：为什么需要 Gated DeltaNet</h4>
+<p>朴素的 Linear Attention 有个致命问题：<code>S_t</code> 是纯累加的，<b>只增不减</b>，很快就被历史信息污染（"记忆饱和"）。</p>
+<p>DeltaNet 引入 delta rule——写入时先擦除该 key 方向上的旧记忆：</p>
+<div class="formula">
+\[
+S_t = \underbrace{S_{t-1}\,(I - \beta_t k_t k_t^T)}_{\text{擦除旧的}} + \underbrace{\beta_t k_t v_t^T}_{\text{写入新的}}
+\]
+</div>
+<p>这让状态具备了<b>可控覆写</b>能力，等价于一个在线的、秩为 1 的增量最小二乘更新。</p>
+<p>Gated DeltaNet 再叠加一个标量遗忘门 \( \alpha_t \)：</p>
+<div class="formula">
+\[
+S_t = \alpha_t \cdot S_{t-1}\,(I - \beta_t k_t k_t^T) + \beta_t k_t v_t^T
+\]
+</div>
+<ul>
+  <li>\( \alpha_t \) 控制<b>全局时间衰减</b>（多久忘掉所有东西）</li>
+  <li>\( \beta_t \) 控制<b>局部精确覆写</b>（这条 key 的记忆改多少）</li>
+</ul>
+<p>这两个机制正交，一个管"泛化遗忘"一个管"精确改写"。此外，<b>输出门控（output gating）消除了 attention sink 和 massive activation 现象</b>——这是 Qwen3-Next 报告的大规模训练稳定性提升的直接来源。</p>
+<p><b>KDA（Kimi Delta Attention）</b>在此基础上做了两点强化：</p>
+<ol>
+  <li><b>更细粒度的门控</b>：从标量门 \( \alpha_t \) 升级为逐通道（channel-wise）对角门，不同特征维度可以有独立的遗忘速率。</li>
+  <li><b>DPLR 转移矩阵的特化变体</b>：\( S_t = (D + UV^T)\,S_{t-1} + \dots \)，通过对 Diagonal-Plus-Low-Rank 结构做特化，使其能用 chunk-wise 并行算法高效训练（否则 DPLR 的递推很难并行化）。</li>
+</ol>
+
+<h4>2.5.3 状态成本的量化：Linear Attention 不是免费午餐</h4>
+<p>以 Qwen3-Next-80B-A3B 的 Gated DeltaNet 层为例（<code>linear_num_value_heads=32</code>, <code>linear_num_key_heads=16</code>, <code>head_dim=128</code>）：</p>
+<pre><code class="nohighlight">每层状态 = 32 × 128 × 128 × 2 B(BF16) = 1.0 MiB
+36 层总计 = 36.0 MiB / 序列     ← 与 L 完全无关</code></pre>
+<p>而它的 12 层 full attention 部分（2 KV heads × 256 dim）：</p>
+<pre><code class="nohighlight">每 token = 2 × 2 × 256 × 2 B = 2048 B
+12 层 = 24 KB / token          ← 与 L 线性相关</code></pre>
+<p>这里必须区分<b>两个不同的盈亏平衡点</b>：</p>
+<pre><code class="nohighlight">① 容量平衡（KV Cache 占用 = 状态占用）：
+   36 MiB = 24 KiB × L   →   L ≈ 1,536 tokens
+
+② Decode 带宽平衡（每 token 读 KV = 每 token 读写状态）：
+   24 KiB × L = 2 × 36 MiB = 72 MiB   →   L ≈ 3,072 tokens
+   （状态需「读旧 + 写新」，故带宽平衡点是容量平衡点的 2 倍）</code></pre>
+<p>这揭示了一个常被忽略的事实：</p>
+<blockquote><p><b>Linear Attention 的省，本质是把 O(L) 的边际成本换成 O(1) 的固定成本。在短序列下它反而更贵。</b></p></blockquote>
+<p>具体地，decode 时每 token 的状态<b>读写</b>带宽恒为 <code>2 × 36 MiB = 72 MiB</code>，而 full attention 部分是 <code>24 KiB × L</code>：</p>
+<table>
+  <tr><th>上下文 L</th><th>Full-attn 部分</th><th>GDN 状态读写</th><th>谁更贵</th></tr>
+  <tr><td>1K</td><td>24 MiB</td><td>72 MiB</td><td><b>GDN 贵 3.0×</b></td></tr>
+  <tr><td>3K</td><td>72 MiB</td><td>72 MiB</td><td>持平</td></tr>
+  <tr><td>32K</td><td>786 MiB</td><td>72 MiB</td><td>Full-attn 贵 10.7×</td></tr>
+  <tr><td>256K</td><td>6.3 GiB</td><td>72 MiB</td><td>Full-attn 贵 85×</td></tr>
+  <tr><td>1M</td><td>25.2 GiB</td><td>72 MiB</td><td>Full-attn 贵<b>341×</b></td></tr>
+</table>
+<p><b>这精确解释了 Kimi Linear 的实验结论：1M 上下文下 decode 吞吐提升 6×，而短上下文下几乎没有提升。</b>也解释了为什么所有落地方案都是 Hybrid 而非纯 Linear，以及为什么 Linear Attention 的收益<b>随上下文长度单调放大</b>——这是它与 MLA / GQA（收益是与 L 无关的纯常数折扣）最本质的区别。</p>
+
+<h4>2.5.4 Linear Attention 的代价：精确召回能力</h4>
+<p>状态矩阵 \( S \in \mathbb{R}^{d_k \times d_v} \) 是一个<b>有损压缩的记忆</b>。当需要在 100 万个 token 中精确找出某个 needle 时，固定大小的状态无法保证无损存储——这是 Linear Attention 在长上下文 recall 类任务上系统性弱于 full attention 的根本原因。</p>
+<p>Hybrid 架构就是用少量 full attention 层做"精确召回兜底"。这是<b>表达能力与存储成本的显式交换</b>。</p>
+
+<h3>2.6 第五刀 · 层间混合（Hybrid）</h3>
+<p>既然 Linear Attention 在长距离上便宜但召回弱、Full Attention 召回强但贵，那就<b>按层混着用</b>：</p>
+<table>
+  <tr><th>模型</th><th>混合方案</th><th>比例</th><th>效果</th></tr>
+  <tr><td><b>MiniMax-Text-01</b></td><td>Lightning Attention + Softmax</td><td><b>7:1</b>（80 层中 <b>70 层 lightning + 10 层 softmax</b>，由 <code>attn_type_list</code> 逐层指定）</td><td>需要存 KV 的层数降至<b>1/8</b>；lightning 层的状态与 L 无关，论文称其 KV 显存可降至 vanilla 的约 1%（该比值随 L 增长而改善：vanilla 是 O(L)，lightning 是 O(1)）；训练 1M / 推理 4M 上下文</td></tr>
+  <tr><td><b>Qwen3-Next-80B-A3B</b></td><td>Gated DeltaNet + Gated Attention</td><td><b>3:1</b>（<code>12 × (3 × GDN → 1 × GatedAttn)</code>，共 36+12=48 层）</td><td>KV Cache 仅来自 12 层；原生 262K，YaRN 扩到 1M</td></tr>
+  <tr><td><b>Kimi-Linear-48B-A3B</b></td><td>KDA + MLA</td><td><b>3:1</b></td><td>KV Cache<b>−75%</b>，1M 上下文 decode 吞吐 <b>6×</b></td></tr>
+  <tr><td><b>Gemma 3</b></td><td>Sliding Window Attention + Global Attention</td><td><b>5:1</b></td><td>KV Cache 显著下降，SWA 层只保留窗口内的 KV</td></tr>
+</table>
+<h4>工程代价：KV Cache 管理碎片化</h4>
+<p>Hybrid 架构在<b>模型侧</b>是简单的一行配置，但在<b>推理引擎侧</b>是一个大坑：</p>
+<ul>
+  <li>不同层的 KV Cache 形状、生命周期完全不同（有的按 token 增长，有的是固定状态，有的是滑动窗口会驱逐）。</li>
+  <li>PagedAttention 的 block 分配策略失效，需要<b>Hybrid KV Cache Manager</b> 统一管理多种 page 类型，否则会产生严重的显存碎片。</li>
+  <li>Prefix Cache 的命中判定变复杂：需要同时匹配 global 层和 SWA/linear 层的缓存状态（vLLM 文档明确提到需要"求交集"）。</li>
+</ul>
+<p>这是"架构激进程度受 Infra 能力约束"的一个典型案例（见第 7 章）。</p>
+
+<h3>2.7 Attention 演进汇总</h3>
+<pre><code class="nohighlight">                       压掉什么                单 token 成本        复杂度
+MHA (2022)          ─                        2·n·d = 32768 elem   O(L²)
+   │
+MQA (2019/2022)     KV 份数 (n → 1)          2·d = 256 elem       O(L²)
+   │  表达力损失过大
+GQA (2023)          KV 份数 (n → n/g)        2·(n/g)·d = 2048     O(L²)
+   │  份数降无可降
+MLA (2024)          每份的维度 (低秩)        576 elem             O(L²)
+   │  仍是 O(L) 全量读取
+NSA (2025.02)       读取的 token 数 (块级)   ~L/32 等效           O(L²/l) + O(nk)
+DSA (2025.09)       读取的 token 数 (索引)   ~L/5 等效            O(L·k) + O(L·d_I)
+   │  稀疏只降常数，不降阶数
+Linear/GDN (2025)   KV Cache 本身            O(1) 状态            O(L)
+   │  精确召回受损
+Hybrid (2025)       需要存 KV 的层数         1/(1+r) 层           混合</code></pre>
+
+<div class="fig">
+<svg viewBox="0 0 880 556" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="m3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/></marker>
+  </defs>
+  <text x="95" y="26" font-size="11" font-weight="bold" fill="#5a6272" text-anchor="middle">技术</text>
+  <text x="190" y="26" font-size="11" font-weight="bold" fill="#5a6272">压掉什么</text>
+  <text x="560" y="26" font-size="11" font-weight="bold" fill="#5a6272">单 token 成本 · 复杂度</text>
+  <rect x="30" y="46" width="130" height="36" rx="18" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="95" y="69" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">MHA · 2022</text>
+  <text x="190" y="69" font-size="12" fill="#1a1f2e">基线：每个 Q head 一份独立 KV</text>
+  <text x="560" y="69" font-size="11" fill="#5a6272">2·n·d = 32768 元素 · O(L²)</text>
+  <line x1="95" y1="84" x2="95" y2="102" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <text x="106" y="98" font-size="10" fill="#5a6272">份数：n → 1</text>
+  <rect x="30" y="108" width="130" height="36" rx="18" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="95" y="131" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">MQA · 2019/22</text>
+  <text x="190" y="131" font-size="12" fill="#1a1f2e">压份数：KV head n → 1</text>
+  <text x="560" y="131" font-size="11" fill="#5a6272">2·d = 256 元素 · O(L²)</text>
+  <line x1="95" y1="146" x2="95" y2="164" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <text x="106" y="160" font-size="10" fill="#5a6272">表达力损失过大 → 折中</text>
+  <rect x="30" y="170" width="130" height="36" rx="18" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="95" y="193" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">GQA · 2023</text>
+  <text x="190" y="193" font-size="12" fill="#1a1f2e">压份数：KV head n → n/g</text>
+  <text x="560" y="193" font-size="11" fill="#5a6272">2·(n/g)·d = 2048 元素 · O(L²)</text>
+  <line x1="95" y1="208" x2="95" y2="226" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <text x="106" y="222" font-size="10" fill="#5a6272">份数降无可降 → 压维度</text>
+  <rect x="30" y="232" width="130" height="36" rx="18" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="95" y="255" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">MLA · 2024</text>
+  <text x="190" y="255" font-size="12" fill="#1a1f2e">压维度：低秩联合隐向量（c_t + RoPE）</text>
+  <text x="560" y="255" font-size="11" fill="#5a6272">576 元素 · O(L²)</text>
+  <line x1="95" y1="270" x2="95" y2="288" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <text x="106" y="284" font-size="10" fill="#5a6272">仍是 O(L) 全量读取</text>
+  <rect x="30" y="294" width="130" height="36" rx="18" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="95" y="317" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">NSA · 2025.02</text>
+  <text x="190" y="317" font-size="12" fill="#1a1f2e">压读取数：块级压缩 + 选择 + 滑窗</text>
+  <text x="560" y="317" font-size="11" fill="#5a6272">≈ L/32 等效 · O(L²/l)+O(n·k)</text>
+  <line x1="95" y1="332" x2="95" y2="350" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <text x="106" y="346" font-size="10" fill="#5a6272">保守工业化版本</text>
+  <rect x="30" y="356" width="130" height="36" rx="18" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="95" y="379" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">DSA · 2025.09</text>
+  <text x="190" y="379" font-size="12" fill="#1a1f2e">压读取数：indexer 打分 top-k=2048</text>
+  <text x="560" y="379" font-size="11" fill="#5a6272">≈ L/5 等效 · O(L·k)+O(L·d_I)</text>
+  <line x1="95" y1="394" x2="95" y2="412" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <text x="106" y="408" font-size="10" fill="#5a6272">稀疏只降常数，不降阶数</text>
+  <rect x="30" y="418" width="130" height="36" rx="18" fill="#e8edf9" stroke="#163a86"/>
+  <text x="95" y="441" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">GDN · 2025</text>
+  <text x="190" y="441" font-size="12" fill="#1a1f2e">换机制：KV Cache → O(1) 循环状态</text>
+  <text x="560" y="441" font-size="11" fill="#5a6272">O(1) 状态 · O(L)</text>
+  <line x1="95" y1="456" x2="95" y2="474" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
+  <text x="106" y="470" font-size="10" fill="#5a6272">精确召回受损 → 少量全注意力兜底</text>
+  <rect x="30" y="480" width="130" height="36" rx="18" fill="#ffffff" stroke="#2456c4" stroke-dasharray="5,4"/>
+  <text x="95" y="503" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">Hybrid · 2025</text>
+  <text x="190" y="503" font-size="12" fill="#1a1f2e">压层数：只让少数层存 KV</text>
+  <text x="560" y="503" font-size="11" fill="#5a6272">1/(1+r) 层 · 混合</text>
+  <rect x="190" y="534" width="20" height="10" fill="#2456c4"/>
+  <text x="216" y="543" font-size="10" fill="#5a6272">压份数</text>
+  <rect x="290" y="534" width="20" height="10" fill="#e8862a"/>
+  <text x="316" y="543" font-size="10" fill="#5a6272">压维度</text>
+  <rect x="390" y="534" width="20" height="10" fill="#2f9e63"/>
+  <text x="416" y="543" font-size="10" fill="#5a6272">压读取 token 数</text>
+  <rect x="540" y="534" width="20" height="10" fill="#163a86"/>
+  <text x="566" y="543" font-size="10" fill="#5a6272">换机制（Linear）</text>
+  <rect x="680" y="534" width="20" height="10" fill="#ffffff" stroke="#2456c4" stroke-dasharray="3,2"/>
+  <text x="706" y="543" font-size="10" fill="#5a6272">层间混合</text>
+</svg>
+</div>
+<p class="cap"><b>图 3</b> · Attention 演进链：每一代都在解上一代留下的"次生短板"。GQA 解决了份数，暴露出维度问题 → MLA；MLA 解决了维度，暴露出 O(L) 读取问题 → Sparse；Sparse 只降常数不降阶数，暴露出根本机制问题 → Linear；Linear 损失召回，暴露出需要兜底 → Hybrid。</p>
+
+<p><b>规律</b>：每一代都在解上一代留下的"次生短板"。GQA 解决了份数，暴露出维度问题 → MLA；MLA 解决了维度，暴露出 O(L) 读取问题 → Sparse；Sparse 只降常数不降阶数，暴露出根本机制问题 → Linear；Linear 损失召回，暴露出需要兜底 → Hybrid。</p>
+<!-- ================================================================ -->
+<h2 id="sec3">3. FFN 演进：从"参数即算力"到"参数与算力解耦"</h2>
+
+<h3>3.1 Dense FFN 的成本结构</h3>
+<p>FFN（MLP）是 Transformer 中参数最密集的模块。标准 SwiGLU FFN：</p>
+<pre><code class="nohighlight">FFN(x) = (Swish(x W_gate) ⊙ (x W_up)) W_down
+
+参数量 = 3 × d_model × d_ff</code></pre>
+<blockquote><p>SwiGLU 用 3 个矩阵替代 GELU FFN 的 2 个，为保持参数量对齐，通常把 <code>d_ff</code> 从 <code>4·d_model</code> 缩到 <code>(8/3)·d_model</code>。</p></blockquote>
+<p><b>FFN 的参数量占比</b>：</p>
+<table>
+  <tr><th>模型</th><th>Attention 参数 / 层</th><th>FFN 参数 / 层</th><th>FFN 占比</th></tr>
+  <tr><td>Llama-3.1-405B（Dense）</td><td>570 M</td><td>2,617 M</td><td><b>82.1%</b></td></tr>
+  <tr><td>DeepSeek-V3（MoE 稀疏层）</td><td>187 M</td><td>11,320 M</td><td><b>98.4%</b></td></tr>
+</table>
+<p>结论很直接：</p>
+<blockquote><p><b>想降参数量，就必须动 FFN。想降访存量，就必须动 Attention。</b></p><p>这就是为什么 MoE 和 MLA/Sparse/Linear 是两条<b>并行且互补</b>的演进主线，而不是互相替代。</p></blockquote>
+
+<h3>3.2 MoE：把参数量和计算量拆开</h3>
+<p><b>Dense 模型的根本困境</b>：参数量（知识容量）与计算量（每 token FLOPs）被强行绑定。想更聪明就必须更贵。</p>
+<p>MoE 用条件计算打破这个绑定：</p>
+<pre><code class="nohighlight">Dense FFN:   y = FFN(x)                    参数 P，计算 2P
+MoE:         y = Σ_{i∈TopK(g(x))} g_i · E_i(x)    参数 N·P_e，计算 2·K·P_e</code></pre>
+<p><b>演进谱系</b>：</p>
+<table>
+  <tr><th>阶段</th><th>代表</th><th>关键设计</th><th>遗留问题</th></tr>
+  <tr><td>起源</td><td>GShard (2017)</td><td>首个大规模 MoE，top-2 路由</td><td>负载不均</td></tr>
+  <tr><td>简化</td><td>Switch Transformer (2021)</td><td>top-1 路由，证明单专家足够</td><td>专家利用率低</td></tr>
+  <tr><td>路由革新</td><td>Expert Choice (2022)</td><td>让专家选 token 而非 token 选专家</td><td>推理不友好（需固定 batch）</td></tr>
+  <tr><td><b>精细化</b></td><td><b>DeepSeekMoE (2024.01)</b></td><td><b>细粒度专家切分 + 共享专家</b></td><td>—</td></tr>
+</table>
+
+<h3>3.3 DeepSeekMoE：细粒度专家 + 共享专家</h3>
+<p>DeepSeekMoE 提出了两个至今仍是标准配置的设计：</p>
+<p><b>① 细粒度专家切分（Fine-Grained Expert Segmentation）</b></p>
+<p>不用少量大专家，而是用大量小专家（通过降低 <code>d_ff</code> 实现），激活更多个：</p>
+<pre><code class="nohighlight">传统：8 个大专家，激活 2 个        → 组合数 C(8,2) = 28
+细粒度：64 个小专家，激活 6 个      → 组合数 C(64,6) = 7.5×10⁷</code></pre>
+<p><b>在相同激活参数下，专家组合的多样性提升 6 个数量级</b>——这意味着模型可以用更细的粒度组合出专门化的子网络，专家特化程度（expert specialization）显著提升。</p>
+<p>DeepSeekMoE 16B 的实测结论（这是"40.5%"这个广为引用的数字的出处）：</p>
+<blockquote><p><b>DeepSeekMoE 16B（16.4B 总参 / 2.8B 激活 / 66 专家激活 8 个）仅用 40.5% 的计算量，达到了与 Llama2-7B Dense 基线相当的性能。</b></p></blockquote>
+<p>这就是"参数量与计算量分离"最直接的量化证据：<b>省下的 59.5% 算力可以用来训更多数据，或训更大模型。</b></p>
+<p><b>② 共享专家（Shared Experts）</b></p>
+<p>隔离出 <code>K_s</code> 个专家<b>永远激活</b>，专门承载所有 token 都需要的通用知识：</p>
+<pre><code class="nohighlight">路由专家：捕捉特化知识，稀疏激活
+共享专家：捕捉公共知识，稠密激活</code></pre>
+<p>好处有三：</p>
+<ul>
+  <li><b>减少路由专家的冗余</b>：不用每个专家都重复学一遍"的/是/了"这类通用模式。</li>
+  <li><b>稳定路由</b>：共享专家提供了恒定的基线输出，降低了路由抖动的危害。</li>
+  <li><b>降低 aux-loss 权重</b>：通用知识不进路由，负载均衡压力自然减小。</li>
+</ul>
+
+<h3>3.4 规模化的两条岔路：DeepSeek-V3 vs Qwen3-Next</h3>
+<p><b>DeepSeek-V3（2024.12）：中等稀疏度 + 大专家</b></p>
+<pre><code class="nohighlight">hidden=7168, layers=61 (前 3 层 Dense)
+n_routed_experts=256, num_experts_per_tok=8, n_shared_experts=1
+moe_intermediate_size=2048   →  每专家 3×7168×2048 = 44.0 M 参数</code></pre>
+<p>参数账本（本报告按 config 复算，与官方 671B/37B 对齐）：</p>
+<table>
+  <tr><th>组成</th><th>计算</th><th>总量</th></tr>
+  <tr><td>MLA（61 层）</td><td>61 × 187.1 M</td><td>11.4 B</td></tr>
+  <tr><td>Dense FFN（前 3 层）</td><td>3 × 3 × 7168 × 18432</td><td>1.2 B</td></tr>
+  <tr><td>MoE（58 层 × 257 专家）</td><td>58 × 257 × 44.04 M</td><td><b>656.6 B</b></td></tr>
+  <tr><td>Embedding + LM Head</td><td>2 × 129280 × 7168</td><td>1.9 B</td></tr>
+  <tr><td><b>总计</b></td><td></td><td><b>≈ 671 B</b> ✓</td></tr>
+  <tr><td><b>激活</b>（8 路由 + 1 共享 = 9 专家/层）</td><td>58×9×44.04M + 其余</td><td><b>≈ 37.4 B</b> ✓</td></tr>
+</table>
+<p>其他关键创新：</p>
+<ul>
+  <li><b>无辅助损失的负载均衡</b>：用序列级均衡的 bias 项替代 aux loss，避免 aux loss 干扰路由学习。</li>
+  <li><b>ReLU 路由 + 分组 top-k</b>：先选 top-<code>n_group</code> 个组，再在组内选专家，减少 router 的 top-k 搜索空间。</li>
+  <li><b>FP8 混合精度训练</b>：首个在 671B 规模上跑通 FP8 预训练的模型，tile-level scaling（1×128 activation / 128×128 weight）。总训练成本 <b>2.788M H800 GPU-hours</b>，远低于同规模 Dense 模型预期。</li>
+</ul>
+<p><b>Qwen3-Next-80B-A3B（2025.09）：极致稀疏 + 微专家</b></p>
+<pre><code class="nohighlight">hidden=2048, layers=48
+n_routed_experts=512, num_experts_per_tok=10, n_shared_experts=1
+moe_intermediate_size=512    →  每专家 3×2048×512 = 3.15 M 参数</code></pre>
+<table>
+  <tr><th>指标</th><th>DeepSeek-V3</th><th>Qwen3-Next</th><th>差异</th></tr>
+  <tr><td>总参数</td><td>671 B</td><td>80 B</td><td>8.4×</td></tr>
+  <tr><td>激活参数</td><td>37 B</td><td><b>3 B</b></td><td>12.4×</td></tr>
+  <tr><td><b>激活率</b></td><td>5.6%</td><td><b>3.75%</b></td><td>更稀疏</td></tr>
+  <tr><td>专家数</td><td>256</td><td><b>512</b></td><td>2×</td></tr>
+  <tr><td><b>单专家大小</b></td><td>44.0 M</td><td><b>3.15 M</b></td><td><b>1/14</b></td></tr>
+</table>
+<p>Qwen3-Next 把 DeepSeekMoE 的"细粒度"哲学推到了极致：<b>专家缩小 14 倍，数量翻倍，激活率降到 3.75%</b>。</p>
+
+<h3>3.5 MoE 把短板推向了"容量"与"网络"</h3>
+<p>这是理解 MoE 最关键的一节。MoE 消除了计算短板，但立即制造了两个新短板：</p>
+
+<h4>3.5.1 "激活参数"是一个 batch=1 的概念</h4>
+<p>一个 token 只激活 K 个专家，但<b>一个 batch 里的不同 token 会激活不同的专家</b>。设 <code>N</code> 个专家、每 token 激活 <code>k</code> 个、batch 为 <code>B</code>，则每步实际需要读取的专家数期望为：</p>
+<div class="formula">
+\[ \mathbb{E}[\text{distinct}] = N \cdot \left(1 - \left(1 - \tfrac{k}{N}\right)^B\right) \]
+</div>
+<p>DeepSeek-V3（N=256, k=8）：</p>
+<table>
+  <tr><th>Batch B</th><th>命中专家数</th><th>覆盖率</th><th>每步读取的专家权重（FP8）</th><th>每 token 摊销</th></tr>
+  <tr><td>1</td><td>8.0</td><td>3.1%</td><td>21 GB</td><td>21 GB</td></tr>
+  <tr><td>16</td><td>102</td><td>39.8%</td><td>261 GB</td><td>16.3 GB</td></tr>
+  <tr><td>64</td><td>222</td><td>86.9%</td><td>570 GB</td><td>8.9 GB</td></tr>
+  <tr><td>128</td><td>252</td><td>98.3%</td><td>647 GB</td><td>5.1 GB</td></tr>
+  <tr><td>256</td><td>256</td><td><b>100%</b></td><td>656 GB</td><td>2.6 GB</td></tr>
+</table>
+<p>Qwen3-Next（N=512, k=10）：</p>
+<table>
+  <tr><th>Batch B</th><th>命中专家数</th><th>覆盖率</th></tr>
+  <tr><td>1</td><td>10</td><td>2.0%</td></tr>
+  <tr><td>16</td><td>139</td><td>27.1%</td></tr>
+  <tr><td>64</td><td>367</td><td>71.7%</td></tr>
+  <tr><td>256</td><td>509</td><td><b>99.4%</b></td></tr>
+</table>
+<p><b>结论</b>：</p>
+<ol>
+  <li>在大 batch decode 下，MoE <b>实际上要读全部专家权重</b>。"37B 激活 / 3B 激活"只在 batch=1 时字面成立。</li>
+  <li>每步延迟存在一个<b>与 batch 无关的下限</b>：<code>T_step ≥ Total_expert_bytes / Aggregate_BW</code>。
+    <ul>
+      <li>DeepSeek-V3 在 8×H200（38.4 TB/s 聚合带宽）上：656 GB / 38.4 TB/s ≈ <b>17 ms/step</b>，这是硬地板。</li>
+      <li>吞吐上限 = B / 17ms：B=1 → 59 tok/s，B=256 → 15,000 tok/s。</li>
+    </ul>
+  </li>
+  <li>对比同激活参数的 <b>Dense 37B 模型</b>：每步恒定读 37 GB → 0.96 ms/step，B=256 时可达 266k tok/s（此时转为 compute bound）。<b>MoE 在极限吞吐上比 Dense 差约 18×。</b></li>
+</ol>
+<blockquote><p><b>MoE 的交易本质：用「显存容量 + 网络带宽 + 极限吞吐」换「知识容量」。</b></p><p>它买到了 671B 参数的知识，代价是必须把这 671B 全部驻留在 HBM 里，且每步都可能要读一遍。</p></blockquote>
+
+<h4>3.5.2 训练侧：Expert Parallelism 的通信墙</h4>
+<ul>
+  <li>专家必须跨卡切分（EP），每个 MoE 层引入两次 all-to-all（dispatch + combine）。</li>
+  <li>当 EP size 增大，all-to-all 的通信量随 <code>B × d_model × k</code> 增长，且是<b>全连接模式</b>，对网络拓扑极其敏感。</li>
+  <li>DeepSeek-V3 的应对：细粒度专家让单个专家的通信粒度更小、更均衡；重叠计算与通信；限制 EP 只在节点内 + 高速互联域。</li>
+  <li>这也是<b>为什么 MoE 训练对网络硬件的要求远高于 Dense</b>，以及为什么"训练必须坚持同构"（第 6 章）。</li>
+</ul>
+
+<h4>3.5.3 推理侧的缓解手段</h4>
+<table>
+  <tr><th>手段</th><th>原理</th></tr>
+  <tr><td><b>EPLB（Expert Parallelism Load Balancing）</b></td><td>运行时统计专家热度，动态重排/复制热门专家以均衡各卡负载</td></tr>
+  <tr><td><b>专家亲和性调度</b></td><td>把可能路由到相同专家的请求聚到同一 batch/同一卡，提高 cache 命中</td></tr>
+  <tr><td><b>多级专家存储</b></td><td>冷专家 offload 到 CPU DRAM / NVMe，热专家常驻 HBM</td></tr>
+  <tr><td><b>PD 解耦</b></td><td>Prefill 阶段专家命中分散（计算密集），Decode 阶段命中集中（访存密集），分开部署各自优化</td></tr>
+</table>
+
+<h3>3.6 低精度与权重压缩</h3>
+
+<h4>3.6.1 训练侧：FP8 成为大规模预训练的默认</h4>
+<table>
+  <tr><th>阶段</th><th>技术</th><th>说明</th></tr>
+  <tr><td>BF16</td><td>基线</td><td>16 bit，指数 8 位 / 尾数 7 位</td></tr>
+  <tr><td><b>FP8 E4M3/E5M2</b></td><td>DeepSeek-V3（2024.12）</td><td>首个 671B 规模 FP8 预训练。tile-level scaling：activation 1×128、weight 128×128。<b>关键：不是全网络 FP8</b>——embedding、router、norm、attention 中的敏感部分保留高精度</td></tr>
+  <tr><td><b>UE8M0 FP8</b></td><td>DeepSeek-V3.1（2025）</td><td>scale factor 强制为 2 的幂（8 位指数、0 位尾数）。<b>纯乘 2 的幂 = 无精度损失的缩放</b>，且硬件实现极简。代价是 scale 粒度变粗，需要更细的量化 block 来补偿</td></tr>
+  <tr><td>MXFP4 / NVFP4 训练</td><td>研究阶段</td><td>4-bit 训练仍是开放问题</td></tr>
+</table>
+<blockquote><p><b>UE8M0 的深层动机是硬件中立性</b>：scale 为 2 的幂意味着任何硬件都能用移位实现，不依赖特定的浮点乘法单元。这是"为国产/异构芯片预留接口"的典型架构决策，也印证了第 6 章的硬件诉求分野。</p></blockquote>
+
+<h4>3.6.2 推理侧：4-bit 进入生产</h4>
+<p><b>NVFP4（Blackwell）</b>的设计：</p>
+<pre><code class="nohighlight">数据元素：E2M1（1 符号 + 2 指数 + 1 尾数）= 4 bit
+两级缩放：
+  ① 每 16 个元素一个 FP8 E4M3 scale（micro-block）
+  ② 整个 tensor 一个 FP32 global scale</code></pre>
+<p>对比 <b>MXFP4</b>（OCP 标准）：每 32 个元素一个 scale，且 scale 只能是 <b>2 的幂</b>。</p>
+<table>
+  <tr><th></th><th>MXFP4</th><th>NVFP4</th></tr>
+  <tr><td>Block size</td><td>32</td><td><b>16</b></td></tr>
+  <tr><td>Scale 格式</td><td>E8M0（2 的幂）</td><td><b>E4M3（带小数）</b></td></tr>
+  <tr><td>量化误差</td><td>较大</td><td>显著更小</td></tr>
+  <tr><td>硬件</td><td>通用</td><td>Blackwell Tensor Core 原生</td></tr>
+</table>
+<p>实测结论（NVIDIA 官方）：</p>
+<ul>
+  <li>相比 FP8，DeepSeek-R1-0528 在 NVFP4 下<b>精度损失 ≤ 1%</b>。</li>
+  <li>显存占用相比 FP8 <b>减少约 1.8×</b>。</li>
+  <li>吞吐提升（Blackwell 上 4-bit Tensor Core 峰值是 FP8 的 2×）。</li>
+</ul>
+<p><b>为什么低精度对 decode 特别有效？</b>回到 Roofline：</p>
+<pre><code class="nohighlight">权重流式读取的算术强度：AI = 2·B_batch / p        (p = 每参数字节数)
+临界 batch（达到 ridge point 所需的并发数）：B* = ridge × p / 2</code></pre>
+<table>
+  <tr><th>精度</th><th>p</th><th>H200 上 B*</th><th>含义</th></tr>
+  <tr><td>BF16</td><td>2 B</td><td>206</td><td>需要 206 并发才能打满算力</td></tr>
+  <tr><td>FP8</td><td>1 B</td><td><b>103</b></td><td>门槛减半</td></tr>
+  <tr><td>NVFP4</td><td>0.5 B</td><td><b>52</b></td><td>门槛再减半</td></tr>
+</table>
+<p><b>低精度直接降低了"打满 GPU 所需的并发数"</b>——这在 KV Cache 容量受限、并发数上不去的场景下是决定性的。H20 这类低算力高带宽的卡，B* 只需 18（FP8），本质上是把 ridge point 降到了更容易达到的水平。</p>
+
+<h4>3.6.3 稀疏与低精度：正交、可叠加</h4>
+<pre><code class="nohighlight">Sparse（DSA/NSA/MoE）：只处理 k/n 的元素        → 消除"量级冗余"
+低精度（FP8/FP4）：    每元素占用 p/16 字节      → 消除"倍数冗余"</code></pre>
+<p>两者作用在<b>成本公式的不同因子上</b>，因此收益近似相乘：</p>
+<pre><code class="nohighlight">Attention 带宽 = L × n_selected_ratio × kv_bytes_per_elem
+                 └── Sparse 攻这里 ──┘   └── 低精度攻这里 ─┘
+
+MoE 权重带宽 = N_experts_hit × expert_params × bytes_per_param
+               └──── 路由攻这里 ────┘          └── 低精度攻这里 ──┘</code></pre>
+<p><b>DeepSeek-V3.2 就是这个叠加的活例子</b>：MLA（维度压缩 3.56×）× FP8 KV（精度压缩 2×）× DSA（token 稀疏 5×）≈ <b>35× 的长上下文 attention 带宽压缩</b>。</p>
+<p>工程上必然同时采用——因为它们没有任何冲突。唯一需要注意的是<b>量化敏感点</b>：稀疏化的打分/索引模块（如 Lightning Indexer）本身对量化误差敏感，因为 top-k 选择的边界 token 可能因为量化噪声被误选，这是不可逆的错误传播。</p>
+
+<h3>3.7 FFN 与 Attention 演进的耦合</h3>
+<p>两条主线并非独立，它们在 2025 年出现了明显的<b>协同设计</b>：</p>
+<p><b>Qwen3-Next 的组合拳</b>：</p>
+<pre><code class="nohighlight">Attention 侧：Gated DeltaNet (36 层) : Gated Attention (12 层) = 3:1
+              → KV Cache 从 48 层压到 12 层，24 KB/token
+FFN 侧：      512 专家 × 3.15M，激活 10+1
+              → 80B 总参，3B 激活（3.75%）
+其他：        Multi-Token Prediction (MTP)
+              → 一次前向预测多 token，既提升预训练效果，又天然支持投机解码
+              → 在 decode memory bound 场景下，MTP 用"多算几个 token 的 FLOPs"
+                换"少读几次权重"，直接提升算术强度
+稳定性：      zero-centered + weight-decayed LayerNorm
+              → 消除 attention sink / massive activation，支撑大规模 RL 后训练</code></pre>
+<p><b>Kimi Linear 的组合拳</b>：KDA（Linear）+ MLA（Full）3:1 混合 + 48B/A3B MoE。<br>→ KV Cache −75%，1M decode 吞吐 6×。</p>
+<p><b>为什么必须协同？</b>因为两者的短板会互相暴露：</p>
+<ul>
+  <li>只压 Attention 不压 FFN → KV Cache 小了，但权重带宽成为新瓶颈（Decode 时 MoE 权重读取 656 GB/step 远超 KV）。</li>
+  <li>只压 FFN 不压 Attention → 长上下文下 KV Cache 直接 OOM，batch 上不去，MoE 的摊薄效应失效。</li>
+</ul>
+<p><b>MTP 是一个特别值得注意的耦合点</b>：它与 §2.3 的 MLA、§9.4 的 CSA/HCA 同属"用算力换带宽"这一贯穿全报告的母题——在 memory bound 的 decode 场景下，多付出的 FLOPs 近乎免费，省下的 bytes 才值钱。</p>
+
+<!-- ================================================================ -->
+<h2 id="sec4">4. 定量账本</h2>
+
+<h3>4.1 单 Token KV Cache 全对照表</h3>
+<table>
+  <tr><th>模型</th><th>存 KV 的层数</th><th>元素/token/层</th><th>字节/token/层</th><th>字节/token</th><th>32K 上下文</th><th>1M 上下文</th></tr>
+  <tr><td>Llama-2-70B (GQA 8×128, BF16)</td><td>80</td><td>2048</td><td>4096</td><td><b>320 KB</b></td><td>10.0 GB</td><td>320 GB</td></tr>
+  <tr><td>Llama-3.1-405B (GQA 8×128, BF16)</td><td>126</td><td>2048</td><td>4096</td><td><b>504 KB</b></td><td>15.8 GB</td><td><b>504 GB</b> ❌</td></tr>
+  <tr><td>DeepSeek-V2 (MLA, BF16)</td><td>68</td><td>576</td><td>1152</td><td><b>76.5 KB</b></td><td>2.4 GB</td><td>76.5 GB</td></tr>
+  <tr><td>DeepSeek-V3 (MLA, BF16)</td><td>61</td><td>576</td><td>1152</td><td><b>68.6 KB</b></td><td>2.1 GB</td><td>68.6 GB</td></tr>
+  <tr><td><b>DeepSeek-V3 (MLA, FP8)</b></td><td>61</td><td>576</td><td><b>656</b></td><td><b>39 KB</b></td><td><b>1.22 GB</b></td><td><b>39 GB</b></td></tr>
+  <tr><td>DeepSeek-V3.2 (+DSA indexer)</td><td>61</td><td>576+128</td><td>784</td><td>47 KB</td><td>1.5 GB</td><td>47 GB<br><b>（读取量降至 1/5）</b></td></tr>
+  <tr><td><b>Qwen3-Next-80B-A3B (Hybrid)</b></td><td><b>12</b></td><td>1024</td><td>2048</td><td><b>24 KB</b><br>+36 MiB 固定状态</td><td>0.75 GB</td><td><b>24 GB</b></td></tr>
+  <tr><td>Kimi-Linear-48B-A3B (KDA+MLA 3:1)</td><td>~1/4 层</td><td>—</td><td>—</td><td>相比全 MLA 基线<b>−75%</b></td><td>—</td><td>—</td></tr>
+  <tr><td>MiniMax-Text-01 (Lightning 7:1)</td><td><b>10</b>（80 层中仅 10 层为 softmax attention）</td><td>—</td><td>—</td><td>论文称降至 vanilla 的<b>~1%</b></td><td>—</td><td>—</td></tr>
+  <tr><td><b>DeepSeek-V4-Pro (CSA+HCA, 2026)</b></td><td>—</td><td>—</td><td>—</td><td><b>~4.7 KB</b> ¹（官方口径 = V3.2 的 <b>10%</b>）</td><td>~0.15 GB</td><td><b>~4.7 GB</b></td></tr>
+</table>
+<blockquote><p>¹ 按 V4 论文"KV cache 降至 V3.2 的 10%"折算（V3.2 = 47 KB/token）。V4-Flash 更激进，官方口径为 V3.2 的 <b>7%</b>（~3.3 KB/token）。CSA/HCA 的压缩发生在 <b>token 维</b>（每 m 个 token 合并成 1 条），因此"元素/token/层"这一列已不再适用——这是 §4.4 成本因子表中 <code>L_ctx</code> 因子被直接改写的体现。</p></blockquote>
+
+<div class="fig">
+<svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg">
+  <text x="530" y="24" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">单 token KV Cache（KB，对数轴）</text>
+  <line x1="377" y1="40" x2="377" y2="272" stroke="#e3e7ee" stroke-dasharray="4,4"/>
+  <line x1="621" y1="40" x2="621" y2="272" stroke="#e3e7ee" stroke-dasharray="4,4"/>
+  <text x="377" y="290" font-size="10" fill="#5a6272" text-anchor="middle">10 KB</text>
+  <text x="621" y="290" font-size="10" fill="#5a6272" text-anchor="middle">100 KB</text>
+  <text x="242" y="61" font-size="11" fill="#1a1f2e" text-anchor="end">Llama-3.1-405B (GQA BF16)</text>
+  <rect x="250" y="48" width="542" height="18" rx="3" fill="#c9d2e0"/>
+  <text x="800" y="61" font-size="11" font-weight="bold" fill="#1a1f2e">504</text>
+  <text x="242" y="95" font-size="11" fill="#1a1f2e" text-anchor="end">DeepSeek-V2 (MLA BF16)</text>
+  <rect x="250" y="82" width="342" height="18" rx="3" fill="#2456c4"/>
+  <text x="600" y="95" font-size="11" fill="#1a1f2e">76.5</text>
+  <text x="242" y="129" font-size="11" fill="#1a1f2e" text-anchor="end">DeepSeek-V3 (MLA BF16)</text>
+  <rect x="250" y="116" width="331" height="18" rx="3" fill="#2456c4"/>
+  <text x="589" y="129" font-size="11" fill="#1a1f2e">68.6</text>
+  <text x="242" y="163" font-size="11" fill="#1a1f2e" text-anchor="end">DeepSeek-V3.2 (+Indexer)</text>
+  <rect x="250" y="150" width="291" height="18" rx="3" fill="#2456c4"/>
+  <text x="549" y="163" font-size="11" fill="#1a1f2e">47.0</text>
+  <text x="242" y="197" font-size="11" fill="#1a1f2e" text-anchor="end">DeepSeek-V3 (MLA FP8)</text>
+  <rect x="250" y="184" width="271" height="18" rx="3" fill="#e8862a"/>
+  <text x="529" y="197" font-size="11" fill="#1a1f2e">39.0</text>
+  <text x="242" y="231" font-size="11" fill="#1a1f2e" text-anchor="end">Qwen3-Next (Hybrid GDN)</text>
+  <rect x="250" y="218" width="220" height="18" rx="3" fill="#2f9e63"/>
+  <text x="478" y="231" font-size="11" fill="#1a1f2e">24.0</text>
+  <text x="242" y="265" font-size="11" fill="#1a1f2e" text-anchor="end">DeepSeek-V4-Pro (CSA+HCA)</text>
+  <rect x="250" y="252" width="48" height="18" rx="3" fill="#163a86"/>
+  <text x="306" y="265" font-size="11" font-weight="bold" fill="#1a1f2e">≈4.7</text>
+</svg>
+</div>
+<p class="cap"><b>图 4</b> · 跨代 KV Cache 浓缩对照（数据同下表，对数轴：每行约一个数量级）。三个正交维度依次登场——架构维（MLA/GDN，10× 级）、精度维（FP8，2×）、token 维（CSA/HCA，10× 级且改变阶数）。2024→2026 两年累计 ~107×。</p>
+
+<p><b>跨代浓缩对照</b>（上一明细表按时间线汇总，对数视角：每行约一个数量级）：</p>
+<table>
+  <tr><th>模型（架构, 精度）</th><th>KV (KB/token)</th><th>相对 Llama-3.1-405B</th><th>压缩来源</th></tr>
+  <tr><td>Llama-3.1-405B（GQA, BF16）</td><td><b>504</b></td><td>1×</td><td>基线</td></tr>
+  <tr><td>Llama-2-70B（GQA, BF16）</td><td><b>320</b></td><td>0.63×</td><td>小模型参照</td></tr>
+  <tr><td>DeepSeek-V2（MLA, BF16）</td><td><b>76.5</b></td><td>~6.6×</td><td>MLA：n_kv→1</td></tr>
+  <tr><td>DeepSeek-V3（MLA, BF16）</td><td><b>68.6</b></td><td>~7.3×</td><td>MLA + 结构微调</td></tr>
+  <tr><td>DeepSeek-V3.2（MLA+DSA indexer）</td><td><b>47.0</b></td><td>~11×</td><td>indexer 略增 KV，换 token 维稀疏读取</td></tr>
+  <tr><td>DeepSeek-V3（MLA, FP8）</td><td><b>39.0</b></td><td>~13×</td><td>元素维：BF16→FP8（0.5×）</td></tr>
+  <tr><td>Qwen3-Next（Hybrid GDN）</td><td><b>24.0</b></td><td>~21×</td><td>层维：3/4 层换线性 GDN</td></tr>
+  <tr><td>DeepSeek-V4-Pro（CSA+HCA）</td><td><b>~4.7</b> ¹</td><td><b>~107×</b> 🟠</td><td>token 维：每 m token 一条，<code>L_ctx</code> 改写</td></tr>
+</table>
+<p><i>读法：三个正交维度依次登场——架构维（MLA/GDN，10× 级）、精度维（FP8，2×）、token 维（CSA/HCA，10× 级且改变阶数）。2024→2026 两年累计 ~107×。</i></p>
+
+<h3>4.2 KV Cache 何时吃掉显存</h3>
+<p>设模型权重 <code>W</code> GB，KV 每 token <code>k</code> GB，并发 <code>B</code>，上下文 <code>L</code>：</p>
+<pre><code class="nohighlight">KV 超过权重的条件：  B × L × k > W    →    B × L > W / k</code></pre>
+<p><b>DeepSeek-V3 FP8 部署</b>（W = 671 GB，k = 39 KB）：</p>
+<pre><code class="nohighlight">临界 B×L = 671 GB / 39 KB ≈ 1.76 × 10⁷ tokens</code></pre>
+<table>
+  <tr><th>并发 B</th><th>KV 超过权重的上下文长度 L</th></tr>
+  <tr><td>1</td><td>17.6 M（不可达）</td></tr>
+  <tr><td>32</td><td>550 K</td></tr>
+  <tr><td>128</td><td><b>137 K</b></td></tr>
+  <tr><td>256</td><td><b>69 K</b></td></tr>
+  <tr><td>1024</td><td>17 K</td></tr>
+</table>
+<p>在 8×H200（1128 GB HBM）上，权重占 671 GB，剩余约 457 GB 给 KV + 激活；扣除激活/通信 buffer/CUDA graph 后净可用 ≈ 400 GB → <b>可承载的 B×L ≈ 1.0×10⁷ ~ 1.2×10⁷ token</b>。</p>
+<p>对照 Agent 实测负载（中位输入 142K token）：</p>
+<pre><code class="nohighlight">理论上限并发 ≈ 1.2×10⁷ / 1.42×10⁵ ≈ 80~85 个并发序列
+工程实际并发 ≈ 50~70（要给碎片、prefix 不命中、激活留余量）</code></pre>
+<blockquote><p><b>这就是当前 Agent 服务的真实显存天花板</b>——不是算力不够，是 KV Cache 装不下。</p></blockquote>
+<p>而 Qwen3-Next 的 Hybrid 方案（k = 24 KB + 36 MiB 固定）：</p>
+<pre><code class="nohighlight">128K 上下文单序列 = 3.0 GB + 36 MiB ≈ 3.04 GB
+Llama-3-405B 同场景 = 15.8 GB (32K) ... 128K 则需 63 GB</code></pre>
+<p><b>21× 的差距。</b></p>
+
+<h3>4.3 Prefill 的计算结构</h3>
+<p>Prefill 的 FLOPs 由两部分组成（causal mask 下 Attention 对数 ≈ L²/2，每对 Q·K + softmax·V 各 2 FLOPs/维度，合并后系数为 1）：</p>
+<pre><code class="nohighlight">FLOPs_prefill ≈ 2 · P_activated · L                       (FFN + 投影，O(L))
+              + L_layers · n_h · (d_qk + d_v) · L²         (Attention core，O(L²))</code></pre>
+<p>以 DeepSeek-V3 规模（P_act = 37B、L_layers = 61、n_h = 128、d_qk = 192、d_v = 128）计算：</p>
+<table>
+  <tr><th>L</th><th>FFN + 投影</th><th>Attention core</th><th>attn / ffn</th><th>Attention 占比</th></tr>
+  <tr><td>8 K</td><td>0.61 PFLOP</td><td>0.17 PFLOP</td><td>0.28</td><td><b>22%</b></td></tr>
+  <tr><td>32 K</td><td>2.42 PFLOP</td><td>2.68 PFLOP</td><td>1.11</td><td>53%</td></tr>
+  <tr><td>64 K</td><td>4.85 PFLOP</td><td>10.7 PFLOP</td><td>2.21</td><td>69%</td></tr>
+  <tr><td>128 K</td><td>9.70 PFLOP</td><td>42.9 PFLOP</td><td><b>4.43</b></td><td><b>82%</b></td></tr>
+  <tr><td>142 K（Agent 实测中位）</td><td>10.5 PFLOP</td><td>50.4 PFLOP</td><td><b>4.79</b></td><td><b>83%</b></td></tr>
+</table>
+<blockquote><p><b>临界点：L* ≈ 30K（精确 29,617）时 Attention 的 O(L²) 项首次超过 FFN 的 O(L) 项。</b></p><p>推导：令 <code>L_layers · n_h · (d_qk+d_v) · L² = 2 · P_act · L</code>，得<br><code>L* = 2·P_act / (L_layers · n_h · (d_qk+d_v)) = 7.4e10 / 2.4986e6 ≈ 2.96e4</code></p></blockquote>
+<p>这个表解释了三件事：</p>
+<ol>
+  <li><b>为什么短上下文时代没人在意 Attention 的 FLOPs</b>——L=8K 时它只占 22%，FFN 才是大头。</li>
+  <li><b>为什么 Agent 时代 Sparse Attention 突然变得至关重要</b>——L=142K（实测中位输入）时 Attention 占 Prefill FLOPs 的 <b>83%</b>，DSA 的 ~5× 加速直接对应 ~4× 端到端 Prefill 提速。</li>
+  <li><b>为什么 Prefill 侧的优化重点和 Decode 侧不同</b>：Prefill 要降 <b>FLOPs</b>（稀疏化），Decode 要降 <b>bytes</b>（压缩 + 稀疏化 + 低精度）。</li>
+</ol>
+<p><b>对 Sparse Attention 的临界长度做敏感性分析</b>：</p>
+<table>
+  <tr><th>模型</th><th>P_act</th><th>L_layers · n_h · (d_qk+d_v)</th><th>L*</th></tr>
+  <tr><td>DeepSeek-V3 (MLA)</td><td>37B</td><td>61·128·320 = 2.50e6</td><td><b>30K</b></td></tr>
+  <tr><td>Llama-3-405B (GQA, dense)</td><td>~405B</td><td>126·128·256 = 4.13e6</td><td><b>196K</b></td></tr>
+  <tr><td>Qwen3-Next-80B-A3B（仅 12 层 full attn）</td><td>3B</td><td>12·16·256 = 4.92e4</td><td><b>122K</b></td></tr>
+</table>
+<p>→ MLA 把 L* 从 GQA dense 模型的 ~200K 量级压到 ~30K，<b>让 Sparse Attention 在主流 Agent 负载下从"可选"变成"必需"</b>。Hybrid 架构则把绝大多数层换成 Linear Attention，从另一侧把"绝对 Attention FLOPs"也降下来。</p>
+
+<h3>4.4 各技术的"成本因子"归因表</h3>
+<p>把 Attention 每 token 的 decode 成本写成：</p>
+<pre><code class="nohighlight">Bytes = L_layers_kv × L_ctx × n_read_ratio × d_stored × p_bytes
+        └── Hybrid ──┘         └─ Sparse ─┘  └─ MLA/GQA ─┘ └ 低精度 ┘</code></pre>
+<table>
+  <tr><th>技术</th><th>攻击的因子</th><th>典型压缩比</th><th>是否改变渐近阶数</th></tr>
+  <tr><td>GQA</td><td><code>n_read_ratio</code>（份数）</td><td>8× vs MHA</td><td>否</td></tr>
+  <tr><td>MLA</td><td><code>d_stored</code>（维度）</td><td>3.56×（2048→576 元素）</td><td>否</td></tr>
+  <tr><td>FP8/FP4 KV</td><td><code>p_bytes</code></td><td>2× / 4×</td><td>否</td></tr>
+  <tr><td>DSA</td><td><code>L_ctx</code> → <code>min(L, k) + L·(d_I/d_KV)</code></td><td>~5×（渐近上限 5×）</td><td><b>部分</b>（主 attention O(L·k)，但 indexer 仍 O(L)）</td></tr>
+  <tr><td>NSA</td><td><code>L_ctx</code> → <code>L/l + n·block</code></td><td>~25–31×</td><td><b>是</b>（粗筛降到 O(L/l)）</td></tr>
+  <tr><td>Linear Attention</td><td>消除 <code>L_ctx</code> 因子</td><td>O(1)</td><td><b>是</b></td></tr>
+  <tr><td>Hybrid</td><td><code>L_layers_kv</code></td><td>3–8×</td><td>否（但常数收益巨大）</td></tr>
+</table>
+<blockquote><p><b>这张表是全报告的核心结论</b>：只有 <b>NSA 级别的块压缩</b>和 <b>Linear Attention</b> 真正改变了渐近阶数；其余都是在降常数。而 Agent 负载的 L 正在快速增长，<b>常数优化终将被 L 的增长吃掉</b>——这是 Hybrid / Linear 路线在 2025 年集中爆发的根本驱动力。</p></blockquote>
+
+<!-- ================================================================ -->
+<h2 id="sec5">5. Agent 时代的负载重构</h2>
+
+<h3>5.1 负载特征实测</h3>
+<p>来自 vLLM × AgentX 的真实生产 trace：</p>
+<table>
+  <tr><th>指标</th><th>数值</th><th>含义</th></tr>
+  <tr><td><b>输入 token 中位数</b></td><td><b>142,000</b></td><td>极长上下文</td></tr>
+  <tr><td><b>输出 token 中位数</b></td><td><b>444</b></td><td>极短生成</td></tr>
+  <tr><td><b>输入/输出比</b></td><td><b>~320 : 1</b></td><td>与聊天场景（~1:1）完全相反</td></tr>
+  <tr><td><b>Prefix Cache 命中率</b></td><td><b>&gt; 96%</b></td><td>绝大部分输入是重复的历史</td></tr>
+</table>
+<p>推论：</p>
+<pre><code class="nohighlight">每个 Agent turn：
+  新增 Prefill token ≈ 数百到数千（新观察到的工具输出）
+  复用的 Prefill token ≈ 14 万（历史对话 + 工具定义 + 系统提示）
+  Decode token ≈ 444
+
+→ 按"处理的 token 总量"计，99%+ 发生在 Prefill 侧
+→ 但按"新增计算量"计，96% 的 Prefill 被 Prefix Cache 吃掉
+→ 真正的成本大头 = KV Cache 的【存储】与【搬运】，不是计算</code></pre>
+<p><b>这是一个根本性的成本结构翻转</b>：</p>
+<table>
+  <tr><th></th><th>传统 Chat</th><th>Agent</th></tr>
+  <tr><td>主导阶段</td><td>Decode（生成长）</td><td><b>Prefill（输入长）</b></td></tr>
+  <tr><td>主导成本</td><td>带宽（读 KV + 读权重）</td><td><b>容量（存 KV）+ 搬运（KV 迁移）</b></td></tr>
+  <tr><td>Prefix Cache 价值</td><td>低（每次 prompt 不同）</td><td><b>极高（96% 命中）</b></td></tr>
+  <tr><td>优化重点</td><td>提高 batch、降 KV 字节</td><td><b>KV 复用、多级存储、PD 解耦</b></td></tr>
+</table>
+
+<h3>5.2 Prefill / Decode 解耦（PD Disaggregation）</h3>
+<p><b>为什么必须解耦？</b>因为两个阶段的硬件诉求完全冲突：</p>
+<table>
+  <tr><th></th><th>Prefill</th><th>Decode</th></tr>
+  <tr><td>计算特征</td><td>大 GEMM，compute bound</td><td>小 GEMV，memory bound</td></tr>
+  <tr><td>理想硬件</td><td>高 FLOPS</td><td>高 HBM 带宽 + 大容量</td></tr>
+  <tr><td>延迟指标</td><td>TTFT（首 token 延迟）</td><td>TPT / TPOT（每 token 延迟）</td></tr>
+  <tr><td>批处理</td><td>chunked prefill，怕被 decode 打断</td><td>continuous batching，怕被 prefill 阻塞</td></tr>
+  <tr><td>KV Cache</td><td>生产者（写）</td><td>消费者（读）</td></tr>
+</table>
+<p><b>混部的问题</b>：一个 142K token 的 prefill 会独占 GPU 数百毫秒，期间所有 decode 请求全部卡住 → TPT 尖刺，SLO 违约。</p>
+<p><b>解耦方案（Mooncake / DistServe 等）</b>：</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="m5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/></marker>
+  </defs>
+  <rect x="40" y="30" width="120" height="32" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="100" y="51" font-size="12" fill="#1a1f2e" text-anchor="middle">用户请求</text>
+  <line x1="164" y1="46" x2="334" y2="46" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m5a)"/>
+  <rect x="340" y="28" width="200" height="48" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="440" y="49" font-size="12" font-weight="bold" fill="#2456c4" text-anchor="middle">KVCache-centric 调度器</text>
+  <text x="440" y="66" font-size="10" fill="#5a6272" text-anchor="middle">按 TTFT / TPT SLO 双向约束调度</text>
+  <polyline points="400,80 400,104 240,104 240,128" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m5a)"/>
+  <polyline points="480,80 480,104 640,104 640,128" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m5a)"/>
+  <rect x="120" y="130" width="240" height="88" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="240" y="154" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">Prefill 池</text>
+  <text x="140" y="178" font-size="11" fill="#1a1f2e">大 GEMM · Compute bound</text>
+  <text x="140" y="196" font-size="11" fill="#1a1f2e">理想硬件：高 FLOPS</text>
+  <text x="140" y="212" font-size="11" fill="#1a1f2e">指标：TTFT（首 token 延迟）</text>
+  <rect x="520" y="130" width="240" height="88" rx="10" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="640" y="154" font-size="13" font-weight="bold" fill="#b35f10" text-anchor="middle">Decode 池</text>
+  <text x="540" y="178" font-size="11" fill="#1a1f2e">小 GEMV · Memory bound</text>
+  <text x="540" y="196" font-size="11" fill="#1a1f2e">理想硬件：高带宽 + 大容量</text>
+  <text x="540" y="212" font-size="11" fill="#1a1f2e">指标：TPOT（每 token 延迟）</text>
+  <line x1="438" y1="174" x2="372" y2="174" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m5a)"/>
+  <line x1="442" y1="174" x2="514" y2="174" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m5a)"/>
+  <text x="440" y="163" font-size="10" fill="#5a6272" text-anchor="middle">RDMA 零拷贝 KV 迁移</text>
+  <line x1="240" y1="222" x2="240" y2="276" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m5a)"/>
+  <line x1="640" y1="222" x2="640" y2="276" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m5a)"/>
+  <text x="250" y="252" font-size="10" fill="#5a6272">写 KV</text>
+  <text x="650" y="252" font-size="10" fill="#5a6272">读 KV</text>
+  <text x="440" y="252" font-size="10" fill="#5a6272" text-anchor="middle">KV 按前缀切片复用</text>
+  <rect x="120" y="280" width="640" height="76" rx="10" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="440" y="302" font-size="12" font-weight="bold" fill="#2f9e63" text-anchor="middle">分布式 KVCache 池 · Prefix Cache 跨实例复用</text>
+  <rect x="170" y="312" width="160" height="32" rx="6" fill="#ffffff" stroke="#7fbf9d"/>
+  <text x="250" y="333" font-size="11" fill="#1a1f2e" text-anchor="middle">HBM · 热 KV / 活跃专家</text>
+  <rect x="380" y="312" width="160" height="32" rx="6" fill="#ffffff" stroke="#7fbf9d"/>
+  <text x="460" y="333" font-size="11" fill="#1a1f2e" text-anchor="middle">DRAM · 温 KV / 冷专家</text>
+  <rect x="590" y="312" width="160" height="32" rx="6" fill="#ffffff" stroke="#7fbf9d"/>
+  <text x="670" y="333" font-size="11" fill="#1a1f2e" text-anchor="middle">NVMe · 冷 KV / 长期记忆</text>
+  <line x1="334" y1="328" x2="376" y2="328" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m5a)"/>
+  <line x1="544" y1="328" x2="586" y2="328" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m5a)"/>
+</svg>
+</div>
+<p class="cap"><b>图 5</b> · Mooncake 式 KVCache-centric PD 解耦：调度器把 KV Cache 当一等公民，Prefill 池（算力优化）与 Decode 池（带宽优化）经 RDMA 零拷贝迁移 KV，底座是 HBM → DRAM → NVMe 的分布式 KV 池与跨实例 Prefix Cache 复用。</p>
+
+<p>关键设计：</p>
+<ul>
+  <li><b>KVCache-centric 而非 GPU-centric 调度</b>：把 KV Cache 当作一等公民，围绕它的位置和复用性来调度计算。</li>
+  <li><b>RDMA 零拷贝传输</b>：避免 KV Cache 在 Prefill→Decode 迁移时经过 CPU 内存和协议栈。</li>
+  <li><b>多级存储</b>：利用集群中闲置的 DRAM 和 NVMe 构建分布式 KV 池，让 Prefix Cache 跨实例共享。</li>
+  <li><b>SLO 感知调度</b>：预测性地丢弃无法满足延迟要求的请求（overload-oriented scheduling）。</li>
+</ul>
+<p><b>实测收益（Mooncake，Kimi 生产环境）</b>：</p>
+<ul>
+  <li>模拟场景吞吐提升最高 <b>525%</b></li>
+  <li>生产环境在满足 SLO 前提下多处理 <b>75%</b> 的请求</li>
+  <li>长上下文场景收益尤其显著</li>
+</ul>
+
+<h3>5.3 架构级的 PD 解耦设计</h3>
+<p>系统层的解耦还不够。<b>新一代架构开始在设计阶段就为 Prefill 和 Decode 准备不同的优化目标</b>（DeepSeek V4.x 路线的核心思路）：</p>
+<pre><code class="nohighlight">Prefill 侧优化目标：降低激活量 / 降低 O(L²) 计算
+  → 更激进的 MoE 稀疏化（激活率 5.6% → 3.75%）
+  → Sparse Attention（DSA / NSA）降低 L² 系数
+  → MTP 提升单次前向的产出
+
+Decode 侧优化目标：减小 KV Cache / 降低每步读取字节
+  → MLA 维度压缩
+  → Hybrid + Linear Attention 减少需要存 KV 的层
+  → FP8 / FP4 KV 量化</code></pre>
+<p><b>为什么这样能"整体 KV Cache 再压缩一倍"？</b>因为解除了单一架构必须同时满足两个阶段的约束：</p>
+<ul>
+  <li>混部时，Prefill 层的 KV 必须按 Decode 的格式存（否则要重算），这限制了 Prefill 侧能用多激进的稀疏化。</li>
+  <li>解耦后，Prefill 侧可以用<b>临时的、激进的稀疏表示</b>（反正算完就传走），Decode 侧则维持<b>紧凑但完整的 KV 布局</b>。</li>
+  <li>更进一步：Prefill 阶段命中 Prefix Cache 的部分<b>根本不需要重算</b>，只需要把已有 KV 搬运过来 → 此时 KV 的<b>存储格式和传输效率</b>比计算效率更重要。</li>
+</ul>
+<p><b>长短序列混合部署</b>是解耦带来的另一个红利：</p>
+<pre><code class="nohighlight">长序列请求（142K）→ 送入专门的长上下文实例（大 KV 池、激进稀疏）
+短序列请求（2K）  → 送入高并发实例（大 batch、稠密 KV）</code></pre>
+<p>这直接提升了整体 batch size 和硬件利用率——因为不再需要用同一套配置去迁就两类极端负载。</p>
+<blockquote><p><b>2026.09 的实证：DeepSeek-V4.1-Flash 把这一设计做进了权重</b> 🟢。其非对称 Causal Encoder-Decoder 中，<b>prefill 激活 8B / decode 激活 16B</b>——同一套权重、两套激活子集，按两阶段各自的 roofline 位置（prefill compute bound → 压激活；decode memory bound → 用更大激活抬高算术强度）分别定制。PD 解耦从"系统层调度"演进为"模型级结构"，详见 §9.1。</p></blockquote>
+
+<!-- ================================================================ -->
+<h2 id="sec6">6. 训推硬件诉求的分野</h2>
+
+<h3>6.1 推理：走向异构专用化</h3>
+<p><b>评估指标的转变</b>：</p>
+<pre><code class="nohighlight">2023：$/GB·s⁻¹   （单位带宽成本）—— decode 主导时代
+2025：$/FLOPS    （单位算力成本）—— prefill 主导 + 大 batch 时代</code></pre>
+<p>为什么指标会变？因为 Agent 负载把重心推回了 Prefill（compute bound），同时 PD 解耦让两个阶段可以用<b>完全不同的芯片</b>：</p>
+<table>
+  <tr><th></th><th>Prefill 专用硬件</th><th>Decode 专用硬件</th></tr>
+  <tr><td>需要</td><td>高 FLOPS、高能效比</td><td>高 HBM 带宽、大 HBM 容量</td></tr>
+  <tr><td>不需要</td><td>大显存</td><td>高算力</td></tr>
+  <tr><td>精度容忍</td><td>较高（可 FP8/FP4）</td><td>较高</td></tr>
+  <tr><td>典型形态</td><td>算力密集的 ASIC / 高密度 GPU</td><td>H20 类"低算力高带宽"卡、Groq/Cerebras 类 SRAM 架构</td></tr>
+</table>
+<p><b>推理侧接受异构的根本原因</b>：</p>
+<ol>
+  <li><b>无状态</b>：推理是单次前向，误差不会累积放大。</li>
+  <li><b>可验证</b>：输出质量可以用 benchmark 直接度量，坏了就换。</li>
+  <li><b>成本敏感</b>：推理是持续性支出，单位成本直接决定商业可行性。</li>
+  <li><b>模块解耦</b>：Prefill/Decode 已经是两个独立服务，天然适合两种硬件。</li>
+</ol>
+
+<h3>6.2 训练：必须坚持同构</h3>
+<p>训练侧的诉求完全相反：</p>
+<table>
+  <tr><th>诉求</th><th>原因</th></tr>
+  <tr><td><b>稳定性</b></td><td>一次预训练 = 数千卡 × 数周 × 数百万美元。任何一次 loss spike 都可能毁掉整个 run</td></tr>
+  <tr><td><b>确定性</b></td><td>需要可复现的消融实验来判断架构改动是否有效</td></tr>
+  <tr><td><b>Bitwise 训推一致</b></td><td>见下</td></tr>
+</table>
+<p><b>为什么训练不能容忍异构芯片的精度不对齐？</b></p>
+<pre><code class="nohighlight">训练是一个 O(10⁶) 步的迭代过程，每步的参数更新量 ~10⁻⁴ 量级。
+
+若某类算子在异构芯片上有 10⁻⁶ 的相对误差：
+  → 单步看，完全无害
+  → 但梯度下降是【正反馈】系统：参数偏移 → 激活分布偏移 → 梯度偏移 → 更大参数偏移
+  → 10⁶ 步后，误差可能放大到改变模型收敛点的程度
+
+更致命的是【不可归因性】：
+  训练崩了，你无法知道是数据问题、超参问题、还是某块芯片的算子精度问题。
+  在数千卡规模下，逐一排查的成本高于重训。</code></pre>
+<p>因此训练侧的红线是：<b>必须做到 Bitwise 级别的训推一致 / 卡间一致</b>。这直接排除了：</p>
+<ul>
+  <li>不同厂商芯片混用（算子实现不同 → rounding 不同）</li>
+  <li>激进的低精度训练（FP4 训练的数值稳定性尚未验证）</li>
+  <li>非确定性的稀疏路由（同一 batch 在不同卡上路由到不同专家）</li>
+</ul>
+<p><b>这也解释了架构设计的"激进程度不对称"</b>：</p>
+<pre><code class="nohighlight">推理侧：可以上 FP4、可以上激进稀疏、可以换硬件   → 迭代快、试错成本低
+训练侧：必须 BF16/FP8、必须稠密可复现、必须同构   → 迭代慢、试错成本高</code></pre>
+<p>DeepSeek 的 UE8M0 FP8（scale 强制为 2 的幂）正是这个矛盾下的产物：<b>它让量化操作在任何硬件上都 bitwise 可复现</b>，从而在保持同构约束的前提下引入了低精度。</p>
+
+<h3>6.3 一个反直觉的推论</h3>
+<blockquote><p><b>推理硬件可以比训练硬件领先一代。</b></p></blockquote>
+<p>因为推理是无状态的、可验证的、成本敏感的；训练是有状态的、难归因的、风险厌恶的。所以：</p>
+<ul>
+  <li>新格式（NVFP4）总是先在推理落地，训练滞后 1-2 年。</li>
+  <li>新架构（Linear Attention）总是先在推理验证收益，再决定是否用于预训练。</li>
+  <li>异构芯片总是先切推理市场。</li>
+</ul>
+
+<!-- ================================================================ -->
+<h2 id="sec7">7. 工程方法论：掉点是怎么被"买回来"的</h2>
+
+<h3>7.1 精度损失可以兑换成其他收益</h3>
+<p>架构激进化的标准流程：</p>
+<pre><code class="nohighlight">① 提出激进架构（稀疏化 / Linear Attention / FP4）
+② 测量精度损失（通常 0.5~2 分）
+③ 测量效率收益（通常 2~5×）
+④ 用效率收益【兑换】精度：
+     - 提升 IO 效率 → 同样时间跑更多 step
+     - 增加 RL 迭代轮次 → 用后训练补回预训练的损失
+     - 扩大数据量 → 用更多 token 补回架构容量的损失
+⑤ 若兑换后净收益为正 → 采纳</code></pre>
+<p><b>关键洞察</b>：架构的"掉点"不是终点，而是一个<b>可以用算力赎回的债务</b>。DeepSeek-V3.2 为 DSA 投入了超过预训练成本 10% 的后训练算力（943.7B token 的稀疏化训练），本质上就是在偿还稀疏化带来的精度债务。</p>
+<p>这要求：</p>
+<ul>
+  <li><b>快速实验能力</b>：能在几天内跑完一次小规模验证，而不是几个月。</li>
+  <li><b>可靠的评估体系</b>：能分辨 0.5 分的真实差异和噪声。</li>
+  <li><b>RL 后训练的成熟度</b>：RL 是当前最有效的"精度赎回"工具。</li>
+</ul>
+
+<h3>7.2 Infra 话语权决定架构激进程度</h3>
+<p>这是一个组织层面的观察，但技术上完全成立：</p>
+<pre><code class="nohighlight">架构团队说："改成 Linear Attention，KV Cache 降 75%"
+Infra 团队说："PagedAttention 要重写、Hybrid KV Manager 要新做、
+              Prefix Cache 命中逻辑要改、所有 attention kernel 要重写、
+              精度对齐要重跑——三个月上线不了"
+结果：架构方案被否决或降级</code></pre>
+<blockquote><p><b>架构创新的可采纳性 = 技术收益 × Infra 可落地性</b>。后者的权重常常被低估。</p></blockquote>
+<p>反例（成功的协同）：</p>
+<ul>
+  <li><b>DSA 能被 vLLM/SGLang day-0 支持</b>，正是因为它<b>保留了 MLA 的 KV Cache 结构</b>，只额外增加一个 indexer cache。相比 NSA 需要全新的三分支 kernel，DSA 的落地阻力小一个数量级。这是"架构为 Infra 让步"的典型。</li>
+  <li><b>Qwen3-Next 的 Hybrid KV Cache Manager</b> 是与 vLLM 团队协同设计的，架构发布时引擎支持已就绪。</li>
+</ul>
+
+<h3>7.3 模型迭代 ≈ 芯片流片</h3>
+<table>
+  <tr><th></th><th>芯片流片</th><th>大模型预训练</th></tr>
+  <tr><td>单次成本</td><td>数百万~数千万美元</td><td>数百万美元</td></tr>
+  <tr><td>周期</td><td>数月~一年</td><td>数月</td></tr>
+  <tr><td>失败后果</td><td>全部报废，重新流片</td><td>全部报废，回炉重训</td></tr>
+  <tr><td>补救手段</td><td>金属层 ECO（有限）</td><td>后训练 / RL（较灵活）</td></tr>
+  <tr><td>决策依据</td><td>仿真 + 小规模验证</td><td>小模型 scaling law 外推</td></tr>
+</table>
+<p><b>这解释了为什么架构决策如此保守</b>，以及为什么"遇到瓶颈会直接回炉重训"——因为在一个错误架构上继续训 10T token 的成本，远高于回炉重来。</p>
+<p>也解释了为什么<b>小模型验证（如 DeepSeekMoE 2B/16B）是必经环节</b>：先在 1/100 的规模上验证架构假设，确认 scaling law 后再放大。</p>
+<!-- ================================================================ -->
+<h2 id="sec8">8. 开放问题与展望</h2>
+
+<h3>8.1 KV Cache 会被彻底消灭吗？</h3>
+<p><b>支持 Linear-only 的论据</b>：</p>
+<ul>
+  <li>状态大小与 L 无关，天然适合超长上下文和超大 batch。</li>
+  <li>Prefill 是 O(L) 而非 O(L²)，长文档处理成本骤降。</li>
+  <li>Kimi Linear / Qwen3-Next 已证明 3:1 混合下能力损失可控。</li>
+</ul>
+<p><b>反对的论据</b>：</p>
+<ul>
+  <li>固定状态无法保证精确召回，"大海捞针"类任务是硬伤。</li>
+  <li>状态读写是 O(1) 但<b>常数很大</b>（Qwen3-Next 每层 1 MiB），短序列场景反而更贵——存在两个盈亏平衡点：<b>容量平衡 ~1.5K token</b>、<b>带宽平衡 ~3K token</b>（详见 §2.5.3）。</li>
+  <li>Prefix Cache 无法复用（状态是路径依赖的，不能像 KV 那样按前缀切片共享）——<b>这对 Agent 负载是致命的</b>，因为 Agent 的核心红利就是 96% 的 prefix 命中。</li>
+</ul>
+<p><b>判断</b>：纯 Linear 短期内不会取代 Hybrid。<b>Prefix Cache 的可复用性</b>这个约束，可能比"表达能力"更能决定 Linear Attention 的采纳上限。这是一个尚未被充分讨论的架构约束。</p>
+
+<h3>8.2 稀疏化的渐近极限</h3>
+<p>DSA 的加速比收敛到 5×（indexer 维度 / MLA 维度），NSA 收敛到 l 倍（块长）。要突破，需要：</p>
+<ul>
+  <li>Indexer 也做块级压缩（DSA + NSA 融合）</li>
+  <li>学习式的动态 k（简单 query 少读、复杂 query 多读）</li>
+  <li>层级稀疏（先粗筛章节，再精读段落）</li>
+</ul>
+
+<h3>8.3 存储层级成为一等公民</h3>
+<pre><code class="nohighlight">HBM  (3-8 TB/s,  141 GB/卡)   ← 热 KV、活跃专家
+ ↓
+DRAM (~500 GB/s, TB 级)       ← 温 KV、冷专家、Prefix Cache
+ ↓
+NVMe (~10 GB/s,  PB 级)       ← 冷 KV、长期记忆
+ ↓
+跨数据中心                     ← 全局 KV Cache 池</code></pre>
+<p>已有研究开始讨论"跨数据中心的 KV Cache"。当 KV Cache 的搬运成本超过重算成本时，<b>架构设计的边界会从"模型"扩展到"存储系统"</b>。届时可能出现的新设计：</p>
+<ul>
+  <li><b>可重算的 KV</b>：故意不存某些层的 KV，需要时用便宜的计算重建（用 FLOPs 换容量）。</li>
+  <li><b>KV 的语义压缩</b>：不是量化，而是把 KV 蒸馏成更少的"记忆 token"。</li>
+  <li><b>前缀感知的架构</b>：让模型结构本身对 prefix 复用友好（如 Linear Attention 的 checkpoint 化）。</li>
+</ul>
+
+<h3>8.4 训练与推理的架构会分叉吗？</h3>
+<p>当前是同一套权重跑训练和推理。但既然：</p>
+<ul>
+  <li>Prefill 和 Decode 已经解耦部署</li>
+  <li>训练必须同构、推理可以异构</li>
+  <li>训练必须 bitwise 确定、推理可以近似</li>
+</ul>
+<p>那么逻辑上的下一步是：<b>训练一个"母模型"，为不同推理场景蒸馏/编译出多个特化变体</b>（长上下文变体、高并发变体、端侧变体）。这会进一步改变架构设计的自由度——母模型可以为"可特化性"而非"单一最优"而设计。</p>
+
+<!-- ================================================================ -->
+<h2 id="sec9">9. 2026 年进展专题</h2>
+<p>本章补充 2025.11 ~ 2026.09 期间的新进展。主线判断不变（短板从带宽转向容量），但<b>每一刀都又往前推了一截</b>：Attention 从"稀疏 + 压缩"走向"稀疏 + 重压缩 + 残差重构"，低精度从"推理 FP8"走向"训练 FP4"，Agent 负载从"prefix 命中"走向"多级存储 + token 感知路由"，硬件从"Blackwell"走向"HBM4 时代"。</p>
+
+<div class="cred">
+<p>与 §1–§8 不同，本章 2026 数据的来源质量<b>参差不齐</b>，且多数闭源模型无法用 <code>config.json</code> 复算。为便于甄别，全章采用四级标注：</p>
+<table>
+  <tr><th>标记</th><th>含义</th><th>典型来源</th></tr>
+  <tr><td>🟢 <b>一手</b></td><td>官方论文/技术报告/config，可复算</td><td>arXiv 摘要、官方 newsroom、HF config</td></tr>
+  <tr><td>🟡 <b>官方转述</b></td><td>官方口径但经媒体/博客转述，未逐字核对</td><td>厂商博客、SemiAnalysis</td></tr>
+  <tr><td>🟠 <b>三方推测</b></td><td>第三方分析或本人推导，依赖上游假设</td><td>分析站、本报告复算</td></tr>
+  <tr><td>🔴 <b>未证实</b></td><td>仅单一低质来源或多源冲突，<b>不应作为决策依据</b></td><td>SEO/AI 内容站</td></tr>
+</table>
+<p>已核实为 🟢 的 V4 核心数据：1.6T/49B、284B/13B、1M 上下文、CSA/HCA/mHC、27% FLOPs、10% KV（arXiv:2606.19348 摘要逐条确认）。<br>标注为 🔴 的存疑数据：V4"384 专家 top-6"、GPT-5.4/Claude 4.6 的具体规格（来源为低质站或可疑 arXiv 修订版，<b>官方未公开</b>）。</p>
+</div>
+
+<h3>9.1 Attention / MoE：DeepSeek-V4 与 Hybrid SSM 的收敛</h3>
+<p><b>2026 年最重要的单点进展是 DeepSeek-V4（2026.04.24 preview）</b>。它没有发明全新机制，而是把 §2 讲过的几条路线<b>首次组合成一个可训练、可量产、1M 上下文的系统</b>：</p>
+<pre><code class="nohighlight">DeepSeek-V4 = CSA（压缩 + 稀疏）  +  HCA（重压缩 + 稠密）  +  mHC（残差重构）  +  Muon 优化器
+              └─ §2.4 DSA 的延伸 ─┘   └─ §2.3 MLA 的极限 ─┘   └─ 训练稳定性新维度 ─┘</code></pre>
+<p><b>两种注意力的分工</b>（按层交替，类似 §2.6 Hybrid 思路，但混的是"两种压缩强度"而非"两种机制"）：</p>
+<table>
+  <tr><th>机制</th><th>做法</th><th>攻的成本</th><th>与 §2 技术的关系</th></tr>
+  <tr><td><b>CSA</b>（Compressed Sparse Attention）</td><td>每 <code>m</code> 个 token 合并成 1 个压缩条目，lightning indexer 选 top-k 压缩条目 + 少量 sliding window</td><td>读取量（稀疏）+ 存储量（压缩）</td><td><b>DSA（§2.4）作用在"压缩后的 KV"上</b>——稀疏的对象从原始 token 变成 token 块</td></tr>
+  <tr><td><b>HCA</b>（Heavily Compressed Attention）</td><td>每 <code>m'</code> 个 token（<code>m' ≫ m</code>）合并成 1 条，<b>不做稀疏</b>，对重压缩条目做稠密 attention + sliding window</td><td>存储量（极限压缩）</td><td><b>MLA（§2.3）压缩思想的 token 维推广</b>——不再压"每 token 的维度"，而是压"token 本身"</td></tr>
+</table>
+<p><b>量化收益</b>（官方口径，对比 DeepSeek-V3.2）：</p>
+<table>
+  <tr><th>模型</th><th>总参 / 激活</th><th>单 token 推理 FLOPs</th><th>KV Cache</th><th>上下文</th></tr>
+  <tr><td>DeepSeek-V4-Pro</td><td><b>1.6T / 49B</b> 🟢（专家数 🔴 存疑：三方称"384 路由 + 1 共享，top-6"，arXiv 摘要未列）</td><td><b>27%</b> 🟢</td><td><b>10%</b> 🟢</td><td>1M 🟢</td></tr>
+  <tr><td>DeepSeek-V4-Flash</td><td><b>284B / 13B</b> 🟢</td><td><b>10%</b> 🟢</td><td><b>7%</b> 🟢</td><td>1M 🟢</td></tr>
+  <tr><td><b>DeepSeek-V4.1-Flash</b>（2026.09.10）</td><td><b>552B / 非对称：输入 8B · 输出 16B</b> 🟢（官方 newsroom 逐字）</td><td>官方未公布（benchmark 仅以图片呈现，文本不可复算）</td><td><b>HBM 1/4 · SSD 1/8</b>（vs 上一代）🟡</td><td>官方未公布</td></tr>
+</table>
+<p>→ 把 §4.1 的账本再往前推一格：V3 FP8 是 39 KB/token，V4-Pro 按官方"10% of V3.2"口径折算约 <b>4.7 KB/token</b> 🟠（本人推导，假设 V4 的 10% 基线与 §4.1 中 V3.2 的 47 KB/token 同口径——<b>该假设未经官方确认</b>），1M 上下文单请求 KV 从 39 GB 降到 ~4.7 GB。<b>Llama-3-405B 的 504 GB → DeepSeek-V4-Pro 的 ~4.7 GB，两年压缩了 ~107×</b> 🟠。</p>
+
+<h4>V4 的"精度债务"：用 §7.1 框架审视（数据缺口必须点明）</h4>
+<p>§7.1 指出激进架构的掉点是"可用算力赎回的债务"。把这套框架套到 V4 上：</p>
+<table>
+  <tr><th>债务来源</th><th>机制</th><th>V4 的偿还手段</th><th>公开证据</th></tr>
+  <tr><td><b>CSA 稀疏</b>（只读 top-k 压缩块）</td><td>漏选关键 token → 召回损失</td><td>lightning indexer 端到端训练（继承 DSA 的 KL 对齐）</td><td>🟡 沿用 V3.2 已验证路线</td></tr>
+  <tr><td><b>HCA 重压缩</b>（m′ token 合并成 1 条）</td><td><b>token 维有损压缩 → 精确召回（needle）风险</b>，即 §2.5.4 对 Linear Attention 的同一批评</td><td>sliding window 兜底局部精确性</td><td>🔴 <b>官方未公布 RULER / 大海捞针逐项数据</b></td></tr>
+  <tr><td>1M 超长上下文</td><td>长程一致性、位置外推</td><td>32T token 训练 + Muon 优化器 + mHC 稳定性</td><td>🟡</td></tr>
+</table>
+<blockquote><p><b>关键诚实声明</b>：V4 目前是 <b>preview 版</b>，arXiv 摘要仅称"redefines the state-of-the-art for open models"，<b>未公布 vs V3.2 的逐项 benchmark</b>（MMLU/GPQA/AIME/SWE-bench/RULER 均缺）。因此"KV 降到 10% 是否付出召回代价"这一最核心的问题，<b>截至本报告尚无一手数据可判定</b>。三方流传的"80% bug patching / 93.5% coding contest"等数字 🔴 来源不可靠，未采信。</p><p>这正是 §7.1 框架的预测：<b>压缩越激进（10% KV），需要赎回的精度债务越重，偿还手段（更多训练 token + RL 后训练 + 稳定性架构）的投入也越大</b>。V4 同时上 mHC + Muon + 32T token，本质上就是在为 CSA/HCA 的精度债务预先支付"利息"。待正式版公布 RULER 类长上下文召回数据后，才能验证这笔债务是否真正还清。</p></blockquote>
+
+<h4>V4.1-Flash（2026.09.10，距 V4 preview 不到半年）：非对称 Causal Encoder-Decoder——把 PD 解耦从系统层下沉到权重里</h4>
+<p>🟢（官方 newsroom / API Docs 逐字核对，尚无 arXiv 技术报告）</p>
+<p>2026.09.10 上线的 V4.1-Flash 是 V4 路线的第一次大改版。官方披露的核心规格：</p>
+<table>
+  <tr><th>维度</th><th>披露值</th><th>可信度</th></tr>
+  <tr><td>总参数</td><td>552B MoE</td><td>🟢 官方逐字</td></tr>
+  <tr><td><b>激活参数（非对称）</b></td><td><b>输入（prefill）8B / 输出（decode）16B</b></td><td>🟢 官方逐字</td></tr>
+  <tr><td>KV Cache</td><td>HBM 需求降至上一代<b>1/4</b>，SSD 需求降至 <b>1/8</b></td><td>🟡 官方口径（基线代际未明示）</td></tr>
+  <tr><td>KV vs 第一代</td><td>−437×</td><td>🟠 "第一代"基线未定义，无法复算</td></tr>
+  <tr><td>训练</td><td>"新预训练方法" + 更大规模 RL 后训练</td><td>🟡 官方口径</td></tr>
+  <tr><td>benchmark</td><td>仅以图片呈现，宣称性能/成本/速度全面超越 V4-Pro</td><td>🟠 文本不可复算</td></tr>
+  <tr><td>定价</td><td>闲时价格为高峰时段 50%（2026.09.10 04:00 UTC 起）</td><td>🟢 官方逐字</td></tr>
+</table>
+<p><b>这条发布的分析价值不在参数量，而在"非对称激活"这四个字</b>：</p>
+<ol>
+  <li><b>prefill 8B / decode 16B 是 §1.3 Roofline 框架的直接应用</b>。decode 是 memory bound，激活更多（16B）意味着每读一字节权重能换更多 FLOPs——主动<b>抬高算术强度</b>去贴近 ridge point；prefill 是 compute bound，激活压到 8B 直接省算力省时延。<b>同一个模型按两个阶段各自的 roofline 位置反推激活子集</b>——这是"Prefill 降激活、Decode 降 KV"（§5.3）从设计原则变成可部署权重的第一个公开实例。</li>
+  <li><b>激活方向与直觉相反，值得停一下</b>：直觉上"prefill 处理 142K token、decode 只生成 444 token"，重头应该在 prefill；V4.1 却让 decode 激活翻倍。原因正是 §5.1 的实测结构——prefill 的绝大部分 token 会被 Prefix Cache 命中而免于重算，真正每时每刻都在跑的是 decode。<b>把参数预算花在永远在线的那一侧</b>，是 Agent 负载结构（§5.1）反向塑造模型架构的第一个信号。</li>
+  <li><b>KV 分 HBM/SSD 两个口径压缩（1/4 vs 1/8）</b>，说明 SSD 驻留层的 KV 格式与 HBM 层已经<b>解耦设计</b>（SSD 层压得更狠）——§9.3 的"多级存储"从运维手段变成了模型内置假设，与 Mooncake/ICM 的系统侧演进（§9.3）互相印证。</li>
+  <li><b>延续 §10.3 ③ 的担忧</b>：无 arXiv 报告、benchmark 为图片、无 RULER 类长上下文召回数据——"HBM 1/4 + 非对称激活是否付出召回/一致性代价"，截至本报告仍无一手数据可判。V4 系列的"精度债务可验证性"问题在 V4.1 上不仅没解决，反而因压缩倍数继续加大而更尖锐。</li>
+</ol>
+<blockquote><p><b>对主线的影响</b>：§5.2/§5.3 讲的 PD 解耦此前的实现都在<b>系统层</b>（Mooncake、DistServe、llm-d——不同卡跑同一个模型）；V4.1-Flash 把非对称做进了<b>模型本身</b>（同一套权重、两套激活子集）。这说明"训推负载分野"（§6）已经深到连前向计算图都要分叉的程度——它是 §8.4"训练与推理架构会分叉吗"这一开放问题迄今最实质性的一个数据点。</p></blockquote>
+
+<h4>mHC（Manifold-Constrained Hyper-Connections）是 2026 年另一个被低估的创新</h4>
+<p>🟢（arXiv:2512.24880）。它不改 attention 也不改 MoE，而是改<b>残差连接</b>：</p>
+<ul>
+  <li>把单一残差流换成 <b>4 条并行流</b>，用学习到的变换在流之间混合信息。</li>
+  <li>关键约束：混合矩阵被限制为<b>双随机矩阵（doubly stochastic）</b>——保证信息重分配稳定，避免信号幅度爆炸。</li>
+  <li>代价：训练时间 <b>+6.7%</b>；收益：早期 hyper-connection 实验显示<b>达到 baseline 指标只需约一半训练 token</b>。</li>
+</ul>
+<blockquote><p><b>为什么是"双随机矩阵"？（数学直觉）</b></p><p>双随机矩阵 = 每行和、每列和都为 1 的非负矩阵。它的关键性质是 <b>保持向量的"总量"守恒</b>：若混合矩阵 <code>M</code> 双随机，则 <code>M·x</code> 的元素和 = <code>x</code> 的元素和（<code>1ᵀMx = 1ᵀx</code>）。</p>
+<ul>
+  <li>对照普通 Hyper-Connections：无约束的混合矩阵会让信号幅度逐层<b>指数放大或衰减</b>（类似 §6.2 讲的梯度正反馈失控）。</li>
+  <li>双随机约束把混合限制在"信息重分配"而非"信息放大"——等价于一个<b>马尔可夫链的状态转移</b>，其平稳分布保证了跨深度的数值有界性（Birkhoff 定理：双随机矩阵是置换矩阵的凸组合，故谱半径 ≤ 1）。</li>
+</ul>
+<p>这就是 mHC 能在 <b>+6.7% 开销</b>下换来训练稳定性的根本原因：它用一条数学约束，把"多流残差"这个容易发散的设计强行拉回了收敛域。</p></blockquote>
+<blockquote><p><b>为什么重要</b>：当 attention/FFN 的压缩逼近极限时，<b>训练稳定性</b>成了新的短板。mHC 开辟了一条正交于"降算/降存"的第三战线——"降训练发散风险"。这是 §7.3"模型迭代 ≈ 芯片流片"判断的延伸：流片成本越高，越需要在架构层面买保险。</p></blockquote>
+
+<p><b>Hybrid SSM + MoE 的殊途同归</b>：2026 年 NVIDIA Nemotron 3 Nano、Qwen3.5、Mamba-3 三个独立团队都收敛到"混合状态空间模型 + 稀疏 MoE"。Qwen3.5（397B/17B，3:1 GDN + full attention，1M 上下文）是 Qwen3-Next 路线的生产级验证。这印证了 §2.6 的判断：<b>纯 Linear 不会取代 Hybrid，但 Hybrid 的 "Linear 占比" 会持续上升</b>。</p>
+<p><b>旗舰闭源模型的 2026 标配</b>：</p>
+<table>
+  <tr><th>模型</th><th>发布</th><th>上下文</th><th>架构披露</th></tr>
+  <tr><td>GPT-5.4</td><td>2026.03.05 🔴</td><td>1M（922K in / 128K out）🔴</td><td>MoE &gt;1T，细节<b>官方未公开</b>；跑在 GB200 NVL72 🟡</td></tr>
+  <tr><td>GPT-5.5</td><td>2026.04.23 🔴</td><td>1M 🔴</td><td>同上</td></tr>
+  <tr><td>Gemini 3.1 Pro</td><td>2026.02.19 🟡</td><td>1M in / 64K out 🟡</td><td>sparse MoE，原生多模态，从头训练 🟡</td></tr>
+  <tr><td>Claude Opus 4.6 / Sonnet 4.6</td><td>2026.02 🟡</td><td>200K 默认 + 1M beta 🟡</td><td>架构<b>官方未公开</b></td></tr>
+  <tr><td>Kimi K2.6</td><td>2026.04.20 🟡</td><td>262K 🟡</td><td>1T / 32B MoE 🟡</td></tr>
+</table>
+<blockquote><p>🔴 GPT-5.4/5.5 的发布日期与上下文拆分来自单一可疑来源（一篇 2023 年 arXiv 综述的 v4 修订），OpenAI 官方未逐项确认，<b>仅作趋势参考</b>。</p></blockquote>
+<p>→ <b>1M 上下文 + 稀疏 MoE 已从"卖点"变成"入场券"</b> 🟡。这反过来验证了本报告主线：容量短板逼迫所有玩家在同一时间窗口内完成 KV Cache 压缩。</p>
+
+<h3>9.2 低精度与压缩：从"推理 FP8"到"训练 FP4"</h3>
+<p>§3.6 预判的"FP4 进入生产"在 2026 年全面兑现，且<b>战线从推理推进到了训练</b>：</p>
+<p><b>① NVFP4 预训练成为现实</b> 🟢（NVIDIA, arXiv:2509.25149）：</p>
+<ul>
+  <li>12B 模型、10T token 训练，<b>NVFP4 与 FP8 baseline 精度相当</b>。</li>
+  <li>四个关键稳定性技术：
+    <ul>
+      <li><b>Random Hadamard Transform（RHT）</b>：把 block 级 outlier 旋转成近似高斯分布，从而 bounded（有界化）量化误差。</li>
+      <li><b>二维量化</b>：保证前向/反向表示一致。</li>
+      <li><b>Stochastic rounding</b>：梯度无偏估计。</li>
+      <li><b>选择性高精度层</b>：embedding / norm / 最后几层保留 FP8/BF16。</li>
+    </ul>
+  </li>
+  <li>意义：§3.6 的"低精度是正交于稀疏的第二战线"如今延伸到了训练侧——<b>FP4 训练把 §6.2"训练必须同构 bitwise"的约束也松动了</b>。</li>
+</ul>
+<p><b>② FP8 KV Cache 成为长上下文默认起点</b> 🟢（vLLM 官方工程博客, 2026.04）：</p>
+<table>
+  <tr><th>指标</th><th>数值</th></tr>
+  <tr><td>推理精度损失</td><td>推理类任务 1~2 点；1M 上下文恢复 baseline AUC 的 <b>97~98%</b></td></tr>
+  <tr><td>Decode 延迟斜率</td><td>降至 BF16 的<b>~54%</b></td></tr>
+  <tr><td>高并发吞吐</td><td>dense 模型<b>+~15%</b>，hybrid 模型小幅提升</td></tr>
+  <tr><td>关键修复</td><td>two-level accumulation（解决长上下文精度崩塌）、per-head scaling、layer-type skip</td></tr>
+</table>
+<p>→ §2.3 表格里"FP8 字节 656 B/token/layer"的口径，在 2026 年从"可选优化"变成了"工程默认"。</p>
+<p><b>③ 4-bit KV 与新量化算法</b> 🟡：</p>
+<ul>
+  <li><b>MXFP4</b>（microscaling）：硬件原生 4-bit，block-32 共享 scale。🟢</li>
+  <li><b>ARCQuant</b>（ACL 2026）：Augmented Residual Correction，给 NVFP4 加残差校正，进一步缩小精度损失。🟡</li>
+  <li><b>KIVI INT2 / SAW-INT4</b>：KV cache 极限量化，INT2 在 CoQA/GSM8K 上仅 ~1 点损失。🟡（具体掉点数字来自三方博客，未核对原论文）</li>
+  <li>判断 🟠：§4.4 成本因子表里的 <code>p_bytes</code> 因子，2026 年已从"2×（FP8）"推进到"4×（FP4）甚至 8×（INT2）"，但<b>4-bit 以下仍需 per-head/per-layer 的精细 scale 管理</b>，工程复杂度陡增。</li>
+</ul>
+
+<h3>9.3 Agent / RL 负载与 PD 解耦：从"prefix 命中"到"多级存储 + token 感知路由"</h3>
+<p>§5.1 引用的 vLLM×AgentX trace（中位输入 142K、prefix 命中 &gt;96%）在 2026 年被更大规模的实测进一步细化：</p>
+<p><b>TraceLab</b> 🟢（2026，coding agent 负载特征，arXiv:2606.30560）：</p>
+<table>
+  <tr><th>指标</th><th>数值</th><th>对 §5 结论的修正/细化</th></tr>
+  <tr><td>全局 prefix 命中率</td><td><b>95.7%</b></td><td>与 §5.1 一致</td></tr>
+  <tr><td>用户发起步骤命中率</td><td>显著更低</td><td><b>新发现</b>：人类停顿 &gt; 驱逐阈值 → cache miss</td></tr>
+  <tr><td>工具结果步骤命中率</td><td>接近 100%</td><td>工具链内部复用极好</td></tr>
+  <tr><td>单步历史 token</td><td><b>&gt;100K</b>，新增 &lt;1K</td><td>与 §5.1 一致</td></tr>
+  <tr><td>单步生成中位数</td><td><b>~200 token</b></td><td>比 §5.1 的 444 更短（工具调用把生成切碎）</td></tr>
+  <tr><td>历史重读成本占比</td><td><b>~60%</b></td><td><b>新发现</b>：prefix token 主导开销</td></tr>
+  <tr><td>单 prompt 平均模型调用</td><td><b>~9 次</b> + ~11 次工具执行</td><td>多轮自治循环</td></tr>
+</table>
+<p>→ <b>核心修正</b>：§5.1 说"成本大头是 KV 的存储与搬运"，TraceLab 进一步指出<b>"搬运"里 60% 是在重读历史</b>。这意味着优化重点从"压 KV 字节"进一步转向"<b>让重读更便宜</b>"——即多级存储与驱逐策略。</p>
+<p><b>Mooncake SSD Offloading</b> 🟢（2026，kvcache.ai 官方工程博客）：把 §5.2 的"HBM → DRAM → NVMe"三级存储从论文变成生产数据：</p>
+<table>
+  <tr><th>配置（8×A100，物理内存打满后）</th><th>Cache 命中率</th><th>TTFT</th></tr>
+  <tr><td>无 SSD 层</td><td><b>36%</b></td><td>16 s</td></tr>
+  <tr><td>有 SSD 层</td><td><b>84%</b></td><td>9.4 s</td></tr>
+</table>
+<ul>
+  <li>工程细节：每线程私有 <code>io_uring</code> 实例（避免锁竞争 + 请求批处理）、bucket-based 顺序布局 + offset allocator 细粒度布局、后台异步迁移不阻塞主线程。</li>
+  <li>Roadmap：<b>GPU Direct Storage</b>（绕过 host memory）+ 远程网络 fabric。</li>
+</ul>
+<p><b>llm-d 0.5</b> 🟡（CNCF Sandbox）：Kubernetes 原生的解耦推理框架，把 §5.2 的 PD 解耦从"大厂自研"变成"社区标准件"，重点是<b>尾延迟治理</b>（解耦架构下 tail latency 由最慢分片决定）。</p>
+<p><b>NVIDIA Inference Context Memory（ICM）Storage Platform</b> 🟡：基于 BlueField-4 DPU，把 KV cache 的分布式回收/复用做成<b>硬件卸载</b>——这是 §5.2"KVCache-centric 调度"的硬件化终局。</p>
+<p><b>Agentic RL 的新约束</b> 🟡：2026 年 RL 后训练的 GPU 成本被<b>多轮 agent rollout</b> 主导（WAR: Workload-Aware Rollouts）。rollout 之间的 KV 复用成为训练侧的新优化点——§8.4"训练/推理架构分叉"的判断在 RL 场景下提前显现：<b>训练侧也开始需要推理侧的 KV 管理技术</b>。</p>
+
+<h3>9.4 硬件：HBM4 时代与"推理专用化"的深化</h3>
+<p>§6 判断的"训推硬件分野"在 2026 年进入 HBM4 时代，且<b>推理专用化进一步细分</b>（硬件规格 🟢 来自厂商官方 newsroom / 发布会；Rubin CPX 取消 🟡 来自 GTC 2026 报道）：</p>
+<table>
+  <tr><th>硬件</th><th>发布</th><th>显存</th><th>带宽</th><th>低精度算力</th><th>定位</th></tr>
+  <tr><td><b>NVIDIA B300 / GB300 NVL72</b>（Blackwell Ultra）</td><td>2025 H2，2026 可租</td><td>288 GB HBM3e</td><td>8 TB/s</td><td>FP4 增强</td><td>训练 + 推理通用，<b>当前主力</b></td></tr>
+  <tr><td><b>NVIDIA Vera Rubin NVL72</b></td><td><b>2026 H2</b></td><td><b>288 GB HBM4</b></td><td><b>22 TB/s</b></td><td><b>50 PFLOPS NVFP4 推理 / 35 PFLOPS 训练</b></td><td>下一代通用，带宽 ~2.75× Blackwell</td></tr>
+  <tr><td><b>NVIDIA Rubin CPX</b></td><td><b>GTC 2026 取消</b> 🟡</td><td>（128 GB GDDR7）</td><td>—</td><td>（30 PFLOPS NVFP4）</td><td>曾计划"decode-only 长上下文专用卡"，<b>被取消</b></td></tr>
+  <tr><td><b>AMD MI455X / Helios</b></td><td><b>2026 H2</b></td><td><b>432 GB HBM4</b></td><td><b>23.3 TB/s</b></td><td><b>40 PFLOPS FP4 / 20 PFLOPS FP8</b></td><td>显存容量/带宽激进，Helios 机架 72 卡 = 31 TB HBM4 / 2.9 FP4 EFLOPS</td></tr>
+  <tr><td><b>Google TPU v7 Ironwood</b></td><td><b>2026.04 GA</b></td><td>192 GB HBM3e</td><td>7.37 TB/s</td><td>4.6 PFLOPS FP8（无 FP4）</td><td><b>推理专用</b>，9216-chip pod = 42.5 EFLOPS FP8</td></tr>
+</table>
+<p><b>三个关键判断</b>：</p>
+<ol>
+  <li><b>Rubin CPX 的取消是一个强信号</b>：NVIDIA 曾计划做"decode-only、GDDR7、无 HBM"的长上下文专用卡（§6.1 预判的"推理走向异构专用化"的极端形态），但在 GTC 2026 取消。原因推测：<b>通用 HBM4 卡（Rubin）的带宽提升已经覆盖了专用卡的收益空间</b>，且软件栈分裂成本过高。→ §6.1 的"异构专用化"有上限，<b>专用化必须跑赢通用卡的迭代速度才有意义</b>。</li>
+  <li><b>HBM4 把"容量短板"又往后推了一代</b>：MI455X 的 432 GB 单卡显存意味着 §4.2 的账本要重算——8×MI455X = 3.4 TB HBM，DeepSeek-V4-Pro（1.6T 权重，FP4 部署 ~800 GB）+ 1M 上下文 KV 可以<b>单机架装下</b>。→ <b>容量短板的缓解速度 vs Agent 上下文增长速度的赛跑仍在继续</b>。</li>
+  <li><b>TPU v7 无 FP4 是一个战略选择</b>：Ironwood 押注 FP8 + 超大 pod（9216 卡）+ 推理专用调度，而 NVIDIA/AMD 押注 FP4 + 机架级。这对应 §6.2"训练必须同构"的另一面——<b>推理可以异构，但异构的"粒度"（芯片级 vs 机架级 vs pod 级）本身就是战略分歧</b>。</li>
+</ol>
+
+<h4>对架构的反向影响：ridge point 在 HBM4 时代不降反升</h4>
+<p>一个容易写反、但方向至关重要的判断。从 Blackwell 到 Rubin，<b>带宽涨了 2.75×，但 FP4 算力涨了 5×</b>——算力跑得比带宽快，因此 ridge point（= 峰值算力 / 峰值带宽）<b>上升</b>而非下降：</p>
+<table>
+  <tr><th>硬件</th><th>精度</th><th>峰值算力</th><th>带宽</th><th>Ridge Point</th></tr>
+  <tr><td>H100 SXM</td><td>BF16</td><td>0.99 PFLOPS</td><td>3.35 TB/s</td><td>295 FLOPs/B</td></tr>
+  <tr><td>H200 SXM</td><td>BF16</td><td>0.99 PFLOPS</td><td>4.80 TB/s</td><td>206 FLOPs/B</td></tr>
+  <tr><td>B200</td><td>BF16</td><td>2.25 PFLOPS</td><td>8.0 TB/s</td><td>281 FLOPs/B</td></tr>
+  <tr><td>B200</td><td>NVFP4</td><td>~10 PFLOPS</td><td>8.0 TB/s</td><td><b>1250 FLOPs/B</b></td></tr>
+  <tr><td>Vera Rubin</td><td>NVFP4</td><td>~50 PFLOPS</td><td>22 TB/s</td><td><b>2273 FLOPs/B</b></td></tr>
+  <tr><td>MI455X</td><td>FP4</td><td>~40 PFLOPS</td><td>23.3 TB/s</td><td><b>1717 FLOPs/B</b></td></tr>
+</table>
+<blockquote><p>注：FP4 ridge 不能与 BF16 ridge 直接比（workload 的 AI 也随精度变化）；应<b>同精度跨代</b>比。B200→Rubin 的 NVFP4 ridge 从 1250 升到 2273（+82%）。</p></blockquote>
+
+<div class="fig">
+<svg viewBox="0 0 880 280" xmlns="http://www.w3.org/2000/svg">
+  <text x="170" y="28" font-size="11" fill="#5a6272">Ridge Point = 峰值算力 ÷ 峰值带宽（FLOPs / Byte）—— 越高，memory bound 区间越宽</text>
+  <text x="160" y="66" font-size="11" fill="#1a1f2e" text-anchor="end">H100 SXM · BF16</text>
+  <rect x="170" y="52" width="78" height="20" rx="3" fill="#c9d2e0"/>
+  <text x="256" y="66" font-size="11" fill="#1a1f2e">295</text>
+  <text x="160" y="100" font-size="11" fill="#1a1f2e" text-anchor="end">H200 SXM · BF16</text>
+  <rect x="170" y="86" width="54" height="20" rx="3" fill="#c9d2e0"/>
+  <text x="232" y="100" font-size="11" fill="#1a1f2e">206</text>
+  <text x="160" y="134" font-size="11" fill="#1a1f2e" text-anchor="end">B200 · BF16</text>
+  <rect x="170" y="120" width="74" height="20" rx="3" fill="#c9d2e0"/>
+  <text x="252" y="134" font-size="11" fill="#1a1f2e">281</text>
+  <text x="160" y="168" font-size="11" fill="#1a1f2e" text-anchor="end">B200 · NVFP4</text>
+  <rect x="170" y="154" width="330" height="20" rx="3" fill="#2456c4"/>
+  <text x="508" y="168" font-size="11" fill="#1a1f2e">1250</text>
+  <text x="160" y="202" font-size="11" fill="#1a1f2e" text-anchor="end">Vera Rubin · NVFP4</text>
+  <rect x="170" y="188" width="600" height="20" rx="3" fill="#163a86"/>
+  <text x="778" y="202" font-size="11" font-weight="bold" fill="#1a1f2e">2273</text>
+  <text x="160" y="236" font-size="11" fill="#1a1f2e" text-anchor="end">MI455X · FP4</text>
+  <rect x="170" y="222" width="453" height="20" rx="3" fill="#e8862a"/>
+  <text x="631" y="236" font-size="11" fill="#1a1f2e">1717</text>
+  <text x="170" y="262" font-size="10" fill="#5a6272">注：BF16 与 FP4 ridge 不可直接比较，应同精度跨代对比 —— B200 → Rubin（NVFP4）：1250 → 2273（+82%）</text>
+</svg>
+</div>
+<p class="cap"><b>图 6</b> · 各代硬件 Ridge Point。从 Blackwell 到 Rubin，带宽涨 2.75× 而 FP4 算力涨 5×，算力跑得比带宽快——ridge point 不降反升，memory bound 区间变宽。</p>
+
+<p><b>"图 2 的表格化"</b>：典型负载算术强度 × 各代硬件 ridge point → bound 判定（判定规则：AI &lt; ridge → memory bound；AI &gt; ridge → compute bound）：</p>
+<table>
+  <tr><th>典型负载</th><th>AI (FLOPs/B)</th><th>H100 BF16（ridge 295）</th><th>B200 NVFP4（ridge 1250）</th><th>Rubin NVFP4（ridge 2273）</th></tr>
+  <tr><td>权重流式 B=1（逐参数）</td><td>~2</td><td>memory</td><td>memory</td><td>memory</td></tr>
+  <tr><td>GQA decode（attn 部分，§2.3）</td><td>16</td><td>memory</td><td>memory</td><td>memory</td></tr>
+  <tr><td>MLA decode（attn 部分，§2.3）</td><td>125</td><td>memory</td><td>memory</td><td>memory</td></tr>
+  <tr><td>权重流式 B=128（FP8，§4.3）</td><td>256</td><td>memory</td><td>memory</td><td>memory</td></tr>
+  <tr><td>Prefill L=142K（全模型，§4.3）</td><td>~1×10³</td><td><b>compute</b>（1000 &gt; 295）</td><td><b>memory</b>（1000 &lt; 1250）</td><td><b>memory</b>（1000 &lt; 2273）</td></tr>
+</table>
+<p><i>读法：decode 侧全部负载在所有代都是 memory bound，且 ridge 越升（1250→2273）离算力墙越远；prefill 则在 H100 上是 compute bound、到 B200/Rubin <b>掉回 memory bound</b>——这就是 ridge 上移使 memory-bound 区间变宽的直接体现。特例：H200（ridge 206）比 H100 更"算力饥渴"，B=128 权重流式（AI=256）在其上反而算力 bound。</i></p>
+<p><b>结论与直觉相反，必须讲清</b>：</p>
+<ul>
+  <li>ridge point <b>上升</b> = memory bound 区间<b>变宽</b> = 低 AI 的 decode 负载相对算力<b>更加被带宽卡死</b>。</li>
+  <li>但正因为<b>算力相对带宽进一步过剩</b>，"用算力换带宽"的设计哲学（MLA 上投影、CSA/HCA 的压缩-重建、MTP 多算少读）的红利<b>不是收窄而是扩大</b>——多付出的 FLOPs 越来越便宜，省下的 bytes 越来越值钱。</li>
+  <li>这才是 §9.1 中 V4 敢把 KV 压到 V3.2 的 <b>10%</b>、把单 token FLOPs 压到 <b>27%</b> 的硬件层底气：<b>HBM4 时代，"压存储/压读取"的收益被算力过剩进一步放大</b>。</li>
+</ul>
+<blockquote><p>⚠️ 修正说明：本节早期版本曾误写为"ridge point 下降、用算力换带宽红利收窄"，方向恰好相反。复算脚本见附录 C。</p></blockquote>
+
+<!-- ================================================================ -->
+<h2 id="sec10">10. 结论：短板迁移的下一站</h2>
+<p>把 §1–§9 收束成一条主线，并回答"下一个短板是什么"。</p>
+
+<h3>10.1 三年压缩账本：一根主线贯穿始终</h3>
+<table>
+  <tr><th>时间</th><th>代表</th><th>1M 上下文单请求 KV</th><th>相对 Llama-405B</th><th>攻的因子（§4.4）</th></tr>
+  <tr><td>2024.07</td><td>Llama-3.1-405B (GQA, BF16)</td><td>504 GB</td><td>1×</td><td>基线</td></tr>
+  <tr><td>2024.12</td><td>DeepSeek-V3 (MLA, FP8)</td><td>39 GB</td><td>12.9×</td><td><code>d_stored</code> × <code>p_bytes</code></td></tr>
+  <tr><td>2025.09</td><td>DeepSeek-V3.2 (MLA+DSA)</td><td>47 GB（读取降至 1/5）</td><td>10.7×（存储）/ ~53×（读取）</td><td>+<code>L_ctx</code>（稀疏，常数）</td></tr>
+  <tr><td>2025.09</td><td>Qwen3-Next (Hybrid GDN)</td><td>24 GB + 固定状态</td><td>21×</td><td><code>L_layers_kv</code>（Hybrid）</td></tr>
+  <tr><td><b>2026.04</b></td><td><b>DeepSeek-V4-Pro (CSA+HCA)</b></td><td><b>~4.7 GB</b> 🟠</td><td><b>~107×</b></td><td><code>L_ctx</code> 被<b>改写</b>（token 维压缩，改变阶数）</td></tr>
+</table>
+<p><b>这张表就是全报告的浓缩</b>：每一代都在 §4.4 的成本因子上动一刀，而 2026 年的 V4 第一次直接改写了 <code>L_ctx</code> 因子本身（把"每 token 一条 KV"变成"每 m 个 token 一条"）——这是从"降常数"到"降阶数"的质变，与 §4.4 的核心结论（只有 NSA 级块压缩和 Linear Attention 改变阶数）完全吻合。</p>
+<p><b>轨迹拐点视角</b>（1M 上下文单请求 KV，对数跨越）：</p>
+<table>
+  <tr><th>时间</th><th>模型</th><th>1M ctx KV</th><th>相对上拐点</th><th>动作</th></tr>
+  <tr><td>2024.07</td><td>Llama-3.1-405B（GQA, BF16）</td><td><b>504 GB</b></td><td>起点</td><td>基线</td></tr>
+  <tr><td>2024.12</td><td>DeepSeek-V3（MLA, FP8）</td><td><b>39 GB</b></td><td>−13×</td><td>n_kv→1 + 精度 0.5×（降常数）</td></tr>
+  <tr><td>2025.09</td><td>V3.2（+DSA） / Qwen3-Next（GDN）</td><td><b>47 / 24 GB</b></td><td>+20% / −38%</td><td>非单调：indexer 加回少量 KV 换稀疏；GDN 砍 3/4 层</td></tr>
+  <tr><td>2026.04</td><td>DeepSeek-V4-Pro（CSA+HCA）</td><td><b>~4.7 GB</b> 🟠</td><td>−10×</td><td><b>token 维 m 压缩，改写 <code>L_ctx</code> 阶数</b></td></tr>
+</table>
+<p><i>读法：2024→2026 累计 ~107×。轨迹并非单调——V3.2 相比 V3-FP8 回升 20%，说明 DSA 是"用更多驻留换更少读取"；真正的斜率突变点只有 2026.04 的 V4，因为只有它改写的是阶数而非系数。</i></p>
+
+<h3>10.2 短板迁移的完整轨迹</h3>
+<pre><code class="nohighlight">计算 (2022前)  ──Dense 撞墙──▶  带宽 (2023-2024)  ──MLA/GQA──▶  容量 (2025)
+                                                                        │
+                                                          Hybrid/稀疏/FP8 │
+                                                                        ▼
+                                                    ┌──────────────────────────────┐
+                                                    │  2026：容量短板被"双向夹击"暂时缓解  │
+                                                    │  供给侧：HBM4（432GB/卡）+ FP4 训练 │
+                                                    │  需求侧：CSA/HCA 把 KV 压到 10%      │
+                                                    └──────────────────────────────┘
+                                                                        │
+                                              下一个短板浮现 ▼</code></pre>
+
+<h3>10.3 下一个短板是什么？三个候选</h3>
+<p>2026 年的进展把"容量"短板暂时压住后，报告识别出<b>三个正在浮现的新短板</b>，按确定性排序：</p>
+<p><b>① 训练稳定性（确定性最高，已被 mHC 验证）</b></p>
+<ul>
+  <li>当压缩逼近极限（KV 10%、FP4 训练），架构的发散风险成为主要矛盾。</li>
+  <li>mHC 的双随机约束、Muon 优化器、zero-centered LayerNorm 都是这条战线的产物。</li>
+  <li><b>判断</b>：§7.3"模型迭代 ≈ 芯片流片"的约束会越来越紧，"为训练稳定性买保险"会成为架构的一等目标，而非事后补救。</li>
+</ul>
+<p><b>② Prefix 不可复用性（被低估，对 Agent 致命）</b></p>
+<ul>
+  <li>§8.1 已指出：Linear Attention 的状态是<b>路径依赖</b>的，无法像 KV 那样按前缀切片共享。</li>
+  <li>而 §9.3 TraceLab 实测：Agent 负载 <b>95.7% prefix 命中、60% 成本是重读历史</b>——prefix 复用是 Agent 经济性的命脉。</li>
+  <li><b>矛盾</b>：越激进的 Linear/状态化压缩，越损害 prefix 复用。<b>这是 Hybrid 路线（而非纯 Linear）成为共识的深层原因</b>，也是 V4 选择"压缩 KV"而非"替换为状态"的关键——CSA/HCA 仍保留可按前缀切片的 KV 结构。</li>
+  <li><b>判断</b>：<code>prefix 可复用性</code> 会成为一个<b>显式的架构设计约束</b>，与"表达能力""存储成本"并列。</li>
+</ul>
+<p><b>③ 精度债务的可验证性（preview 时代的隐忧）</b></p>
+<ul>
+  <li>§9.1 已点明：V4 preview 版<b>未公布逐项 benchmark</b>，"10% KV 是否付出召回代价"无一手数据可判。</li>
+  <li>当压缩越来越激进，"掉点 0.5 分还是 2 分"的测量本身变得困难（§7.1 要求"能分辨 0.5 分的真实差异和噪声"）。</li>
+  <li><b>判断</b>：<b>长上下文召回的标准评测（RULER / 大海捞针 / 多跳推理）会成为架构激进度的"刹车片"</b>——没有可信评测，精度债务就无法定价，激进压缩就变成赌博。</li>
+</ul>
+
+<h3>10.4 一句话总结</h3>
+<blockquote><p><b>LLM 架构演进的本质，是一场"短板迁移"的接力赛：每解决一个瓶颈，就暴露下一个。2026 年，容量短板被 HBM4（供给）和 CSA/HCA（需求）双向夹击而暂时缓解，接力棒正交向"训练稳定性"与"prefix 可复用性"——而后者的特殊之处在于，它不是一个工程问题，而是一个会反向约束架构选择的"硬约束"。</b></p></blockquote>
+
+<!-- ================================================================ -->
+<h2 id="appa">附录 A · 关键模型参数速查</h2>
+<table>
+  <tr><th>模型</th><th>总参</th><th>激活</th><th>层数</th><th>Attention</th><th>FFN / MoE</th></tr>
+  <tr><td>Llama-2-70B</td><td>70 B</td><td>70 B</td><td>80</td><td>GQA：64 Q / 8 KV，d=128</td><td>Dense，d_ff=28672</td></tr>
+  <tr><td>Llama-3.1-405B</td><td>405 B</td><td>405 B</td><td>126</td><td>GQA：128 Q / 8 KV，d=128</td><td>Dense，d_ff=53248</td></tr>
+  <tr><td>Mixtral-8x7B</td><td>47 B</td><td>~13 B</td><td>32</td><td>MHA：32 heads</td><td>MoE：8 专家 top-2</td></tr>
+  <tr><td>DeepSeekMoE-16B</td><td>16.4 B</td><td>2.8 B</td><td>—</td><td>MHA</td><td>66 专家（2 共享 + 64 路由）激活 8</td></tr>
+  <tr><td>DeepSeek-V2</td><td>236 B</td><td>21 B</td><td>68</td><td><b>MLA</b></td><td>160 路由 + 2 共享，top-6，d_moe=1408</td></tr>
+  <tr><td><b>DeepSeek-V3</b></td><td><b>671 B</b></td><td><b>37 B</b></td><td><b>61</b></td><td><b>MLA</b>：d_c=512, d_r=64, 128 heads, d_qk=192, d_v=128</td><td><b>256 路由 + 1 共享，top-8，d_moe=2048</b>；前 3 层 Dense（d_ff=18432）</td></tr>
+  <tr><td>MiniMax-Text-01</td><td>456 B</td><td>45.9 B</td><td>80</td><td><b>Hybrid Lightning</b>：70 层 lightning + 10 层 softmax（7:1，由 <code>attn_type_list</code> 显式指定）</td><td>MoE：32 专家，top-2</td></tr>
+  <tr><td>Qwen3-Next-80B-A3B</td><td>80 B</td><td><b>3 B</b></td><td>48</td><td><b>GDN 36 层 + Gated Attn 12 层（3:1）</b><br>GDN：16 K heads / 32 V heads，d=128<br>Gated Attn：16 Q / 2 KV，d=256，RoPE=64</td><td><b>512 专家 + 1 共享，top-10，d_moe=512</b></td></tr>
+  <tr><td>Kimi-Linear-48B-A3B</td><td>48 B</td><td>3 B</td><td>—</td><td><b>KDA + MLA（3:1）</b>，KDA = GDN + 通道级门控 + DPLR 特化</td><td>MoE</td></tr>
+  <tr><td><b>DeepSeek-V3.2</b></td><td>671 B</td><td>37 B</td><td>61</td><td><b>MLA + DSA</b>：Lightning Indexer（64 heads × 128 dim，共享 K），<b>top-k=2048</b></td><td>同 V3</td></tr>
+  <tr><td><b>DeepSeek-V4-Pro</b>（2026.04）</td><td><b>1.6 T</b></td><td><b>49 B</b></td><td>—</td><td><b>CSA + HCA 混合</b>（压缩稀疏 + 重压缩稠密）+ <b>mHC</b> 残差</td><td><b>384 路由 + 1 共享，top-6</b>；Muon 优化器；32T token 训练</td></tr>
+  <tr><td><b>DeepSeek-V4-Flash</b>（2026.04）</td><td><b>284 B</b></td><td><b>13 B</b></td><td>—</td><td>同 V4-Pro</td><td>同 V4-Pro 路线</td></tr>
+  <tr><td><b>DeepSeek-V4.1-Flash</b>（2026.09）</td><td><b>552 B</b></td><td><b>非对称：输入 8B / 输出 16B</b></td><td>—</td><td><b>非对称 Causal Encoder-Decoder</b>（注意力细节官方未披露）</td><td>官方未披露专家配置；KV：HBM 1/4、SSD 1/8（vs 上一代）；新预训练方法 + 更大规模 RL 后训练</td></tr>
+  <tr><td>Qwen3.5（2026）</td><td>397 B</td><td>17 B</td><td>—</td><td><b>GDN + full attention（3:1）</b>，Qwen3-Next 生产级验证</td><td>sparse MoE</td></tr>
+  <tr><td>Kimi K2.6（2026.04）</td><td>1 T</td><td>32 B</td><td>—</td><td>长上下文优先</td><td>MoE</td></tr>
+  <tr><td>GPT-5.4 / 5.5（2026.03/04）</td><td>&gt;1 T（推测）</td><td>—</td><td>—</td><td>未公开，1M 上下文</td><td>MoE（推测），GB200 NVL72</td></tr>
+  <tr><td>Gemini 3.1 Pro（2026.02）</td><td>未公开</td><td>未公开</td><td>—</td><td>未公开，1M in / 64K out</td><td><b>sparse MoE</b>，原生多模态</td></tr>
+</table>
+<p>DeepSeek-V3.2 关键 config 字段：</p>
+<pre><code class="nohighlight">{
+  "num_hidden_layers": 61,       "num_attention_heads": 128,
+  "kv_lora_rank": 512,           "qk_rope_head_dim": 64,
+  "qk_nope_head_dim": 128,       "v_head_dim": 128,
+  "index_n_heads": 64,           "index_head_dim": 128,
+  "index_topk": 2048,
+  "n_routed_experts": 256,       "num_experts_per_tok": 8,
+  "n_shared_experts": 1,         "moe_intermediate_size": 2048,
+  "first_k_dense_replace": 3,    "intermediate_size": 18432,
+  "hidden_size": 7168,           "vocab_size": 129280
+}</code></pre>
+
+<!-- ================================================================ -->
+<h2 id="appb">附录 B · 术语表</h2>
+<table>
+  <tr><th>术语</th><th>全称</th><th>含义</th></tr>
+  <tr><td>MHA / MQA / GQA</td><td>Multi-Head / Multi-Query / Grouped-Query Attention</td><td>KV head 数依次为 n / 1 / n÷g</td></tr>
+  <tr><td>MLA</td><td>Multi-head Latent Attention</td><td>缓存低秩联合隐向量 c_kv + 解耦 RoPE key</td></tr>
+  <tr><td>SWA</td><td>Sliding Window Attention</td><td>只保留窗口内 token 的 KV，窗口外的驱逐</td></tr>
+  <tr><td>NSA</td><td>Native Sparse Attention</td><td>压缩 + 选择 + 滑窗三分支，硬件对齐、原生可训练</td></tr>
+  <tr><td>DSA</td><td>DeepSeek Sparse Attention</td><td>Lightning Indexer 打分 + top-k 精读</td></tr>
+  <tr><td>GDN</td><td>Gated DeltaNet</td><td>带遗忘门 + delta rule 的线性注意力</td></tr>
+  <tr><td>KDA</td><td>Kimi Delta Attention</td><td>GDN + 通道级门控 + DPLR 特化</td></tr>
+  <tr><td>DPLR</td><td>Diagonal-Plus-Low-Rank</td><td>状态转移矩阵结构，可 chunk-wise 并行</td></tr>
+  <tr><td>PD 解耦</td><td>Prefill/Decode Disaggregation</td><td>两阶段分别部署在不同硬件池</td></tr>
+  <tr><td>EP</td><td>Expert Parallelism</td><td>专家跨卡切分的并行方式</td></tr>
+  <tr><td>EPLB</td><td>EP Load Balancing</td><td>动态重排/复制热门专家以均衡负载</td></tr>
+  <tr><td>MTP</td><td>Multi-Token Prediction</td><td>单次前向预测多个 token，兼作投机解码</td></tr>
+  <tr><td>AI</td><td>Arithmetic Intensity</td><td>FLOPs / Bytes，Roofline 的横轴</td></tr>
+  <tr><td>Ridge Point</td><td>—</td><td>峰值算力 ÷ 峰值带宽，memory/compute bound 的分界</td></tr>
+  <tr><td>UE8M0</td><td>—</td><td>8 位指数 0 位尾数的 scale 格式，即"2 的幂缩放"</td></tr>
+  <tr><td>NVFP4 / MXFP4</td><td>—</td><td>4-bit 浮点格式，block size 16（E4M3 scale）/ 32（E8M0 scale）</td></tr>
+  <tr><td>CSA</td><td>Compressed Sparse Attention</td><td>DeepSeek-V4：每 m token 合并 + lightning indexer top-k 稀疏 + 滑窗</td></tr>
+  <tr><td>HCA</td><td>Heavily Compressed Attention</td><td>DeepSeek-V4：每 m′ token（m′≫m）重压缩 + 稠密 attention + 滑窗，不做稀疏</td></tr>
+  <tr><td>mHC</td><td>Manifold-Constrained Hyper-Connections</td><td>多并行残差流 + 双随机混合矩阵约束，提升训练稳定性</td></tr>
+  <tr><td>RHT</td><td>Random Hadamard Transform</td><td>FP4 训练中旋转 outlier 以 bounded 量化误差</td></tr>
+  <tr><td>ICM</td><td>Inference Context Memory</td><td>NVIDIA BlueField-4 卸载的分布式 KV 存储/回收平台</td></tr>
+</table>
+
+<!-- ================================================================ -->
+<h2 id="appc">附录 C · 参考资料</h2>
+
+<h4>Attention 架构</h4>
+<ul class="refs">
+  <li>DeepSeek-AI. <i>DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model</i>. 2024.（MLA 首次大规模落地）</li>
+  <li>DeepSeek-AI. <i>NSA: A Hardware-Aligned and Natively Trainable Sparse Attention for Large Language Models</i>. arXiv:2502.11089, ACL 2025.</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V3.2: Pushing the Frontier of Open Large Language Models</i>. arXiv:2512.02556.（DSA / Lightning Indexer）</li>
+  <li>Moonshot AI. <i>Kimi Linear: An Expressive, Efficient Attention Architecture</i>. arXiv:2510.26692.</li>
+  <li>Qwen Team. <i>Qwen3-Next-80B-A3B</i> Model Card &amp; 技术博客.（Gated DeltaNet + Gated Attention 3:1）</li>
+  <li>MiniMax. <i>MiniMax-01: Scaling Foundation Models with Lightning Attention</i>. arXiv:2501.08313.</li>
+  <li>Google. <i>Gemma 3 Technical Report</i>. arXiv:2503.19786.（SWA : Global = 5:1）</li>
+  <li>Yang et al. <i>Gated Delta Networks: Improving Mamba2 with Delta Rule</i>.（GDN 理论基础）</li>
+</ul>
+
+<h4>FFN / MoE</h4>
+<ul class="refs">
+  <li>DeepSeek-AI. <i>DeepSeekMoE: Towards Ultimate Expert Specialization in Mixture-of-Experts Language Models</i>. arXiv:2401.06066.（细粒度专家 + 共享专家；40.5% 计算量对标 Llama2-7B）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V3 Technical Report</i>. arXiv:2412.19437.（671B/37B、无辅助损失负载均衡、FP8 训练）</li>
+  <li>Fedus et al. <i>Switch Transformers</i>. 2021. / Lepikhin et al. <i>GShard</i>. 2020. / Zhou et al. <i>Expert Choice Routing</i>. 2022.</li>
+</ul>
+
+<h4>系统与低精度</h4>
+<ul class="refs">
+  <li>Moonshot AI. <i>Mooncake: A KVCache-centric Disaggregated Architecture for LLM Serving</i>. arXiv:2407.00079.</li>
+  <li>Zhong et al. <i>DistServe: Disaggregating Prefill and Decoding for Goodput-optimized LLM Serving</i>.</li>
+  <li>vLLM Blog. <i>DeepSeek-V3.2-Exp in vLLM: Fine-Grained Sparse Attention in Action</i>. 2025-09-29.（MLA FP8 KV = 656 B/token/layer 的实测口径、indexer cache 布局）</li>
+  <li>vLLM Blog. <i>vLLM x AgentX: Optimizing for Real-World Agentic Serving</i>. 2026-09-08.（Agent 负载 trace：输入中位 142K、输出 444、prefix 命中 &gt;96%）</li>
+  <li>vLLM Docs. <i>Hybrid KV Cache Manager</i>.</li>
+  <li>NVIDIA. <i>Introducing NVFP4 for Efficient and Accurate Low-Precision Inference</i>. Developer Blog.</li>
+  <li>LMSYS. <i>Deploying DeepSeek with PD Disaggregation and Large-Scale Expert Parallelism</i>. 2025-05-05.</li>
+</ul>
+
+<h4>2026 年新增（§9 专题）</h4>
+<ul class="refs">
+  <li>DeepSeek-AI. <i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Language Models</i>. arXiv:2606.19348.（CSA + HCA + mHC + Muon；V4-Pro 1.6T/49B、V4-Flash 284B/13B；vs V3.2：27% FLOPs / 10% KV）</li>
+  <li>DeepSeek. <i>DeepSeek-V4.1-Flash: Smarter, Faster, More Efficient</i>. 官方 Newsroom / API Docs 更新日志, 2026-09-10.（552B MoE；非对称 Causal Encoder-Decoder：prefill 激活 8B / decode 激活 16B；KV HBM 1/4、SSD 1/8；闲时半价定价；benchmark 仅图片呈现，无 arXiv 技术报告）</li>
+  <li>DeepSeek-AI. <i>mHC: Manifold-Constrained Hyper-Connections</i>. arXiv:2512.24880.（4 并行残差流 + 双随机约束，+6.7% 训练开销，~½ 训练 token 达 baseline）</li>
+  <li>NVIDIA. <i>Pretraining Large Language Models with NVFP4</i>. arXiv:2509.25149.（12B/10T token，RHT + 2D 量化 + stochastic rounding + 选择性高精度层）</li>
+  <li>vLLM Project. <i>The State of FP8 KV-Cache and Attention Quantization in vLLM</i>. 2026-04-22.（two-level accumulation、per-head scaling；decode 延迟斜率 ~54%，1M 上下文 97~98% baseline AUC）</li>
+  <li>TraceLab. <i>Characterizing Coding Agent Workloads for LLM Serving</i>. arXiv:2606.30560.（prefix 命中 95.7%，历史重读占 ~60% 成本，单 prompt ~9 次模型调用）</li>
+  <li>Moonshot AI / kvcache.ai. <i>Scaling KV Cache Beyond Memory with Mooncake SSD Offloading</i>. 2026.（8×A100：无 SSD 命中 36%/TTFT 16s → 有 SSD 84%/9.4s；io_uring + GPU Direct Storage roadmap）</li>
+  <li>llm-d. <i>llm-d 0.5: Sustaining Performance at Scale</i>. 2026.（CNCF Sandbox，K8s 原生 PD 解耦，尾延迟治理）</li>
+  <li>NVIDIA. <i>Inside the Vera Rubin Platform / Rubin CPX</i>. Developer Newsroom, 2026.（Rubin：288 GB HBM4、22 TB/s、50 PFLOPS NVFP4；Rubin CPX 于 GTC 2026 取消）</li>
+  <li>AMD. <i>Instinct MI400 Series / Helios</i>. AAI 2026.（MI455X：432 GB HBM4、23.3 TB/s、40 PFLOPS FP4；Helios 72 卡 = 31 TB / 2.9 FP4 EFLOPS）</li>
+  <li>Google. <i>Ironwood: The First TPU for the Age of Inference</i> + SemiAnalysis <i>TPUv7</i>. 2026.（192 GB HBM3e、7.37 TB/s、4.6 PFLOPS FP8、9216-chip pod = 42.5 EFLOPS）</li>
+  <li>Sebastian Raschka. <i>Recent Developments in LLM Architectures: KV Sharing, mHC, and …</i>. 2026.（mHC 与 hybrid SSM+MoE 收敛的综述视角）</li>
+</ul>
+
+<h4>本报告的一阶推导</h4>
+<p>（基于公开 config，可用脚本复算）</p>
+<ul class="refs">
+  <li>KV Cache 字节数、Roofline ridge point、临界 batch、DSA/NSA 带宽估算、Prefill FLOPs 分解、MoE 专家覆盖率期望、参数量账本核对（DeepSeek-V3 复算 670.9B/37.4B，与官方 671B/37B 一致）。</li>
+</ul>
+
+<h4>配表数据复算脚本</h4>
+<ul class="refs">
+  <li><code>report-assets/gen_charts.py</code> 包含正文三张数据表的全部底层数字：§4.1 跨代 KV 浓缩对照（KB/token）、§9.4 各代硬件 ridge point 与负载 AI 落点、§10.1 时间轨迹拐点。运行 <code>python3 report-assets/gen_charts.py</code> 可复算全部数值（脚本附带的图形渲染仅为离线可视化辅助，正文统一以表格呈现）。</li>
+</ul>
+
+<footer>生成于 2026-09-20 · 基于《LLM 架构演进技术报告》全文转换 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以各模型 Technical Report 与官方 config 为准，推断与三方数据已逐条标注可信度（🟢/🟡/🟠/🔴）</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
