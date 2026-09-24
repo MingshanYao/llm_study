@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek-V4.1 零基础七讲 · 第 5 讲：预训练——45T token 多模态语料是怎么炼成的</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DeepSeek-V4.1 零基础七讲 · 第 5 讲：预训练——45T token 多模态语料是怎么炼成的</h1>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>日期：</b>2026-09-20　<b>范围：</b>DeepSeek-V4.1-Flash 技术报告 §4 Pre-Training（印刷页 20–25），含 §4.1 数据构建、§4.2 预训练设置、§4.3 基座评测；并借用 §1 引言与 §2/§3 的少量背景。</p>
+  <p style="margin:4px 0"><b>依据：</b><i>DeepSeek-V4.1-Flash 技术报告</i>，本地 PDF：<code>paper/deepseek_v41.pdf</code>（51 页）。本讲所有数字均出自该 PDF；论文未写明的地方已明确标注。</p>
+  <p style="margin:4px 0"><b>姊妹篇：</b><a href="deepseek-v41-t0-overview.html">第 0 讲·总览</a>（全景）｜<a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a>（8B/16B 激活的来历）｜<a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a>｜<a href="deepseek-v41-t3-extensions.html">第 3 讲·架构扩展</a>（FP4 KV、Engram、DSpark）｜<a href="deepseek-v41-t4-infra.html">第 4 讲·基础设施</a>｜<a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a></p>
+  <p style="margin:4px 0"><b>背景报告：</b>MoE 原理见 <a href="moe-t1-basics.html">MoE 基础</a> 与 <a href="deepseek-moe.html">DeepSeek MoE 演进</a>；V4 一代架构见 <a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>。</p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>预训练就是把一个"什么都不会"的模型，用海量文本反复做"猜下一个词"的练习，直到它把世界知识压进参数里。DeepSeek-V4.1-Flash 这一次练习用了 <b>45T（45 万亿）token 的多模态语料</b>（文本 : 多模态 = <b>7 : 1</b>），全程零训练事故，训练后期在 34T token 处把上下文从 64K 扩到 <b>1M</b>。模型主干 <b>552B 参数（MoE）</b>，prefill 每 token 只激活 <b>8B</b>、decode 激活 <b>16B</b>。最终基座模型用 1/3 的总参数量、1/4 的激活参数量，把世界知识、推理、代码能力做到了与 1.6T 的 DeepSeek-V4-Pro-Base 基本持平，在内部留存集（held-out）评测上还有 <b>5%–10%</b> 的提升；代价是多语言数学（MGSM 80.2）与部分知识类基准上仍落后于更小或更老的兄弟模型。本讲按"数据 → 模型 → 训练 → 评测"的顺序把这 45T token 的修炼过程讲清楚。</p>
+</div>
+
+<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 18px;margin:20px 0;font-size:0.92em;">
+<b>系列导航 · DeepSeek-V4.1 零基础七讲</b>
+<div style="margin-top:6px;line-height:2.1">
+<a href="deepseek-v41-t0-overview.html">第 0 讲·总览</a> ｜ <a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a> ｜ <a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a> ｜ <a href="deepseek-v41-t3-extensions.html">第 3 讲·架构扩展</a> ｜ <a href="deepseek-v41-t4-infra.html">第 4 讲·基础设施</a> ｜ <span style="background:#eef3fc;color:#2456c4;border-radius:999px;padding:2px 12px;font-weight:700">第 5 讲·预训练（本篇）</span> ｜ <a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>
+</div>
+</div>
+
+<nav style="background:#f4f7fd;border:1px solid var(--line);border-radius:10px;padding:12px 20px;margin:20px 0;font-size:0.92em;">
+<b>本讲目录</b>
+<ol style="margin:6px 0 0;padding-left:22px;">
+  <li><a href="#s1">一分钟铺路：预训练是什么</a></li>
+  <li><a href="#s2">数据构建（§4.1）：45T token 从哪来</a></li>
+  <li><a href="#s3">模型设置（§4.2.1）：552B MoE 主干长什么样</a></li>
+  <li><a href="#s4">训练设置（§4.2.2）：怎么把这 45T token 喂进去</a></li>
+  <li><a href="#s5">基座评测（§4.3）：结果表怎么看</a></li>
+  <li><a href="#s6">训练中的关键观察</a></li>
+  <li><a href="#s7">本讲小结与自测</a></li>
+  <li><a href="#s8">参考来源</a></li>
+</ol>
+</nav>
+
+<h2 id="s1">1. 一分钟铺路：预训练是什么</h2>
+
+<p>一个 LLM 最早期的训练叫<b>预训练（pre-training）</b>：给模型看海量文本，每个位置都让它猜"下一个 token（词元）是什么"，猜错了就微调参数。<b>token</b> 可以理解为"字/词的碎片"，是模型处理文本的最小单位。这个目标在数学上叫<b>下一 token 预测</b>（next-token prediction）：</p>
+
+<div class="fig formula">
+\[
+\mathcal{L}_{\text{PT}} \;=\; -\sum_{t=1}^{n} \log P_\theta\!\left(x_t \mid x_{&lt;t}\right)
+\]
+<p class="cap">预训练目标（通识形式，论文 §4 采用的即此目标）：把整段文本 \(x_1 x_2 \cdots x_n\) 逐位置求"猜对下一个 token"的负对数概率并求和。</p>
+</div>
+
+<p>逐符号解释：\(x_t\) 是第 \(t\) 个 token；\(x_{&lt;t}\) 是它前面已经出现的所有 token；\(P_\theta(x_t \mid x_{&lt;t})\) 是参数为 \(\theta\) 的模型在看完前缀后给"正确答案 \(x_t\)"打的概率——这个概率越接近 1，\(\log\) 越接近 0，损失越小；\(\sum_{t=1}^{n}\) 表示把这段文本里每个位置的损失加起来。训练就是不断调 \(\theta\) 让这个数变小。</p>
+
+<p>为什么说"数据决定上限"？因为预训练的命题本质是<b>压缩</b>：模型在参数里压缩的是训练语料中的知识、语言规律和推理模式。语料里没有的东西，模型很难"无中生有"；语料里有大量重复、低质的内容，压缩空间就被浪费了。这就是为什么本讲花最大篇幅讲数据。后训练（SFT/RL，见第 6 讲）是在这个底子上"激发"能力，而底子有多厚，是预训练决定的。</p>
+
+<p>DeepSeek-V4.1-Flash 这次预训练的一个特殊之处：它是<b>原生多模态</b>的——文本、图像（以及与图像交错的文字）从预训练阶段就一起喂进同一个主干模型，而不是先训一个纯文本模型、再"外挂"一个视觉模块（论文 §4.3.2 明确称之为 native multimodal training）。多模态语料怎么来、怎么清洗、怎么配比，是下一节的主角。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 370" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, sans-serif" font-size="13">
+  <defs>
+    <marker id="ar1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="30" y="20" font-size="12" fill="#5a6272">支线：视觉编码器单独训练（§4.2.2 Vision Encoder Training）</text>
+  <rect x="30" y="30" width="180" height="58" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="120" y="53" text-anchor="middle">① 对比预训练</text>
+  <text x="120" y="72" text-anchor="middle" font-size="12">47B 图文对 · 224×224</text>
+  <line x1="210" y1="59" x2="248" y2="59" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
+  <rect x="250" y="30" width="200" height="58" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="350" y="53" text-anchor="middle">② 自回归微调</text>
+  <text x="350" y="72" text-anchor="middle" font-size="12">接 4B MoE LLM · 236B token</text>
+  <line x1="450" y1="59" x2="488" y2="59" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
+  <rect x="490" y="30" width="170" height="58" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="575" y="53" text-anchor="middle">③ 丢弃 LLM</text>
+  <text x="575" y="72" text-anchor="middle" font-size="12">只保留优化后的 ViT</text>
+  <path d="M 575 88 L 575 150 L 720 150" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#ar1)"/>
+  <text x="700" y="20" font-size="12" fill="#5a6272">主线：语言主干预训练（§4.1–§4.2）</text>
+  <rect x="30" y="150" width="150" height="64" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="105" y="176" text-anchor="middle">文本语料清洗</text>
+  <text x="105" y="196" text-anchor="middle" font-size="12">过滤隐式重复等</text>
+  <line x1="180" y1="182" x2="208" y2="182" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
+  <rect x="210" y="150" width="180" height="64" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="300" y="176" text-anchor="middle">多模态语料清洗</text>
+  <text x="300" y="196" text-anchor="middle" font-size="12">图文对 / 交错 / 领域数据</text>
+  <line x1="390" y1="182" x2="418" y2="182" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
+  <rect x="420" y="150" width="170" height="64" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="505" y="176" text-anchor="middle">合并去重</text>
+  <text x="505" y="196" text-anchor="middle" font-size="12">文本 : 多模态 = 7 : 1</text>
+  <line x1="590" y1="182" x2="618" y2="182" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
+  <rect x="620" y="150" width="210" height="64" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="725" y="172" text-anchor="middle">主干预训练</text>
+  <text x="725" y="191" text-anchor="middle" font-size="12">45T token · 64K 起步</text>
+  <text x="725" y="207" text-anchor="middle" font-size="12">34T 处扩到 1M 上下文</text>
+  <line x1="725" y1="214" x2="725" y2="268" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
+  <rect x="620" y="270" width="210" height="56" rx="8" fill="#f4f7fd" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="725" y="293" text-anchor="middle">DeepSeek-V4.1-Flash-Base</text>
+  <text x="725" y="312" text-anchor="middle" font-size="12">552B 主干 → §4.3 评测</text>
+</svg>
+<p class="cap"><b>图 1</b>：预训练全景（对应论文 §4 全章）。上方支线是视觉编码器 DeepSeek-ViT 的两阶段单独训练，产物注入下方主线；主线是"文本 + 多模态语料 → 7:1 合并 → 45T token 预训练 → 基座模型"。细节分别在本文第 2、3、4 节展开。</p>
+</div>
+
+<h2 id="s2">2. 数据构建（§4.1）：45T token 从哪来</h2>
+
+<h3>2.1 文本数据：从"单条好不好"到"整体配比好不好"</h3>
+
+<p>论文在文本数据上的第一句话就很有信息量：为了追求更高智能，他们<b>超越了小规模数据实验所反映的"单样本质量"</b>，转而关注<b>不同语料之间的整体交互</b>——每种语料能提供什么<b>独特的信息增益</b>。打个比方：不是问"这颗食材新鲜吗"，而是问"这一桌菜搭配起来营养全不全"。</p>
+
+<p>围绕这个理念，论文列出了四件具体的事：</p>
+<ul>
+  <li><b>设计"缩放阶梯"（scaling ladder）</b>：在"模型参数量 × 训练数据量"上设计一套由小到大的阶梯式实验，用更全面的评测来指导真正的大规模训练。<span class="infer">论文只说"carefully designed to guide large-scale training runs"，未展开阶梯的具体档位；这是业界常见的"先训小模型扫参、再放大"的做法，但具体如何实施属于论文未披露细节。</span></li>
+  <li><b>过滤"模型生成内容"（model-generated content）</b>：把低能力模型产生的输出、低质量机器翻译文本筛掉。论文给了一个有意思的说法：这类内容是<b>"隐式重复"（implicit duplication）</b>——它们本质上是在换着花样复述已有信息，训练久了反而有害。</li>
+  <li><b>model-in-the-loop 数据迭代</b>：让模型参与数据构建的闭环迭代，作为未来大规模<b>合成数据</b>的基础。注意论文的措辞是"探索"（explore）且定位为"为未来打基础"——本代预训练的多模态部分明确<b>没有</b>做大规模合成（见 2.2 节）。</li>
+  <li><b>引入更多领域专家</b>：让专家参与构建更细粒度的数据质量评估维度。</li>
+  <li><b>代码语料更新</b>：相比上一代，新语料纳入了更多<b>新近发布的开源仓库、commit、库和新兴框架</b>，覆盖更多编程语言，更贴近当代真实软件工程场景。</li>
+</ul>
+
+<h3>2.2 多模态数据：三类数据 + 一条"递增成本"的漏斗</h3>
+
+<p>多模态预训练语料由三类构成（论文 §4.1 Multimodal Data Curation）：</p>
+<ol>
+  <li><b>图文对（image-text pairs）</b>：一张图配一段描述它的文字；</li>
+  <li><b>图文交错数据（interleaved image-text data）</b>：像图文并茂的网页/教材那样，图片和文字穿插出现；</li>
+  <li><b>领域专用数据（domain-specific data）</b>：补齐网络抓取数据的短板的专项数据。</li>
+</ol>
+
+<p>一个大方向值得先说：论文明确表示<b>"放弃了大规模数据合成"</b>——前提判断是"原始网络数据天然富含多模态知识"，所以优先<b>清洗并原样利用</b>（native form），追求"最直接、最可扩展的视觉知识压缩"。<span class="infer">这与第 6 讲的后训练形成鲜明对照：后训练几乎全靠合成数据与环境构建，而预训练多模态主打"清洗原生数据"。两处的取舍逻辑不同：预训练要的是互联网级规模的天然知识分布，后训练要的是可验证的任务。</span></p>
+
+<p>数据来源上还有一个小插曲：他们最初发现爬虫系统<b>过度偏向以文本为中心的网页</b>，于是<b>从 Common Crawl 重新引导（re-bootstrap）了爬虫</b>，以覆盖更多含图、含视频的多模态网页。（注：本报告未在 §4.1 正文检索到对视频/音频模态数据管线的具体描述，论文本节实际展开的是图文类数据，读者如关心视频/音频请以论文原文披露为准。）</p>
+
+<p>三类数据各自的清洗方式：</p>
+<ul>
+  <li><b>图文对</b>：从网页提取图片及其 <b>alt text</b>（网页里给图片配的文字说明，图片挂了时显示的那段话），用<b>图文相关性阈值</b>过滤，再按<b>图像语义</b>去重（即"两张图看起来内容一样"就算重复，而不是 URL 一样才算）。</li>
+  <li><b>图文交错数据</b>：主要来自网页和 PDF。论文特别指出：大规模多模态语料处理的 CPU 与磁盘成本远高于纯文本，所以把构建流程组织成<b>"成本递增的多级阶段"</b>——先用便宜的手段砍掉绝大部分，再对幸存者上昂贵的手段。具体是：图像检索前先做<b>启发式与统计过滤、去重、质量模型</b>筛选高价值文档 → 幸存文档拼装成图文交错序列 → 再做一轮<b>图像感知（image-aware）的过滤与去重</b> → 最后用 <b>SmolVLM</b>（一个轻量开源视觉语言模型）对图文内容做<b>严格质量打分</b>，抽出高质量交错数据。</li>
+  <li><b>领域专用数据</b>：为弥补网络数据固有缺陷，加入提升<b>细粒度视觉感知</b>（如视觉定位 visual grounding 与指向 pointing）、<b>OCR</b>（光学字符识别，即把图片里的文字读出来）、<b>长尾知识</b>（冷门但有用的知识）的数据；另外还收集了大量<b>图文代码对（image-code pairs）</b>和<b>计算机使用轨迹（computer-use trajectories）</b>来增强多模态智能体（agentic）理解。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 860 330" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, sans-serif" font-size="13">
+  <defs>
+    <marker id="ar2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="30" y="18" font-size="12" fill="#5a6272">成本递增：越往下越贵，但处理的文档越少</text>
+  <rect x="90" y="28" width="560" height="34" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="370" y="50" text-anchor="middle">网页 / PDF 原始文档（从 Common Crawl 重新引导爬虫）</text>
+  <line x1="370" y1="62" x2="370" y2="76" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <rect x="130" y="78" width="480" height="34" rx="6" fill="#e7eefb" stroke="#2456c4"/>
+  <text x="370" y="100" text-anchor="middle">启发式 + 统计过滤 · 去重 · 质量模型 → 选出高价值文档</text>
+  <line x1="370" y1="112" x2="370" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <rect x="165" y="128" width="410" height="34" rx="6" fill="#dde8f8" stroke="#2456c4"/>
+  <text x="370" y="150" text-anchor="middle">拼装成图文交错序列</text>
+  <line x1="370" y1="162" x2="370" y2="176" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <rect x="200" y="178" width="340" height="34" rx="6" fill="#cfdcf5" stroke="#2456c4"/>
+  <text x="370" y="200" text-anchor="middle">图像感知（image-aware）的过滤与去重</text>
+  <line x1="370" y1="212" x2="370" y2="226" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <rect x="235" y="228" width="270" height="34" rx="6" fill="#c2d2f2" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="370" y="250" text-anchor="middle">SmolVLM 严格质量打分</text>
+  <line x1="370" y1="262" x2="370" y2="276" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <rect x="255" y="278" width="230" height="34" rx="6" fill="#2456c4"/>
+  <text x="370" y="300" text-anchor="middle" fill="#ffffff">高质量图文交错数据</text>
+  <path d="M 505 245 C 610 245 620 190 660 185" fill="none" stroke="#9a7b1c" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ar2)"/>
+  <rect x="655" y="160" width="190" height="52" rx="8" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="750" y="182" text-anchor="middle" font-size="12">被淘汰的文档</text>
+  <text x="750" y="201" text-anchor="middle" font-size="12">部分回收为图文对</text>
+</svg>
+<p class="cap"><b>图 2</b>：多模态交错数据的"成本递增漏斗"（依据论文 §4.1 Multimodal Data Curation 段落绘制）。漏斗主体层层收窄，越靠后的环节越昂贵（SmolVLM 打分最贵），因此放在最后只处理幸存者；黄色虚线是"废料回收"：被淘汰的文档经筛选重组后部分变成图文对数据，不浪费。</p>
+</div>
+
+<h3>2.3 合并与去重：7 : 1 的最终配比</h3>
+
+<p>文本与多模态数据走的是<b>两条独立管线</b>，最终训练语料取两者的<b>并集</b>。对重叠样本：用<b>多模态版本替换</b>纯文本版本（一张带 alt text 的网页当然比纯文字版信息多），并采用两条管线中<b>较大的 epoch 数</b>（epoch = 数据被完整过一遍的次数）。替换之后，最终语料的 token 配比为：</p>
+
+<div class="fig formula">
+\[
+\underbrace{7}_{\text{纯文本}} : \underbrace{1}_{\text{多模态}} \qquad \text{（按 token 数计，论文 §4.1 Data Integration and Deduplication）}
+\]
+</div>
+
+<p>其余三个工程细节：① 预训练与上下文扩展阶段之间<b>联合预取并分配样本</b>，把两个阶段的样本重叠降到最低（同一篇文档尽量不在两个阶段重复出现）；② <b>超长文档在混合前做确定性预切分</b>，保证训练 token 在数据分片和训练步之间均匀分布；③ 持续优化 packing（把多条样本拼进定长训练序列的装箱算法），把<b>填充率（padding rate）压到不超过 \(10^{-4}\)</b>——一万个 token 的预算里浪费的填充位不到 1 个，几乎零浪费。</p>
+
+<h2 id="s3">3. 模型设置（§4.2.1）：552B MoE 主干长什么样</h2>
+
+<p>先解释两个词。<b>MoE（Mixture-of-Experts，混合专家）</b>：把模型里的前馈层换成很多个"专家"小网络，每个 token 只请少数几位专家干活，从而"总参数很大、每次计算很小"（详见 <a href="moe-t1-basics.html">MoE 基础篇</a>与 <a href="deepseek-moe.html">DeepSeek MoE 演进</a>）。<b>激活参数</b>：每个 token 实际参与计算的那部分参数量。V4.1-Flash 的总参数（backbone）是 552B，但每个 token 激活的只有 8B（prefill，读入阶段）或 16B（decode，生成阶段）——这就是"Flash"名字的由来。</p>
+
+<h3>3.1 超参数全表</h3>
+
+<p>下表逐项复现论文 §4.2.1 Model Setups 的数字（CED/CSA2 机制本身在 <a href="deepseek-v41-t1-ced.html">第 1 讲</a>、<a href="deepseek-v41-t2-csa2.html">第 2 讲</a>展开，此处只给"说明书"）：</p>
+
+<table>
+<tr><th>类别</th><th>项目</th><th>取值</th></tr>
+<tr><td rowspan="2">整体</td><td>Transformer 层数 / 隐藏维 \(d\)</td><td>40 层 / 5120（编码器 20 层 + 解码器 20 层，CED 架构）</td></tr>
+<tr><td>总参数 / 激活参数</td><td>552B 主干；prefill 每 token 激活 8B，decode 激活 16B</td></tr>
+<tr><td rowspan="3">注意力布局</td><td>编码器</td><td>前 2 层纯滑动窗口注意力（SWA）；其余 18 层为 CSA2，压缩率 \(m=2\)，分 3 组（每组 6 层）：每组第 1 层 Full Mode，其余 5 层 Reuse Mode</td></tr>
+<tr><td>解码器</td><td>20 层均为 CSA2，压缩率 \(m=1\)，分 5 组（每组 4 层）：第 1 组为 1 层 Full + 3 层 Reuse；其余 4 组均为 1 层 Reindex + 3 层 Reuse</td></tr>
+<tr><td>SWA 窗口 \(n_{\text{win}}\)</td><td>128</td></tr>
+<tr><td rowspan="3">注意力细部</td><td>Indexer（索引器）</td><td>查询头 32 个，每头维度 128；注意力 top-k = 512（每查询选中 512 条 KV entry 做稀疏注意力）</td></tr>
+<tr><td>主注意力</td><td>查询头 64 个，每头维度 512；查询压缩维度 1280；输出投影组数 8，每组中间注意力输出维度 1024</td></tr>
+<tr><td>分层稀疏索引器（Hierarchical Sparse Indexer）</td><td>最多选 2,048 个 block × 每 block 8 个位置 = 最多 16,384 个候选位置</td></tr>
+<tr><td rowspan="2">MoE</td><td>专家配置</td><td>每个 Transformer 块都是 MoE 层：1 个共享专家 + 384 个路由专家，每专家中间维 2304，每 token 激活 6 个路由专家</td></tr>
+<tr><td>其他</td><td>SwiGLU 激活（带 clamp，阈值 10）；mHC 扩展因子 4，Sinkhorn-Knopp 迭代 20 次</td></tr>
+<tr><td rowspan="3">视觉侧</td><td>DeepSeek-ViT</td><td>32 层，隐藏维 1024，16 个注意力头，图像 patch 大小 14</td></tr>
+<tr><td>MLP 投影器</td><td>2 层，隐藏维 5120（对齐主干隐藏维）</td></tr>
+<tr><td>视觉 token 压缩</td><td>3×3 pixel-unshuffle，视觉 token 数降为 1/9，支持约 1344×1344 输入（出自 §2.1.1）</td></tr>
+</table>
+
+<p class="cap"><b>表 1</b>：DeepSeek-V4.1-Flash 模型设置（数据出处：论文印刷页 21–22，§4.2.1；pixel-unshuffle 一行出自 §2.1.1）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, sans-serif" font-size="12">
+  <text x="30" y="24" font-size="13" font-weight="bold">编码器 20 层</text>
+  <text x="30" y="42" fill="#5a6272">CSA2 压缩率 m=2（前 2 层纯 SWA）；3 组 × 6 层，每组 1 Full + 5 Reuse</text>
+  <g>
+    <rect x="30" y="52" width="26" height="30" fill="#9aa3b2"/><rect x="58" y="52" width="26" height="30" fill="#9aa3b2"/>
+    <rect x="86" y="52" width="26" height="30" fill="#2456c4"/>
+    <rect x="114" y="52" width="130" height="30" fill="#a9c0ea"/>
+    <rect x="248" y="52" width="26" height="30" fill="#2456c4"/>
+    <rect x="276" y="52" width="130" height="30" fill="#a9c0ea"/>
+    <rect x="410" y="52" width="26" height="30" fill="#2456c4"/>
+    <rect x="438" y="52" width="130" height="30" fill="#a9c0ea"/>
+  </g>
+  <text x="30" y="100" font-size="12" fill="#5a6272">深蓝 = Full Mode（生成全局 KV 并索引）　浅蓝 = Reuse Mode（复用上一层全局 KV 与 Top-K 索引）　灰 = 纯 SWA</text>
+  <text x="30" y="138" font-size="13" font-weight="bold">解码器 20 层</text>
+  <text x="30" y="156" fill="#5a6272">CSA2 压缩率 m=1；5 组 × 4 层：第 1 组 1 Full + 3 Reuse；其余 4 组各 1 Reindex + 3 Reuse</text>
+  <g>
+    <rect x="30" y="166" width="26" height="30" fill="#2456c4"/>
+    <rect x="58" y="166" width="78" height="30" fill="#a9c0ea"/>
+    <rect x="140" y="166" width="26" height="30" fill="#5b7fc7"/>
+    <rect x="168" y="166" width="78" height="30" fill="#a9c0ea"/>
+    <rect x="250" y="166" width="26" height="30" fill="#5b7fc7"/>
+    <rect x="278" y="166" width="78" height="30" fill="#a9c0ea"/>
+    <rect x="360" y="166" width="26" height="30" fill="#5b7fc7"/>
+    <rect x="388" y="166" width="78" height="30" fill="#a9c0ea"/>
+    <rect x="470" y="166" width="26" height="30" fill="#5b7fc7"/>
+    <rect x="498" y="166" width="78" height="30" fill="#a9c0ea"/>
+  </g>
+  <text x="30" y="214" font-size="12" fill="#5a6272">中蓝 = Reindex Mode（复用全局 KV，但用自己的索引器重新打分选出新的 Top-K）</text>
+  <text x="30" y="234" font-size="12" fill="#5a6272">大多数层工作在 Reuse Mode，全局 KV 存储被大量摊薄——这正是 552B 模型能把 KV cache 压小的原因之一</text>
+</svg>
+<p class="cap"><b>图 3</b>：编码器/解码器逐层注意力模式布局（依据论文 §4.2.1 原文绘制）。三种模式的语义出自 §1 引言与 §2.3；本图只是把文字描述可视化。</p>
+</div>
+
+<h3>3.2 8B / 16B 激活是怎么"训"出来的</h3>
+
+<p>论文 §1 引言交代了机制：V4.1-Flash 采用 <b>CED（Causal Encoder-Decoder，因果编码器-解码器）</b>架构——解码器的全局 KV 直接<b>从编码器最终隐藏状态投影得到</b>。直觉上：读入一篇长文档时（prefill），绝大部分 token 只需要过编码器（激活 8B 就够）；真正逐 token 生成答案时（decode），才动用更重的解码器（16B）。这种"输入便宜、输出略贵"的形状对读多写少的智能体场景特别划算（机制细节见 <a href="deepseek-v41-t1-ced.html">第 1 讲</a>）。</p>
+
+<p>要强调的是：8B/16B 不是训练后再"裁剪"出来的，而是<b>架构在预训练时就定死的</b>——40 层怎么分、每层多少专家、激活几个专家（6 个），共同决定了每 token 的激活量。预训练从头到尾都在这个稀疏激活的形态下进行，包括 sparse attention 也是<b>从零开始（from scratch）在 64K 序列长度上直接训练</b>、没有先 dense 后稀疏的过渡阶段（论文 §1、§4.2.2）。</p>
+
+<h2 id="s4">4. 训练设置（§4.2.2）：怎么把这 45T token 喂进去</h2>
+
+<h3>4.1 三套优化器分工</h3>
+
+<p>V4.1-Flash 的参数不是用一把"螺丝刀"拧的，而是按参数类型分成三套优化方案（下表全部出自论文 §4.2.2）：</p>
+
+<table>
+<tr><th>适用参数</th><th>方法</th><th>关键超参数</th></tr>
+<tr><td>所有线性变换（矩阵）参数</td><td><b>Muon</b> 优化器</td><td>动量 0.95；权重衰减 0.1；每次更新把矩阵的 RMS 重标定到 0.18，以复用 AdamW 的学习率</td></tr>
+<tr><td>所有 RMSNorm 模块权重及其他非矩阵参数</td><td><b>AdamW</b></td><td>\(\beta_1=0.9\)，\(\beta_2=0.95\)，\(\varepsilon=10^{-20}\)，weight decay = 0.1</td></tr>
+<tr><td>所有 embedding 与预测头（prediction head）</td><td><b>Sinkhorn 平衡更新</b></td><td>动量系数与学习率修正因子同 Muon；\(K=11\)，\(\tau=10^{-3}\)，\(\varepsilon=10^{-20}\)</td></tr>
+<tr><td>Engram 条件记忆模块</td><td>沿用上表方案，学习率 ×5</td><td>遵循 Cheng et al., 2026b 的做法</td></tr>
+</table>
+
+<p class="cap"><b>表 2</b>：优化器配置（论文 §4.2.2）。Muon 是一种对矩阵参数做"正交化"式更新的优化器；Sinkhorn 平衡更新（论文 Algorithm 1）在动量更新后交替做行、列归一化。</p>
+
+<p>零基础读者只需记住一句：<b>矩阵用 Muon、归一化层用 AdamW、查表（embedding）用 Sinkhorn 平衡</b>——不同形状的参数脾气不同，分而治之是大模型训练的常态。<span class="infer">Muon 的细节与为何对矩阵友好，本讲不展开；论文此处只引用了 Jordan et al., 2024 与 Liu et al., 2025 两篇文献。</span></p>
+
+<h3>4.2 token 预算、批大小与学习率时间表</h3>
+
+<ul>
+  <li><b>总量</b>：45T token 多模态数据，<b>全程零不稳定（no instability）</b>——对 552B 的模型来说，这意味着没有损失 spikes（损失突然飙升）之类的训练事故需要回滚。</li>
+  <li><b>批大小</b>：全程固定 <b>100.6M token/步</b>（不随训练阶段放大）。</li>
+  <li><b>学习率</b>：前 2000 步线性升温（warmup）到 \(2.6\times10^{-4}\)；保持到 28T token；28T→40T 按<b>余弦（cosine）schedule 衰减</b>到 \(2.6\times10^{-5}\)；40T→45T 保持不变直到结束。</li>
+  <li><b>上下文长度</b>：从零（from scratch）以 64K 序列长度训练，在 <b>34T token</b> 处扩展到 <b>1M</b>。注意论文 §1 特别强调：<b>没有 dense attention 预热阶段</b>，稀疏注意力一开始就是稀疏的。</li>
+</ul>
+
+<p>论文没有给出余弦衰减的公式，只给了起止值。常规的余弦衰减形式如下（<span class="infer">公式形式为通识写法，属本报告补充；起止数值 \(2.6\times10^{-4} \to 2.6\times10^{-5}\) 与区间 28T–40T 为论文事实</span>）：</p>
+
+<div class="fig formula">
+\[
+\eta(t) \;=\; \eta_{\min} + \frac{1}{2}\left(\eta_{\max}-\eta_{\min}\right)\left(1+\cos\!\frac{t-t_1}{t_2-t_1}\,\pi\right),\quad t\in[t_1,t_2]
+\]
+<p class="cap">符号：\(\eta(t)\) 是第 \(t\) token 处的学习率；\(\eta_{\max}=2.6\times10^{-4}\)（28T 处），\(\eta_{\min}=2.6\times10^{-5}\)（40T 处）；\(t_1=28\text{T}\)，\(t_2=40\text{T}\)。直觉：学习率像退火一样先大后小——前期大步探索，后期小步精修。</p>
+</div>
+
+<div class="fig">
+<svg viewBox="0 0 860 290" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, sans-serif" font-size="12">
+  <defs>
+    <marker id="ar3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <line x1="60" y1="240" x2="830" y2="240" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar3)"/>
+  <line x1="60" y1="240" x2="60" y2="40" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar3)"/>
+  <text x="836" y="258" text-anchor="end">训练 token 数</text>
+  <text x="52" y="34" text-anchor="end">学习率</text>
+  <text x="822" y="258" text-anchor="end">45T</text>
+  <text x="533" y="258" text-anchor="middle">28T</text>
+  <text x="735" y="258" text-anchor="middle">40T</text>
+  <text x="70" y="258">0</text>
+  <polyline points="62,238 64,74 533,74" fill="none" stroke="#2456c4" stroke-width="2.5"/>
+  <path d="M 533 74 C 590 74 660 206 735 208" fill="none" stroke="#2456c4" stroke-width="2.5"/>
+  <line x1="735" y1="208" x2="820" y2="208" stroke="#2456c4" stroke-width="2.5"/>
+  <line x1="64" y1="74" x2="533" y2="74" stroke="#2456c4" stroke-width="2.5"/>
+  <text x="120" y="66">warmup 2000 步 → 2.6×10⁻⁴（放大图里是缓坡，这里几乎瞬时）</text>
+  <text x="300" y="94">恒定 2.6×10⁻⁴（0 → 28T）</text>
+  <text x="560" y="150">余弦衰减 28T → 40T</text>
+  <text x="742" y="196">恒定 2.6×10⁻⁵（40T → 45T）</text>
+  <line x1="634" y1="60" x2="634" y2="240" stroke="#e0862c" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="640" y="56" fill="#e0862c">34T：上下文 64K → 1M</text>
+  <rect x="90" y="120" width="300" height="34" rx="6" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="240" y="142" text-anchor="middle">批大小全程固定 100.6M token / 步</text>
+  <circle cx="64" cy="74" r="4" fill="#2456c4"/>
+  <circle cx="533" cy="74" r="4" fill="#2456c4"/>
+  <circle cx="735" cy="208" r="4" fill="#2456c4"/>
+</svg>
+<p class="cap"><b>图 4</b>：学习率与阶段时间线（依据论文 §4.2.2 的数字绘制；横轴按 token 数线性映射，warmup 2000 步 ≈ 0.2T token，在图上宽度不足 1%，故画成近乎竖直的上升段）。橙色虚线标记 34T 处的 1M 上下文扩展。</p>
+</div>
+
+<h3>4.3 多模态训练的特殊处理</h3>
+
+<p>图文混训会带来纯文本训练没有的麻烦，论文在 §4.2.2 和 §3.1（训练基础设施，<a href="deepseek-v41-t4-infra.html">第 4 讲</a>详述）给出了四项针对性处理：</p>
+
+<ul>
+  <li><b>按模态分开的负载均衡</b>：图像 token 和文本 token 的分布不同，对专家路由的偏好也不同；如果把两者混在一起做总量均衡，会掩盖"某一模态内严重不均"的问题。于是论文把 auxiliary-loss-free 负载均衡（Wang et al., 2024a）扩展为<b>文本、图像各持一套专家修正偏置（correction biases）</b>，各自独立更新。偏置更新速度设为 0.001（两种模态相同），另保留一个很小的<b>序列级均衡损失</b>（权重 0.0001）防止单条序列内极端失衡。</li>
+  <li><b>视觉编码器解耦执行（disaggregated encoder，§3.1.1）</b>：视觉编码器被复制到 LLM 参数树之外，每个训练步分三相——视觉编码器前向、LLM 前向/反向、视觉编码器反向——让视觉计算不干扰 LLM 的并行策略，LLM 相保持纯文本训练的并行方式。</li>
+  <li><b>对比学习通信重叠（§3.1.1）</b>：视觉编码器的对比预训练损失要在全批图文对上算，两种模态的特征需在数据并行（data-parallel）各副本间 all-gather（把所有副本的数据聚齐）；论文利用"文本特征梯度只依赖聚合后的视觉特征、反之亦然"的对称性，把两次 all-gather 完全藏进前向/反向计算里，不阻塞流水线。</li>
+  <li><b>均衡图像分片（balanced image sharding，§3.1.1）</b>：一条百万 token 的图像密集序列加载时能吃满一台主机的 I/O、CPU 和内存，所以把每条序列的图像<b>按负载均衡切分到各 CP（context parallel，上下文并行）rank</b> 上，每张图只读一次。论文还给出判据：只要每 token 原始字节 \(\rho\) 与每 token 计算量 \(C\) 满足 \(\rho &lt; \tfrac{B_{\text{IO}}}{B_{\text{GPU}}}C\)（\(B_{\text{IO}}\)、\(B_{\text{GPU}}\) 为文件系统与 GPU 带宽），加载就能藏在计算后面；序列长度与集群规模在式中被约掉了。</li>
+</ul>
+
+<p><b>CSA2 的跨层复用如何在大规模分布式训练中落地</b>（§3.1.2）：共享注意力组件的层可能被切到不同的<b>流水线并行（pipeline parallelism）</b>阶段上（PP 把模型按层切开、各阶段分布在不同设备上），直接复用模块会与"各阶段只能看本地"的常规执行冲突。论文用<b>影子索引器（shadow indexers）</b>解决：每个参与阶段放一个轻量可执行副本，共享参数只有一个逻辑所有者（owner），由 owner 负责优化和 checkpoint，副本间做参数同步。另一个佐证是 Engram 模块被刻意放在<b>第 1 层和第 14 层（零索引）</b>，理由正是"在训练流水线各阶段间均衡显存占用"——间接说明预训练确实使用了流水线并行。</p>
+
+<div class="infer">
+<p>关于<b>硬件规模与并行配置的诚实说明</b>：论文 §4.2.2 及全文<b>没有披露</b>预训练使用的 GPU 数量/集群规模，也没有给出 EP/PP/DP 各维的具体 rank 数。上文能确认的只有：使用了数据并行（对比学习 all-gather）、上下文并行（CP，图像分片）、流水线并行（影子索引器与 Engram 分层放置的表述间接证实）和跨阶段的共享状态管理。硬件规模属于论文未披露信息，请勿引用任何第三方猜测数字。</p>
+</div>
+
+<h3>4.4 视觉编码器的两阶段训练（§4.2.2 Vision Encoder Training）</h3>
+
+<p>DeepSeek-ViT 在并入语言主干之前要单独过两关：</p>
+
+<ol>
+  <li><b>对比预训练（contrastive pre-training）</b>：用 SigLIP 式的 sigmoid 对比损失，在约 <b>47B（470 亿）图文对</b>（来自 alt text 数据）上训练，输入分辨率压到最大 <b>224×224</b>（大图等比缩小）。直觉：对比学习就是"配对练习"——给模型看一张图和一段话，让它判断这段话是不是在描述这张图。为什么不用高分辨率？论文给了实验依据：<b>高分辨率在该阶段的收益对最终模型贡献很小</b>（后续自回归阶段专门负责高分辨率外推），在此阶段放大分辨率只会大幅增加计算开销。</li>
+  <li><b>自回归微调（autoregressive fine-tuning）</b>：把视觉编码器接到一个 <b>4B MoE LLM</b> 上，在 <b>236B token</b> 的数据（图像描述、alt text、图表、OCR）上用下一 token 预测目标训练，分辨率限制在 <b>544×544 到 1344×1344</b>（超界等比缩放）。这一阶段练的是编码器对<b>细粒度视觉特征</b>的建模能力。训练完<b>把 LLM 丢弃、只保留视觉编码器</b>进入后续预训练管线，并沿用同样的分辨率策略。</li>
+</ol>
+
+<p><span class="infer">这套"先对比后生成、最终丢掉脚手架 LLM"的流程意味着 4B LLM 只是一次性训练工具，不进入最终 552B 模型的参数；论文原文明确写了 discard the LLM，此点为论文事实而非推断。</span></p>
+
+<h2 id="s5">5. 基座评测（§4.3）：结果表怎么看</h2>
+
+<h3>5.1 基准清单与怎么看懂它们</h3>
+
+<p>评测对象是<b>基座模型（Base model）</b>——即刚做完预训练、还没经过后训练"调教"的模型，考的是底子而非应试技巧。对比对象是两个前代：DeepSeek-V4-Flash-Base（284B / 激活 13B）与 DeepSeek-V4-Pro-Base（1.6T / 激活 49B）。全部模型在同一内部评测框架、严格受控可复现的设置下打分。</p>
+
+<p>先教你看表里的三类记号（论文 Table 1 的图例规则）：</p>
+<ul>
+  <li><b># Shots</b>：给模型看几个示例再答题。0-shot 是"直接考"，5-shot 是"先做 5 道例题再考"，多用于把模型"对齐"到答题格式上。</li>
+  <li><b>指标</b>：EM（Exact Match，答案精确匹配）、F1（精确率和召回率的调和平均，适合抽取式答案）、Pass@1（生成的代码一次通过全部测试的比例）、LLM-Judge（用一个 LLM 当裁判打分）、Acc@0.5（检测框与标准答案交叠超过 0.5 记对）。</li>
+  <li><b>加粗/下划线</b>：每行最高分加粗、次高下划线；<b>分差不超过 0.3 视为同一水平</b>——所以 83.4 和 83.9 不算谁赢。</li>
+</ul>
+
+<table>
+<tr><th>维度</th><th>基准（括号内为指标）</th><th>一句话考什么</th></tr>
+<tr><td rowspan="6">世界知识</td><td>AGIEval (EM)</td><td>升学/资格考试风格的综合知识题</td></tr>
+<tr><td>MMLU-Pro (EM)</td><td>多领域选择题的加强版（更难、10 选项）</td></tr>
+<tr><td>C-Eval (EM)</td><td>中文多学科知识测评</td></tr>
+<tr><td>MultiLoKo (LLM-Judge)</td><td>多语言知识与理解</td></tr>
+<tr><td>SimpleQA-Verified (EM)</td><td>短事实问答（考"知不知道"，也考会不会瞎编）</td></tr>
+<tr><td>SuperGPQA (EM)</td><td>覆盖面极广的研究生级知识问答</td></tr>
+<tr><td rowspan="4">语言理解与推理</td><td>BBH (EM)</td><td>BigBench 里的高难度推理任务合集</td></tr>
+<tr><td>BBEH (EM)</td><td>BBH 的"地狱难度"版</td></tr>
+<tr><td>DROP (F1)</td><td>阅读理解，需要跨段落做离散推理（数数、排序等）</td></tr>
+<tr><td>HellaSwag (EM)</td><td>常识推理：给一段情境选最合理的后续</td></tr>
+<tr><td rowspan="5">代码与数学</td><td>BigCodeBench (Pass@1)</td><td>贴近真实库调用的代码生成</td></tr>
+<tr><td>HumanEval (Pass@1)</td><td>经典函数级代码生成</td></tr>
+<tr><td>GSM8K (EM)</td><td>小学应用题数学</td></tr>
+<tr><td>MATH (EM)</td><td>竞赛风格的高难数学</td></tr>
+<tr><td>MGSM (EM)</td><td>GSM8K 的多语言版（同一批题翻成多种语言）</td></tr>
+<tr><td>长上下文</td><td>LongBench-V2 (EM)</td><td>超长文档的理解与问答</td></tr>
+<tr><td rowspan="4">多模态</td><td>MMMU-Pro (EM)</td><td>大学水平的多模态学科题（加强版）</td></tr>
+<tr><td>CVBench (EM)</td><td>视觉基础能力（相对位置、计数、深度等）</td></tr>
+<tr><td>DocVQA (LLM-Judge)</td><td>文档图片问答（读票据、报表、表格）</td></tr>
+<tr><td>RefCOCO/+/g (Acc@0.5)</td><td>视觉定位：按一句话在图里框出目标物体</td></tr>
+</table>
+
+<p class="cap"><b>表 3</b>：五维基准清单（论文 §4.3.1）。"一句话考什么"列为本报告为零基础读者加的白话注解，基准的官方定义以各自论文为准。</p>
+
+<h3>5.2 结果表复现与解读</h3>
+
+<p>下表逐格复现论文 Table 1 的数字（每行最高分<b>加粗</b>、次高<span style="text-decoration:underline">下划线</span>，规则与原文一致）：</p>
+
+<table>
+<tr><th>基准（指标）</th><th># Shots</th><th>V4-Flash-Base<br>（284B / 激活 13B）</th><th>V4-Pro-Base<br>（1.6T / 激活 49B）</th><th>V4.1-Flash-Base<br>（552B / 激活 8B·16B）</th></tr>
+<tr><td colspan="5"><b>世界知识</b></td></tr>
+<tr><td>AGIEval (EM)</td><td>3–5</td><td style="text-decoration:underline">83.9</td><td><b>84.4</b></td><td>83.4</td></tr>
+<tr><td>MMLU-Pro (EM)</td><td>5</td><td>68.3</td><td style="text-decoration:underline">73.5</td><td><b>74.1</b></td></tr>
+<tr><td>C-Eval (EM)</td><td>5</td><td style="text-decoration:underline">92.1</td><td><b>93.1</b></td><td style="text-decoration:underline">92.1</td></tr>
+<tr><td>MultiLoKo (LLM-Judge)</td><td>5</td><td>42.6</td><td><b>50.9</b></td><td style="text-decoration:underline">45.5</td></tr>
+<tr><td>SimpleQA-Verified (EM)</td><td>25</td><td>30.1</td><td><b>55.2</b></td><td style="text-decoration:underline">42.3</td></tr>
+<tr><td>SuperGPQA (EM)</td><td>5</td><td>46.5</td><td><b>53.9</b></td><td style="text-decoration:underline">53.1</td></tr>
+<tr><td colspan="5"><b>语言理解与推理</b></td></tr>
+<tr><td>BBH (EM)</td><td>3</td><td style="text-decoration:underline">86.9</td><td><b>87.5</b></td><td>86.1</td></tr>
+<tr><td>BBEH (EM)</td><td>1</td><td>25.4</td><td><b>29.8</b></td><td style="text-decoration:underline">27.2</td></tr>
+<tr><td>DROP (F1)</td><td>1</td><td style="text-decoration:underline">88.6</td><td><b>88.7</b></td><td>87.9</td></tr>
+<tr><td>HellaSwag (EM)</td><td>0</td><td>85.7</td><td><b>88.0</b></td><td style="text-decoration:underline">87.2</td></tr>
+<tr><td colspan="5"><b>代码与数学</b></td></tr>
+<tr><td>BigCodeBench (Pass@1)</td><td>3</td><td>56.8</td><td style="text-decoration:underline">59.2</td><td><b>60.6</b></td></tr>
+<tr><td>HumanEval (Pass@1)</td><td>0</td><td>69.5</td><td style="text-decoration:underline">76.8</td><td><b>79.4</b></td></tr>
+<tr><td>GSM8K (EM)</td><td>8</td><td>90.8</td><td style="text-decoration:underline">92.6</td><td><b>93.0</b></td></tr>
+<tr><td>MATH (EM)</td><td>4</td><td>57.4</td><td><b>64.5</b></td><td style="text-decoration:underline">61.1</td></tr>
+<tr><td>MGSM (EM)</td><td>8</td><td><b>85.7</b></td><td style="text-decoration:underline">84.4</td><td>80.2</td></tr>
+<tr><td colspan="5"><b>长上下文</b></td></tr>
+<tr><td>LongBench-V2 (EM)</td><td>1</td><td>44.7</td><td><b>51.5</b></td><td style="text-decoration:underline">45.2</td></tr>
+<tr><td colspan="5"><b>多模态</b>（仅 V4.1-Flash 报告，前两代在原表中为 "-"）</td></tr>
+<tr><td>MMMU-Pro (EM)</td><td>4</td><td>–</td><td>–</td><td><b>56.5</b></td></tr>
+<tr><td>CVBench (EM)</td><td>4</td><td>–</td><td>–</td><td><b>77.9</b></td></tr>
+<tr><td>DocVQA (LLM-Judge)</td><td>4</td><td>–</td><td>–</td><td><b>95.6</b></td></tr>
+<tr><td>RefCOCO-avg (Acc@0.5)</td><td>0</td><td>–</td><td>–</td><td><b>86.0</b></td></tr>
+</table>
+
+<p class="cap"><b>表 4</b>：基座模型评测对比（数字逐格复现论文 Table 1，印刷页 24）。多模态四行在原文中只有 V4.1-Flash 一列有数值。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 345" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, sans-serif" font-size="12">
+  <line x1="90" y1="280" x2="830" y2="280" stroke="#5a6272" stroke-width="1.5"/>
+  <line x1="90" y1="280" x2="90" y2="30" stroke="#5a6272" stroke-width="1.5"/>
+  <text x="82" y="284" text-anchor="end">0</text>
+  <text x="82" y="224" text-anchor="end">25</text>
+  <text x="82" y="164" text-anchor="end">50</text>
+  <text x="82" y="104" text-anchor="end">75</text>
+  <text x="82" y="44" text-anchor="end">100</text>
+  <line x1="86" y1="220" x2="90" y2="220" stroke="#5a6272"/>
+  <line x1="86" y1="160" x2="90" y2="160" stroke="#5a6272"/>
+  <line x1="86" y1="100" x2="90" y2="100" stroke="#5a6272"/>
+  <line x1="86" y1="40" x2="90" y2="40" stroke="#5a6272"/>
+  <g>
+    <rect x="104" y="116.1" width="40" height="163.9" fill="#9db4dd"/>
+    <rect x="150" y="103.6" width="40" height="176.4" fill="#5b7fc7"/>
+    <rect x="196" y="102.2" width="40" height="177.8" fill="#e07b39"/>
+    <text x="124" y="111" text-anchor="middle">68.3</text>
+    <text x="170" y="98" text-anchor="middle">73.5</text>
+    <text x="216" y="97" text-anchor="middle" font-weight="bold">74.1</text>
+    <text x="170" y="302" text-anchor="middle">MMLU-Pro</text>
+  </g>
+  <g>
+    <rect x="294" y="113.2" width="40" height="166.8" fill="#9db4dd"/>
+    <rect x="340" y="95.7" width="40" height="184.3" fill="#5b7fc7"/>
+    <rect x="386" y="89.4" width="40" height="190.6" fill="#e07b39"/>
+    <text x="314" y="108" text-anchor="middle">69.5</text>
+    <text x="360" y="90" text-anchor="middle">76.8</text>
+    <text x="406" y="84" text-anchor="middle" font-weight="bold">79.4</text>
+    <text x="360" y="302" text-anchor="middle">HumanEval</text>
+  </g>
+  <g>
+    <rect x="484" y="142.2" width="40" height="137.8" fill="#9db4dd"/>
+    <rect x="530" y="125.2" width="40" height="154.8" fill="#5b7fc7"/>
+    <rect x="576" y="133.4" width="40" height="146.6" fill="#e07b39"/>
+    <text x="504" y="137" text-anchor="middle">57.4</text>
+    <text x="550" y="120" text-anchor="middle" font-weight="bold">64.5</text>
+    <text x="596" y="128" text-anchor="middle">61.1</text>
+    <text x="550" y="302" text-anchor="middle">MATH</text>
+  </g>
+  <g>
+    <rect x="674" y="74.3" width="40" height="205.7" fill="#9db4dd"/>
+    <rect x="720" y="77.4" width="40" height="202.6" fill="#5b7fc7"/>
+    <rect x="766" y="87.5" width="40" height="192.5" fill="#e07b39"/>
+    <text x="694" y="69" text-anchor="middle" font-weight="bold">85.7</text>
+    <text x="740" y="72" text-anchor="middle">84.4</text>
+    <text x="786" y="82" text-anchor="middle">80.2</text>
+    <text x="740" y="302" text-anchor="middle">MGSM</text>
+  </g>
+  <rect x="560" y="8" width="14" height="14" fill="#9db4dd"/>
+  <text x="580" y="20">V4-Flash-Base</text>
+  <rect x="672" y="8" width="14" height="14" fill="#5b7fc7"/>
+  <text x="692" y="20">V4-Pro-Base</text>
+  <rect x="776" y="8" width="14" height="14" fill="#e07b39"/>
+  <text x="796" y="20">V4.1-Flash-Base</text>
+  <text x="460" y="330" text-anchor="middle">橙色为 V4.1-Flash：MMLU-Pro / HumanEval 反超 1.6T 的 Pro；MATH 略逊、MGSM 明显落后</text>
+</svg>
+<p class="cap"><b>表 4 中 4 个代表性基准的图形化</b>（数据同 Table 1）。选这四个是因为它们最能说明"强项与弱项并存"：代码与英文知识/数学上是亮点，多语言数学上是短板。</p>
+</div>
+
+<h4>怎么读出这四列的"性格"</h4>
+
+<ul>
+  <li><b>效率是最大卖点</b>：论文原文的总结是——V4.1-Flash 激活参数远小于 V4-Pro-Base、KV cache 大幅缩小，但性能<b>完全持平（fully on par）</b>；引言进一步量化：世界知识、推理、代码能力与 V4-Pro-Base 相当，内部留存集评测提升 5%–10%，而<b>总参数只有 1/3、激活参数只有 1/4</b>。按"激活 8B/16B 对阵激活 49B"来看，这是很陡的能力/成本曲线。</li>
+  <li><b>强项：代码与英文知识</b>。MMLU-Pro（74.1）、HumanEval（79.4）、GSM8K（93.0）、BigCodeBench（60.6）四处反超 1.6T 的 Pro 拿下行最高分。论文把这归功于"对预训练数据管线的大幅改进"以及更多样的多模态语料。</li>
+  <li><b>弱项一：多语言数学</b>。MGSM 80.2 是三个模型中<b>最低</b>的，比 284B 的 V4-Flash（85.7）还低 5.5 分——注意这一行最高分属于最小的模型，"更大更新"不等于"全面更强"。</li>
+  <li><b>弱项二：部分知识/长上下文基准仍落后 Pro</b>。MultiLoKo（45.5 vs 50.9）、SimpleQA-Verified（42.3 vs 55.2）、SuperGPQA（53.1 vs 53.9）、LongBench-V2（45.2 vs 51.5）有可见差距。SimpleQA 考的是"冷门事实知不知道"，与语料中长尾事实的覆盖密度强相关。</li>
+  <li><b>多模态是"独有成绩单"</b>：MMMU-Pro 56.5、CVBench 77.9、DocVQA 95.6、RefCOCO-avg 86.0。前两代基座没有对应成绩（表中为"-"），所以这四行无法横向比，只用于验证"原生多模态训练有效"这一主张。</li>
+</ul>
+
+<p>论文还补了一个<b>公开基准之外</b>的测试：由于困惑度（perplexity，模型对文本"惊讶程度"的平均负对数概率，越低越好）没法通过模型 API 测，他们在<b>内部留存评测集</b>（内部文档、专有代码仓库、学术材料，面向复杂科研问题的推理/归因/解题）上测了 <b>BPB（bits-per-byte，每字节比特数）</b>：</p>
+
+<div class="fig formula">
+\[
+\text{BPB} \;=\; \frac{\text{全体测试文本的负对数似然（换算为比特）}}{\text{全体测试文本的字节数}}
+\]
+<p class="cap">BPB 的通识定义（本报告补充；论文只说报告 BPB、越低越好）：相当于"平均每存储一个字节的真实文本，模型要花多少比特的'惊讶量'"，越低说明模型把这类文本压缩得越好。</p>
+</div>
+
+<p>结论（论文 Figure 6）：V4.1-Flash-Base 在<b>所有</b>留存任务上 BPB 最低，论文据此认为它"更有潜力成为强基座模型"。这也呼应了引言中"留存集提升 5%–10%"的说法——公开基准看不全的进步，在更贴近真实研发场景的语料上显现了出来。</p>
+
+<h2 id="s6">6. 训练中的关键观察</h2>
+
+<p>论文 §4 没有专门的"消融实验"章节（ablation，即控制变量拆解各设计贡献的实验），也未披露任何训练曲线。以下是散落在 §1、§4 文字中、论文明确给出的观察，以及本报告的整理：</p>
+
+<ol>
+  <li><b>45T token、零事故</b>：论文原文 "We train DeepSeek-V4.1-Flash on 45T tokens of multimodal data with no instability"。对 552B 级 MoE，这本身就是优化方案（Muon + AdamW + Sinkhorn 平衡、按模态分偏置的负载均衡）稳定性的佐证。</li>
+  <li><b>稀疏注意力可以"从零训"</b>：sparse attention 在 64K 序列长度上 from scratch 训练、没有 dense warmup 阶段，最终长上下文成绩（LongBench-V2 45.2）与语义评测没有出现塌方。这省掉了"先 dense 后 sparse"两阶段的开销（对 CSA2 机制本身的分析见第 2 讲）。</li>
+  <li><b>对比训练阶段低分辨率就够</b>：论文明确做了取舍——224×224 的对比预训练虽然换更高分辨率有收益，但"这些收益对最终模型贡献很小"，因为高分辨率能力由后续自回归阶段专门补足。这是"在哪一阶段花算力最划算"的显式判断。</li>
+  <li><b>多模态语料"清洗优先、合成靠后"</b>：判断依据是"原始网络数据天然富含多模态知识"；与后训练的"合成数据是主要增益来源"（第 6 讲）形成对照。两种哲学各有适用场景。</li>
+  <li><b>隐式重复有害</b>：低能力模型的输出与低质量机翻在长训练视角下是负资产——这是数据过滤"隐式重复"标准的动机。</li>
+</ol>
+
+<div class="infer">
+<p><b>论文没给、读者常想问的</b>：各模态数据的具体 token 数（只给了 7:1 总配比）、数据源的份额表、学习率/批大小为何取这些值、消融实验数字——均未披露。本讲不做任何数值补齐。另外，§4.1 开头的"多模态预训练数据"叙述以图文数据为主，视频/音频模态的数据管线在 §4 正文未见具体描述（引言只统称 45T token 为"多模态语料"），如需引用请以论文原文口径为准。</p>
+</div>
+
+<h2 id="s7">7. 本讲小结与自测</h2>
+
+<h3>本讲小结</h3>
+<ul>
+  <li><b>预训练</b> = 用下一 token 预测把语料中的知识压进参数；数据的质量与配比决定模型上限。</li>
+  <li><b>数据（§4.1）</b>：文本侧重"整体配比"——scaling ladder 扫描、过滤隐式重复、更新代码语料；多模态侧"清洗优先于合成"——图文对（alt text + 相关性过滤 + 语义去重）、图文交错（成本递增漏斗 + SmolVLM 打分 + 废料回收）、领域专项（OCR、定位、图文代码对、computer-use 轨迹）；最终文本 : 多模态 = <b>7 : 1</b>，packing 填充率 ≤ \(10^{-4}\)。</li>
+  <li><b>模型（§4.2.1）</b>：40 层（20+20 CED）、\(d=5120\)、1 共享 + 384 路由专家（激活 6）、552B 主干，prefill 激活 8B / decode 激活 16B；编码器 18 层 CSA2（m=2）、解码器 20 层 CSA2（m=1），多数层为 Reuse Mode。</li>
+  <li><b>训练（§4.2.2）</b>：Muon / AdamW / Sinkhorn 平衡三套优化器分工；45T token 零事故；批大小恒定 100.6M token；学习率 2000 步 warmup → \(2.6\times10^{-4}\)（至 28T）→ 余弦降到 \(2.6\times10^{-5}\)（40T）→ 保持；64K 起步、34T 处扩到 1M；多模态特殊处理包括按模态分离的专家负载均衡、视觉编码器解耦执行、对比学习通信重叠、均衡图像分片、影子索引器。GPU 规模未披露。</li>
+  <li><b>评测（§4.3）</b>：基座模型五维 19 项基准。以 1/3 总参数、1/4 激活参数对齐 1.6T 的 Pro：代码与英文知识反超（HumanEval 79.4、GSM8K 93.0、MMLU-Pro 74.1），多语言数学（MGSM 80.2）与部分知识/长上下文基准仍落后；留存集 BPB 全面最低（+5%–10%）；多模态四项首次有分（MMMU-Pro 56.5 等）。</li>
+</ul>
+
+<h3>自测清单（先自己答，再展开看参考答案）</h3>
+
+<details>
+<summary><b>Q1</b>：最终训练语料里文本和多模态数据的比例是多少？重叠样本怎么处理？</summary>
+<p><b>答</b>：文本-only : 多模态 = <b>7 : 1</b>（按 token 数）。文本与多模态语料先各自独立构建，取并集；重叠样本用<b>多模态版本替换</b>文本版本，并采用两条管线中较大的 epoch 数（论文 §4.1 Data Integration and Deduplication）。</p>
+</details>
+
+<details>
+<summary><b>Q2</b>：552B 主干，为什么每个 token 只激活 8B 或 16B？这两个数分别在什么阶段生效？</summary>
+<p><b>答</b>：两个来源叠加。① MoE：每层 1 个共享专家 + 384 个路由专家，每 token 只激活 6 个路由专家；② CED 架构：解码器全局 KV 由编码器最终隐状态投影而来，读入阶段（prefill）绝大多数 token 只过编码器，激活 <b>8B</b>；逐 token 生成阶段（decode）使用解码器，激活 <b>16B</b>。这是架构在预训练时就定死的形态，不是事后裁剪（机制详见第 1 讲）。</p>
+</details>
+
+<details>
+<summary><b>Q3</b>：学习率时间表的三个关键数字（初始值、衰减起点、终值）和上下文长度扩展发生在第几个 token？</summary>
+<p><b>答</b>：warmup 2000 步到 \(2.6\times10^{-4}\)，保持到 <b>28T</b> token 后余弦衰减到 \(2.6\times10^{-5}\)（40T 处到位并保持至 45T）；上下文在 <b>34T</b> token 处从 64K 扩到 1M。批大小全程固定 100.6M token（论文 §4.2.2）。</p>
+</details>
+
+<details>
+<summary><b>Q4</b>：为什么视觉编码器的对比预训练只用 224×224 分辨率？</summary>
+<p><b>答</b>：论文给出两个理由：① 实验显示更高分辨率在该阶段的收益"对最终模型贡献很小"；② 高分辨率外推由后续的自回归微调阶段（544×544–1344×1344）专门负责，在对比阶段放大分辨率只会显著增加计算开销、总体收益不大（论文 §4.2.2 Vision Encoder Training）。</p>
+</details>
+
+<details>
+<summary><b>Q5</b>：V4.1-Flash-Base 相比 V4-Pro-Base 的强项和弱项各举一个基准并给出数字。</summary>
+<p><b>答</b>：强项（举其一）：HumanEval Pass@1 <b>79.4 vs 76.8</b>（或 MMLU-Pro 74.1 vs 73.5、GSM8K 93.0 vs 92.6、BigCodeBench 60.6 vs 59.2），且激活参数只有对方的约 1/6–1/3；弱项（举其一）：MGSM <b>80.2 vs 84.4</b>（或 MultiLoKo 45.5 vs 50.9、SimpleQA-Verified 42.3 vs 55.2、LongBench-V2 45.2 vs 51.5）。按论文规则，分差 ≤0.3 视为同一水平。</p>
+</details>
+
+<details>
+<summary><b>Q6</b>：论文披露了预训练用了多少张 GPU 吗？"影子索引器"是在解决什么问题？</summary>
+<p><b>答</b>：GPU 数量与集群规模<b>未披露</b>，任何具体卡数都不是出自论文。影子索引器（shadow indexers，§3.1.2）解决的是：CSA2 的跨层 KV/索引共享在流水线并行下，共享组件的层可能被切到不同 PP 阶段、无法直接复用模块——做法是每个参与阶段放一个轻量可执行副本，共享参数只有一个逻辑 owner 负责优化与 checkpoint。</p>
+</details>
+
+<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 18px;margin:20px 0;font-size:0.92em;">
+<b>系列导航 · DeepSeek-V4.1 零基础七讲</b>
+<div style="margin-top:6px;line-height:2.1">
+<a href="deepseek-v41-t0-overview.html">第 0 讲·总览</a> ｜ <a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a> ｜ <a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a> ｜ <a href="deepseek-v41-t3-extensions.html">第 3 讲·架构扩展</a> ｜ <a href="deepseek-v41-t4-infra.html">第 4 讲·基础设施</a> ｜ <span style="background:#eef3fc;color:#2456c4;border-radius:999px;padding:2px 12px;font-weight:700">第 5 讲·预训练（本篇）</span> ｜ <a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>
+</div>
+</div>
+
+<h2 id="s8">参考来源</h2>
+
+<ol class="refs">
+  <li>DeepSeek-AI. <i>DeepSeek-V4.1-Flash 技术报告</i>（本地 PDF：<code>paper/deepseek_v41.pdf</code>，51 页）。本讲主要依据 §1 Introduction（印刷页 1–3）、§2.1/§2.4/§2.5（背景）、§3.1 Training Infrastructure（背景）、§4 Pre-Training（印刷页 20–25，含 Table 1 与 Figure 6）。报告未给出公开 arXiv 编号，本页以本地归档为引用依据。</li>
+  <li>背景术语对照：<a href="https://arxiv.org/abs/2401.06088">DeepSeekMoE（Dai et al., 2024）</a>、<a href="https://arxiv.org/abs/2303.15343">SigLIP（Zhai et al., 2023）</a>、<a href="https://arxiv.org/abs/2502.16982">Muon is Scalable for LLM Training（Liu et al., 2025）</a>、SmolVLM（Marafioti et al., 2025）、auxiliary-loss-free load balancing（Wang et al., 2024a）——均转引自 V4.1 技术报告参考文献，本讲未直接展开。</li>
+  <li>站内背景报告：<a href="moe-t1-basics.html">MoE 基础</a>、<a href="deepseek-moe.html">DeepSeek MoE 演进</a>、<a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>、<a href="deepseek-v41-t1-ced.html">第 1 讲·CED</a>、<a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2</a>、<a href="deepseek-v41-t4-infra.html">第 4 讲·基础设施</a>、<a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>。</li>
+</ol>
+
+<footer>生成于 2026-09-20 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

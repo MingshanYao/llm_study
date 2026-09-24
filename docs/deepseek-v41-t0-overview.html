@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek-V4.1 零基础七讲 · 第 0 讲：总览——为长程 Agent 而生的 KV cache 压缩之作</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DeepSeek-V4.1 零基础七讲 · 第 0 讲：总览<br>——为长程 Agent 而生的 KV cache 压缩之作</h1>
+
+<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 20px;margin:20px 0;font-size:0.92em;">
+<b>系列导航（DeepSeek-V4.1 零基础七讲）</b>
+<ol style="margin:6px 0 0;padding-left:22px;">
+  <li style="margin:2px 0;"><b style="color:#2456c4;">▶ 第 0 讲 · 总览：为长程 Agent 而生的 KV cache 压缩之作（本篇）</b></li>
+  <li style="margin:2px 0;"><a href="deepseek-v41-t1-ced.html">第 1 讲 · CED 架构：一半的层不参与预填充</a></li>
+  <li style="margin:2px 0;"><a href="deepseek-v41-t2-csa2.html">第 2 讲 · CSA2 注意力：跨层 KV 与索引复用 + 层级稀疏索引器</a></li>
+  <li style="margin:2px 0;"><a href="deepseek-v41-t3-extensions.html">第 3 讲 · 架构扩展：Single-Pass mHC / Engram / DSpark / FP4 KV</a></li>
+  <li style="margin:2px 0;"><a href="deepseek-v41-t4-infra.html">第 4 讲 · 基础设施：训练与推理系统（含 SWA Bounded Replay）</a></li>
+  <li style="margin:2px 0;"><a href="deepseek-v41-t5-pretraining.html">第 5 讲 · 预训练：45T token 多模态语料</a></li>
+  <li style="margin:2px 0;"><a href="deepseek-v41-t6-posttraining.html">第 6 讲 · 后训练：任务合成、异步 RL 与推理努力控制</a></li>
+</ol>
+</div>
+
+<div class="meta">
+<p style="margin:4px 0"><b>日期：</b>2026-09-20　<b>系列：</b>DeepSeek-V4.1 零基础七讲 · 第 0 讲（总览篇）</p>
+<p style="margin:4px 0"><b>论文：</b>DeepSeek-AI. <i>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</i>，51 页英文技术报告（论文页未给出 arXiv 编号；本地归档 <code>paper/deepseek_v41.pdf</code>）。模型权重：<a href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash">huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash</a></p>
+<p style="margin:4px 0"><b>本讲范围：</b>摘要与 Figure 1、§1 Introduction、§2 Architecture 各小节粗读（只抓「是什么 + 为什么」）、§3–§5 关键数字、§6 Conclusion/Limitations/Future Directions、附录 C（推理努力控制，点到为止）</p>
+<p style="margin:4px 0"><b>适合谁读：</b>零基础读者。本篇是整个系列的入口，不要求任何大模型训练/推理背景；所有术语首次出现都配白话解释，深讲留给后续各讲。</p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>DeepSeek-V4.1-Flash 是一个多模态 MoE（Mixture-of-Experts，混合专家）大模型：552B 主干参数（另有 196B Engram 参数），支持 100 万 token 上下文。它的诞生动机非常具体——<b>长程 Agent（能连续干很久活的 AI 助手）的工作负载越来越「输入重」</b>：预填充（prefill，读入长 prompt）算得贵，巨大的 KV cache（模型边读边记的「笔记」）挤占显存 HBM 和硬盘 SSD 的容量与传输带宽。V4.1-Flash 用「架构 + 缓存精度 + 部署策略」三板斧同时打这三个瓶颈：CED 架构让预填充计算近乎减半；CSA2 跨层复用 KV 加 FP4 缓存把<b>全局 KV cache 压到 890 bytes/token</b>（约为上一代 V4-Flash 的 1/4、相对 DeepSeek-V1 约 437 倍压缩）；SWA Bounded Replay 把<b>持久 KV cache 压到约 1/8</b>。代价几乎没有：在更小的 KV footprint 下，模型性能反而显著好于 V4-Flash，主要基准上与 1.6T 参数的 DeepSeek-V4-Pro 相当。本讲负责把全景图铺开，细节交给后面六讲。</p>
+</div>
+
+<nav style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 20px;margin:20px 0;font-size:0.92em;">
+<b>目录</b>
+<ol style="margin:6px 0 0;padding-left:22px;">
+  <li><a href="#s1">前置知识速览：四个词看懂全文</a></li>
+  <li><a href="#s2">V4.1-Flash 是什么模型</a></li>
+  <li><a href="#s3">它为谁而生：长程 Agent 的三重瓶颈</a></li>
+  <li><a href="#s4">成绩单：一页看懂压缩了多少</a></li>
+  <li><a href="#s5">技术全家桶一览（六讲内容的预告）</a></li>
+  <li><a href="#s6">七讲路线图</a></li>
+  <li><a href="#s7">论文自己承认的局限与未来方向（§6）</a></li>
+  <li><a href="#s8">本讲小结与自测清单</a></li>
+</ol>
+</nav>
+
+<h2 id="s1">1. 前置知识速览：四个词看懂全文</h2>
+
+<p>这一节给完全没接触过大模型推理细节的读者补四块积木。已经懂的读者可以直接跳到第 2 节。</p>
+
+<h3>1.1 KV cache：模型边读边记的「笔记本」</h3>
+
+<p>大语言模型（LLM）生成文字时是一个 token（词元，可以粗略理解为「半个词」）一个 token 往外蹦的。每生成一个新 token，模型都需要「回头看」之前所有 token 的信息。Attention（注意力）机制为了回头看得快，会把每个历史 token 算出的 Key 和 Value 两组向量缓存下来，这就是 <b>KV cache</b>。</p>
+
+<p>打个比方：你读一本 1000 页的资料并写总结，为了不每次都重读全书，你会边读边在便签上记「每页的要点索引」。KV cache 就是这些便签。<b>便签的麻烦在于：读多长，就要存多长</b>——上下文 100 万 token，便签就要记 100 万份，而且每层网络都要单独记一份。这些便签存哪？主要存在 GPU 的 <b>HBM</b>（High Bandwidth Memory，GPU 显存，快但小且贵）里，装不下时溢出到 <b>SSD</b>（固态硬盘，大但慢）。KV cache 有多大，直接决定了单张显卡能同时伺候多少用户、部署成本多少——这就是整篇论文拼命压缩它的原因。</p>
+
+<p>延伸阅读：<a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV cache 设计解读</a>。</p>
+
+<h3>1.2 prefill vs decode：先「读完」再「作答」</h3>
+
+<p>LLM 处理一次请求分两个阶段：</p>
+<ul>
+<li><b>Prefill（预填充）</b>：一次性读入用户给的整段 prompt（可能几千到几十万 token），为每个 token 算好 KV 并存进 cache。这一步<b>计算密集</b>——几百万个 token 一起做矩阵乘法，GPU 能吃满。好比考试前通读全书、做笔记，费脑子。</li>
+<li><b>Decode（解码）</b>：逐个 token 生成回答。每步只处理 1 个新 token，算量小，但要把整个 KV cache 从显存里搬出来读一遍——这一步<b>访存密集</b>（受显存带宽限制）。好比答题时不断翻自己的笔记，费的是「翻页速度」。</li>
+</ul>
+
+<p>这两段的参数激活量在普通模型里是同一套。V4.1-Flash 的一个核心卖点（CED 架构，见第 5 节）就是让 prefill 阶段只激活 8B 参数、decode 阶段激活 16B 参数——「读书时轻装上阵，答题时全力以赴」，而这恰好匹配 Agent 场景「读得多、答得短」的负载。</p>
+
+<h3>1.3 MoE：一个超大公司，每次只派一支小分队</h3>
+
+<p><b>MoE（Mixture-of-Experts，混合专家）</b>是把 Transformer 里的前馈层换成许多个并行的「专家」网络，每个 token 由一个路由器挑出少数几个专家来处理。好处是<b>总参数可以做得非常大（知识储备多），但每个 token 实际激活的参数很少（算得便宜）</b>。V4.1-Flash 每个 MoE 层有 1 个共享专家 + 384 个路由专家，每个 token 只激活其中 6 个路由专家（§4.2.1）。延伸阅读：<a href="deepseek-moe.html">DeepSeekMoE 解读</a>与系列入门篇 <a href="moe-t0-foundation.html">MoE 零基础第 0 讲</a>。</p>
+
+<h3>1.4 稀疏注意力：不必每句话都细读全文</h3>
+
+<p>标准注意力里，每个新 token 要和<b>所有</b>历史 token 算一遍相关度，长上下文下这笔账是平方级增长的。<b>稀疏注意力</b>的思路是：先用一个轻量的「索引器」（indexer，像一个图书管理员）快速给所有历史内容打分，只挑出最相关的 top-k 条参与精细的注意力计算，其余略过。代价是得额外维护一份「索引 KV」。V4 系列的 CSA（压缩稀疏注意力）更进一步：先把每 m 个 token 压缩成 1 条 KV entry，再在压缩后的条目上做稀疏选择。延伸阅读：<a href="deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读</a>、<a href="deepseek-v4-lightning-indexer.html">Lightning Indexer 解读</a>、<a href="csa-compression.html">CSA 压缩过程详解</a>。</p>
+
+<h2 id="s2">2. V4.1-Flash 是什么模型</h2>
+
+<p>先给出一句话定位（摘要 + §2.1）：<b>DeepSeek-V4.1-Flash 是一个原生多模态、上下文最长 100 万 token 的 MoE 大模型，专为把 KV cache 压到极限而设计</b>。论文标题就叫「Pushing the Limits of KV Cache Compression」（把 KV cache 压缩推到极限）——它不是一篇追求榜单第一的模型报告，而是一篇「把部署成本打下来」的模型报告。</p>
+
+<table>
+  <tr><th>项目</th><th>数值</th><th>出处</th></tr>
+  <tr><td>主干参数（backbone）</td><td>552B（5520 亿）</td><td>摘要、§2.1</td></tr>
+  <tr><td>Engram 附加参数（条件记忆模块，第 3 讲细讲）</td><td>196B</td><td>§2.1</td></tr>
+  <tr><td>每 token 激活参数：prefill / decode</td><td>8B / 16B</td><td>摘要、§2.1、§4.2.1</td></tr>
+  <tr><td>上下文长度</td><td>最长 1M（100 万）token</td><td>摘要</td></tr>
+  <tr><td>Transformer 层数</td><td>40 层 = 20 层因果编码器 + 20 层解码器（CED 架构）</td><td>§2.1、§4.2.1</td></tr>
+  <tr><td>隐藏维度 \(d\)</td><td>5120</td><td>§4.2.1</td></tr>
+  <tr><td>注意力配置</td><td>除前 2 层外，每层都同时有全局注意力（CSA2）与滑窗注意力（SWA，窗口 \(n_{win}\)=128）</td><td>§2.1、§4.2.1</td></tr>
+  <tr><td>MoE 配置</td><td>每层 1 共享专家 + 384 路由专家，激活 6 个，专家中间维度 2304</td><td>§4.2.1</td></tr>
+  <tr><td>多模态</td><td>DeepSeek-ViT 视觉编码器（32 层）+ 2 层 MLP 投影器；3×3 pixel-unshuffle 把视觉 token 数量降为 1/9，支持约 1344×1344 像素输入</td><td>§2.1.1</td></tr>
+  <tr><td>预训练语料</td><td>45T token 多模态数据（文本 : 多模态 ≈ 7 : 1）</td><td>摘要、§4.1</td></tr>
+</table>
+<p class="cap"><b>表 1</b>｜V4.1-Flash 基本参数一栏（全部出自论文）。「8B/16B 激活」指：prefill 阶段每个 token 走过的参数量是 8B，decode 阶段是 16B——原因是 CED 架构让大部分层在 prefill 时不必做完整计算（第 1 讲细讲）。</p>
+
+<p>两个容易疑惑的点先解释一下：</p>
+<ul>
+<li><b>为什么叫「Flash」？</b>论文没有正式定义这个名字，但对照可以看出来：同代还有 1.6T 参数的 DeepSeek-V4-Pro，Flash 是同系列里<b>参数更小、激活更少、主打性价比</b>的档位。V4.1-Flash 用 1/3 的总参数、1/4 的激活参数，做到了与 V4-Pro-Base 相当的水准（§4.3.2）。</li>
+<li><b>多模态指什么？</b>模型从语言模型预训练一开始就同时喂图片和文本（§2.1：multimodal data incorporated from the start of language-model pre-training）。图片先经过自研的 DeepSeek-ViT 视觉编码器变成一串「视觉 token」，插进文本 token 序列里，之后所有层一视同仁地处理。它不只是「能看图」，还能在视觉 Agent 工作流里用屏幕截图做视觉检查和自我纠错（§1）。</li>
+</ul>
+
+<h2 id="s3">3. 它为谁而生：长程 Agent 的三重瓶颈</h2>
+
+<h3>3.1 长程 Agent 的负载长什么样</h3>
+
+<p><b>Agent（智能体）</b>是能自主调用工具、连续多轮干活的 AI：写代码的 Agent 会反复读仓库、跑测试、改文件，一轮任务可能持续成百上千次模型调用，每次调用都携带越来越长的历史上下文。论文 §1 开篇就说：<i>「长程 Agent 的普及让模型工作负载越来越 input-heavy（输入占大头）」</i>。</p>
+
+<p>为什么输入占大头？两个原因（§1、§2.2）：</p>
+<ul>
+<li><b>每次工具调用都是一次「重新读书」</b>：Agent 每调一次工具，就要把系统提示、全部历史、工具返回结果重新喂给模型。如果 KV cache 命中不了（cache miss，即笔记丢了），就要重新 prefill 一大段文本——§2.2 原话：<i>「频繁的工具调用产生大量 prefill 请求，在 KV cache 未命中时造成严重计算开销」</i>。</li>
+<li><b>读的内容远多于写的内容</b>：一个 Agent 轨迹可能输入几十万 token、只输出几千 token。计算和存储的大头都在输入侧。</li>
+</ul>
+
+<h3>3.2 三重瓶颈：算力、存储、带宽</h3>
+
+<p>论文把长上下文部署的负担归纳为三个互相叠加的瓶颈（摘要与 §1）：</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 330" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="t0m1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <!-- 顶部：负载 -->
+  <rect x="230" y="14" width="400" height="46" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="430" y="34" text-anchor="middle" fill="#1a1f2e" font-weight="bold">长程 Agent 工作负载（input-heavy）</text>
+  <text x="430" y="52" text-anchor="middle" fill="#5a6272">频繁工具调用 · 上下文持续增长 · 多轮会话</text>
+  <!-- 三条箭头 -->
+  <line x1="330" y1="60" x2="140" y2="108" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m1)"/>
+  <line x1="430" y1="60" x2="430" y2="108" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m1)"/>
+  <line x1="530" y1="60" x2="720" y2="108" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m1)"/>
+  <!-- 三个瓶颈 -->
+  <rect x="24" y="112" width="230" height="92" rx="10" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="24" y="112" width="230" height="26" rx="10" fill="#dbe6f8"/>
+  <text x="139" y="130" text-anchor="middle" fill="#2456c4" font-weight="bold">瓶颈一：Compute 算力</text>
+  <text x="139" y="156" text-anchor="middle" fill="#2a3040">prefill 计算贵</text>
+  <text x="139" y="174" text-anchor="middle" fill="#5a6272">长 prompt 逐层算注意力，</text>
+  <text x="139" y="191" text-anchor="middle" fill="#5a6272">cache 未命中就得重算一遍</text>
+  <rect x="315" y="112" width="230" height="92" rx="10" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="315" y="112" width="230" height="26" rx="10" fill="#dbe6f8"/>
+  <text x="430" y="130" text-anchor="middle" fill="#2456c4" font-weight="bold">瓶颈二：Storage 存储</text>
+  <text x="430" y="156" text-anchor="middle" fill="#2a3040">KV cache 挤占 HBM 与 SSD 容量</text>
+  <text x="430" y="174" text-anchor="middle" fill="#5a6272">全局 KV 必须常驻 HBM，</text>
+  <text x="430" y="191" text-anchor="middle" fill="#5a6272">持久 KV 长期占用 SSD / 主机内存</text>
+  <rect x="606" y="112" width="230" height="92" rx="10" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="606" y="112" width="230" height="26" rx="10" fill="#dbe6f8"/>
+  <text x="721" y="130" text-anchor="middle" fill="#2456c4" font-weight="bold">瓶颈三：Bandwidth 带宽</text>
+  <text x="721" y="156" text-anchor="middle" fill="#2a3040">缓存的搬迁与读取受 I/O 限制</text>
+  <text x="721" y="174" text-anchor="middle" fill="#5a6272">cache 在 HBM/SSD 之间迁移、加载，</text>
+  <text x="721" y="191" text-anchor="middle" fill="#5a6272">I/O 与互连带宽限制吞吐</text>
+  <!-- 底部：对策 -->
+  <rect x="24" y="248" width="230" height="62" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="139" y="272" text-anchor="middle" fill="#1a1f2e" font-weight="bold">CED 架构（第 1 讲）</text>
+  <text x="139" y="294" text-anchor="middle" fill="#5a6272">prefill 计算量 ≈ 减半</text>
+  <rect x="315" y="248" width="230" height="62" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="430" y="266" text-anchor="middle" fill="#1a1f2e" font-weight="bold">CSA2 + FP4 KV（第 2、3 讲）</text>
+  <text x="430" y="286" text-anchor="middle" fill="#5a6272">全局 KV → 890 B/token</text>
+  <text x="430" y="303" text-anchor="middle" fill="#5a6272">≈ V4-Flash 的 1/4</text>
+  <rect x="606" y="248" width="230" height="62" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="721" y="266" text-anchor="middle" fill="#1a1f2e" font-weight="bold">SWA Bounded Replay（第 4 讲）</text>
+  <text x="721" y="286" text-anchor="middle" fill="#5a6272">持久 KV ≈ V4-Flash 的 1/8，</text>
+  <text x="721" y="303" text-anchor="middle" fill="#5a6272">SWA KV 不再写入 SSD</text>
+  <!-- 对策箭头 -->
+  <line x1="139" y1="204" x2="139" y2="248" stroke="#2456c4" stroke-width="1.4" marker-end="url(#t0m1)"/>
+  <line x1="430" y1="204" x2="430" y2="248" stroke="#2456c4" stroke-width="1.4" marker-end="url(#t0m1)"/>
+  <line x1="721" y1="204" x2="721" y2="248" stroke="#2456c4" stroke-width="1.4" marker-end="url(#t0m1)"/>
+  <text x="430" y="326" text-anchor="middle" fill="#5a6272" font-size="11">对应论文摘要与 §1 的 compute / storage / bandwidth 三重瓶颈框架，及三条主线对策</text>
+</svg>
+<p class="cap"><b>图 1</b>｜三重瓶颈与 V4.1-Flash 的三条对策（对应论文摘要、§1 Introduction）。</p>
+</div>
+
+<p>用开图书馆的比喻把三个瓶颈讲透。把 KV cache 想象成图书馆为每位读者准备的「读书笔记」：</p>
+
+<ul>
+<li><b>算力瓶颈</b>：读者（Agent）每次回来都带着一大箱新书要登记造册。登记（prefill）本身就要动用全馆人手——长 prompt 的 prefill 是计算密集的，GPU 算力直接决定登记速度。笔记一旦丢失（cache miss），整箱书还得重新登记一遍。</li>
+<li><b>存储瓶颈</b>：笔记越来越多，馆内快架（HBM，快但格子小）必须放「随手要翻的全局笔记」，放不下就得堆到地下库房（SSD，大但取货慢）。地下库房也会被塞满——这就是持久 KV cache 对 SSD 与主机内存容量的压力（§1）。</li>
+<li><b>带宽瓶颈</b>：笔记在馆内和库房之间搬来搬去要过走廊（I/O 与互连带宽）。走廊一次只能过那么多人，搬得越多、等得越久，直接拖慢服务吞吐（§1：<i>I/O and interconnect bandwidth also limit cache migration and loading</i>）。</li>
+</ul>
+
+<p>论文还点明了一个趋势性事实：之前的稀疏注意力工作（DeepSeek-V4 等）已经把<b>长序列计算</b>的成本大幅压下来了，于是<b>持久存储与数据搬运反而成了越来越突出的瓶颈</b>（§1）。这也是为什么 V4.1 这一代的主攻方向从「算得少」转向「存得少、搬得少」。</p>
+
+<h3>3.3 一个必须理解的分工：全局 KV vs 滑窗 KV</h3>
+
+<p>V4 系列每层都有两套 KV（§1）：</p>
+<ul>
+<li><b>全局 KV（global KV）</b>：覆盖整个上下文的「全套笔记」，包括主 KV（main KV）和索引器 K（indexer K）。它必须<b>常驻 HBM</b>（推理时随时可能被任意位置的 query 查询），序列越长越大——长上下文下运行时 KV footprint 的主导项。</li>
+<li><b>滑窗 KV（SWA KV）</b>：只保留最近 \(n_{win}\)=128 个 token 的局部笔记，窗口固定，<b>存储量不随序列长度增长</b>。但它有一个隐藏麻烦：滑窗 KV 依赖逐层累积的隐状态，丢了之后想精确恢复，得把最近 \(L \times n_{win}\) 个 token 逐层重放一遍（L 是层数）——这笔重算账催生了第 4 讲的 SWA Bounded Replay。</li>
+</ul>
+
+<p>于是压缩战役分成两条战线：<b>全局 KV</b>（压它在 HBM 里的常驻体积）和<b>持久 KV cache</b>（为多轮会话缓存复用而存在 SSD/主机内存里的部分）。V4.1-Flash 的成绩分别是 1/4 和 1/8。</p>
+
+<h2 id="s4">4. 成绩单：一页看懂压缩了多少</h2>
+
+<p>先看论文反复强调的四个核心数字（摘要、Figure 1、§6）：</p>
+
+<table>
+  <tr><th>指标</th><th>V4.1-Flash 数值</th><th>相对基线</th><th>出处</th></tr>
+  <tr><td>全局 KV cache（常驻 HBM）</td><td><b>890 bytes / token</b></td><td>约为 DeepSeek-V4-Flash 的 <b>1/4</b>；相对 DeepSeek-V1 约 <b>437 倍压缩</b></td><td>摘要、Figure 1(b)、§6</td></tr>
+  <tr><td>持久 KV cache（SSD / 主机内存）</td><td>论文未给绝对值</td><td>约为 V4-Flash 的 <b>1/8</b></td><td>摘要、§3.2.1</td></tr>
+  <tr><td>prefill 激活参数</td><td>8B / token</td><td>decode（16B）的一半</td><td>摘要、§2.2</td></tr>
+  <tr><td>单 token decode FLOPs 随上下文增长</td><td>上下文从 4K 扩到 1M（256 倍），decode FLOPs 只增加 1/4</td><td>近乎恒定（Figure 2）</td><td>§1</td></tr>
+  <tr><td>预训练语料</td><td>45T token 多模态</td><td>—</td><td>摘要、§4.2.2</td></tr>
+  <tr><td>基础模型能力（held-out 评测）</td><td>BPB 全面最低</td><td>用 1/3 总参数、1/4 激活参数达到 V4-Pro-Base 水准，held-out 提升 5%–10%</td><td>§4.3.2、Figure 6</td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜核心成绩单。FLOPs = 浮点运算次数；BPB = bits-per-byte，越低越好；held-out 评测指模型没见过的内部评测集。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <!-- 坐标轴 -->
+  <line x1="150" y1="24" x2="150" y2="196" stroke="#c9d2e0" stroke-width="1.2"/>
+  <text x="30" y="20" font-size="11" fill="#5a6272">每 token 全局 KV 体积（对数尺度示意）</text>
+  <!-- V1 bar -->
+  <text x="142" y="52" text-anchor="end" fill="#2a3040" font-weight="bold">DeepSeek-V1</text>
+  <rect x="150" y="36" width="686" height="26" rx="5" fill="#f2b8b8" opacity="0.9"/>
+  <text x="726" y="54" text-anchor="middle" fill="#8a2b2b" font-weight="bold">≈ 389 KB / token（推断）· 基准 437×</text>
+  <!-- V4-Flash bar -->
+  <text x="142" y="106" text-anchor="end" fill="#2a3040" font-weight="bold">V4-Flash</text>
+  <rect x="150" y="90" width="272" height="26" rx="5" fill="#f2d3a8" opacity="0.9"/>
+  <text x="432" y="108" text-anchor="middle" fill="#8a5a1b" font-weight="bold">≈ 3.5 KB / token（推断）· 约 4×</text>
+  <!-- V4.1-Flash bar -->
+  <text x="142" y="160" text-anchor="end" fill="#2a3040" font-weight="bold">V4.1-Flash</text>
+  <rect x="150" y="144" width="72" height="26" rx="5" fill="#a8c8f2" opacity="0.95"/>
+  <text x="232" y="162" fill="#163a86" font-weight="bold">890 B / token（论文值）</text>
+  <!-- 注释箭头 -->
+  <text x="560" y="150" fill="#2456c4" font-size="11">较 V4-Flash ↓ 约 4 倍</text>
+  <text x="560" y="96" fill="#2456c4" font-size="11">较 V1 ↓ 约 437 倍</text>
+  <text x="150" y="216" fill="#5a6272" font-size="11">条宽按 log2 体积示意，非严格线性。Figure 1(b) 只给出 V4.1-Flash 的绝对值 890 B/token 与两个倍数；</text>
+  <text x="150" y="233" fill="#5a6272" font-size="11">V1 与 V4-Flash 的绝对值为按倍数反推的估算（890×437、890×4），标注为推断。</text>
+</svg>
+<p class="cap"><b>图 2</b>｜全局 KV cache 每 token 体积的代际对比（对应论文 Figure 1(b)）。三代模型从约 389 KB/token 压到 890 B/token——一本 100 万 token 的书，全局笔记从「一屋子打印纸」缩成「一叠便签」。</p>
+</div>
+
+<p>性能不是省出来的借口。摘要与 §1 强调：<b>尽管 KV footprint 小得多，模型性能反而显著优于基线</b>。基座模型对比（论文表 1，节选）：</p>
+
+<table>
+  <tr><th>基准</th><th>V4-Flash-Base（284B）</th><th>V4-Pro-Base（1.6T）</th><th>V4.1-Flash-Base（552B，8B/16B 激活）</th></tr>
+  <tr><td>MMLU-Pro（世界知识）</td><td>68.3</td><td>73.5</td><td><b>74.1</b></td></tr>
+  <tr><td>HumanEval（代码）</td><td>69.5</td><td>76.8</td><td><b>79.4</b></td></tr>
+  <tr><td>BigCodeBench（代码）</td><td>56.8</td><td>59.2</td><td><b>60.6</b></td></tr>
+  <tr><td>GSM8K（数学）</td><td>90.8</td><td>92.6</td><td><b>93.0</b></td></tr>
+  <tr><td>LongBench-V2（长上下文）</td><td>44.7</td><td><b>51.5</b></td><td>45.2</td></tr>
+  <tr><td>MMMU-Pro（多模态）</td><td>—</td><td>—</td><td>56.5</td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜基座模型评测节选（论文表 1，分数差距 ≤0.3 视为同档）。知识类与 V4-Pro 基本持平，代码与数学类持平甚至反超；长上下文 LongBench-V2 尚有差距——与 §6 承认的「最难题目上仍有差距」一致。</p>
+
+<p>Agent 侧的成绩（§1、§5.3）：在 Terminal-Bench 2.1、DeepSWE v1.1、AutomationBench 等标准 Agent 基准上与闭源前沿模型持平，能完成 <b>95% 以上的真实任务</b>；多模态 Agent（前端开发、办公自动化里用屏幕截图自查自纠）在视觉推理与专业图表理解上超过开源对手 Kimi-K3；但在需要专家级领域知识的科学类 Agent 任务（如 Terminal-Bench 4.0）上与巨型模型仍有差距。</p>
+
+<h3>4.1 从数字到体感：890 B/token 意味着什么</h3>
+
+<p>「890 bytes」太抽象，我们换算一下（纯算术推演，论文未直接给出该算例，标注为推断）。全局 KV 常驻 HBM，它的大小决定了「一张卡能同时装下几个长会话」：</p>
+
+<ul>
+<li><b>100 万 token 上下文</b>：全局 KV ≈ 1,000,000 × 890 B ≈ <b>890 MB</b>。同样 1M 上下文，若按 V4-Flash 的约 1/4 倍率反推则约 3.5 GB，按 V1 的 437 倍率反推更是约 389 GB——后者单张最大的 GPU 都装不下，前者一张卡就能放下。</li>
+<li><b>多会话并发</b>：以 32K 上下文的典型会话为例，全局 KV 仅约 28 MB/会话，一台 8 卡机在留给权重的空间之外也能同时挂相当数量的长会话——这正是「降低部署成本、扩大服务规模」的具体含义。</li>
+<li><b>decode FLOPs 近乎恒定</b>的含义：Figure 2 显示 V4.1-Flash 的单 token decode FLOPs 几乎不随上下文变长而增长（4K→1M 只涨 1/4），意味着模型「翻自己的笔记」的速度不会因为书变厚而明显变慢——长会话的生成延迟与短会话基本同级。</li>
+</ul>
+
+<h2 id="s5">5. 技术全家桶一览（六讲内容的预告）</h2>
+
+<p>V4.1-Flash 的 KV 压缩不是单个技巧，而是一套「架构 + 缓存精度 + 部署策略」的联合优化（§1）。论文的视角很清晰：<b>DeepSeek-V4 可以看作「SWA 局部处理主干 + 压缩的全局上下文」</b>，所以 V4.1 的思路是<b>简化全局分支、基本保留局部注意力设计</b>。下面按六讲的顺序把全家桶每个部件用一两段话讲清「是什么、解决什么」。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 400" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="t0m2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <!-- 输入 -->
+  <rect x="16" y="60" width="120" height="44" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="76" y="78" text-anchor="middle" fill="#1a1f2e">图片</text>
+  <text x="76" y="95" text-anchor="middle" fill="#5a6272">DeepSeek-ViT</text>
+  <rect x="16" y="150" width="120" height="44" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="76" y="168" text-anchor="middle" fill="#1a1f2e">文本</text>
+  <text x="76" y="185" text-anchor="middle" fill="#5a6272">文本 Embedding</text>
+  <!-- 编码器 -->
+  <rect x="196" y="60" width="190" height="220" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="291" y="84" text-anchor="middle" fill="#1a1f2e" font-weight="bold">因果编码器（20 层）</text>
+  <text x="291" y="106" text-anchor="middle" fill="#5a6272">前 2 层：纯 SWA</text>
+  <text x="291" y="124" text-anchor="middle" fill="#5a6272">后 18 层：CSA2，m=2</text>
+  <text x="291" y="141" text-anchor="middle" fill="#5a6272">3 组 × 6 层：1 Full + 5 Reuse</text>
+  <text x="291" y="172" text-anchor="middle" fill="#2a3040">prefill 激活 8B</text>
+  <text x="291" y="192" text-anchor="middle" fill="#5a6272">MoE：1 共享 + 384 路由，激活 6</text>
+  <text x="291" y="230" text-anchor="middle" fill="#2456c4" font-weight="bold">Engram 模块挂载在第 1 层</text>
+  <text x="291" y="250" text-anchor="middle" fill="#5a6272">（第 14 层为另一模块）</text>
+  <!-- 中间产物 -->
+  <rect x="420" y="128" width="128" height="60" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <text x="484" y="150" text-anchor="middle" fill="#1a1f2e">编码器末层隐状态</text>
+  <text x="484" y="168" text-anchor="middle" fill="#5a6272">Enc. Hidden States</text>
+  <!-- 解码器 -->
+  <rect x="582" y="60" width="200" height="220" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="682" y="84" text-anchor="middle" fill="#1a1f2e" font-weight="bold">解码器（20 层）</text>
+  <text x="682" y="106" text-anchor="middle" fill="#5a6272">全部 CSA2，m=1（不压缩）</text>
+  <text x="682" y="124" text-anchor="middle" fill="#5a6272">5 组 × 4 层：1 Full/Reindex + 3 Reuse</text>
+  <text x="682" y="148" text-anchor="middle" fill="#2a3040">decode 激活 16B</text>
+  <text x="682" y="172" text-anchor="middle" fill="#2456c4" font-weight="bold">层级稀疏索引器（第 2 讲）</text>
+  <text x="682" y="190" text-anchor="middle" fill="#5a6272">16384 候选池 · top-512</text>
+  <text x="682" y="216" text-anchor="middle" fill="#2a3040">主 KV 以 FP4 存储（第 3 讲）</text>
+  <text x="682" y="236" text-anchor="middle" fill="#5a6272">SWA KV 保持 FP8</text>
+  <text x="682" y="262" text-anchor="middle" fill="#2a3040">DSpark 投机解码（第 3 讲）</text>
+  <!-- 全局副作用模块 -->
+  <rect x="196" y="318" width="300" height="52" rx="8" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="346" y="339" text-anchor="middle" fill="#1a1f2e" font-weight="bold">Single-Pass mHC（第 3 讲）</text>
+  <text x="346" y="358" text-anchor="middle" fill="#5a6272">多残差流混合 · Mega-mHC 内核砍半激活访存</text>
+  <rect x="530" y="318" width="252" height="52" rx="8" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="656" y="339" text-anchor="middle" fill="#1a1f2e" font-weight="bold">SWA Bounded Replay（第 4 讲）</text>
+  <text x="656" y="358" text-anchor="middle" fill="#5a6272">只重放最近 n_win=128 token</text>
+  <!-- 箭头 -->
+  <line x1="136" y1="82" x2="196" y2="100" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m2)"/>
+  <line x1="136" y1="172" x2="196" y2="164" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m2)"/>
+  <line x1="386" y1="158" x2="420" y2="158" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m2)"/>
+  <line x1="548" y1="158" x2="582" y2="158" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m2)"/>
+  <polyline points="291,280 291,318" fill="none" stroke="#b8912a" stroke-width="1.4" marker-end="url(#t0m2)"/>
+  <polyline points="682,280 682,318" fill="none" stroke="#b8912a" stroke-width="1.4" marker-end="url(#t0m2)"/>
+  <text x="430" y="394" text-anchor="middle" fill="#5a6272" font-size="11">整体架构简化自论文 Figure 3（CED 架构 + CSA2 + 各扩展模块的位置）</text>
+</svg>
+<p class="cap"><b>图 3</b>｜V4.1-Flash 全家桶位置图（简化自论文 Figure 3，§2.1）。左半是因果编码器（prefill 便宜），右半是解码器（decode 激活 16B）；黄色框是横跨全局的机制。CSA2 的三种模式、Engram/DSpark/FP4 细节分别在对应讲次展开。</p>
+</div>
+
+<h3>5.1 CED：因果编码器-解码器架构（第 1 讲细讲）</h3>
+
+<p><b>是什么：</b>CED（Causal Encoder-Decoder，因果编码器-解码器，灵感来自 YoCo）把 40 层网络劈成两半：下半 20 层是「因果编码器」，上半 20 层是「解码器」。解码器的<b>全局 KV 不再由各层自己的隐状态算出</b>，而是直接从编码器最后一层的隐状态 \(H_{L/2}\) 投影得到（§2.2，式 1）：</p>
+
+<div class="formula">\[ C^{l} = H_{L/2}\, W^{KV}_{l}, \qquad Z^{l} = H_{L/2}\, W^{Z}_{l}, \qquad l > L/2 \]</div>
+
+<p>其中 \(C^l\) 是第 \(l\) 层解码器的 KV entry，\(Z^l\) 是配套的压缩权重，\(W^{KV}_l, W^Z_l\) 是各层自己的投影矩阵。注意每个矩阵是各层独立的——解码器每层仍「各看各的」，只是看的原材料统一来自编码器末层。</p>
+
+<p><b>解决什么：</b>prefill 时解码器这 20 层不必对全部 N 个 token 做完整计算，序列复杂度从 \(O(NL)\) 降到 \(O(NL/2 + n_{win} \times L/2) \approx O(NL/2)\)——<b>预填充计算近乎减半</b>（§2.2）。这正是给 input-heavy 的 Agent 负载量身定做的：输入 token 数千千万万，但它们只需要「过一遍」编码器就能产出解码器全部层的全局 KV。这也是 8B/16B 激活参数差异的来源。</p>
+
+<h3>5.2 CSA2：跨层 KV 与索引复用 + 层级稀疏索引器（第 2 讲细讲）</h3>
+
+<p><b>是什么：</b>CSA2（Compressed Sparse Attention 2，压缩稀疏注意力 2）是 V4.1 对全局 KV 的主压缩手段。它抓住三个<b>相乘的压缩维度</b>（§2.3）：条目大小（entry size，GQA/MLA 压 KV 头）、序列维（每 m 个 token 压成 1 条 entry）、<b>层维</b>（跨层复用缓存与选择）——CSA2 的独特点是把第三个维度用满，且缓存共享与索引复用互相解耦。每个 CSA2 层被静态分配为三种模式之一（§2.3.1，Figure 4）：</p>
+
+<ul>
+<li><b>Full 模式</b>：自己算主 KV 与 indexer K，完整跑索引器，产出新的 top-K 索引；</li>
+<li><b>Reindex 模式</b>：复用前一层的全局 KV 与 indexer K，但用自己的 indexer Q 重新打分，选出<b>新的</b> top-K——缓存共享，但每层看到的内容可以不同；</li>
+<li><b>Reuse 模式</b>：全局 KV 和 top-K 索引全部复用，直接做稀疏注意力，连索引器都不用跑。</li>
+</ul>
+
+<p>所有模式里每层保留自己的全局 Q 和 SWA KV（所以「读书笔记的钥匙」仍是每层独立学出来的）。此外，解码器还配了<b>层级稀疏索引器</b>（Hierarchical Sparse Indexer，§2.3.2）：解码器第一个 Full 层在全上下文打分时顺带按块（block）做粗筛，选出的块汇成一个共享候选池（最多 2048 块 × 每块 8 位置 = 16384 个候选位置），后续 Reindex 层只在池子里选 top-512——后续索引器的打分成本从「随上下文线性增长」变成<b>常数</b>。</p>
+
+<p><b>解决什么：</b>存储上，共享主 KV 与 indexer K 消除了层间重复缓存（配合 FP4 精度，全局 KV 压到 890 B/token，约为 V4-Flash 的 1/4）；计算上，Reuse 层完全跳过索引、层级索引器把后续打分限制在固定候选池。相比 V4 的 CSA+HCA 混合架构，V4.1 改用<b>纯 CSA2</b>，并简化了压缩器（去掉重叠窗口与绝对位置编码）与索引器（indexer K 直接从主 KV entry 投影，不再单独从隐状态压缩，§2.3）。Reuse 层的推理执行只需 15 个 kernel（prefill）/ 11 个（decode）（§3.2），实现又快又省。</p>
+
+<h3>5.3 四个架构扩展（第 3 讲细讲）</h3>
+
+<p><b>Single-Pass mHC（§2.4.1）</b>：mHC 是 V4 引入的「多残差流」机制——在相邻 Transformer 块之间维护 n 条并行的残差流 \(X^l \in \mathbb{R}^{n \times d}\)，用可学习系数矩阵混合。问题：原始实现要三个内核顺序执行，激活访存是 \((4n+4)d\)，是理论下界 \((2n+2)d\) 的两倍。V4.1 的 Single-Pass 改动极小却巧妙：<b>把输入混合系数错后一块</b>（每个块使用上一块算出的系数 \(A_{l-1}\)），消除了数据依赖，于是残差更新、输入混合、系数预测可以融成单个内核 Mega-mHC，访存正好达到下界、<b>减半</b>——性能几乎无损。这属于「动了部署经济学」的改动：mHC 本身不省算力，省的是显存带宽。</p>
+
+<p><b>Engram（§2.4.2）</b>：条件记忆模块，思路是「把记忆从计算中解耦」——不靠大参数慢慢算，而是用 n-gram 多头哈希直接<b>查表</b>拿到记忆向量。V4.1-Flash 挂了 196B Engram 参数（分两个模块，放在第 1 和第 14 层）：每个模块用 2/3/4 阶 n-gram、8 个哈希头、每头一张约 1600 万条目的嵌入表，表与投影全用 FP8。推理时地址是确定性的，可以提前用 RDMA 从主机内存后台预取，预取与第一块 Transformer 的计算重叠。<b>解决什么</b>：给模型加「外挂记忆」，参数量巨大但访问极便宜。</p>
+
+<p><b>DSpark（§2.4.3）</b>：投机解码（speculative decoding，用一个便宜的小模型先「猜」好几个 token，再用大模型一次性验证）架构，特点是半自回归起草 + 置信度调度的验证长度：3 个滑窗 128 的 Transformer 块一次前向并行算出 5 个草案位置的基础 logits，一个小型 Markov 头建模草案 token 间的依赖，置信头预测每个位置的条件接受概率；调度器结合引擎吞吐曲线动态决定每个请求验证多长。与 V3 的 MTP 在预训练全程联合训练不同，DSpark 在主干预训练<b>之后</b>单独训练（主干冻结），后训练时与主干一起继续训练但不回传梯度到主干。<b>解决什么</b>：decode 阶段一步吐多个 token，提高解码吞吐。</p>
+
+<p><b>FP4 主 KV cache（§2.4.4）</b>：把全局主 KV 从 FP8 进一步压到 FP4。V4 已对索引器的 Q/K 做过 FP4 量化感知训练（QAT），V4.1 把 QAT 扩展到主 KV cache。格式上采用 OCP 标准 MXFP4 兼容的 E2M1 + 每 16 通道一个 E4M3 scale（类似 NVFP4 但去掉第二级全局 scale，论文论证了动态范围足够：KV latent 经 RMSNorm 后幅值上限约 \(\sqrt{512} \approx 22.6\)，训练中实测最大约 10，而格式支持到 448×6=2688）。量化在 RoPE 之后进行，注意力计算前反量化——不需要硬件原生支持 FP4 矩阵乘。SWA KV 因对量化敏感而保持 FP8。<b>解决什么</b>：FP8→FP4 让主 KV 在 HBM 与 SSD 上的存储再近似减半，是 890 B/token 的关键组成之一。</p>
+
+<div class="infer">890 B/token 的具体构成（各组件各占多少字节）论文没有在本报告引用的章节里逐项给出明细，只给出总量与倍数关系；如需逐字节账目，建议等第 2、3 讲结合 CSA2 结构与 V4 系列文档进一步推算。</div>
+
+<h3>5.4 训练与推理基础设施（第 4 讲细讲）</h3>
+
+<p><b>训练侧（§3.1）</b>：多模态训练基础设施做了三件事——对比学习阶段的通信-计算重叠（all-gather 藏进前向/反向）；视觉编码器与 LLM <b>解耦部署</b>（encoder 复制到 LLM 参数树之外，三个阶段交替执行，LLM 阶段保持纯文本并行策略）；超长图文序列的<b>均衡图像分片</b>（一张图密集的长序列会打爆单机 I/O，把图按负载均衡切到各 CP rank，每图只读一次）。CSA2 的跨层共享给分布式训练带来真麻烦：共享的层可能被切到不同流水线阶段，论文用影子索引器（shadow indexer，每个参与阶段放一个可执行的轻量副本、逻辑上单一 owner）、流水线载荷扩展、微批次级共享状态管理三件套解决。Engram 的嵌入表按行切分、预取与视觉编码器计算重叠。</p>
+
+<p><b>推理侧（§3.2）</b>：采用 Encoder–Prefill–Decode（EPD）三段 disaggregation，视觉编码、预填充、解码各自独立扩缩并重叠执行。核心是<b>持久 KV cache 管理 + SWA Bounded Replay</b>：V4 部署中 SWA KV 占了持久 cache 近一半容量，但它的复用只发生在活跃会话的分钟级窗口内、会话结束即死——长期存 SSD 极不划算。V4.1 干脆把 SWA KV 踢出持久 cache，改存到一个只占每台机器 10% 主机 DRAM 的分布式内存池（TTL 只有几分钟，到期即回收；全局 KV 仍在持久 cache 里保底 72 小时以上）。踢出去必然有 miss，兜底就是 SWA Bounded Replay：丢了滑窗状态不再重放 \(L \times n_{win}\) 个 token，<b>只重放最近 \(n_{win}\) 个</b>并截断滑窗，接受近似状态（§3.2.2 给出公式：从位置 s 起重放时，位置 i 的 query 只看 \([\max(s, i-W+1),\ i]\) 内的 SWA keys）。实验显示性能几乎无损；分 Encoder 与 Decoder 两条路径，后者让 prefill 在编码器就收尾、解码器只需跑 \(n_{win}\) 个 token，进一步把预填充总量砍到约一半。<b>这正是持久 KV 1/8 的来源</b>：SWA KV 不再持久化（约省一半）×全局 KV 压到 1/4（§3.2.1）。</p>
+
+<h3>5.5 预训练（第 5 讲细讲）</h3>
+
+<p><b>是什么：</b>45T token 多模态语料（文本 : 多模态 ≈ 7:1；多模态部分以网络原生图文对、交错图文与领域数据为主，不做大规模合成），序列从 64K 起步、34T token 处扩展到 1M。<b>值得注意</b>：稀疏注意力是<b>从零直接在 64K 长度上训练的，没有任何稠密注意力热身阶段</b>（§1、§4.2.2）——稠密热身曾是稀疏注意力训练的惯例，这里直接省掉。优化器配置是三代演进：线性层用 Muon（Query/Key 用 head-wise Muon，按头拆分预条件器），归一化层等非矩阵参数用 AdamW，Engram 嵌入表/token 嵌入/预测头用「动量更新 + Sinkhorn 平衡」（只带动量缓冲、效果超 Adam 且省优化器状态内存）；另有多模态各自独立的 aux-loss-free 负载均衡。视觉编码器 DeepSeek-ViT 单独两阶段训练（约 470 亿图文对的 SigLIP 对比学习 + 接 4B MoE LLM 的 2360 亿 token 自回归微调），之后才并入主干预训练。训练全程无不稳定。</p>
+
+<h3>5.6 后训练（第 6 讲细讲）</h3>
+
+<p><b>是什么：</b>论文坦白：后训练<b>没有任何算法创新</b>，就是标准的 SFT → RL → OPD（on-policy distillation，在线策略蒸馏，用 40 多个教师模型做全词表蒸馏）；所有实质投入都在<b>数据与工程</b>上（§5.1）。三个值得记住的点：①大规模 Agent 任务自动合成流水线——把任务形式化为（问题、环境、验证系统）三元组，覆盖通用 Agent 与代码 Agent，模型甚至学着给自己造训练题；②DSec 沙箱平台支撑<b>百万级并发沙箱</b>（单节点容器密度从约 1000 提到 2500+，还要防模型「越狱」搞 reward hacking）；③<b>可控推理努力</b>：给模型一个标量旋钮 \(b \in \{1,\dots,100\}\)（系统提示里写 Reasoning Effort），RL 中用指数衰减的 token 长度惩罚 \(k(b) = k_0 \exp\!\left(-\frac{b-b_{min}}{\tau}\right)\) 让高努力档位少罚长度，一个 checkpoint 就能在成本-质量曲线上滑动——2026 年 9 月上线的公开 API 的 max/high/low 三档即对应 \(b=100/75/50\)（附录 C 给了这个指数设计的边际效用推导）。另有异步后训练基础设施（token 级中断、断点续跑）与多智能体 Agent Team 模式的初步实验（多 Agent 在各时限下全面优于单 Agent）。</p>
+
+<h2 id="s6">6. 七讲路线图</h2>
+
+<div class="fig">
+<svg viewBox="0 0 860 210" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="t0m3" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2456c4"/></marker></defs>
+  <!-- T0 -->
+  <rect x="14" y="66" width="104" height="72" rx="10" fill="#2456c4"/>
+  <text x="66" y="94" text-anchor="middle" fill="#fff" font-weight="bold">第 0 讲</text>
+  <text x="66" y="114" text-anchor="middle" fill="#dbe6f8" font-size="11">总览（本篇）</text>
+  <!-- T1 -->
+  <rect x="136" y="66" width="104" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="188" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 1 讲</text>
+  <text x="188" y="108" text-anchor="middle" fill="#5a6272" font-size="11">CED 架构</text>
+  <text x="188" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§2.1–2.2</text>
+  <!-- T2 -->
+  <rect x="258" y="66" width="104" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="310" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 2 讲</text>
+  <text x="310" y="108" text-anchor="middle" fill="#5a6272" font-size="11">CSA2 注意力</text>
+  <text x="310" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§2.3 + §3.1.2</text>
+  <!-- T3 -->
+  <rect x="380" y="66" width="104" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="432" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 3 讲</text>
+  <text x="432" y="108" text-anchor="middle" fill="#5a6272" font-size="11">架构扩展 ×4</text>
+  <text x="432" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§2.4–2.5</text>
+  <!-- T4 -->
+  <rect x="502" y="66" width="104" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="554" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 4 讲</text>
+  <text x="554" y="108" text-anchor="middle" fill="#5a6272" font-size="11">基础设施</text>
+  <text x="554" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§3（含 Bounded Replay）</text>
+  <!-- T5 -->
+  <rect x="624" y="66" width="104" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="676" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 5 讲</text>
+  <text x="676" y="108" text-anchor="middle" fill="#5a6272" font-size="11">预训练</text>
+  <text x="676" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§4</text>
+  <!-- T6 -->
+  <rect x="746" y="66" width="100" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="796" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 6 讲</text>
+  <text x="796" y="108" text-anchor="middle" fill="#5a6272" font-size="11">后训练</text>
+  <text x="796" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§5 + 附录 C</text>
+  <!-- 箭头 -->
+  <g stroke="#2456c4" stroke-width="1.5">
+    <line x1="118" y1="102" x2="136" y2="102" marker-end="url(#t0m3)"/>
+    <line x1="240" y1="102" x2="258" y2="102" marker-end="url(#t0m3)"/>
+    <line x1="362" y1="102" x2="380" y2="102" marker-end="url(#t0m3)"/>
+    <line x1="484" y1="102" x2="502" y2="102" marker-end="url(#t0m3)"/>
+    <line x1="606" y1="102" x2="624" y2="102" marker-end="url(#t0m3)"/>
+    <line x1="728" y1="102" x2="746" y2="102" marker-end="url(#t0m3)"/>
+  </g>
+  <!-- 主题带 -->
+  <rect x="14" y="168" width="344" height="30" rx="6" fill="#dbe6f8"/>
+  <text x="186" y="188" text-anchor="middle" fill="#163a86" font-size="11">主线 A：把「读入」变便宜（compute）</text>
+  <rect x="380" y="168" width="344" height="30" rx="6" fill="#dbe6f8"/>
+  <text x="552" y="188" text-anchor="middle" fill="#163a86" font-size="11">主线 B：把「笔记」变小、变便宜（storage/bandwidth）</text>
+  <line x1="188" y1="138" x2="186" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
+  <line x1="310" y1="138" x2="310" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
+  <line x1="432" y1="138" x2="432" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
+  <line x1="554" y1="138" x2="554" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
+  <line x1="676" y1="138" x2="676" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
+  <line x1="796" y1="138" x2="796" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
+</svg>
+<p class="cap"><b>图 4</b>｜七讲地图。第 0–1 讲对应主线 A（算力），第 2–4 讲对应主线 B（存储与带宽），第 5–6 讲是数据侧的两讲。全部链接见页首与页尾的系列导航。</p>
+</div>
+
+<table>
+  <tr><th>讲次</th><th>主题</th><th>论文对应章节</th><th>一句话内容</th></tr>
+  <tr><td><b>第 0 讲（本篇）</b></td><td>总览</td><td>摘要、§1、§2 粗读、§6</td><td>三重瓶颈框架、成绩单与全家桶地图</td></tr>
+  <tr><td><a href="deepseek-v41-t1-ced.html">第 1 讲</a></td><td>CED 架构</td><td>§2.1–2.2</td><td>解码器全局 KV 直接从编码器末层投影，prefill 计算近乎减半</td></tr>
+  <tr><td><a href="deepseek-v41-t2-csa2.html">第 2 讲</a></td><td>CSA2 注意力</td><td>§2.3、§3.1.2</td><td>Full/Reindex/Reuse 三模式跨层复用 KV 与索引；层级稀疏索引器</td></tr>
+  <tr><td><a href="deepseek-v41-t3-extensions.html">第 3 讲</a></td><td>架构扩展</td><td>§2.4–2.5</td><td>Single-Pass mHC、Engram、DSpark、FP4 主 KV cache</td></tr>
+  <tr><td><a href="deepseek-v41-t4-infra.html">第 4 讲</a></td><td>基础设施</td><td>§3</td><td>多模态训练系统、CSA2 分布式训练、持久 KV 管理与 SWA Bounded Replay</td></tr>
+  <tr><td><a href="deepseek-v41-t5-pretraining.html">第 5 讲</a></td><td>预训练</td><td>§4</td><td>45T token 多模态语料、无稠密热身的稀疏注意力训练、Muon 家族优化器</td></tr>
+  <tr><td><a href="deepseek-v41-t6-posttraining.html">第 6 讲</a></td><td>后训练</td><td>§5、附录 C</td><td>任务合成、DSec 沙箱、异步 RL/OPD、推理努力控制</td></tr>
+</table>
+<p class="cap"><b>表 4</b>｜七讲一览。链接指向各讲文件，尚未写出的讲次打开会是 404，请以仓库实际发布进度为准。</p>
+
+<h2 id="s7">7. 论文自己承认的局限与未来方向（§6）</h2>
+
+<p>技术报告的 Conclusion 部分通常最有信息量，V4.1-Flash 的 §6 写得相当诚实，分三层：</p>
+
+<h3>7.1 已做的声明</h3>
+<p>通过架构、缓存精度与部署策略的联合优化，全局 KV 压到 890 B/token（V4-Flash 的约 1/4）、持久 KV 压到约 1/8，同时性能显著优于 V4-Flash；与 GLM-5.3、Kimi-K3 等当代开源模型相比参数足迹小得多，却在关键基准上 comparable 甚至部分任务 superior。</p>
+
+<h3>7.2 局限（Limitations）——两条都关于「压缩的边界」</h3>
+<ul>
+<li><b>鲁棒性边界尚未完全刻画</b>：虽然 V4.1 简化了 V4-Flash 的不少组件，但新架构也带来了新的失效面。内部评测覆盖了大量边界条件、未观察到系统性能力退化，但论文明确承认：没有任何有限测试集能覆盖所有极端输入与部署条件——<b>CSA2 的潜在选择错误（selection errors）与 SWA Bounded Replay 的近似状态重建，在未测试的边界情况下仍可能造成能力退化</b>。</li>
+<li><b>基准饱和掩盖了真实差距</b>：V4.1-Flash 与 Fable-5、GPT-6 Astra 等顶级模型的分数差距很小、日常体验相当，但论文直言「分数接近不等于在最难任务上追平前沿」——复杂高难度推理与边缘案例上与领先闭源系统仍有差距。</li>
+</ul>
+
+<h3>7.3 未来方向（Future Directions）</h3>
+<ul>
+<li><b>扩大压力测试与评测栈</b>，重点关注长上下文稀疏检索与 cache 恢复边界处的 SWA 状态重建；持续监控真实负载、系统性地刻画失效模式与鲁棒性边界。</li>
+<li><b>持续更新评测协议</b>，严格评估最先进的推理边界。</li>
+<li><b>数据、模型容量与 RL 的协同扩展（coordinated scaling）</b>：以 V4.1-Flash 为新起点，攻关大规模数据合成与 RL 扩展的关键难题。</li>
+<li><b>模型-脚手架协同设计（model–harness co-design）</b>：让模型与 Agent 框架作为一个联合系统一起进化优化。</li>
+<li>总纲：<b>降本与能力扩展两条腿走路</b>，让高能力 Agent 更易得、更易部署。</li>
+</ul>
+
+<h2 id="s8">8. 本讲小结与自测清单</h2>
+
+<h3>8.1 本讲小结</h3>
+<ul>
+<li>V4.1-Flash 是 552B 主干（+196B Engram）的多模态 MoE 模型，1M 上下文，prefill 激活 8B / decode 激活 16B，预训练 45T token。</li>
+<li>它的靶子是长程 Agent 的<b>三重瓶颈</b>：prefill 算力（CED 近乎减半）、存储（CSA2+FP4 把全局 KV 压到 890 B/token ≈ V4-Flash 的 1/4、V1 的 1/437）、带宽/持久存储（SWA Bounded Replay 把持久 KV 压到约 1/8）。</li>
+<li>压缩的哲学：全局分支大胆共享与简化（纯 CSA2 + 三种复用模式 + 层级索引器），局部分支（SWA）保持逐层独立与 FP8 精度。</li>
+<li>成绩：性能不但没掉还反超基线，与 1.6T 的 V4-Pro-Base 相当，Agent 任务可完成 95% 以上真实任务；诚实承认 CSA2 选择错误与近似重建的鲁棒性边界、以及最难任务上的差距。</li>
+</ul>
+
+<h3>8.2 自测清单（点击括号展开答案）</h3>
+<ol>
+<li><b>为什么说 Agent 工作负载是「input-heavy」的？这对模型设计提出了什么要求？</b><br>
+<details><summary>答案</summary>Agent 每次工具调用都携带完整历史与工具返回重新请求模型，读入的 token 远多于生成；一旦 KV cache 未命中就要重新 prefill 大段文本。因此模型要优先降低 prefill 的计算成本（CED：prefill 只需跑一半的层，激活 8B），并让 KV cache 便宜地持久化与复用。</details></li>
+<li><b>全局 KV 和 SWA KV 有什么本质区别？为什么 SWA KV 不适合长期持久化？</b><br>
+<details><summary>答案</summary>全局 KV 覆盖全部上下文、体积随序列增长、必须常驻 HBM；SWA KV 只保留最近 \(n_{win}\)=128 个 token、体积与序列长度无关。SWA KV 的复用只发生在活跃会话的分钟级窗口内、会话结束即失效，与持久 cache 的 72 小时级保留策略不匹配——长期存 SSD 花钱买了一个基本不会命中的缓存（§3.2.1）。</details></li>
+<li><b>890 bytes/token 这个数字压缩了什么？两个倍数（1/4 与 437 倍）分别相对谁？</b><br>
+<details><summary>答案</summary>890 B/token 是 V4.1-Flash 的<b>全局 KV cache</b>（常驻 HBM 部分）每 token 体积；1/4 相对 DeepSeek-V4-Flash，437 倍相对 DeepSeek-V1（摘要、Figure 1(b)、§6）。</details></li>
+<li><b>CSA2 的三种模式分别复用什么、各自解决什么？</b><br>
+<details><summary>答案</summary>Full 模式完整计算（生成全局 KV、跑索引）；Reindex 模式复用全局 KV 与 indexer K、用自己的 Q 重新选 top-K（省缓存但不省选择自由度）；Reuse 模式连 top-K 索引也复用、跳过索引计算（最省）。存储省在共享 KV，计算省在复用索引，两者解耦。</details></li>
+<li><b>SWA Bounded Replay 用什么换了什么？为什么敢这么换？</b><br>
+<details><summary>答案</summary>用「近似」换「重算」：丢失滑窗状态后不再精确重放 \(L \times n_{win}\) 个 token，只重放最近 \(n_{win}\)=128 个并截断滑窗，接受近似状态。敢换的依据是实验显示性能退化可忽略；且后训练时同步模拟了这种重放（train-aware adaptation，§3.2.2）。论文同时在 §6 承认这是需要在极端边界下继续压力测试的点。</details></li>
+<li><b>「推理努力」旋钮是怎么训练出来的？API 的 max/high/low 对应什么数值？</b><br>
+<details><summary>答案</summary>RL 时在系统提示里注入标量 \(b \in \{1,\dots,100\}\)，同组内做组相对优势计算，长度惩罚系数随 b 指数衰减 \(k(b)=k_0\exp(-(b-b_{min})/\tau)\)——高努力档位允许更长的思考（§5.1.4）。API 三档 max/high/low 对应 \(b=100/75/50\)（§5.1.4 表 2）。</details></li>
+</ol>
+
+<div class="infer">关于本讲的一点阅读提示：论文页脚的印刷页码与 PDF 物理页一致（第 1 页即标题页），与本系列部分早期报告「物理页 = 印刷页 + 3」的规则不同；本讲引用一律以章节号为准，避免页码歧义。</div>
+
+<footer>
+<ul class="refs">
+  <li><b>本系列</b>：<a href="deepseek-v41-t1-ced.html">第 1 讲 · CED</a>｜<a href="deepseek-v41-t2-csa2.html">第 2 讲 · CSA2</a>｜<a href="deepseek-v41-t3-extensions.html">第 3 讲 · 架构扩展</a>｜<a href="deepseek-v41-t4-infra.html">第 4 讲 · 基础设施</a>｜<a href="deepseek-v41-t5-pretraining.html">第 5 讲 · 预训练</a>｜<a href="deepseek-v41-t6-posttraining.html">第 6 讲 · 后训练</a></li>
+  <li><b>背景报告（交叉引用）</b>：<a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>｜<a href="deepseek-v4-attention.html">DeepSeek-V4 Attention（CSA/HCA）</a>｜<a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV cache</a>｜<a href="deepseek-v4-lightning-indexer.html">Lightning Indexer</a>｜<a href="csa-compression.html">CSA 压缩过程详解</a>｜<a href="deepseek-moe.html">DeepSeekMoE</a>｜<a href="deepseek-mhc.html">mHC</a></li>
+  <li><b>入门系列</b>：MoE <a href="moe-t0-foundation.html">第 0 讲</a>｜量化 <a href="quant-t0-foundation.html">第 0 讲</a>（FP4/FP8 背景见 <a href="quant-t4-ultra-low-bit.html">第 4 讲</a>、<a href="quant-t5-kv-systems.html">第 5 讲</a>）｜RL <a href="rl-t0-foundation.html">第 0 讲</a>（GRPO 背景 <a href="rl-t5-rlvr-grpo.html">第 5 讲</a>）</li>
+  <li><b>论文</b>：DeepSeek-AI. <i>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</i>. 本地 <code>paper/deepseek_v41.pdf</code>；模型权重 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash">deepseek-ai/DeepSeek-V4.1-Flash</a>。本讲未引用官方推理源码（本讲为纯论文综述，代码级分析见后续讲次）。</li>
+</ul>
+</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

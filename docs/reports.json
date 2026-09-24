@@ -1,5 +1,47 @@
 [
   {
+    "slug": "deepseek-v41-t0-overview",
+    "title": "DeepSeek-V4.1 零基础七讲 · 第 0 讲：总览——为长程 Agent 而生的 KV cache 压缩之作",
+    "date": "2026-09-20",
+    "paper": "DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression（本地 paper/deepseek_v41.pdf）"
+  },
+  {
+    "slug": "deepseek-v41-t1-ced",
+    "title": "DeepSeek-V4.1 零基础七讲 · 第 1 讲：CED 因果编码器-解码器架构",
+    "date": "2026-09-20",
+    "paper": "DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression（本地 paper/deepseek_v41.pdf）"
+  },
+  {
+    "slug": "deepseek-v41-t2-csa2",
+    "title": "DeepSeek-V4.1 零基础七讲 · 第 2 讲：CSA2 注意力——跨层 KV 复用与层级稀疏索引",
+    "date": "2026-09-20",
+    "paper": "DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression（本地 paper/deepseek_v41.pdf）"
+  },
+  {
+    "slug": "deepseek-v41-t3-extensions",
+    "title": "DeepSeek-V4.1 零基础七讲 · 第 3 讲：架构扩展篇——Single-Pass mHC、Engram、DSpark 与 FP4 Main KV Cache",
+    "date": "2026-09-20",
+    "paper": "DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression（本地 paper/deepseek_v41.pdf）"
+  },
+  {
+    "slug": "deepseek-v41-t4-infra",
+    "title": "DeepSeek-V4.1 零基础七讲·第 4 讲：基础设施——KV cache 的存储层级、持久缓存管理与 SWA Bounded Replay",
+    "date": "2026-09-20",
+    "paper": "DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression（本地 paper/deepseek_v41.pdf）"
+  },
+  {
+    "slug": "deepseek-v41-t5-pretraining",
+    "title": "DeepSeek-V4.1 零基础七讲 · 第 5 讲：预训练——45T token 多模态语料是怎么炼成的",
+    "date": "2026-09-20",
+    "paper": "DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression（本地 paper/deepseek_v41.pdf）"
+  },
+  {
+    "slug": "deepseek-v41-t6-posttraining",
+    "title": "DeepSeek-V4.1 零基础七讲 · 第 6 讲：后训练——数据、环境与异步基础设施",
+    "date": "2026-09-20",
+    "paper": "DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression（本地 paper/deepseek_v41.pdf）"
+  },
+  {
     "slug": "rl-t7-score-centering",
     "title": "RL 训练工程师零基础七讲 · 番外篇：Score Centering 精读（TIM 漂移、一行修复、与重要性采样对比）",
     "date": "2026-09-20",

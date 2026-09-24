@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek-V4.1 零基础七讲 · 第 3 讲：架构扩展篇——Single-Pass mHC、Engram、DSpark 与 FP4 Main KV Cache</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DeepSeek-V4.1 零基础七讲 · 第 3 讲：架构扩展篇</h1>
+<p style="color:var(--muted);margin-top:0">Single-Pass mHC · Engram · DSpark · FP4 Main KV Cache —— 主线之外的四个「加/改」件，各自怎么工作</p>
+
+<div class="meta">
+<p style="margin:4px 0"><b>日期：</b>2026-09-20　<b>系列：</b>DeepSeek-V4.1 零基础七讲 · 第 3 讲（架构扩展篇）</p>
+<p style="margin:4px 0"><b>论文：</b><i>DeepSeek-V4.1-Flash Technical Report</i>（DeepSeek-AI），本地 <code>paper/deepseek_v41.pdf</code>（51 页）。本讲覆盖 §2.4 Efficient Architectural Extensions 全部四小节、§3.1.3（Engram 训练侧）、§2.5（Engram 相关优化器）、§1 Introduction（定位）与 §4.2.1/§6（配置与验证数字）。</p>
+<p style="margin:4px 0"><b>背景阅读：</b><a href="deepseek-mhc.html">DeepSeek mHC 解读</a>（mHC 原版详解）· <a href="deepseek-v4-architecture.html">DeepSeek-V4 总体架构解读</a> · <a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV Cache 组织解读</a> · <a href="quant-t4-ultra-low-bit.html">量化七讲·第 4 讲（MXFP4/NVFP4）</a> · <a href="quant-t5-kv-systems.html">量化七讲·第 5 讲（KV Cache 量化）</a></p>
+<p style="margin:4px 0"><b>说明：</b>本讲只讲四个「架构扩展」；CED 架构与 CSA2 注意力这两条 KV 压缩主线见 <a href="deepseek-v41-t1-ced.html">第 1 讲</a> 与 <a href="deepseek-v41-t2-csa2.html">第 2 讲</a>。</p>
+</div>
+
+<nav style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 20px;margin:20px 0;font-size:0.93em">
+<b>系列导航</b>　
+<a href="deepseek-v41-t0-overview.html">第 0 讲·总览</a>｜
+<a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a>｜
+<a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a>｜
+<b style="color:var(--accent)">第 3 讲·架构扩展（本篇）</b>｜
+<a href="deepseek-v41-t4-infra.html">第 4 讲·基础设施</a>｜
+<a href="deepseek-v41-t5-pretraining.html">第 5 讲·预训练</a>｜
+<a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>
+</nav>
+
+<div class="tldr">
+<p><b>TL;DR：</b>DeepSeek-V4.1-Flash 的 KV cache 压缩由 CED + CSA2 + SWA Bounded Replay 三条主线完成（第 1、2 讲），而本讲的四个「架构扩展」是主线之外的加/改件：<b>① Single-Pass mHC</b> 把 mHC 残差流的「输入混合系数」推迟一个 block 使用，解开了 kernel 之间的串行依赖，配合 Mega-mHC 部署内核把激活访存流量从 \((4n+4)d\) 砍到 \((2n+2)d\)（正好减半、达到理论下界）；<b>② Engram</b> 挂上 196B 参数的「稀疏查表记忆模块」（2/3/4-gram 多头哈希查表，FP8 存储），把「死记硬背」从主干计算里解耦出去；<b>③ DSpark</b> 是预训练后单独训练的投机解码模块：一次前向并行产出 5 个草稿位置，用置信度调度验证长度；<b>④ FP4 Main KV Cache</b> 把主 KV cache 从 V4 的 FP8 压到 4-bit（E2M1 + 每 16 通道一个 E4M3 scale，去掉了 NVFP4 的二级全局 scale），靠对数值范围的严格论证保精度，主 KV 存储几乎减半。四者论文均只给「性能几乎无损」的定性结论，未附单独消融表。</p>
+</div>
+
+<h2 id="s0">0. 先搞清楚「架构扩展」是什么定位</h2>
+
+<p>读这一讲之前，先把四个组件在论文里的身份摆正。DeepSeek-V4.1-Flash 的头号目标是<b>压 KV cache</b>——先补一句小白解释：模型在生成文字时，每处理一个 token 都要留下中间计算结果（Key/Value 向量），供后面的 token「回看」上文，这堆留存的向量就是 <b>KV cache</b>；上下文越长它越大，是长文本推理最吃显存的部分。</p>
+
+<p>论文 §1 把压缩主线归纳为三个层面：<b>架构层</b>是 CED（因果编码器-解码器，让解码器的全局 KV 从编码器末层投影出来）+ CSA2（跨层共享全局 KV 与 Top-K 索引）；<b>精度层</b>是 FP4 全局 KV cache；<b>部署层</b>是 SWA Bounded Replay（不再持久化滑窗 KV，用少量重算换存储）。这三条是「主角」。</p>
+
+<p>而 §2.4 的四个组件，论文的定位原话是：「Complementing CED and CSA2, we further <b>streamline</b> the original DeepSeek-V4 architecture」——即在主线之外<b>进一步精简/增强</b>原架构：mHC 升级为 Single-Pass 版（省访存）、集成 Engram（增强能力）、引入 DSpark（加速解码）、主 KV 压到 FP4（省存储）。论文 §2.1 明确这四者<b>都属于 V4.1-Flash 的正式组成部分</b>（图 3 的总体架构图明确画出了 Single-Pass mHC、Engram、DSpark），并未描述任何「可选开关」；所谓「可能并非全开」的猜测，唯一依据是 DSpark 在预训练<b>之后</b>才单独训练、Mega-mHC 单内核只用于部署（训练侧仍保留多 kernel 实现），论文并未说它们可以关闭——这是论文的原文立场，本讲照实呈现。</p>
+
+<p>四个组件与主线的分工一张表看全：</p>
+
+<table>
+<tr><th>组件</th><th>动的是什么</th><th>一句话收益</th><th>论文中的性质</th></tr>
+<tr><td><b>Single-Pass mHC</b></td><td>残差流维护方式（训练公式 + 部署内核）</td><td>激活访存流量减半（\((4n+4)d \to (2n+2)d\)）</td><td>对 V4 已有 mHC 的精简升级</td></tr>
+<tr><td><b>Engram</b></td><td>新增 196B 参数的查表记忆模块</td><td>「解耦记忆与计算」，增强长尾知识等能力</td><td>沿用前作 Engram，做两处修改</td></tr>
+<tr><td><b>DSpark</b></td><td>解码方式（投机解码）</td><td>半自回归草稿 + 置信度调度验证，提升解码吞吐</td><td>预训练后单独训练的模块</td></tr>
+<tr><td><b>FP4 Main KV Cache</b></td><td>主 KV cache 的存储精度</td><td>相对 V4 的 FP8 主 KV 存储几乎减半</td><td>QAT（量化感知训练），post-training 引入</td></tr>
+</table>
+<p class="cap"><b>表 1</b>｜四个架构扩展总览（依据论文 §1、§2.1、§2.4）。注意前三者<b>都不直接压 KV cache</b>：mHC 省的是激活的显存读写，Engram 换来的是能力，DSpark 省的是解码时间。</p>
+
+<h2 id="s1">1. Single-Pass mHC：两趟变一趟的「残差流水线」</h2>
+
+<h3>1.1 背景一分钟：mHC 原版是什么</h3>
+
+<p>标准 Transformer 的<b>残差连接</b>（residual connection，即「每层的输出直接加回输入」这条主干道，像高速公路的主车道）只有一条 \(d\) 维的信息流。<b>Hyper-Connections（HC）</b>把它加宽成 \(n\) 条并行流（\(n \times d\)），用一个「读出」映射从 n 条流里调出本层的输入、一个「写回」映射把输出写回去、一个 \(n\times n\) 的「流间混合」矩阵管 n 条流互相串门。DeepSeek 的 <b>mHC</b>（流形约束超连接）在 HC 基础上把流间混合矩阵约束成「双随机矩阵」（行和 = 列和 = 1），解决 HC 复合增益失控导致的训练不稳定。<a href="deepseek-mhc.html">背景详解见姊妹篇</a>，此处只需记住：mHC 在 V4 里全面启用，本讲配置为 \(n=4\) 条流。</p>
+
+<p>记号对应关系要先说清（两篇论文记号不同）：mHC 论文里的三个映射 \(H^{pre}\)（读出）、\(H^{post}\)（写回）、\(H^{res}\)（流间混合），在 V4.1 论文式 (2) 里分别写作 <b>\(A\)（\(\mathbb{R}^{1\times n}\)，读出/输入混合）、\(C\)（\(\mathbb{R}^{n\times 1}\)，写回）、\(B\)（\(\mathbb{R}^{n\times n}\)，流间混合）</b>。本讲统一用 V4.1 论文的 \(A/B/C\)。</p>
+
+<h3>1.2 动机：FLOPs 不贵，访存才贵</h3>
+
+<p>mHC 的问题不在计算量（n=4 的系数 FLOPs 可忽略），而在<b>激活访存</b>——训练/推理时把中间激活在显存（HBM）里搬进搬出的字节数。现代芯片算力增长远快于显存带宽，「搬数据」常常比「算数据」更耗时，所以激活的读写字节数是实打实的性能账。</p>
+
+<p>V4.1 论文先立了一个理论标尺：mHC 下相邻两个 block 的流更新，理想情况是一次映射 \((X_{l-1}, Y_{l-1}) \to (X_l, \hat{X}_l)\)，需要读 \((n+1)d\)（n 条旧流 + 1 份层输出）、写 \((n+1)d\)，所以<b>下界是 \((2n+2)d\)</b>。\(\hat{X}_l = A_l X_l\) 是当前 block 的层输入，\(Y_{l-1} = F_{l-1}(\hat{X}_{l-1})\) 是上一 block 的输出（\(F_l\) 是 block 内的注意力/MoE 等层函数）。</p>
+
+<p>但 V4 的实际实现是<b>多趟（multi-pass）</b>：由于公式里存在数据依赖，三个 kernel（kernel 即 GPU 上一次成批执行的融合计算单元，起 kernel 有启动与读写开销）必须<b>串行</b>执行：</p>
+
+<div class="formula">\[ X_l = B_{l-1} X_{l-1} + C_{l-1} Y_{l-1} \quad\text{（残差更新，对 } n \text{ 收缩）} \tag{3} \]</div>
+<div class="formula">\[ (A_l, B_l, C_l) = \mathsf{H}(X_l) \quad\text{（系数预测，对 } nd \text{ 收缩）} \tag{4} \]</div>
+<div class="formula">\[ \hat{X}_l = A_l X_l \quad\text{（输入混合，对 } n \text{ 收缩）} \tag{5} \]</div>
+
+<p>逐个符号解释：式 (3) 用上一 block 的流间混合矩阵 \(B_{l-1}\) 混合旧流 \(X_{l-1}\)，再加上写回项 \(C_{l-1}Y_{l-1}\)，得到新流 \(X_l\)；式 (4) 的 \(\mathsf{H}\) 是系数预测器（含归一化与投影，逐 token 动态生成三个系数）；式 (5) 用刚算出的 \(A_l\) 把 n 条流「读出」成一份 d 维层输入 \(\hat{X}_l\)，喂给 \(F_l\)。</p>
+
+<p>麻烦出在式 (4) → 式 (5) 的依赖上：\(\mathsf{H}\) 里有一处对整个隐藏维 \(nd\) 的<b>归约</b>（reduction，即把 d 个维度加总求一个统计量，比如 RMS 归一化的均方根——必须看完全部 d 维才能算出）。所以 \(A_l\) 要等 \(X_l\) 全部读完才算得出来，式 (5) 只能<b>再读一遍 \(X_l\)</b>。三个 kernel 分别读 \((n+1)d\)、\(nd\)、\(nd\)，共写 \((n+1)d\)；把 \(F_l\) 里的 pre-norm（层函数前的归一化）也算上，<b>总激活访存流量为 \((4n+4)d\)，正好是下界的 2 倍</b>。</p>
+
+<p>论文还提到一个中间方案：由于 \(\mathsf{H}\) 的归一化权重可以离线折叠进投影权重、RMS 除法放在投影之后，残差更新和系数预测可以<b>共享一次对残差的遍历</b>（每算出一小块 \(X_l\) 就立刻累计投影输出与平方和），只剩输入混合因为 \(A_l\) 未就绪而必须第二遍读 \(X_l\)——即两趟实现，\((3n+2)d\)。但两趟仍比下界多一次 \(X_l\) 的读。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 420" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="mh1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <text x="10" y="24" font-size="14" font-weight="bold" fill="#1a1f2e">(a) V4 多趟实现：3 个 kernel 串行，X_l 被读两次</text>
+  <rect x="10" y="52" width="78" height="56" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="49" y="76" text-anchor="middle" fill="#1a1f2e" font-weight="bold">X_l</text>
+  <text x="49" y="94" text-anchor="middle" fill="#5a6272">n×d 流</text>
+  <rect x="118" y="46" width="176" height="68" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="206" y="68" text-anchor="middle" fill="#1a1f2e" font-weight="bold">kernel ① 残差更新</text>
+  <text x="206" y="86" text-anchor="middle" fill="#5a6272">B(l-1)·X(l-1) + C(l-1)·Y(l-1)</text>
+  <text x="206" y="104" text-anchor="middle" fill="#5a6272">读 (n+1)d　式(3)</text>
+  <rect x="324" y="46" width="196" height="68" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="422" y="68" text-anchor="middle" fill="#1a1f2e" font-weight="bold">kernel ② 系数预测</text>
+  <text x="422" y="86" text-anchor="middle" fill="#5a6272">(A_l, B_l, C_l) = H(X_l)</text>
+  <text x="422" y="104" text-anchor="middle" fill="#5a6272">读 nd（需对 d 全归约）式(4)</text>
+  <rect x="550" y="46" width="200" height="68" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="650" y="68" text-anchor="middle" fill="#1a1f2e" font-weight="bold">kernel ③ 输入混合</text>
+  <text x="650" y="86" text-anchor="middle" fill="#5a6272">X̂_l = A_l · X_l</text>
+  <text x="650" y="104" text-anchor="middle" fill="#5a6272">第二次读 X_l　式(5)</text>
+  <rect x="782" y="52" width="88" height="56" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="826" y="76" text-anchor="middle" fill="#1a1f2e">层函数 F_l</text>
+  <text x="826" y="94" text-anchor="middle" fill="#5a6272">Attn/MoE</text>
+  <line x1="88" y1="80" x2="114" y2="80" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
+  <line x1="294" y1="80" x2="320" y2="80" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
+  <line x1="520" y1="80" x2="546" y2="80" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
+  <line x1="750" y1="80" x2="778" y2="80" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
+  <text x="422" y="134" text-anchor="middle" font-size="12" fill="#c0392b" font-weight="bold">串行依赖：③ 必须等 ② 算出 A_l → 同一份 X_l 读两遍，总流量 (4n+4)d = 2× 下界</text>
+
+  <text x="10" y="196" font-size="14" font-weight="bold" fill="#1a1f2e">(b) Single-Pass mHC + Mega-mHC：单 kernel，X_l 只读一次、残差只写一次</text>
+  <rect x="10" y="256" width="78" height="56" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="49" y="280" text-anchor="middle" fill="#1a1f2e" font-weight="bold">X_l</text>
+  <text x="49" y="298" text-anchor="middle" fill="#5a6272">n×d 流</text>
+  <rect x="118" y="216" width="632" height="136" rx="10" fill="#f2f7ee" stroke="#2f9e63" stroke-width="2"/>
+  <text x="434" y="240" text-anchor="middle" fill="#1d5c38" font-weight="bold">Mega-mHC 单 kernel（沿隐藏维分 tile 逐块处理）</text>
+  <text x="140" y="268" fill="#2a3040">每块 tile 同时干两件事，互不等待：</text>
+  <text x="140" y="292" fill="#2a3040">① 输入混合 = A(l-1)·X_l —— 用「上一个 block」留下的系数，无需等本块归约完成</text>
+  <text x="140" y="316" fill="#2a3040">② 累计归约量 → 为「下一个 block」预测 (A_l, B_l, C_l)</text>
+  <text x="140" y="340" fill="#5a6272">另含输入 pre-norm 与 FP8 转换；残差 X 流只读一次、写一次</text>
+  <rect x="782" y="256" width="88" height="56" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="826" y="280" text-anchor="middle" fill="#1a1f2e">层函数 F_l</text>
+  <text x="826" y="298" text-anchor="middle" fill="#5a6272">Attn/MoE</text>
+  <line x1="88" y1="284" x2="114" y2="284" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
+  <line x1="750" y1="284" x2="778" y2="284" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
+  <text x="434" y="386" text-anchor="middle" font-size="12" fill="#1d7a4a" font-weight="bold">总流量 (2n+2)d = 理想下界，激活访存流量减半（相对原实现）</text>
+</svg>
+<p class="cap"><b>图 1</b>｜多趟 vs Single-Pass（依据论文 §2.4.1 式 (3)–(6) 及其访存分析）。关键差别只有一处：输入混合用的系数从「本 block 现算的 \(A_l\)」换成「上一 block 留下的 \(A_{l-1}\)」，串行依赖随之消失，三个 kernel 融成一个。</p>
+</div>
+
+<h3>1.3 机制：把系数「错位一格」</h3>
+
+<p>Single-Pass mHC 的改动小到惊人——把输入混合系数整体<b>推迟一个 block</b>：</p>
+
+<div class="formula">\[ X_{l+1} = B_l X_l + C_l\, F_l\big(A_{l-1} X_l\big), \qquad (A_l, B_l, C_l) = \mathsf{H}(X_l) \tag{6} \]</div>
+
+<p>与式 (2) 逐项对比：唯一的差别是 \(F_l\) 的输入从 \(A_l X_l\) 换成 \(A_{l-1} X_l\)。也就是说，第 \(l\) 个 block 用第 \(l-1\) 个 block 算出的读出系数来调自己的输入——系数「晚到一步」，但永远在手边。这样一来，\(X_l\) 的每一小块（tile）算出来后可以<b>立刻</b>同时用于两件事：输入混合（用现成的 \(A_{l-1}\)）与系数预测（为下一个 block 累计归约量），不必等全维归约完成。论文的实验结论是「<b>this shift incurs negligible performance degradation</b>（该错位带来的性能退化可忽略）」。</p>
+
+<p>训练与部署两侧的处理不同（这回答了「是否全开」的疑问）：</p>
+<ul>
+<li><b>预训练侧</b>：保留现有多 kernel 实现——因为错位只改变「每个 block 应用哪一组混合系数」，数学结构不变，沿用旧实现即可；</li>
+<li><b>部署侧</b>：把残差更新、输入混合、系数预测三步融合成<b>一个 kernel，即 Mega-mHC</b>。该 kernel 沿隐藏维分 tile 处理 \(X_l\)，同时完成输入混合与「下一 block 系数」的累计，并把输入 pre-norm 与 FP8 转换也吸收进来。残差流<b>只读一次、写一次</b>，达到理想映射的 \((n+1)d\) 读 + \((n+1)d\) 写。</li>
+</ul>
+
+<p>收益账目汇总（\(n=4\)、\(d=5120\) 时按每 token 激活元素数计）：</p>
+
+<table>
+<tr><th>实现方案</th><th>kernel 数</th><th>激活访存流量（读+写合计）</th><th>n=4 时</th><th>相对下界</th></tr>
+<tr><td>理想单次映射（下界）</td><td>1</td><td>\((2n+2)d\)</td><td>\(10d\)</td><td>1×</td></tr>
+<tr><td>V4 多趟实现（论文 §1 称「四 kernel 版」，§2.4.1 正文列 3 个 kernel + \(F_l\) 内 pre-norm）</td><td>3（+pre-norm）</td><td>\((4n+4)d\)</td><td>\(20d\)</td><td>2×</td></tr>
+<tr><td>两趟融合（共享残差遍历的中间方案）</td><td>2</td><td>\((3n+2)d\)</td><td>\(14d\)</td><td>—</td></tr>
+<tr><td><b>Single-Pass + Mega-mHC</b></td><td><b>1</b></td><td>\((2n+2)d\)</td><td>\(10d\)</td><td><b>1×（达到下界）</b></td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜mHC 各实现的激活访存流量（论文 §2.4.1）。Mega-mHC 对原实现的减半来自 \((4n+4)d \to (2n+2)d\)；论文 §1 的表述是「相对原四 kernel 实现激活访存流量减半」，§2.4.1 正文写「三个 kernel 串行」，两处口径的差异在于是否把 \(F_l\) 内的 pre-norm 单独算一个 kernel，正文数字以 \((4n+4)d\) 为准。</p>
+
+<p><b>收益/代价小结</b>：收益是激活访存精确减半且达到理论下界（对以访存为瓶颈的推理/训练都有直接意义）；代价是把混合系数错位一格（论文称性能退化可忽略）+ 需要编写 Mega-mHC 部署内核（工程成本，论文未展开）。另外 Mega-mHC 与 §3.2 提到的 Mega-Gate、Mega-MoE 同属 DeepGEMM 的融合内核家族，使 Reuse Mode 层在 prefill 只需 15 个 kernel、decode 只需 11 个。</p>
+
+<h2 id="s2">2. Engram：给模型外挂一个「查表式记忆体」</h2>
+
+<h3>2.1 它是什么：把「死记硬背」从主干里解耦出去</h3>
+
+<p>先建立一个直觉：Transformer 处理「记住地球上有多少个国家、某个冷门 API 的参数名」这类<b>事实记忆</b>时，靠的是把知识压进几百亿参数的权重里，每次回忆都要动用大量计算。<b>Engram</b>（论文引用为 Cheng et al., 2026c，原论文标题 <i>Conditional memory via scalable lookup: A new axis of sparsity for large language models</i>，ACL 2026）的思路是：把这部分「记忆」拆出来，改用<b>超大规模查找表（embedding table，可理解为一张巨型「外置笔记本」）</b>存——查表本身几乎不花计算，而且表可以做得极大（本模型 196B 参数）而不增加多少激活计算。这就是论文所说的「<b>decouple memorization from computation</b>（把记忆从计算中解耦）」。</p>
+
+<div class="infer">「Engram」这个名字论文未解释来源。英语中 engram（记忆痕）是神经科学术语，指记忆在脑中留下的物理痕迹，与该模块「外置记忆体」的定位吻合——此为命名动机的推断，非论文原文。</div>
+
+<p>V4.1-Flash 对 Engram 的集成方式是「沿用原设计 + 两处修改」：保留<b>分词器压缩（tokenizer compression）、多头哈希（multi-head hashing）、上下文感知门控（context-aware gating）、多分支整合（multi-branch integration）</b>四大件；第一处修改是<b>去掉短因果卷积</b>（原文：其性能收益不值推理栈里的额外复杂度）；第二处是<b>嵌入表改用「动量更新 + Sinkhorn 平衡」优化</b>（见 §2.4，下文 2.3）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 310" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="eg1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <rect x="8" y="96" width="122" height="72" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="69" y="122" text-anchor="middle" fill="#1a1f2e" font-weight="bold">输入 token 序列</text>
+  <text x="69" y="142" text-anchor="middle" fill="#5a6272">查表地址只由它决定</text>
+  <rect x="156" y="96" width="128" height="72" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="220" y="122" text-anchor="middle" fill="#1a1f2e" font-weight="bold">N-gram 提取</text>
+  <text x="220" y="142" text-anchor="middle" fill="#5a6272">阶数 {2, 3, 4}</text>
+  <text x="220" y="158" text-anchor="middle" fill="#5a6272">（相邻 2/3/4 个 token）</text>
+  <rect x="310" y="96" width="128" height="72" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="374" y="122" text-anchor="middle" fill="#1a1f2e" font-weight="bold">多头哈希</text>
+  <text x="374" y="142" text-anchor="middle" fill="#5a6272">每阶 8 个头</text>
+  <text x="374" y="158" text-anchor="middle" fill="#5a6272">各自独立定位</text>
+  <rect x="464" y="90" width="158" height="84" rx="8" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.6"/>
+  <text x="543" y="114" text-anchor="middle" fill="#1a1f2e" font-weight="bold">embedding 表</text>
+  <text x="543" y="134" text-anchor="middle" fill="#5a6272">每头 ≈16M 条目</text>
+  <text x="543" y="152" text-anchor="middle" fill="#5a6272">容量取不同素数</text>
+  <text x="543" y="168" text-anchor="middle" fill="#b05e10">表与 K/V 投影均 FP8</text>
+  <rect x="648" y="96" width="130" height="72" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="713" y="120" text-anchor="middle" fill="#1a1f2e" font-weight="bold">门控 + 多分支整合</text>
+  <text x="713" y="140" text-anchor="middle" fill="#5a6272">context-aware gating</text>
+  <text x="713" y="156" text-anchor="middle" fill="#5a6272">按上文决定取多少</text>
+  <rect x="736" y="216" width="136" height="60" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="804" y="240" text-anchor="middle" fill="#1a1f2e" font-weight="bold">注入主干</text>
+  <text x="804" y="260" text-anchor="middle" fill="#5a6272">第 1、14 层（0 起始）</text>
+  <line x1="130" y1="132" x2="152" y2="132" stroke="#5a6272" stroke-width="1.4" marker-end="url(#eg1)"/>
+  <line x1="284" y1="132" x2="306" y2="132" stroke="#5a6272" stroke-width="1.4" marker-end="url(#eg1)"/>
+  <line x1="438" y1="132" x2="460" y2="132" stroke="#5a6272" stroke-width="1.4" marker-end="url(#eg1)"/>
+  <line x1="622" y1="132" x2="644" y2="132" stroke="#5a6272" stroke-width="1.4" marker-end="url(#eg1)"/>
+  <polyline points="713,168 713,246 732,246" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#eg1)"/>
+  <text x="80" y="216" font-size="12" fill="#2456c4" font-weight="bold">两个模块，各 98B 参数（合计 196B）</text>
+  <text x="80" y="238" font-size="12" fill="#5a6272">每阶 embedding 总维数 2048；每模块按「engram 并行」行切分到专用进程组</text>
+  <text x="80" y="260" font-size="12" fill="#5a6272">推理：确定性寻址 → 后台 RDMA 从主机内存预取；模块 1 的预取与第一个 Transformer block 计算重叠</text>
+  <text x="80" y="286" font-size="12" fill="#5a6272">模块放在第 1、14 层是为了在训练流水线各阶段之间平衡显存占用（论文原文）</text>
+</svg>
+<p class="cap"><b>图 2</b>｜Engram 查表数据流（依据论文 §2.4.2 与 §3.1.3）。「多头哈希」可类比给每个 N-gram 发 8 张不同编号的门禁卡，各卡指向一张独立的表——8 张表同时命中同一记忆的概率远高于单表，降低哈希碰撞风险；门控则像「按需调亮度」，由上下文决定这段查到的记忆以多大比例混入主干。</p>
+</div>
+
+<h3>2.2 配置与推理侧</h3>
+
+<table>
+<tr><th>配置项</th><th>取值（论文 §2.4.2）</th></tr>
+<tr><td>Engram 参数总量</td><td><b>196B</b>，均分到两个模块（各 98B）</td></tr>
+<tr><td>模块挂载位置</td><td>第 1、14 层（0 起始）——为平衡训练流水线各阶段的显存</td></tr>
+<tr><td>N-gram 阶数</td><td>每模块 {2, 3, 4} 三阶</td></tr>
+<tr><td>哈希头数</td><td>每阶 8 头</td></tr>
+<tr><td>每阶 embedding 总维数</td><td>2048</td></tr>
+<tr><td>每头表容量</td><td>约 16M 条目，各表容量取<b>不同的素数</b></td></tr>
+<tr><td>数值精度</td><td>embedding 表与 K/V 投影均为 <b>FP8</b></td></tr>
+<tr><td>推理预取</td><td>查表地址只由输入 token 序列决定（确定性寻址）→ 后台 RDMA 从主机内存预取；模块 1 的预取与第一个 Transformer block 的计算重叠</td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜Engram 配置。「素数容量」是哈希表的经典技巧：表大小取素数能让哈希键更均匀地散开、减少碰撞聚集（实现惯例；论文只陈述了取素数这一事实）。</p>
+
+<div class="infer">参数量的自洽核对：每模块 3 阶 × 8 头 × 16M 条 × 2048 维 ≈ 983 亿条参数，两模块合计 ≈ 1967 亿，与「196B、两模块均分」吻合（FP8 下表参数 1 字节/条）。论文未给出此算式，属本人核对性推断。</div>
+
+<h3>2.3 训练侧怎么训（§3.1.3 + §2.5）</h3>
+
+<p>196B 的表用普通 Adam 优化器训不动——Adam 要为每个参数存两个动量状态，显存直接爆炸。论文 §2.5 给的解法是<b>「动量更新 + Sinkhorn 平衡」</b>：工作流与 Muon 优化器一致（只维护一份动量缓冲），但把 Muon 里的 Newton–Schulz 正交化换成 <b>Sinkhorn 平衡</b>——对动量更新矩阵交替做行归一化、列归一化，直到每行、每列的均方根（RMS）都约等于 1：</p>
+
+<div class="formula">\[ \Delta_t = \sqrt{n}\, U^{(K)} = \sqrt{n}\, D_r\, \tilde{G}_t\, D_c, \qquad \frac{1}{n}\sum_{j=1}^{n}(\Delta_t)_{ij}^2 \approx 1, \quad \frac{1}{m}\sum_{i=1}^{m}(\Delta_t)_{ij}^2 \approx 1 \tag{7} \]</div>
+
+<p>符号含义：\(\tilde{G}_t\) 是 Nesterov 动量修正后的梯度矩阵；\(D_r, D_c\) 是 Sinkhorn 平衡找出的行、列对角缩放矩阵；\(U^{(K)}\) 是交替归一化 \(K\) 轮后的矩阵；\(\sqrt{n}\) 把「单位行 \(\ell_2\) 范数」换算成「单位行 RMS」；\(m\) 是矩阵较大维（对嵌入表即词表/n-gram 身份数），\(n\) 是隐藏维。直观理解：<b>一行对应一个 token/n-gram 身份、一列对应一个隐藏特征</b>，行与列双向归一化正好利用了这种「身份 × 特征」结构，让每一行的更新量、每一列的更新量都均衡。为数值稳定，RMS 过小的行（\(\rho_i \le \tau\bar{\rho}\)）被掩蔽；有效学习率乘以 \(\gamma = 0.18\) 以对齐 Adam 的更新幅度（接近 Moonlight 的 0.2）。训练配置里 \(K=11\)，Engram 学习率按前作做法放大 5×。论文声称：与 Muon 一样只需一份动量缓冲，且经验上优于 Adam。</p>
+
+<p>工程侧（§3.1.3）的关键设计：</p>
+<ul>
+<li><b>表按行切分</b>到「engram 并行」专用进程组——组大小权衡单卡显存占用与查表通信范围；优化器状态再在表分片的各副本间分摊。</li>
+<li><b>预取前移</b>：查表索引只依赖输入 token 序列，因此在流水线各 stage 开始处理当前步 microbatch 之前，就对整个本地 batch 发起 embedding 预取，尽量不干扰流水线执行。</li>
+<li><b>梯度异步回传</b>：embedding 梯度在反向传播期间先缓冲，主干反向完成后才归还给所属 rank；预取与梯度传输特意安排与<b>视觉编码器的前向/反向重叠</b>（V4.1 是多模态训练，见第 4、5 讲）。</li>
+<li><b>FP8 存取直通 GEMM</b>：embedding 以 FP8 存储与读取，取出的值和缩放因子直接交给后续矩阵乘，省一次反量化。</li>
+<li><b>更新融合</b>：Sinkhorn 归一化跨迭代维护行/列缩放向量，避免每次重写整个归一化矩阵；行归一化与部分列统计累加融合成单个 kernel，减少访存。</li>
+<li><b>RL 阶段</b>：滚动生成（rollout）期间 Engram 表<b>常驻 GPU 显存</b>，降低主机内存压力、避免主机内存碎片导致的 OOM。</li>
+</ul>
+
+<h3>2.4 带来什么能力</h3>
+
+<p>论文对 Engram 的收益表述集中在能力面：§1 说「integrate the Engram conditional memory module <b>to strengthen model capabilities</b>」，§2.1 说它「adds sparsely accessed conditional memory」。原论文标题把它称为「稀疏性的新轴」——即除了 MoE 的专家稀疏之外，再加一条「记忆稀疏」的容量扩展轴。需要如实说明：<b>本报告（V4.1 技术报告）没有给出 Engram 的单独消融数字</b>（如去掉 Engram 各基准掉多少分），其能力收益的证据在 Engram 原论文中，V4.1 报告仅引用其做法。</p>
+
+<h2 id="s3">3. DSpark：会「看情况下注」的投机解码</h2>
+
+<h3>3.1 投机解码是什么（小白版）</h3>
+
+<p>大模型解码时一个 token 要过一遍整个模型，很慢。<b>投机解码（speculative decoding）</b>的思路像「代写 + 批改」：先用一个便宜的小模型（drafter，草稿员）一口气猜出 k 个 token，再让昂贵的大模型（target）<b>一次前向</b>把这 k 个 token 全部批改——对的留下，错的从出错处截断重猜。因为大模型的批改是并行的，一次批改顶好几次生成，快。V3 的 MTP 模块就是 DeepSeek 上一代投机解码方案（随主干一起预训练）；V4.1 改用 <b>DSpark</b>（Cheng et al., 2026a，arXiv:2607.05147）。</p>
+
+<h3>3.2 机制：半自回归草稿 + 置信度调度验证</h3>
+
+<p>论文 §2.4.3 对 DSpark 的一句话定位是「<b>semi-autoregressive drafting with confidence-scheduled verification</b>（半自回归草稿生成 + 置信度调度验证）」，机制四件套：</p>
+
+<ol>
+<li><b>草稿员很小</b>：3 个 Transformer block，滑窗注意力窗口仅 128 token（对比主干 40 层、百万上下文，草稿员便宜到可以忽略）。</li>
+<li><b>半自回归草稿</b>：草稿员<b>单次前向</b>并行算出 <b>5 个草稿位置</b>的 base logits（即每个位置「下一个 token 是什么」的原始打分）——不是老老实实猜一个再猜下一个，所以叫「半」自回归；位置之间的依赖由一个<b>轻量 Markov 头</b>建模（Markov 头即「只看前一个状态」的小预测器，补上并行生成缺失的接续关系）。</li>
+<li><b>置信度头</b>：一个 confidence head 预测每个草稿位置的<b>条件接受概率</b>（这个位置如果被大模型批改，有多大把握被留下），并据此估计<b>前缀存活概率</b>（前 i 个草稿全被接受的概率）。</li>
+<li><b>置信度调度验证</b>：调度器把前缀存活概率与<b>实测的引擎吞吐曲线</b>结合，为<b>每个请求动态选择验证长度</b>——目标是「在当前系统负载下最大化系统级 token 吞吐」。直觉：模型有把握时多验证几个（赚得多），没把握或系统忙时少验证几个（不浪费批改算力），像下注时看牌面和牌桌拥挤程度决定押多少。</li>
+</ol>
+
+<div class="fig">
+<svg viewBox="0 0 880 350" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="ds1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <rect x="10" y="30" width="180" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="100" y="56" text-anchor="middle" fill="#1a1f2e" font-weight="bold">草稿员 drafter</text>
+  <text x="100" y="76" text-anchor="middle" fill="#5a6272">3 个 Transformer block</text>
+  <text x="100" y="92" text-anchor="middle" fill="#5a6272">滑窗 128 token</text>
+  <line x1="190" y1="62" x2="232" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#ds1)"/>
+  <text x="211" y="52" text-anchor="middle" fill="#5a6272">单次前向</text>
+  <rect x="236" y="16" width="240" height="44" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="356" y="35" text-anchor="middle" fill="#1a1f2e">base logits × 5 个草稿位置（并行）</text>
+  <text x="356" y="52" text-anchor="middle" fill="#5a6272">Markov 头建模草稿 token 间依赖</text>
+  <rect x="236" y="66" width="240" height="40" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="356" y="84" text-anchor="middle" fill="#1a1f2e">confidence 头：逐位置条件接受概率</text>
+  <text x="356" y="100" text-anchor="middle" fill="#5a6272">→ 估计前缀存活概率</text>
+  <line x1="476" y1="38" x2="536" y2="58" stroke="#5a6272" stroke-width="1.4" marker-end="url(#ds1)"/>
+  <line x1="476" y1="86" x2="536" y2="66" stroke="#5a6272" stroke-width="1.4" marker-end="url(#ds1)"/>
+  <rect x="540" y="30" width="190" height="64" rx="8" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.6"/>
+  <text x="635" y="54" text-anchor="middle" fill="#1a1f2e" font-weight="bold">调度器（逐请求）</text>
+  <text x="635" y="74" text-anchor="middle" fill="#5a6272">存活概率 × 实测吞吐曲线</text>
+  <text x="635" y="90" text-anchor="middle" fill="#5a6272">→ 动态选验证长度</text>
+  <line x1="730" y1="62" x2="772" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#ds1)"/>
+  <rect x="776" y="30" width="96" height="64" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="824" y="56" text-anchor="middle" fill="#1a1f2e" font-weight="bold">目标模型</text>
+  <text x="824" y="76" text-anchor="middle" fill="#5a6272">一次前向批改</text>
+  <text x="440" y="140" font-size="12" fill="#5a6272">调度目标：在当前系统负载下最大化「期望系统级 token 吞吐」</text>
+  <rect x="10" y="170" width="862" height="150" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="26" y="196" font-size="13" font-weight="bold" fill="#1a1f2e">与 V3 MTP 的训练安排差异（论文 §2.4.3 / §2.1）</text>
+  <text x="26" y="222" fill="#2a3040">· MTP：与主干一起、贯穿整个预训练联合训练。</text>
+  <text x="26" y="248" fill="#2a3040">· DSpark：预训练结束后的<b>专门阶段</b>单独训练——只训 DSpark，主干冻结；</text>
+  <text x="26" y="274" fill="#2a3040">· 后训练（post-training）期间：DSpark 与主干一起继续训练，但 DSpark 目标的梯度<b>不回传进主干</b>；</text>
+  <text x="26" y="300" fill="#2a3040">· 动机：让 DSpark 始终对齐持续进化的策略模型，从而同时加速在线服务与 RL/OPD 的 rollout 生成。</text>
+</svg>
+<p class="cap"><b>图 3</b>｜DSpark 工作流与训练安排（依据论文 §2.4.3）。图中未标注任何加速倍数——V4.1 论文未给出 DSpark 的具体加速数字（原论文 arXiv:2607.05147 才有），本讲不编造。</p>
+</div>
+
+<h3>3.3 收益与代价</h3>
+
+<p><b>收益</b>：论文 §1 定性表述为「improve decoding efficiency through semi-autoregressive draft generation and confidence-scheduled verification」。两点结构性优点值得一提：其一，草稿与验证解耦，验证长度逐请求自适应，天然适合多租户、负载波动的在线服务；其二，DSpark「保持与进化中的策略对齐」，使其在后训练快速迭代时仍能服务 RL/OPD 的 rollout 生成（这部分属于部署与训练系统协同，第 4、6 讲会再遇到）。</p>
+
+<p><b>代价</b>：多出一个需单独训练、随策略持续更新的模块；主干预训练期间没有 MTP 陪伴（论文 §2.1：「We omit the MTP module during backbone pre-training」）。V4.1 论文未给出 DSpark 的接受率/加速倍数等量化数字。</p>
+
+<h2 id="s4">4. FP4 Main KV Cache：主 KV 从 8-bit 再砍到 4-bit</h2>
+
+<h3>4.1 背景：为什么主 KV「敢」用 4-bit</h3>
+
+<p>第 2 讲说过，V4.1 的全局 KV（CED + CSA2 之下，跨层共享的那份）常驻 HBM，是长上下文 KV 占用的大头；V4 已把主 KV 存成 FP8（8-bit 浮点）。现在要再砍到 FP4（4-bit）。这为什么可行？关键在 V4.1 的注意力结构：<b>被量化的缓存值在进入注意力计算前会先反量化（dequantize）回高精度</b>——也就是说 FP4 只用于「存」，不用于「算」，因此<b>不需要硬件原生支持 FP4 矩阵乘</b>，任何平台都能跑。论文原话：「Dequantizing cached values before attention allows us to use a more accurate format without requiring native matrix-multiplication support for that format, preserving compatibility across hardware platforms.」（FP4 格式背景见 <a href="quant-t4-ultra-low-bit.html">量化七讲·第 4 讲</a>；KV cache 量化系统落地见 <a href="quant-t5-kv-systems.html">第 5 讲</a>。）</p>
+
+<h3>4.2 用什么格式：E2M1 + 每 16 通道一个 E4M3 scale（去全局 scale）</h3>
+
+<p>论文的表述分两层，需要掰开：</p>
+<ul>
+<li>论文首先说「采用 <b>OCP 标准的 MXFP4</b> 格式以支持尽可能多的硬件平台，尽管实验中其他格式精度更高」。MXFP4 与 NVFP4 的元素格式同为 <b>E2M1</b>（1 符号 + 2 指数 + 1 尾数，每数量级只有几个刻度、天生很粗），差别在 scale（缩放因子）：<a href="quant-t4-ultra-low-bit.html">第 4 讲</a>讲过，MXFP4 是每 32 个数共享一个 E8M0（纯 2 的幂）scale，NVFP4 是每 16 个数一个 E4M3 scale 外加一个张量级二级全局 scale。</li>
+<li>随后论文给出最终选择：「在评估的约 4-bit 格式中，选择 <b>E2M1 + 每 16 通道一个 E4M3 scale</b>，跟随 <b>NVFP4</b>，但<b>省去其二级全局 scale</b>，以平衡精度与简洁。」即 scale 布局取 NVFP4 的（组大小 16、E4M3），但只有一级 scale。</li>
+</ul>
+
+<div class="infer">两句话并存的理解：元素格式 E2M1 属于 OCP FP4 标准（MXFP4/NVFP4 共用），保住了「硬件平台兼容」这一层；而由于缓存值在注意力前反量化、不走硬件原生 FP4 矩阵乘，scale 布局不必迁就硬件 tile，因此可以选实验中更准的 NVFP4 式「每 16 通道 E4M3」并再省掉全局 scale。这是对论文行文逻辑的解释性推断，论文未明说两句之间的衔接。</div>
+
+<p><b>省掉全局 scale 为什么安全？</b>论文给了一段干净的量级论证——全局 scale 本来的作用是防止数值超出格式上限，而这里上限富余得很：</p>
+<ul>
+<li>该格式可表示的最大幅值 = E4M3 scale 上限 × E2M1 元素上限 = \(448 \times 6 = 2688\)；</li>
+<li>训练出的最大 RMSNorm 权重幅值约 <b>1</b>，故经 RMS 归一化后，<b>512 通道 KV latent 的 \(\ell_2\) 范数至多约 \(\sqrt{512}\)</b>；</li>
+<li><b>RoPE 不改变范数</b>（RoPE 是旋转变换，只转方向不拉长度），所以旋转后各通道绝对值仍被 \(\sqrt{512} \approx 22.6\) 界住；</li>
+<li>训练中实际观测到的最大幅值约 <b>10</b>。</li>
+</ul>
+
+<p>\(10 \ll 22.6 \ll 2688\)：观测峰值距格式上限还有两个数量级以上的余量，省掉全局 scale「未造成可测量的精度下降（no measurable decrease in accuracy）」，还简化了缓存布局。</p>
+
+<h3>4.3 怎么训、怎么量化</h3>
+
+<ul>
+<li><b>QAT（quantization-aware training，量化感知训练——训练时就模拟量化误差，让模型适应低精度）</b>：V4 已对 FP4 indexer 的 Q/K 用 QAT（那是为加速索引计算、缩小索引缓存）；V4.1 把 QAT 扩展到主 KV cache——这里 FP4 的目的是<b>省存储</b>而非加速矩阵乘。论文 §1 概括为「训练期间使用 FP4 全局 KV cache，性能退化极小（only marginal performance degradation）」；§2.4.4 落到实处：<b>QAT 在 post-training 阶段引入</b>。</li>
+<li><b>量化时机：RoPE 之后</b>。缓存值在 RoPE（旋转位置编码，给向量「盖上位置戳」的旋转操作）之后量化。先量化再 RoPE 在实验中只有边际的精度改善，却会在解码时引入额外开销，得不偿失。</li>
+<li><b>格式统一</b>：非 RoPE 分量与 RoPE 分量用同一量化格式（V4 的 MLA 式缓存常见「部分 RoPE」设计，两段分别处理，此处格式保持一致）。</li>
+<li><b>SWA KV 仍保留 FP8</b>：滑窗 KV 对量化敏感（sensitivity to quantization），不跟风压到 FP4。注意滑窗 KV 本来就只在窗口内保留、体量小且不进持久缓存（第 1、2 讲），压它的收益小、风险大。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 880 330" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="fq1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <rect x="10" y="52" width="130" height="60" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="75" y="76" text-anchor="middle" fill="#1a1f2e" font-weight="bold">KV latent</text>
+  <text x="75" y="96" text-anchor="middle" fill="#5a6272">512 通道</text>
+  <rect x="170" y="52" width="140" height="60" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="240" y="76" text-anchor="middle" fill="#1a1f2e">RMSNorm</text>
+  <text x="240" y="96" text-anchor="middle" fill="#5a6272">权重最大幅值 ≈ 1</text>
+  <rect x="340" y="52" width="120" height="60" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="400" y="76" text-anchor="middle" fill="#1a1f2e">RoPE</text>
+  <text x="400" y="96" text-anchor="middle" fill="#5a6272">保持 ℓ2 范数</text>
+  <rect x="490" y="40" width="200" height="84" rx="8" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.6"/>
+  <text x="590" y="62" text-anchor="middle" fill="#1a1f2e" font-weight="bold">FP4 量化（RoPE 后）</text>
+  <text x="590" y="82" text-anchor="middle" fill="#5a6272">元素：E2M1（±6 封顶）</text>
+  <text x="590" y="100" text-anchor="middle" fill="#5a6272">scale：每 16 通道一个 E4M3</text>
+  <text x="590" y="116" text-anchor="middle" fill="#b05e10">无二级全局 scale</text>
+  <rect x="720" y="52" width="150" height="60" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="795" y="76" text-anchor="middle" fill="#1a1f2e" font-weight="bold">FP4 主 KV cache</text>
+  <text x="795" y="96" text-anchor="middle" fill="#5a6272">HBM / SSD 各省约一半</text>
+  <line x1="140" y1="82" x2="166" y2="82" stroke="#5a6272" stroke-width="1.4" marker-end="url(#fq1)"/>
+  <line x1="310" y1="82" x2="336" y2="82" stroke="#5a6272" stroke-width="1.4" marker-end="url(#fq1)"/>
+  <line x1="460" y1="82" x2="486" y2="82" stroke="#5a6272" stroke-width="1.4" marker-end="url(#fq1)"/>
+  <line x1="690" y1="82" x2="716" y2="82" stroke="#5a6272" stroke-width="1.4" marker-end="url(#fq1)"/>
+  <polyline points="795,112 795,150 400,150 400,176" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#fq1)"/>
+  <rect x="320" y="180" width="160" height="52" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="400" y="202" text-anchor="middle" fill="#1a1f2e">读出时反量化</text>
+  <text x="400" y="220" text-anchor="middle" fill="#5a6272">再进注意力计算</text>
+  <text x="500" y="202" fill="#5a6272">→ 不需要硬件原生 FP4 矩阵乘，跨平台兼容</text>
+  <rect x="10" y="252" width="862" height="66" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="26" y="274" font-size="13" font-weight="bold" fill="#1a1f2e">量级安全余量（论文 §2.4.4）</text>
+  <text x="26" y="300" fill="#2a3040">格式上限 448×6 = 2688　≫　范数上界 √512 ≈ 22.6　＞　训练实测最大幅值 ≈ 10　→　省掉全局 scale 无可测精度损失</text>
+</svg>
+<p class="cap"><b>图 4</b>｜FP4 主 KV cache 的量化流水线与量级论证（依据论文 §2.4.4）。QAT 在 post-training 引入，让模型在训练中就「习惯」量化误差。</p>
+</div>
+
+<h3>4.4 与 V4 的 FP8 KV 对比：省了多少</h3>
+
+<p>V4 的主 KV cache 为 FP8；V4.1 改为 FP4 后，「<b>存储占用几乎减半（nearly halves the storage footprint），HBM 与卸载到 SSD 时皆然</b>」。这与第 2 讲的全局 KV 总账对上：CSA2 跨层共享（架构）× FP4（精度）两层相乘，V4.1-Flash 的全局 KV 占用降到 <b>890 字节/token</b>，约为 V4-Flash 的 1/4（论文 §6）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="fb1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <text x="10" y="26" font-size="13" font-weight="bold" fill="#1a1f2e">全局 KV cache 占用（常驻 HBM，字节/token）</text>
+  <text x="10" y="64" fill="#2a3040">V4-Flash（FP8 主 KV，无跨层共享）</text>
+  <rect x="360" y="48" width="440" height="24" rx="4" fill="#dbe6f8" stroke="#2456c4"/>
+  <text x="812" y="65" fill="#2456c4" font-weight="bold">≈3560（推算：890×4）</text>
+  <text x="10" y="112" fill="#2a3040">V4.1-Flash（CSA2 跨层共享 + FP4）</text>
+  <rect x="360" y="96" width="110" height="24" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="478" y="113" fill="#1d7a4a" font-weight="bold">890（论文 §6）</text>
+  <line x1="10" y1="150" x2="870" y2="150" stroke="#e3e7ee" stroke-width="1"/>
+  <text x="10" y="176" fill="#5a6272">注：V4-Flash 的 3560 B/token 由论文「约 1/4」反推，论文未直接给出该数；890 B/token 为论文原文（§6）。</text>
+</svg>
+<p class="cap"><b>图 5</b>｜全局 KV 每 token 占用对比。这 1/4 是「架构（CSA2）× 精度（FP4）」两个乘法因子的合计效果；本讲只负责其中的 FP4 因子（主 KV 存储相对 FP8 几乎减半），跨层共享归第 2 讲。</p>
+</div>
+
+<h2 id="s5">5. 四个扩展在论文中的验证情况</h2>
+
+<p>如实汇报：<b>V4.1 技术报告没有为这四个扩展提供单独的消融表</b>（例如「去掉 Engram 各基准掉几分」「DSpark 加速 x 倍」这类数字在报告中缺席）。论文给出的验证证据按组件整理如下：</p>
+
+<table>
+<tr><th>组件</th><th>论文中的验证表述（原文位置）</th><th>性质</th></tr>
+<tr><td>Single-Pass mHC</td><td>「Empirically, this shift incurs negligible performance degradation」（§2.4.1）；访存减半有精确的流量推导（(4n+4)d → (2n+2)d）</td><td>性能：定性「可忽略退化」；收益：解析证明达到下界</td></tr>
+<tr><td>Engram</td><td>引用前作（Cheng et al., 2026c）的设计与训练法；本报告仅说明集成方式与修改点（§2.4.2、§3.1.3、§2.5）</td><td>无本报告内的消融数字；训练侧经验性结论「如 Muon 般只需动量缓冲且优于 Adam」（§2.5）</td></tr>
+<tr><td>DSpark</td><td>「improve decoding efficiency through semi-autoregressive draft generation and confidence-scheduled verification」（§1）；训练安排见 §2.4.3</td><td>无加速倍数/接受率数字（在原论文 arXiv:2607.05147）</td></tr>
+<tr><td>FP4 Main KV</td><td>「only marginal performance degradation」（§1）；「omitting the global scale causes no measurable decrease in accuracy」（§2.4.4）；存储「nearly halves」vs FP8（§2.4.4）</td><td>精度：定性「退化极小/无可测下降」；收益：存储减半明确</td></tr>
+</table>
+<p class="cap"><b>表 4</b>｜四个扩展的验证证据一览。表中「推算/无数字」处均已如实标注，请勿外传为论文结论。</p>
+
+<p>模型级（而非组件级）的验证数字可供参照：DeepSeek-V4.1-Flash-Base 在内部评测框架下与世界知识与推理能力<strong>与 DeepSeek-V4-Pro-Base 相当</strong>（如 MMLU-Pro 74.1 vs 73.5、HumanEval 79.4 vs 76.8、GSM8K 93.0 vs 92.6，论文表 1），同时只用 1/3 总参数、1/4 激活参数，held-out 评测还有 5%–10% 提升（§1）；整体性能优于 DeepSeek-V4-Flash-Base。这意味着四个扩展叠加进模型后，模型能力没有「被扩展拖垮」——但这是合并验证，无法归因到单个组件。另注意论文 §6 的鲁棒性边界讨论点名的是 <b>CSA2 的选择错误</b>与 <b>SWA Bounded Replay 的近似重构</b>（第 1、2 讲的内容），并未把本讲四个扩展列为风险点。</p>
+
+<p>与整体效率相关的两个数字（四个扩展参与其中）：单 token Decode FLOPs 随上下文长度几乎恒定——上下文从 4K 扩到 1M（256 倍），Decode FLOPs 只增加约 1/4（论文图 2，显著低于 V4-Flash 的增长）；模型整体 552B 主干参数 + 196B Engram 参数，prefill 每 token 激活 8B、decode 激活 16B。</p>
+
+<h2 id="s6">6. 本讲小结</h2>
+
+<ul>
+<li><b>Single-Pass mHC</b>：一行公式改动的典范——把输入混合系数从「本 block 现算」错位成「上一 block 留下」，解开 kernel 串行依赖，Mega-mHC 单内核把激活访存从 \((4n+4)d\) 压到 \((2n+2)d\)，精确减半且达到理论下界；训练侧公式照用，部署侧才启用融合内核。</li>
+<li><b>Engram</b>：196B 参数的稀疏查表记忆模块（2/3/4-gram × 8 头哈希 × 素数容量 FP8 表，挂在第 1、14 层），把记忆从主干计算中解耦；训练用动量 + Sinkhorn 平衡更新（省掉 Adam 的状态显存），查表可预取、可重叠，V4.1 的修改是去短因果卷积 + 换优化器。</li>
+<li><b>DSpark</b>：预训练后单独训练的投机解码模块——3 block 小草稿员单次前向并行出 5 个草稿位置，Markov 头补依赖、置信度头估存活概率，调度器按实测吞吐曲线逐请求定验证长度；后训练与主干同训但梯度不进主干，保持与进化策略对齐。</li>
+<li><b>FP4 Main KV Cache</b>：主 KV 从 FP8 压到 4-bit——E2M1 元素 + 每 16 通道 E4M3 scale（NVFP4 布局去掉二级全局 scale），靠「2688 上限 ≫ √512≈22.6 范数界 ≫ 实测 ~10」的量级余量保精度；RoPE 后量化、注意力前反量化，跨硬件兼容；SWA KV 因量化敏感仍留 FP8。主 KV 存储相对 V4 的 FP8 几乎减半。</li>
+<li>方法论上值得记住：这四个扩展都不动「模型学到什么」，只动「信息怎么搬运」（mHC）、 「知识存在哪」（Engram）、「下一步怎么猜」（DSpark）、「缓存存多省」（FP4）——这正是 V4.1「在压 KV 的主线之外，把系统每一层的浪费都拧一遍」的整体风格。</li>
+</ul>
+
+<h2 id="s7">7. 常见疑问（FAQ）</h2>
+
+<p><b>Q：这四个扩展里，哪一个对「KV cache 变小」贡献最大？</b><br>
+A：只有 FP4 Main KV Cache 直接作用于 KV cache——把主 KV 的存储精度从 FP8 压到 FP4，相对减半；再与第 2 讲的 CSA2 跨层共享相乘，得到全局 KV 约 890 B/token（V4-Flash 的 1/4）。Single-Pass mHC 省的是<b>激活</b>（层间传递的中间量）的读写，不是 KV cache；Engram 反而<b>增加</b>参数（但查表几乎不加计算）；DSpark 优化的是<b>解码速度</b>。读论文时容易把这四件事混进「KV 压缩」一个大筐，实际它们的账本各记各的。</p>
+
+<p><b>Q：mHC 的「激活访存减半」对最终速度影响多大？</b><br>
+A：论文没有给出端到端的墙钟时间数字。可以确定的是：mHC 的系数计算 FLOPs 可忽略，其开销本来就集中在访存，因此访存减半基本等价于该环节耗时趋近减半；但整个 Transformer 层还有注意力、MoE 等大头，端到端收益要打折。论文给出的一个系统级旁证是：配合 Mega-Gate、Mega-mHC、Mega-MoE 等融合内核，CSA2 Reuse Mode 层的 prefill 只要 15 个 kernel、decode 只要 11 个——kernel 数量少，意味着更少的启动开销与更高的流水线效率（推断：论文陈述了 kernel 数与访存数字，未直接给出「减半 → 快 x%」的映射）。</p>
+
+<p><b>Q：为什么 FP4 只压「主 KV」，连 indexer K 也一起压吗？</b><br>
+A：论文 §2.4.4 标题与内容针对的是主 KV cache（全局注意力的主体缓存）；而 indexer 的 FP4（含 indexer 查询与键）是 V4 就已经用 QAT 做过的——那是为了加速索引计算、缩小索引缓存，本讲沿用这一事实。SWA KV（滑窗那份）因对量化敏感保留 FP8。也就是说 V4.1 的全局 KV 三种成分里：主 KV 在本讲升级到 FP4，indexer K 沿用 V4 的 FP4，滑窗 KV 维持 FP8。</p>
+
+<h2 id="s8">8. 自测清单</h2>
+
+<details style="border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:10px 0">
+<summary><b>Q1</b>：Single-Pass mHC 改了公式里的哪一处？为什么这一处改动能让三个 kernel 融成一个？</summary>
+<p>答：把式 (2) 中 \(F_l\) 的输入 \(A_l X_l\) 改为 \(A_{l-1} X_l\)（式 (6)），即输入混合改用上一个 block 算出的系数。原实现里式 (5) 的输入混合必须等式 (4) 的系数预测完成（后者含对隐藏维的全归约），导致 \(X_l\) 被读两次、kernel 串行；错位后混合用的系数现成，每块 tile 算出即可同时用于混合与为下一 block 累计归约量，三 kernel 融成 Mega-mHC 单 kernel，访存从 \((4n+4)d\) 降到 \((2n+2)d\)（下界）。</p>
+</details>
+
+<details style="border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:10px 0">
+<summary><b>Q2</b>：Engram 为什么能用 196B 参数还几乎不增加计算？它在 V4.1 里相对原版改了哪两处？</summary>
+<p>答：因为它把知识放进查找表、按 N-gram 哈希地址<b>稀疏访问</b>——每个 token 只查少量条目，查表计算可忽略，参数量与计算量解耦（「记忆与计算解耦」）。两处修改：① 去掉短因果卷积（收益不值推理栈复杂度）；② embedding 改用动量更新 + Sinkhorn 平衡的优化器（省 Adam 的优化器状态显存，经验上还更优）。</p>
+</details>
+
+<details style="border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:10px 0">
+<summary><b>Q3</b>：DSpark 的「置信度调度验证」调度的是什么？依据是什么信号？</summary>
+<p>答：调度<b>每个请求的验证长度</b>（目标模型一次批改多少个草稿 token）。信号是置信度头估计的<b>前缀存活概率</b>（草稿前缀被接受的概率）与<b>实测的引擎吞吐曲线</b>，目标是在当前系统负载下最大化期望的系统级 token 吞吐。</p>
+</details>
+
+<details style="border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:10px 0">
+<summary><b>Q4</b>：FP4 主 KV cache 用什么格式？省掉 NVFP4 的二级全局 scale 为什么没有精度问题？</summary>
+<p>答：E2M1 元素格式 + 每 16 通道一个 E4M3 scale（无二级全局 scale）。安全余量来自量级论证：格式可表示上限 \(448\times 6=2688\)；而 RMSNorm 权重最大约 1，归一化后 512 通道 KV latent 的 \(\ell_2\) 范数至多 \(\sqrt{512}\approx 22.6\)，RoPE 保范数，训练实测最大幅值约 10——距上限两个数量级以上。</p>
+</details>
+
+<details style="border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:10px 0">
+<summary><b>Q5</b>：FP4 主 KV cache 为什么不需要硬件原生 FP4 矩阵乘支持？SWA KV 为什么不一起压？</summary>
+<p>答：因为缓存值在进入注意力计算<b>之前先反量化</b>，FP4 只用于存储不用于计算，所以不依赖硬件 FP4 矩阵乘、跨平台兼容。SWA KV 对量化敏感，保留 FP8（其本身仅保留窗口内条目、不进持久缓存，压缩收益也小）。</p>
+</details>
+
+<details style="border:1px solid var(--line);border-radius:8px;padding:10px 16px;margin:10px 0">
+<summary><b>Q6</b>：本讲四个扩展中，哪两个有明确的量化收益数字？哪两个在 V4.1 报告里只有定性结论？</summary>
+<p>答：Single-Pass mHC（激活访存 \((4n+4)d \to (2n+2)d\)，解析减半）与 FP4 主 KV（相对 FP8 存储几乎减半）有明确量化收益；Single-Pass 的性能影响与 FP4 的精度影响也只有定性表述（「可忽略/极小」）。Engram 与 DSpark 在 V4.1 报告中连收益数字都没有（分别在原论文中），仅有集成方式与训练安排的描述。</p>
+</details>
+
+<h2 id="s9">参考来源</h2>
+<ol class="refs">
+<li>DeepSeek-AI. <i>DeepSeek-V4.1-Flash Technical Report</i>. 本地归档 <code>paper/deepseek_v41.pdf</code>（51 页）。本讲引用：§1（定位、图 2）、§2.1（总览、图 3）、§2.4.1–§2.4.4、§2.5（Sinkhorn 平衡更新、算法 1）、§3.1.3（Engram 训练侧）、§4.2.1/§4.2.2（模型与训练配置）、§6（结论与 890 B/token）。</li>
+<li>Xie et al., 2026. <i>mHC: Manifold-Constrained Hyper-Connections</i>. arXiv:2512.24880. 本地归档 <code>paper/mhc.pdf</code>；中文详解见 <a href="deepseek-mhc.html">DeepSeek mHC 解读</a>。</li>
+<li>Cheng et al., 2026c. <i>Conditional memory via scalable lookup: A new axis of sparsity for large language models</i>. ACL 2026（Engram 原论文，V4.1 报告参考文献页）。</li>
+<li>Cheng et al., 2026a. <i>DSpark: Confidence-scheduled speculative decoding with semi-autoregressive generation</i>. arXiv:2607.05147（V4.1 报告参考文献页）。</li>
+<li>Rouhani et al., 2023（OCP MXFP4）；Alvarez et al., 2025（NVFP4）。背景见 <a href="quant-t4-ultra-low-bit.html">大模型量化零基础七讲 · 第 4 讲</a>。</li>
+<li>背景报告：<a href="deepseek-v4-architecture.html">DeepSeek-V4 总体架构解读</a> · <a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV Cache 组织解读</a> · <a href="quant-t5-kv-systems.html">大模型量化零基础七讲 · 第 5 讲：KV Cache 量化</a>。</li>
+</ol>
+
+<nav style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 20px;margin:20px 0;font-size:0.93em">
+<b>系列导航</b>　
+<a href="deepseek-v41-t0-overview.html">第 0 讲·总览</a>｜
+<a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a>｜
+<a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a>｜
+<b style="color:var(--accent)">第 3 讲·架构扩展（本篇）</b>｜
+<a href="deepseek-v41-t4-infra.html">第 4 讲·基础设施</a>｜
+<a href="deepseek-v41-t5-pretraining.html">第 5 讲·预训练</a>｜
+<a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>
+</nav>
+
+<footer>生成于 2026-09-20 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

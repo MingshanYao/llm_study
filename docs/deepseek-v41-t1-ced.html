@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek-V4.1 零基础七讲 · 第 1 讲：CED 因果编码器-解码器架构</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  nav.toc {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 20px; margin: 20px 0; font-size: 0.92em;
+  }
+  nav.toc b { color: var(--ink); }
+  nav.toc ol { margin: 6px 0 0; padding-left: 22px; }
+  nav.toc li { margin: 2px 0; }
+  nav.series {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 20px; margin: 20px 0; font-size: 0.92em;
+  }
+  nav.series b { color: var(--ink); }
+  nav.series ol { margin: 6px 0 0; padding-left: 22px; }
+  nav.series li { margin: 2px 0; }
+  nav.series .cur { font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 5px; padding: 0 6px; }
+</style>
+</head>
+<body>
+<main>
+
+<nav class="series">
+<b>系列导航 · DeepSeek-V4.1 零基础七讲</b>
+<ol>
+  <li><a href="deepseek-v41-t0-overview.html">第 0 讲 · 总览</a></li>
+  <li><span class="cur">第 1 讲 · CED 架构（本篇）</span></li>
+  <li><a href="deepseek-v41-t2-csa2.html">第 2 讲 · CSA2 注意力</a></li>
+  <li><a href="deepseek-v41-t3-extensions.html">第 3 讲 · 架构扩展</a></li>
+  <li><a href="deepseek-v41-t4-infra.html">第 4 讲 · 基础设施</a></li>
+  <li><a href="deepseek-v41-t5-pretraining.html">第 5 讲 · 预训练</a></li>
+  <li><a href="deepseek-v41-t6-posttraining.html">第 6 讲 · 后训练</a></li>
+</ol>
+</nav>
+
+<h1>DeepSeek-V4.1 零基础七讲 · 第 1 讲：CED 因果编码器-解码器架构</h1>
+
+<div class="meta">
+<p style="margin:4px 0"><b>日期：</b>2026-09-20　<b>系列：</b>DeepSeek-V4.1 零基础七讲（第 1 讲，架构篇）</p>
+<p style="margin:4px 0"><b>论文：</b><i>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</i>（DeepSeek-AI，本地 <code>paper/deepseek_v41.pdf</code>，51 页；模型卡 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash">huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash</a>）。本讲覆盖 §1 Introduction、§2.1 Overview、§2.1.1 Multimodal Architecture、§2.2 CED、§2.5 Optimization、§4.2.1 Model Setups（印刷页 4–9、14–15、21–22，物理页 7–12、17–18、24–25）。</p>
+<p style="margin:4px 0"><b>说明：</b>本讲聚焦 CED（Causal Encoder-Decoder）机制与模型总览。§2.3 CSA2（跨层 KV 复用注意力）归第 2 讲，§2.4 架构扩展（Single-Pass mHC / Engram / DSpark / FP4 KV）归第 3 讲，本讲各用一句话带过。</p>
+<p style="margin:4px 0"><b>姊妹篇交叉引用：</b><a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>、<a href="deepseek-v4-attention.html">DeepSeek-V4 Attention（CSA/HCA）</a>、<a href="deepseek-moe.html">DeepSeekMoE 解读</a>、<a href="moe-t0-foundation.html">MoE 零基础系列（t0–t4）</a>。</p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>现在的 AI Agent（智能体）工作负载有个鲜明特点：<b>输入巨长、输出很短</b>——每次调用工具，模型都要重新读几万字的上下文，却只回几百字。这导致「读入」（prefill）成了花钱大头。DeepSeek-V4.1-Flash 的解法是 <b>CED（Causal Encoder-Decoder，因果编码器-解码器）架构</b>：把 40 层 Transformer 劈成上下两半，下半 20 层是「因果编码器」，正常逐层算；上半 20 层「解码器」的全局 KV cache 不再从自己的隐状态算出，而是<b>直接从编码器最后一层的隐状态投影出来</b>——于是处理长输入时上半层几乎可以整体跳过。效果：总参数 552B 的 MoE 模型，prefill 每 token 只激活 8B 参数、decode 每 token 激活 16B，prefill 计算量近乎减半（复杂度从 \(O(NL)\) 降到约 \(O(NL/2)\)）；同时配合 CSA2 与 FP4 KV 缓存，全局 KV cache 压到每 token 890 字节，约为 DeepSeek-V4-Flash 的 1/4。性能却与参数量 1.6T 的 V4-Pro-Base 相当。</p>
+</div>
+
+<nav class="toc">
+<b>目录</b>
+<ol>
+  <li><a href="#s1">铺路：decoder-only 与 encoder-decoder，主流大模型为什么长成 GPT 那样</a></li>
+  <li><a href="#s2">V4.1-Flash 模型总览：552B MoE，prefill 8B / decode 16B</a></li>
+  <li><a href="#s3">多模态怎么接：DeepSeek-ViT + MLP projector</a></li>
+  <li><a href="#s4">CED 机制详解：上半层的 KV 从「抄」而不是「算」</a></li>
+  <li><a href="#s5">省钱账：为什么 agentic 负载下这个不对称特别值钱</a></li>
+  <li><a href="#s6">与 DeepSeek-V4 的关系：streamline 精简了什么、继承了什么</a></li>
+  <li><a href="#s7">§2.5 Optimization：训练优化如实讲</a></li>
+  <li><a href="#s8">效果速览与 KV cache 对比</a></li>
+  <li><a href="#s9">一句话带过 §2.3 与 §2.4（归属第 2、3 讲）</a></li>
+  <li><a href="#s10">事实与推断的边界</a></li>
+  <li><a href="#s11">本讲小结</a></li>
+  <li><a href="#s12">自测清单</a></li>
+</ol>
+</nav>
+
+<h2 id="s1">1. 铺路：decoder-only 与 encoder-decoder，主流大模型为什么长成 GPT 那样</h2>
+
+<p>本节是背景铺垫，帮零基础读者建立坐标系。先用三个词把 Transformer 讲清楚：</p>
+<ul>
+  <li><b>token（词元）</b>：模型处理文字的最小单位，可以粗略理解成「半个词或一个字」。</li>
+  <li><b>Transformer 层</b>：模型的「加工车间」。文本变成向量后要依次穿过几十层车间，每层做两件事——<b>注意力</b>（让每个 token 环顾四周、决定该参考谁的信息，像开会时每个人轮流发言并环顾全场）和<b>前馈网络</b>（对每个 token 独立做一次深加工）。层数越多、车间越大，模型通常越聪明。</li>
+  <li><b>KV cache</b>：生成第 1000 个 token 时，注意力需要回头「看」前 999 个 token。如果每次生成都重新算前文，代价无法承受，所以模型把前文每层算好的两份中间结果——Key（K，可以理解成「每个人的名片」）和 Value（V，「每个人的发言内容」）——存起来复用。这份缓存就叫 KV cache。它是长文本推理中显存占用的最大头。</li>
+</ul>
+
+<p>有了这三个词，两种模型形态的区别就清楚了：</p>
+
+<table>
+  <tr><th>维度</th><th>decoder-only（GPT 式）</th><th>encoder-decoder（T5 式）</th></tr>
+  <tr><td>结构</td><td>只有一摞 decoder 层，从头到尾一条路</td><td>一个 encoder（读入并「理解」输入）+ 一个 decoder（基于理解结果生成输出）</td></tr>
+  <tr><td>注意力方式</td><td><b>因果注意力</b>（causal attention）：第 i 个 token 只能看第 1..i 个 token，不能偷看未来</td><td>encoder 内部双向（每个 token 可看全文），decoder 生成时再与 encoder 的输出交互</td></tr>
+  <tr><td>擅长任务</td><td>开放式生成，训练目标（预测下一个 token）与使用方式完全一致</td><td>输入明确、输出相对确定的转换类任务（翻译、摘要）</td></tr>
+  <tr><td>当前地位</td><td>几乎所有主流 LLM（GPT、Llama、DeepSeek 全系）</td><td>主流 LLM 中已很少见</td></tr>
+</table>
+<p class="cap"><b>表 1</b>｜两种模型形态的对比（背景知识，非本论文内容）。</p>
+
+<p><b>为什么主流 LLM 都是 decoder-only？</b>这是社区共识层面的判断，论文没有专门论证，我们把它作为背景知识归纳为三点（标注为通识归纳，非论文原文）：</p>
+<ul>
+  <li><b>训练目标 = 使用目标</b>：decoder-only 训练时就是「预测下一个 token」，推理时就是「接着往下生成」，训练与部署无缝对齐；</li>
+  <li><b>工程简单、扩展性好</b>：只有一个序列、一套 KV cache，流水线、并行、缓存复用都更简单；</li>
+  <li><b>规模化验证充分</b>：GPT-3 之后的大规模实验几乎都押注 decoder-only，生态与基础设施围绕它建立。</li>
+</ul>
+
+<div class="infer">正因为 encoder-decoder 被「淘汰」，CED 的出现才显得反直觉：DeepSeek 在 V4.1-Flash 里把 encoder-decoder 的思想<b>请了回来</b>，但不是照搬 T5 的双向 encoder，而是造了一个「因果编码器」——encoder 内部依然是因果注意力、能无缝生成，只是在「上层解码器的全局 KV 从哪来」这一点上借用了 encoder-decoder 的分工思想。可以说 CED = decoder-only 的骨架 + encoder-decoder 的算力分工，这是理解本讲的关键。</div>
+
+<h2 id="s2">2. V4.1-Flash 模型总览：552B MoE，prefill 8B / decode 16B</h2>
+
+<p>先解决两个术语。<b>MoE（Mixture-of-Experts，专家混合）</b>：把每层的一个大前馈网络换成一大群小专家网络，每个 token 只挑其中几个用——好比一家大医院有很多专科医生，每个病人只看其中几位。这样「总参数多（知识渊博）」和「每次计算少（便宜快速）」可以兼得（详见 <a href="deepseek-moe.html">DeepSeekMoE 解读</a> 与 <a href="moe-t0-foundation.html">MoE 零基础系列</a>）。<b>激活参数</b>：处理每个 token 时真正参与计算的参数量，区别于存着不用的总参数量。</p>
+
+<p>论文摘要与 §2.1 给出的整体规格如下（均为论文原文数字）：</p>
+
+<table>
+  <tr><th>项目</th><th>数值</th><th>出处</th></tr>
+  <tr><td>模型形态</td><td>多模态 MoE Transformer：输入图像+文本，自回归生成文本</td><td>§2.1</td></tr>
+  <tr><td>骨干总参数</td><td><b>552B</b>（另有 196B Engram 参数，见第 3 讲）</td><td>摘要、§2.1、§2.4.2</td></tr>
+  <tr><td>激活参数</td><td><b>prefill 每 token 8B，decode 每 token 16B</b></td><td>摘要、§2.1</td></tr>
+  <tr><td>上下文长度</td><td>最长 <b>1M</b>（一百万）token</td><td>摘要</td></tr>
+  <tr><td>Transformer 层数</td><td>40 层 = 20 层因果编码器 + 20 层解码器</td><td>§2.1、§4.2.1</td></tr>
+  <tr><td>隐藏维度 \(d\)</td><td>5120</td><td>§4.2.1</td></tr>
+  <tr><td>注意力头</td><td>64 个查询头 × 512 维；查询压缩维度 1280；输出投影分 8 组，每组中间注意力输出维度 1024</td><td>§4.2.1</td></tr>
+  <tr><td>稀疏索引器</td><td>索引器 32 个查询头 × 128 维；注意力 top-k = 512；层次化索引候选池至多 2048 块 × 8 位置 = 16384 个候选位置</td><td>§4.2.1、§2.3.2</td></tr>
+  <tr><td>滑窗注意力</td><td>每层都有 SWA 分支，窗口 \(n_{win}\)=128（前两层纯 SWA）</td><td>§4.2.1、§2.1</td></tr>
+  <tr><td>MoE 配置</td><td>每层 1 个共享专家 + 384 个路由专家，每 token 激活 6 个路由专家；专家中间维度 2304；SwiGLU 激活（clamp 阈值 10）</td><td>§4.2.1</td></tr>
+  <tr><td>mHC 配置</td><td>扩展因子 4，Sinkhorn-Knopp 迭代 20 次</td><td>§4.2.1</td></tr>
+  <tr><td>视觉编码器</td><td>DeepSeek-ViT：32 层、隐藏维 1024、16 头、patch 大小 14；MLP projector 2 层、隐藏维 5120</td><td>§2.1.1、§4.2.1</td></tr>
+  <tr><td>预训练</td><td>45T token 多模态语料；batch 固定 100.6M token；学习率 2.6×10⁻⁴；64K 序列长度从头训稀疏注意力，34T token 时扩展到 1M</td><td>摘要、§4.2.2</td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜DeepSeek-V4.1-Flash-Base 的模型配置总表（论文 §4.2.1 原文数字）。「输出投影分 8 组」指注意力输出投影按组划分以省 KV/计算（第 2 讲展开）。</p>
+
+<p>注意「8B / 16B」这组数字里藏着一个反常之处：同一个模型，为什么读入（prefill）时激活的参数比生成（decode）时<b>少一半</b>？这正是 CED 的产物——下面第 4 节揭晓。作为对照，Table 1 中 DeepSeek-V4-Flash-Base 为 284B 总参 / 13B 激活，DeepSeek-V4-Pro-Base 为 1.6T 总参 / 49B 激活：V4.1-Flash 用 552B 总参、8B prefill 激活，达到了与 1.6T 的 V4-Pro 相当的水平（论文称知识/推理/编程能力相当，held-out 评测提升 5%–10%，只用了 1/3 总参数与 1/4 激活参数）。</p>
+
+<h2 id="s3">3. 多模态怎么接：DeepSeek-ViT + MLP projector</h2>
+
+<p>V4.1-Flash 是原生多模态模型：能同时吃图像和文本。§2.1.1 描述的接入方式并不神秘，就是「把图变成一串特殊 token 塞进文本流」：</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 320" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <!-- 图像支路 -->
+  <rect x="14" y="30" width="128" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="78" y="55" text-anchor="middle">输入图像</text>
+  <text x="78" y="75" text-anchor="middle" font-size="11" fill="#5a6272">最高约 1344×1344</text>
+  <rect x="176" y="30" width="150" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="251" y="50" text-anchor="middle" font-weight="bold">DeepSeek-ViT</text>
+  <text x="251" y="68" text-anchor="middle" font-size="11" fill="#5a6272">32 层 · 2D-RoPE</text>
+  <text x="251" y="84" text-anchor="middle" font-size="11" fill="#5a6272">输出空间网格视觉特征</text>
+  <rect x="360" y="30" width="150" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="435" y="50" text-anchor="middle" font-weight="bold">3×3 pixel-unshuffle</text>
+  <text x="435" y="68" text-anchor="middle" font-size="11" fill="#5a6272">空间重排进通道维</text>
+  <text x="435" y="84" text-anchor="middle" font-size="11" fill="#5a6272">视觉 token 数 ↓9 倍</text>
+  <rect x="544" y="30" width="140" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="614" y="50" text-anchor="middle" font-weight="bold">MLP projector</text>
+  <text x="614" y="68" text-anchor="middle" font-size="11" fill="#5a6272">2 层 · 隐藏维 5120</text>
+  <text x="614" y="84" text-anchor="middle" font-size="11" fill="#5a6272">映射到语言骨干维度</text>
+  <line x1="142" y1="62" x2="176" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1)"/>
+  <line x1="326" y1="62" x2="360" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1)"/>
+  <line x1="510" y1="62" x2="544" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1)"/>
+  <!-- 汇合 -->
+  <polyline points="684,62 716,62 716,150" fill="none" stroke="#2456c4" stroke-width="1.6" marker-end="url(#m1)"/>
+  <!-- 文本支路 -->
+  <rect x="14" y="130" width="128" height="48" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <text x="78" y="150" text-anchor="middle">输入文本</text>
+  <text x="78" y="167" text-anchor="middle" font-size="11" fill="#5a6272">Text Embedding</text>
+  <line x1="142" y1="154" x2="196" y2="154" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1)"/>
+  <!-- 嵌入序列 -->
+  <rect x="196" y="128" width="470" height="52" rx="8" fill="#fff" stroke="#8ea6d8"/>
+  <g font-size="11" text-anchor="middle" fill="#1a1f2e">
+    <rect x="216" y="142" width="44" height="24" rx="4" fill="#f6f8fa" stroke="#c9d2e0"/><text x="238" y="158">文本</text>
+    <rect x="264" y="142" width="44" height="24" rx="4" fill="#f6f8fa" stroke="#c9d2e0"/><text x="286" y="158">文本</text>
+    <rect x="312" y="142" width="60" height="24" rx="4" fill="#dbe6f8" stroke="#2456c4"/><text x="342" y="158" fill="#2456c4">视觉</text>
+    <rect x="376" y="142" width="60" height="24" rx="4" fill="#dbe6f8" stroke="#2456c4"/><text x="406" y="158" fill="#2456c4">视觉</text>
+    <rect x="440" y="142" width="44" height="24" rx="4" fill="#f6f8fa" stroke="#c9d2e0"/><text x="462" y="158">文本</text>
+    <rect x="488" y="142" width="44" height="24" rx="4" fill="#f6f8fa" stroke="#c9d2e0"/><text x="510" y="158">文本</text>
+    <rect x="536" y="142" width="60" height="24" rx="4" fill="#dbe6f8" stroke="#2456c4"/><text x="566" y="158" fill="#2456c4">视觉</text>
+  </g>
+  <text x="431" y="200" text-anchor="middle" font-size="11" fill="#5a6272">视觉嵌入插入输入序列中对应的 image-token 位置，与文本嵌入一起送入语言骨干</text>
+  <!-- 骨干 -->
+  <line x1="431" y1="206" x2="431" y2="232" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1)"/>
+  <rect x="150" y="232" width="562" height="66" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="431" y="256" text-anchor="middle" font-weight="bold">语言骨干：40 层因果 Transformer（CED）</text>
+  <text x="431" y="276" text-anchor="middle" font-size="11" fill="#5a6272">20 层因果编码器（前 2 层纯 SWA，后 18 层 CSA2 m=2）→ 20 层解码器（CSA2 m=1）</text>
+  <text x="431" y="292" text-anchor="middle" font-size="11" fill="#5a6272">每层 MoE：1 共享专家 + 384 路由专家，激活 6 个</text>
+</svg>
+<p class="cap"><b>图 1</b>｜多模态接入路径（对应论文 §2.1 与 §2.1.1，及 Figure 3 的多模态部分）。视觉支路产出的视觉嵌入被插到输入序列中「图像占位 token」的位置，之后图文一视同仁地穿过 40 层语言骨干。</p>
+</div>
+
+<p>三个值得记住的设计细节（§2.1.1 原文）：</p>
+<ul>
+  <li><b>DeepSeek-ViT 从零训练</b>，基于 Vision Transformer 改造，可原生处理任意分辨率图像：用 <b>2D-RoPE</b>（二维旋转位置编码，给每个图块按行列位置标注「坐标」）替换绝对位置嵌入；patch 嵌入用线性投影替代卷积（为了兼容 Muon 优化器）；归一化用 RMSNorm、激活用 SwiGLU，向 LLM 的设计习惯看齐。</li>
+  <li><b>3×3 pixel-unshuffle</b>：把每个 3×3 邻域的空间像素沿通道维重排，空间分辨率缩小、通道变宽，<b>视觉 token 数量减少 9 倍</b>（3×3=9），从而支持最高约 1344×1344 像素的输入而不让 token 爆炸。图像 token 少，对后续所有注意力计算和 KV cache 都是直接利好。</li>
+  <li><b>多模态辅助损失-free 负载均衡</b>：图像和文本 token 的表达分布不同，路由偏好也不同；如果只看总负载，会掩盖模态内部的失衡。做法是给文本、图像各维护一套专家修正偏置，路由时按各自模态的偏置选专家（打分权重仍用原始路由分），训练中两套偏置按各自的专家负载独立更新。</li>
+</ul>
+
+<h2 id="s4">4. CED 机制详解：上半层的 KV 从「抄」而不是「算」</h2>
+
+<h3>4.1 问题：agentic 工作负载让 prefill 成了花钱大头</h3>
+
+<p>§2.2 开篇给出的场景：agent（智能体）频繁调用工具，每次调用都产生大量 <b>prefill 请求</b>——即把新上下文整段读一遍、建立 KV cache 的过程。当 KV cache 未命中（比如多轮会话间隔太久被清掉、或切换到新任务），这些读入就得全额重算，计算开销很大。而 agent 的典型形态恰恰是<b>输入长、输出短</b>：读 10 万 token 的工具输出和历史记录，只回几百字。常规 decoder-only 模型对每个 prefill token 都要走完全部 40 层——太浪费，因为大部分层的计算成果（全局 KV）在短输出场景下被复用得很少。</p>
+
+<h3>4.2 思想来源：YoCo 的「上半层共享下半层 KV」</h3>
+
+<p>论文明确说 CED <b>inspired by YoCo（Sun et al., 2024）</b>：YoCo 让模型上半部分的层直接复用下半部分层生成的 KV cache，以此削减 prefill 计算。CED 继承这个概念，并做了一系列结构改进，「以增强整体 KV cache 容量与 KV 生成计算深度」，最终在性能与基线相当的前提下砍掉近一半 prefill 计算（§2.2 原文）。YoCo 与 CED 的差别，论文只笼统说「一系列结构改进」，结合 §2.2 后文可具体化为两点：CED 的上半层不是原样复用下半层的 KV，而是<b>每层用自己独立的投影矩阵</b>从编码器末层隐状态投影出 KV（保留每层的表达差异）；同时 SWA（局部滑窗注意力）仍保持<b>逐层正常计算</b>，使局部 KV 的生成深度不打折。</p>
+
+<h3>4.3 核心公式（论文式 1）</h3>
+
+<p>记模型共 \(L\) 层（V4.1-Flash 中 \(L=40\)），第 \(l\) 层的隐状态为 \(H^l\)。对全局注意力而言，编码器就是下半层 \(l \le L/2\)，解码器是上半层 \(l > L/2\)。解码器各层的 KV 不再来自各自的隐状态，而是统一从编码器最后一层的隐状态 \(H^{L/2}\) 投影出来：</p>
+
+<div class="formula">\[ C^l = H^{L/2}\, W^{KV}_l, \qquad Z^l = H^{L/2}\, W^{Z}_l, \qquad l > L/2 \tag{式 1} \]</div>
+
+<p>逐符号解释：</p>
+<ul>
+  <li>\(H^{L/2}\)：第 20 层（编码器最后一层）输出的隐状态，形状「token 数 × 5120」。它是整段输入经过下半层充分加工后的「浓缩理解」。</li>
+  <li>\(W^{KV}_l\)：解码器第 \(l\) 层<b>专属</b>的 KV 投影矩阵——每层各有一套，互不共享，所以不同层能得到视角不同的 KV。</li>
+  <li>\(C^l\)：第 \(l\) 层的全局 KV entry（进入 KV cache 的主体）；\(Z^l\)：与 \(C^l\) 配套的压缩权重（供 CSA2 的压缩器使用，第 2 讲展开）。</li>
+</ul>
+
+<p>这个设计带来的直接后果：在 prefill 阶段，解码器各层的全局 KV 只需「读一遍 \(H^{L/2}\)、做一次矩阵乘」就能得到——不需要让 token 逐层穿过上半部分的注意力与前馈网络。<b>唯一不能跳过的</b>是 SWA：§2.2 明确「对滑动窗口注意力，CED 在所有层保持常规逐层计算」——第 \(l\) 层的局部 K/V 依然取自本层隐状态 \(H^l\)。为什么？因为 SWA 是每层自己的「近视眼」，负责近处细节；保持逐层计算能「有效增加局部 KV 生成的计算深度」（论文原话），模型的表达能力不因全局 KV 抄近路而受损。</p>
+
+<h3>4.4 双路径对比：prefill 走短路，decode 走全路</h3>
+
+<div class="fig">
+<svg viewBox="0 0 860 470" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs>
+    <marker id="m2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker>
+    <marker id="m2b" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2456c4"/></marker>
+    <marker id="m2r" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#c0392b"/></marker>
+  </defs>
+  <!-- 左：prefill 路径 -->
+  <text x="210" y="26" text-anchor="middle" font-size="13" fill="#2456c4" font-weight="bold">Prefill（读入 100k token 的提示词）</text>
+  <rect x="40" y="40" width="120" height="44" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="100" y="59" text-anchor="middle">输入 N 个 token</text>
+  <text x="100" y="75" text-anchor="middle" font-size="10.5" fill="#5a6272">（如 100k 提示词）</text>
+  <line x1="160" y1="62" x2="196" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2)"/>
+  <!-- 编码器堆 -->
+  <rect x="60" y="96" width="300" height="96" rx="10" fill="#dbe6f8" stroke="#2456c4" stroke-width="1.8"/>
+  <text x="210" y="118" text-anchor="middle" font-weight="bold" fill="#163a86">因果编码器：第 1–20 层（完整计算）</text>
+  <g font-size="10.5" fill="#163a86" text-anchor="middle">
+    <text x="210" y="138">每层：全局注意力 + SWA + MoE 全跑</text>
+    <text x="210" y="156">前 2 层纯 SWA · 后 18 层 CSA2（m=2）</text>
+    <text x="210" y="176">激活参数 ≈ 8B/token</text>
+  </g>
+  <line x1="160" y1="84" x2="160" y2="96" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2)"/>
+  <text x="378" y="150" font-size="13" fill="#163a86" font-weight="bold">H</text>
+  <text x="378" y="165" font-size="10.5" fill="#5a6272">L/2</text>
+  <text x="210" y="216" text-anchor="middle" font-size="11" fill="#5a6272">编码器末层隐状态（浓缩理解）</text>
+  <!-- 投影箭头 -->
+  <line x1="210" y1="192" x2="210" y2="240" stroke="#2456c4" stroke-width="1.8" marker-end="url(#m2b)"/>
+  <text x="222" y="222" font-size="10.5" fill="#2456c4">式(1)：C^l = H_L/2 · W_KV^l（一次性投影）</text>
+  <!-- 解码器堆（prefill 灰化） -->
+  <rect x="60" y="240" width="300" height="110" rx="10" fill="#f2f4f8" stroke="#c9d2e0" stroke-dasharray="6 4"/>
+  <text x="210" y="262" text-anchor="middle" font-weight="bold" fill="#5a6272">解码器：第 21–40 层</text>
+  <g font-size="10.5" fill="#8a93a5" text-anchor="middle">
+    <text x="210" y="282">全局注意力 / MoE：逐 token 计算 ✂ 跳过</text>
+    <text x="210" y="300">全局 KV：由 H_L/2 投影直接得到（灰区不跑 token）</text>
+    <text x="210" y="322" fill="#5a6272">SWA：仍逐层计算，但只需对最后 n_win=128</text>
+    <text x="210" y="338" fill="#5a6272">个 token 做 Decoder SWA Bounded Replay（§3.2.2）</text>
+  </g>
+  <text x="210" y="372" text-anchor="middle" font-size="11" fill="#2456c4" font-weight="bold">prefill 激活参数 ≈ 8B/token · 复杂度 ≈ O(N·L/2)</text>
+
+  <!-- 右：decode 路径 -->
+  <text x="650" y="26" text-anchor="middle" font-size="13" fill="#c0392b" font-weight="bold">Decode（逐个生成输出 token）</text>
+  <rect x="500" y="40" width="120" height="44" rx="8" fill="#fff" stroke="#c0392b"/>
+  <text x="560" y="59" text-anchor="middle">新生成的 token</text>
+  <text x="560" y="75" text-anchor="middle" font-size="10.5" fill="#5a6272">（一次一个）</text>
+  <line x1="620" y1="62" x2="656" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2)"/>
+  <rect x="500" y="96" width="300" height="96" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.8"/>
+  <text x="650" y="118" text-anchor="middle" font-weight="bold" fill="#163a86">因果编码器</text>
+  <g font-size="10.5" fill="#163a86" text-anchor="middle">
+    <text x="650" y="138">单个 token 快速过一遍</text>
+    <text x="650" y="156">产出它自己的 H_L/2</text>
+    <text x="650" y="176">（缓存命中时甚至可跳过）</text>
+  </g>
+  <line x1="620" y1="84" x2="620" y2="96" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2)"/>
+  <line x1="650" y1="192" x2="650" y2="240" stroke="#c0392b" stroke-width="1.8" marker-end="url(#m2r)"/>
+  <text x="662" y="222" font-size="10.5" fill="#c0392b">H_L/2 投影出该层全局 KV</text>
+  <rect x="500" y="240" width="300" height="110" rx="10" fill="#fdece8" stroke="#c0392b" stroke-width="1.8"/>
+  <text x="650" y="262" text-anchor="middle" font-weight="bold" fill="#c0392b">解码器：第 21–40 层（完整计算）</text>
+  <g font-size="10.5" fill="#c0392b" text-anchor="middle">
+    <text x="650" y="282">每层：全局注意力（读缓存 KV）+ SWA + MoE 全跑</text>
+    <text x="650" y="300">激活参数 ≈ 16B/token（比 prefill 多一倍）</text>
+    <text x="650" y="322">只对 1 个 token 做 → 代价可承受</text>
+    <text x="650" y="338">全局 KV 继续投影写回缓存，供后续 token 用</text>
+  </g>
+  <text x="650" y="372" text-anchor="middle" font-size="11" fill="#c0392b" font-weight="bold">decode 激活参数 ≈ 16B/token</text>
+
+  <!-- 底部总括 -->
+  <rect x="40" y="396" width="780" height="56" rx="10" fill="#f4f7fd" stroke="#8ea6d8"/>
+  <text x="430" y="418" text-anchor="middle" font-size="11.5" fill="#1a1f2e">同一个模型，两条路径不对称：长输入只走下半层 + 投影（便宜），短输出走全部 40 层（贵但量小）。</text>
+  <text x="430" y="438" text-anchor="middle" font-size="11.5" fill="#1a1f2e">序列长度 N ≫ n_win 时，prefill 复杂度从 O(N·L) 降到 O(N·L/2 + n_win·L/2) ≈ O(N·L/2)（论文 §2.2）。</text>
+</svg>
+<p class="cap"><b>图 2</b>｜CED 的 prefill 路径 vs decode 路径（对应论文 §2.2 式 1 与 §3.2.2）。prefill 时解码器的全局注意力与 MoE 不逐 token 执行，全局 KV 由编码器末态一次性投影；decode 时每生成一个 token 走完整 40 层，全局 KV 也由当前 \(H^{L/2}\) 投影而来并写入缓存。</p>
+</div>
+
+<h3>4.5 一个必须交代的小尾巴：Decoder SWA Bounded Replay</h3>
+
+<p>跳过解码器逐层计算有一个副作用：解码器各层的 SWA KV 本应由各层自己的隐状态算出，而 prefill 时这些隐状态根本没算。若要精确补齐，需把最后 \(n_{win} \times L/2\) 个 token（128 × 20 = 2560 个）送进解码器重放。对「每轮提示都很短」的多轮对话，这笔开销不可忽略。论文引用先前工作（Chen et al., 2025）指出 SWA 的<b>实际有效感受野远小于理论值</b> \(n_{win} \times L/2\)，于是引入 <b>Decoder SWA Bounded Replay</b>：prefill 时只把提示词<b>最后 \(n_{win}\)=128 个 token</b> 送进解码器算 SWA KV，其余不做。细节与部署侧的 Encoder SWA Bounded Replay 归第 4 讲（§3.2.2），此处只需记住：正是这个有损但有界的小重放，让「prefill 在编码器处收工」成为可能。</p>
+
+<h3>4.6 复杂度结论（论文原文）</h3>
+
+<p>论文 §2.2 的总结论：对序列长度 \(N \gg n_{win}\) 的请求，</p>
+
+<div class="formula">\[ \text{prefill 复杂度：}\; O(NL) \;\longrightarrow\; O\!\left(\tfrac{NL}{2} + \tfrac{n_{win} L}{2}\right) \approx O\!\left(\tfrac{NL}{2}\right) \]</div>
+
+<p>即<b>整体 prefill 计算近乎减半</b>（论文摘要与 §2.2 两处均用 "nearly halves"）。配合「decode 每 token 激活 16B」的事实，就得到了开头那个反常的 8B/16B 不对称。</p>
+
+<h2 id="s5">5. 省钱账：为什么 agentic 负载下这个不对称特别值钱</h2>
+
+<p>传统上 MoE 模型对每个 token 的激活参数是同一个数（如 V4-Flash 的 13B）。CED 把「激活多少」变成了<b>随阶段而定的旋钮</b>：prefill 8B、decode 16B。这笔账只有在「输入占比极高」的负载下才划算，而 agent 恰好就是这种负载。下面用一笔直觉账说明（论文给出的原始数字是 8B/16B 与 "nearly halves"；下面的具体乘法为推断核算，便于建立直觉）：</p>
+
+<table>
+  <tr><th>场景：100k 输入 + 1k 输出的请求</th><th>常规 decoder-only（假设全程 16B/token）</th><th>CED（prefill 8B / decode 16B）</th></tr>
+  <tr><td>prefill 激活参数·token</td><td>100,000 × 16B = 1.6×10¹⁵</td><td>100,000 × 8B = 8×10¹⁴</td></tr>
+  <tr><td>decode 激活参数·token</td><td>1,000 × 16B = 1.6×10¹³</td><td>1,000 × 16B = 1.6×10¹³</td></tr>
+  <tr><td>合计</td><td>≈1.616×10¹⁵</td><td>≈8.16×10¹⁴（<b>约 50.5%</b>）</td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜费用直觉账（推断核算：乘法基于论文的 8B/16B 数字与 "nearly halves prefill computation" 的定性结论；n_win×L/2=2560 token 的重放开销在此规模下占比不足 0.03%，忽略）。输入越长，节省比例越趋近 50%。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 240" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="m3" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <text x="430" y="24" text-anchor="middle" font-weight="bold">同样 100k 输入 + 1k 输出：两套激活量对比（推断核算，见表 3）</text>
+  <!-- 常规方案 -->
+  <text x="30" y="64" font-size="12" fill="#1a1f2e">常规 decoder-only</text>
+  <rect x="200" y="46" width="560" height="30" rx="6" fill="#c0392b" opacity="0.85"/>
+  <text x="470" y="66" text-anchor="middle" fill="#fff" font-size="12">prefill 100k × 16B = 1600 单位</text>
+  <rect x="200" y="82" width="10" height="20" rx="3" fill="#e8a09a"/>
+  <text x="218" y="97" font-size="11" fill="#5a6272">decode 1k × 16B = 16 单位（几乎看不见）</text>
+  <!-- CED -->
+  <text x="30" y="158" font-size="12" fill="#1a1f2e">CED</text>
+  <rect x="200" y="140" width="280" height="30" rx="6" fill="#2456c4" opacity="0.85"/>
+  <text x="340" y="160" text-anchor="middle" fill="#fff" font-size="12">prefill 100k × 8B = 800 单位</text>
+  <rect x="200" y="176" width="10" height="20" rx="3" fill="#e8a09a"/>
+  <text x="218" y="191" font-size="11" fill="#5a6272">decode 1k × 16B = 16 单位（不变）</text>
+  <line x1="480" y1="140" x2="480" y2="196" stroke="#2456c4" stroke-dasharray="4 3"/>
+  <text x="492" y="188" font-size="11.5" fill="#2456c4" font-weight="bold">总量 ≈ 一半</text>
+  <text x="30" y="226" font-size="11" fill="#5a6272">agent 请求的激活量几乎全由 prefill 决定——把 prefill 砍半，就等于把整笔账砍半。</text>
+</svg>
+<p class="cap"><b>图 3</b>｜输入重度负载下的激活量对比条形图（数值为表 3 的推断核算；"CED 省 ~一半 prefill 计算" 的定性结论出自论文摘要与 §2.2）。decode 那一格在两种方案下完全相同，因为 decode 阶段每 token 都要走完整 40 层。</p>
+</div>
+
+<p>反过来也要诚实指出边界（论文未展开，属推断）：如果负载是「输入短、输出长」（例如长文写作），prefill 占比小，CED 的收益就有限；而 decode 阶段每 token 要额外做 \(H^{L/2}\) 投影、模型又比 V4-Flash 大，单位 decode 成本未必更低。CED 是一把为 agentic / 长输入场景定制的刀，不是普适提速。</p>
+
+<h2 id="s6">6. 与 DeepSeek-V4 的关系：streamline 精简了什么、继承了什么</h2>
+
+<p>论文摘要说 V4.1 "streamline the DeepSeek-V4 architecture"（精简了 V4 架构）。§1 给出了精简的思路原话：<b>「DeepSeek-V4 可以看作一个基于 SWA 的局部处理骨干 + 压缩的全局上下文」</b>——既然局部分支好用，那就集中火力简化全局分支，同时基本保留局部注意力设计。逐条对照：</p>
+
+<table>
+  <tr><th>组件</th><th>DeepSeek-V4</th><th>DeepSeek-V4.1-Flash</th><th>性质</th></tr>
+  <tr><td>全局注意力</td><td>CSA–HCA 混合架构（两种层混排）</td><td><b>纯 CSA2</b>（三种模式：Full / Reindex / Reuse，跨层复用全局 KV 与 Top-K 索引）</td><td>精简：一种层、三种静态模式，替代两种异构层</td></tr>
+  <tr><td>计算分工</td><td>所有层对称，prefill 全层计算</td><td><b>CED</b>：下半层为因果编码器，上半层全局 KV 投影生成</td><td>新增</td></tr>
+  <tr><td>残留流混合</td><td>mHC（多 pass 实现，4 kernel，激活内存流量 (4n+4)d）</td><td><b>Single-Pass mHC</b>（系数错位一位，Mega-mHC 单 kernel，(2n+2)d，激活内存流量减半）</td><td>升级精简</td></tr>
+  <tr><td>条件记忆</td><td>无</td><td>新增 <b>Engram</b>（196B 参数，稀疏访问的条件记忆模块）</td><td>新增</td></tr>
+  <tr><td>投机解码</td><td>MTP 模块与骨干联合预训练</td><td><b>省略 MTP</b>，改用 <b>DSpark</b>（骨干预训练后单独训练）</td><td>替换精简</td></tr>
+  <tr><td>主 KV 精度</td><td>FP8 主 KV cache</td><td><b>FP4 主 KV cache</b>（QAT，MXFP4/NVFP4 式 E2M1 + 每 16 通道一个 E4M3 scale）</td><td>升级</td></tr>
+  <tr><td>SWA 持久化</td><td>混合策略（持久化或精确重放 \(L\times n_{win}\) token）</td><td><b>SWA Bounded Replay</b>（只重放最近 \(n_{win}\) token）</td><td>简化</td></tr>
+</table>
+<p class="cap"><b>表 4</b>｜V4 → V4.1 的架构变化清单（依据论文摘要、§1、§2.1、§2.4、§3.2.2；各项细节分别归第 2–4 讲）。</p>
+
+<p><b>继承</b>的骨架同样清晰（§2.1）：每层仍然同时有全局注意力与 SWA（前两层除外）；前馈层仍是标准 <b>DeepSeekMoE</b>（1 共享 + 384 路由、细粒度专家、共享专家保留）；沿用辅助损失-free 负载均衡并扩展出模态专属版本；优化器仍是 Muon 家族（§2.5）。一句话：V4.1 没有推翻 V4，而是把「全局分支怎么省」这一件事推到了极致——层维（CSA2 复用）、精度维（FP4）、计算分工维（CED）三管齐下。</p>
+
+<h2 id="s7">7. §2.5 Optimization：训练优化如实讲</h2>
+
+<p>§2.5 讲的是「在 V4 优化配置之上的新修改」，共两件事加一组基础配置：</p>
+
+<h3>7.1 Head-wise Muon：每个注意力头一个 preconditioner</h3>
+
+<p><b>Muon</b> 是一种优化器：可以把它粗略理解成「给梯度先做一次正交化再更新的 SGD」，对新纪元的矩阵参数更新比 AdamW 更省显存且效果好（论文引 Jordan et al., 2024；Liu et al., 2025）。V4.1 的新修改是 <b>head-wise Muon</b>：把 Query 权重<b>按注意力头切分后再施加 Muon 更新</b>。动机（§2.5 原话）：把 Muon 看作「带预条件子的梯度下降」，普通 Muon 对所有头共用一个预条件子，而 head-wise 版本给不同头配不同预条件子，<b>更好地处理注意力头之间的异质性</b>。论文报告观察到 head-wise Muon 优于普通 Muon，并指出该经验优势也在 GLM 5 与 Kimi-K3 中得到验证。Key 权重同样使用 head-wise Muon（§4.2.2）。</p>
+
+<h3>7.2 Sinkhorn 平衡更新：给巨大的 Embedding / 预测头 / Engram 表换掉 Adam</h3>
+
+<p>给 Engram 参数直接用 Adam 会显著增加优化器状态显存。V4.1 改用「动量更新 + Sinkhorn 平衡」来优化 <b>Engram 嵌入表、token embedding 与预测头</b>这三类大矩阵。Sinkhorn 平衡此前在 SinkGD（Scetbon et al., 2025）中用于线性层权重，本文将其推广到这些大参数矩阵。核心思想与 Muon 同构：Muon 用 Newton–Schulz 迭代做正交化，这里用 Sinkhorn 平衡替代。给定 Nesterov 动量更新 \(\widehat{G}_t\)，寻找对角缩放矩阵 \(D_r, D_c\) 使（论文式 7）：\[ \Delta_t = \sqrt{n}\, U^{(K)} = \sqrt{n}\, D_r\, \widehat{G}_t\, D_c,\qquad \frac{1}{n}\sum_{j=1}^{n}(\Delta_t)^2_{ij} \approx 1,\quad \frac{1}{m}\sum_{i=1}^{m}(\Delta_t)^2_{ij} \approx 1 \]</p>
+<p>逐符号解释：\(m\) 是矩阵较大维（对嵌入表和预测头即词表大小），\(n\) 是隐藏维；\(U^{(K)}\) 是对 \(\widehat{G}_t\) 交替做行/列归一化 \(K\) 次（K 为奇数）后的结果；两条约束分别要求<b>每一行、每一列的均方根（RMS）近似为 1</b>——这里一行对应一个 token 索引或 n-gram 身份、一列对应一个隐藏特征，Sinkhorn 正是利用这种「token–特征」结构做双向归一化。实现细节（Algorithm 1）：动量系数与 Muon 相同（0.95），行 RMS 满足 \(\rho_i \le \tau\bar\rho\) 的近零行被掩蔽（\(\tau=10^{-3}\)，K=11，\(\varepsilon=10^{-20}\)）；\(\sqrt{n}\) 把单位行 ℓ2 范数换算成单位行 RMS；有效学习率调整为 \(\tilde\eta_t = \gamma\eta_t\)、\(\gamma=0.18\)（接近 Moonlight 的 0.2），以对齐 Adam 的更新幅度。效果（论文原话）：像 Muon 一样<b>只需一份动量缓冲</b>，且经验上优于 Adam。</p>
+
+<h3>7.3 基础配置（§4.2.2 与 §2.5 "Basic Configurations"）</h3>
+
+<ul>
+  <li>RMSNorm 等归一化层权重及其他非矩阵参数（偏置、缩放因子）用 <b>AdamW</b>（\(\beta_1\)=0.9，\(\beta_2\)=0.95，\(\varepsilon\)=10⁻²⁰，weight decay=0.1）；线性变换权重矩阵（语言骨干、Engram 投影层、视觉-语言 projector）用 <b>Muon</b>（动量 0.95，weight decay 0.1，更新矩阵 RMS 重标定到 0.18 以复用 AdamW 学习率）；偏置与缩放因子不做 weight decay，归一化层权重做。</li>
+  <li>训练全程 45T token、batch 固定 100.6M token，<b>无不稳定现象</b>；学习率线性预热 2000 步至 2.6×10⁻⁴，28T 前保持，28T–40T 余弦衰减到 2.6×10⁻⁵ 并保持到 45T。</li>
+  <li>视觉编码器在预训练中<b>冻结到学习率衰减阶段</b>（其最终归一化层与视觉-语言 projector 保持可训练）；进入衰减阶段后解冻，与 LLM 联合训练、用较小学习率。</li>
+  <li>辅助损失-free 负载均衡的偏置更新速度为 0.001（图像、文本相同），另保留权重 0.0001 的小型序列级均衡损失以防单序列内极端失衡。</li>
+</ul>
+
+<h2 id="s8">8. 效果速览与 KV cache 对比</h2>
+
+<p>虽然 KV cache 的细账归第 2、4 讲，但作为架构篇应交代 CED 所在整体的战绩（全部为论文数字）：</p>
+
+<ul>
+  <li><b>全局 KV cache</b>（常驻 HBM）压缩到 <b>890 字节/token</b>，约为 DeepSeek-V4-Flash 的 <b>1/4</b>、DeepSeek-V1 的 <b>1/437</b>（摘要与 Figure 1(b)）。</li>
+  <li><b>持久 KV cache</b>（SSD 或主机内存）约为 V4-Flash 的 <b>1/8</b>——乘法分解：不再存 SWA KV（≈减半）× 全局 KV 压到 1/4（§3.2.1）。</li>
+  <li><b>Decode FLOPs 近乎恒定</b>：上下文从 4K 扩到 1M（256 倍），单 token decode FLOPs 只增加 1/4（§1 与 Figure 2）。</li>
+  <li><b>能力</b>：Base 模型知识与推理能力与 1.6T 的 V4-Pro-Base 相当，held-out 评测高 5%–10%，仅用 1/3 总参数与 1/4 激活参数（§1）；推理/Agent/多模态三线表现见 §5.3（第 6 讲展开）。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 860 230" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <text x="430" y="24" text-anchor="middle" font-weight="bold">每 token 全局 KV cache 字节数（摘要与 Figure 1(b) 口径；对数直觉按比例绘制）</text>
+  <!-- V1: 890*437 ≈ 388,930 -->
+  <rect x="60" y="46" width="300" height="30" rx="6" fill="#b8c4da"/>
+  <text x="370" y="66" font-size="11.5" fill="#5a6272">DeepSeek-V1 ≈ 388,900 B/token（由 437 倍关系反推）</text>
+  <!-- V4-Flash: 890*4 = 3560 -->
+  <rect x="60" y="92" width="60" height="30" rx="6" fill="#7f96c4"/>
+  <text x="130" y="112" font-size="11.5" fill="#5a6272">DeepSeek-V4-Flash ≈ 3,560 B/token（由 1/4 关系反推）</text>
+  <!-- V4.1 -->
+  <rect x="60" y="138" width="30" height="30" rx="6" fill="#2456c4"/>
+  <text x="100" y="158" font-size="12" fill="#2456c4" font-weight="bold">DeepSeek-V4.1-Flash = 890 B/token（论文原值）</text>
+  <line x1="90" y1="40" x2="90" y2="180" stroke="#c9d2e0" stroke-dasharray="3 3"/>
+  <text x="60" y="200" font-size="11" fill="#5a6272">注：V1 与 V4-Flash 的绝对值为论文所述倍数关系的推断换算；条长为示意（非线性精确对数刻度）。</text>
+  <text x="60" y="220" font-size="11" fill="#5a6272">贡献分解（摘要/§1）：CED 属于计算分工，890 B 主要由 CSA2（层维复用）+ FP4 KV（精度维）达成。</text>
+</svg>
+<p class="cap"><b>图 4</b>｜三代 DeepSeek 模型全局 KV cache 每字节对比（数据点：890 B/token、约 1/4、约 1/437 均出自论文摘要与 Figure 1(b) caption；两个基线绝对值由倍数反推，属推断换算）。</p>
+</div>
+
+<h2 id="s9">9. 一句话带过 §2.3 与 §2.4（归属第 2、3 讲）</h2>
+
+<ul>
+  <li><b>§2.3 CSA2（第 2 讲）</b>：把 V4 的 CSA–HCA 混合换成纯 CSA2——沿「层」这个维度做复用：Full 模式层自己算全局 KV 并做索引；Reindex 模式层复用前层的全局 KV、用自己的索引器重新打分选出新的 Top-K；Reuse 模式层连索引结果一起复用。解码器还配了 Hierarchical Sparse Indexer：第一个 Full 层选出候选池（至多 2048 块 × 8 位置 = 16384 位置），后续索引器只在池内打分，使每个后续索引器每查询的打分量从「正比于上下文长度」变为「常数」。</li>
+  <li><b>§2.4 架构扩展（第 3 讲）</b>：Single-Pass mHC（残留流混合改单 pass，配合 Mega-mHC kernel 把激活内存流量减半）、Engram（196B 参数的稀疏条件记忆，置于第 1、14 层）、DSpark（半自回归起草 + 置信度调度验证的投机解码）、FP4 主 KV cache（QAT + 量化后 RoPE 的 E2M1 格式，存储再减半）。</li>
+</ul>
+
+<h2 id="s10">10. 事实与推断的边界</h2>
+
+<table>
+  <tr><th>类别</th><th>内容</th></tr>
+  <tr><td>论文证实的事实</td><td>40 层 = 20+20 的 CED 结构；式 (1) 的投影公式；SWA 全层逐层计算；prefill 复杂度 \(O(NL)\to O(NL/2+n_{win}L/2)\approx O(NL/2)\)、"nearly halves"；8B/16B 激活；552B/196B 参数；1M 上下文；890 B/token 全局 KV；1/4 与 1/8 的 KV 对比；45T token 预训练；§4.2.1 全部配置数字；§2.5 的 head-wise Muon 与 Sinkhorn 平衡更新及其超参；§2.1.1 多模态细节（2D-RoPE、线性 patch 投影、pixel-unshuffle 9 倍、模态专属负载均衡）；CED inspired by YoCo；省略 MTP 改用 DSpark；纯 CSA2 替代 CSA-HCA。</td></tr>
+  <tr><td>论文未明说、本讲推断</td><td>① decoder-only 成为主流的三个理由（通识归纳）；② 表 3 / 图 3 的具体乘法核算与「约 50.5%」数字（由 8B/16B 与 nearly halves 推算）；③ 图 4 中 V1 ≈ 388,900 B 与 V4-Flash ≈ 3,560 B 的绝对值（由倍数反推）；④ CED 相对 YoCo 的两点具体改进（每层独立投影、SWA 逐层计算）——由 §2.2 行文归纳，论文未逐点对照；⑤ 「输入短输出长场景 CED 收益有限」的适用边界讨论；⑥ 890 B 的贡献主要归 CSA2+FP4 而非 CED（CED 省的是计算，不是 cache 字节，此归属为依据摘要行文的推断）。</td></tr>
+  <tr><td>论文未披露</td><td>\(W^{KV}_l, W^Z_l\) 投影矩阵的具体形状与参数量分配；编码器/解码器各激活参数如何精确加总出 8B/16B；CED 在消融中的单独贡献比例（§2.2 称「maintaining performance comparable to the baseline」但未给本规模的单独消融表）。</td></tr>
+</table>
+
+<h2 id="s11">11. 本讲小结</h2>
+
+<ul>
+  <li><b>动机</b>：agent 负载输入重、输出轻，prefill 计算成为成本大头；长上下文下 KV cache 的存储与搬运也成为瓶颈（§1）。</li>
+  <li><b>CED 的核心动作只有一句话</b>：解码器 20 层的全局 KV 不从各自隐状态算，而是从编码器末层隐状态 \(H^{L/2}\) 用每层专属矩阵投影出来（式 1）；SWA 保持全层逐层计算，配 Decoder SWA Bounded Replay 把重放开销压到 \(n_{win}\)=128 个 token。</li>
+  <li><b>效果</b>：prefill 复杂度近乎减半；prefill 激活 8B/token、decode 16B/token 的不对称正中 agentic 负载要害；与 CSA2、FP4 KV 协力把全局 KV 压到 890 B/token（V4-Flash 的 1/4）。</li>
+  <li><b>架构观</b>：V4.1 是对 V4 的「精简 + 聚焦」——保留 SWA 局部分支与 DeepSeekMoE 骨架，把全局分支沿层维（CSA2）、精度维（FP4）、分工维（CED）三路压缩；mHC 升级为 Single-Pass、MTP 换成 DSpark、新增 Engram。</li>
+  <li><b>训练面（§2.5）</b>：head-wise Muon 处理注意力头异质性；Engram/embedding/预测头改用动量 + Sinkhorn 平衡更新，只留一份动量缓冲、效果优于 Adam。</li>
+</ul>
+
+<h2 id="s12">12. 自测清单</h2>
+
+<details>
+<summary><b>Q1</b>：CED 里「因果编码器」的「因果」体现在哪？它和 T5 的 encoder 有什么本质区别？</summary>
+<p>答：编码器的 20 层内部仍然是<b>因果注意力</b>——每个 token 只能看到自己之前的 token，与 decoder-only 完全一致，因此模型整体仍能自回归地生成。T5 式 encoder 内部是双向注意力（每个 token 可见全文），只能处理整段输入、不能直接参与逐 token 生成。CED 是「decoder-only 的骨架 + 编码器-解码器的算力分工」。</p>
+</details>
+
+<details>
+<summary><b>Q2</b>：写出论文式 (1)，并说明解码器的全局 KV 是从哪个张量投影出来的。</summary>
+<p>答：\(C^l = H^{L/2} W^{KV}_l,\; Z^l = H^{L/2} W^Z_l,\; l > L/2\)。来源是<b>第 L/2 层（编码器最后一层，第 20 层）的隐状态</b>，而非解码器各层自己的隐状态；\(W^{KV}_l, W^Z_l\) 是每层独立的投影权重，\(C\) 是 KV entry、\(Z\) 是配套压缩权重。</p>
+</details>
+
+<details>
+<summary><b>Q3</b>：为什么解码器的 SWA 不能像全局注意力那样跳过？跳过会怎样、论文怎么补救？</summary>
+<p>答：解码器各层的局部 K/V 必须由各层自己的隐状态导出；若不跑解码器前向，这些隐状态不存在，解码器的 SWA KV 也就缺失，而 decode 的第一步就需要它。精确补齐需重放 \(n_{win}\times L/2\)（128×20=2560）个 token，对短提示多轮场景开销可观。论文的补救是 Decoder SWA Bounded Replay：只重放最后 \(n_{win}\)=128 个 token、将 SWA 截断到重放段，接受近似状态（实验显示对回复质量影响可忽略，§3.2.2）。</p>
+</details>
+
+<details>
+<summary><b>Q4</b>：V4.1-Flash 为什么设计成 prefill 8B / decode 16B？这个不对称对什么负载最有利？</summary>
+<p>答：prefill 时长输入只穿过下半 20 层（编码器），上半 20 层的全局 KV 由投影一次性得到，几乎不需要逐 token 的重型计算，故激活参数减半；decode 时每个输出 token 都要走完整 40 层，激活 16B。对「输入长、输出短」的 agentic 负载（频繁工具调用产生大量长 prefill）最有利——prefill 计算近乎减半，整体请求成本趋近减半；对输入短、输出长的负载收益有限（推断）。</p>
+</details>
+
+<details>
+<summary><b>Q5</b>：相比 DeepSeek-V4，V4.1 在注意力与总体架构上分别「精简」了什么？</summary>
+<p>答：注意力上，用<b>纯 CSA2</b>（Full/Reindex/Reuse 三种静态模式，跨层共享全局 KV 与索引器 K、复用 Top-K 索引）替代 V4 的 CSA–HCA 混合架构；总体上，mHC 升级为 Single-Pass mHC（激活内存流量减半）、省略 MTP 改用骨干后单独训练的 DSpark、新增 Engram 条件记忆、主 KV cache 降到 FP4，同时保留 DeepSeekMoE 与每层 SWA 的骨架。</p>
+</details>
+
+<details>
+<summary><b>Q6</b>：§2.5 中把 Engram/embedding/预测头的优化器从 Adam 换成「动量 + Sinkhorn 平衡」，动机和代价各是什么？</summary>
+<p>答：动机是<b>省优化器状态显存</b>——Adam 要为每个参数存两份状态，对巨大的嵌入表/预测头/Engram 表负担极重；Sinkhorn 方案像 Muon 一样只维护<b>一份动量缓冲</b>，且经验上优于 Adam。代价是需要 \(K\)=11 次交替的行/列归一化迭代（奇数次、含近零行掩蔽），并需用 \(\gamma\)=0.18 的学习率校正系数对齐 Adam 的更新幅度。</p>
+</details>
+
+<nav class="series">
+<b>系列导航 · DeepSeek-V4.1 零基础七讲</b>
+<ol>
+  <li><a href="deepseek-v41-t0-overview.html">第 0 讲 · 总览</a></li>
+  <li><span class="cur">第 1 讲 · CED 架构（本篇）</span></li>
+  <li><a href="deepseek-v41-t2-csa2.html">第 2 讲 · CSA2 注意力</a></li>
+  <li><a href="deepseek-v41-t3-extensions.html">第 3 讲 · 架构扩展</a></li>
+  <li><a href="deepseek-v41-t4-infra.html">第 4 讲 · 基础设施</a></li>
+  <li><a href="deepseek-v41-t5-pretraining.html">第 5 讲 · 预训练</a></li>
+  <li><a href="deepseek-v41-t6-posttraining.html">第 6 讲 · 后训练</a></li>
+</ol>
+</nav>
+
+<footer>
+<ul class="refs">
+  <li><b>主论文</b>：DeepSeek-AI. <i>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</i>（本地 <code>paper/deepseek_v41.pdf</code>）。本讲引用章节：摘要、§1（物理 7–9）、§2.1/§2.1.1（物理 10–11）、§2.2 CED（物理 12）、§2.3/§2.3.2（物理 12–14，一带而过）、§2.4/§2.5（物理 15–18）、§3.2.2（物理 23）、§4.2.1/§4.2.2（物理 24–25）、Table 1（物理 27）。</li>
+  <li><b>模型</b>：<a href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash">deepseek-ai/DeepSeek-V4.1-Flash</a>（HuggingFace 模型卡，见论文摘要）。</li>
+  <li><b>背景方法</b>：YoCo（Sun et al., 2024）、DeepSeekMoE（Dai et al., 2024）、辅助损失-free 负载均衡（Wang et al., 2024a）、mHC（Xie et al., 2026）、Engram（Cheng et al., 2026b）、DSpark（Cheng et al., 2026a）、Muon（Jordan et al., 2024；Liu et al., 2025）、SinkGD（Scetbon et al., 2025）——引用关系见论文参考文献。</li>
+  <li><b>站内交叉引用</b>：<a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a> · <a href="deepseek-v4-attention.html">DeepSeek-V4 Attention（CSA/HCA）</a> · <a href="deepseek-moe.html">DeepSeekMoE 解读</a> · <a href="moe-t0-foundation.html">MoE 零基础系列</a> · <a href="csa-compression.html">CSA 压缩过程详解</a></li>
+</ul>
+</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

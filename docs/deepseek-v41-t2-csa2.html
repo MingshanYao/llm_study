@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek-V4.1 零基础七讲 · 第 2 讲：CSA2 注意力——跨层 KV 复用与层级稀疏索引</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 14px 0;
+    background: #fff;
+  }
+  details summary { cursor: pointer; font-weight: 600; padding: 10px 0; color: var(--accent); }
+  details[open] summary { border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DeepSeek-V4.1 零基础七讲 · 第 2 讲<br>CSA2 注意力：跨层 KV 复用与层级稀疏索引</h1>
+
+<div class="series-nav">
+  <a href="deepseek-v41-t0-overview.html">第 0 讲·总览</a>
+  <a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a>
+  <a class="here" href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a>
+  <a href="deepseek-v41-t3-extensions.html">第 3 讲·架构扩展</a>
+  <a href="deepseek-v41-t4-infra.html">第 4 讲·基础设施</a>
+  <a href="deepseek-v41-t5-pretraining.html">第 5 讲·预训练</a>
+  <a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>日期：</b>2026-09-20　<b>系列：</b>DeepSeek-V4.1 零基础七讲（第 2 讲 / 共 7 讲）</p>
+  <p style="margin:4px 0"><b>论文：</b><i>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</i>（DeepSeek-AI，本地 <code>paper/deepseek_v41.pdf</code>，共 51 页；模型权重见 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash">HuggingFace</a>）。本讲对应论文 §2.3（CSA2）、§2.3.1（跨层复用）、§2.3.2（层级稀疏索引器）、§3.1.2（Attention Sharing 训练），并引用 §1、§2.4.4、§4.2.1、§6 的相关数字。</p>
+  <p style="margin:4px 0"><b>背景报告：</b><a href="deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读</a> · <a href="csa-compression.html">CSA 压缩过程详解</a> · <a href="deepseek-v4-lightning-indexer.html">Lightning Indexer 深度解读</a> · <a href="deepseek-v4-kvcache.html">V4 KV Cache 组织解读</a> · <a href="quant-t5-kv-systems.html">KV Cache 量化与推理系统</a></p>
+  <p style="margin:4px 0"><b>说明：</b>截至本讲撰写日，论文未附带官方开源参考实现，本讲全部代码级细节以论文文字与配置数字为准；所有「推断」内容均以黄色虚线框单独标注。</p>
+</div>
+
+<div class="series-nav" style="margin-top:2px">
+  <span style="align-self:center;color:var(--muted)">快速跳转：</span>
+  <a href="#s1">1 为什么 KV cache 会爆炸</a>
+  <a href="#s2">2 CSA2 总览与三种模式</a>
+  <a href="#s3">3 招式一：跨层复用</a>
+  <a href="#s4">4 招式二：层级稀疏索引器</a>
+  <a href="#s5">5 训练怎么配合</a>
+  <a href="#s6">6 算账：890 B/token</a>
+  <a href="#s7">7 与 V4 CSA 对比与取舍</a>
+  <a href="#s8">8 小结与自测</a>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>大模型推理时，每个历史 token 的 Key/Value（合称 KV）都要留在显存里供后续 token「查阅」，上下文越长这部分显存越大。DeepSeek-V4.1-Flash 的答案是 <b>CSA2（Compressed Sparse Attention 2）</b>：把 KV 压缩从「序列维」（V4 的 CSA：每 m 个 token 压成 1 条 entry）进一步扩展到<b>「层维」</b>——相邻若干层<b>共享同一份 main KV、indexer K 甚至 Top-K 索引</b>，层与层之间按 Full / Reindex / Reuse 三种模式静态分工。再配上<b>层级稀疏索引器（Hierarchical Sparse Indexer）</b>：解码器第一层全量打分后选出一个候选池，后面的索引器只在池内「复试」，把每个查询的打分开销从「随上下文线性增长」压成「常数」。两项设计加上 FP4 量化，把全局 KV cache 压到 <b>890 字节/token，约为 DeepSeek-V4-Flash 的 1/4、DeepSeek-V1 的 1/437</b>——而模型性能反而更强。本讲就是要把这两招和配套的训练策略（§3.1.2）掰开揉碎讲清楚。</p>
+</div>
+
+<h2 id="s1">1. 铺路：KV cache 为什么会「越聊越大」</h2>
+
+<h3>1.1 Attention 的记账方式</h3>
+
+<p>先补三块基础知识（懂的同学可以直接跳到 1.3）。</p>
+
+<p><b>Token（词元）</b>：模型处理文字的最小单位，可能是一个字、半个词或一个标点。模型读入一串 token，预测下一个 token。</p>
+
+<p><b>Attention（注意力）</b>：生成每个新 token 时，模型要让「当前的查询（Query，简称 Q）」去和「之前所有 token 的钥匙（Key，简称 K）」比对相关度，再按相关度加权取回「内容（Value，简称 V）」。打个比方：你在图书馆找资料——Q 是你手里的问题清单，K 是每本书书脊上的标签，V 是书里的内容。问题要和标签逐一比对，才能决定重点翻哪几本书。</p>
+
+<p><b>KV cache（KV 缓存）</b>：比对用的 K 和书的内容 V，在每个注意力层、每个历史 token 上都要留一份，否则每生成一个字都得把整篇文章重新算一遍。这份「留在显存里的历史 K/V」就是 KV cache。它的体量公式很朴素：</p>
+
+<div class="formula">\[ \text{KV cache 字节数} \;=\; \text{层数} \times \text{序列长度} \times \text{每层每 token 的 KV 字节数} \]</div>
+
+<p>三个因子都是乘法关系：模型层数固定，于是 <b>KV cache 随上下文长度线性膨胀</b>——100 万 token 的上下文，就意味着 100 万份历史 K/V 堆在显存里。full attention（每个 token 都能看全部历史）的代价由此而来：显存放不下（HBM 容量）、搬不动（读写带宽）、算不完（打分计算量随长度平方增长）。</p>
+
+<h3>1.2 V4 世代的解法：压 entry 大小 → 压序列长度</h3>
+
+<p>V4.1 论文在 §2.3 开头给了一张很好的「地图」：KV cache 的开销可以沿<b>三个乘法维度</b>去压——</p>
+
+<table>
+  <tr><th>压缩维度</th><th>思路</th><th>代表方法</th></tr>
+  <tr><td><b>entry 大小</b>（每 token 每 深度存多少字节）</td><td>让多个注意力头共用一份 KV，或把 KV 投影到一个低维 latent</td><td>GQA、MLA</td></tr>
+  <tr><td><b>序列维</b>（多少 token 存一条）</td><td>每 m 个 token 压缩成 1 条 entry</td><td>DeepSeek-V4 的 CSA / HCA</td></tr>
+  <tr><td><b>层维</b>（多少层各存一份）</td><td>让一部分层复用别的层的缓存与检索结果</td><td>IndexCache、YOIO、HySparse 等前人工作</td></tr>
+</table>
+<p class="cap"><b>表 1</b>｜论文 §2.3 归纳的三个 KV 压缩维度。前两维是 V3→V4 世代的主战场，第三维是 V4.1（本讲）的新战场。</p>
+
+<p><b>V4 世代做了什么？</b>V4 采用「<b>全局注意力分支 + 滑窗注意力（SWA）</b>」的混合结构（论文 §1 回顾）：全局分支负责「看全部历史」，它的 KV 叫<b>全局 KV</b>，由两部分组成——<b>main KV</b>（真正参与注意力计算的主体）和 <b>indexer K</b>（给索引器用的检索钥匙）；SWA 只看最近一个窗口（如最近 128 个 token）的原始 token，窗口固定，所以 SWA 的 KV 存储量不随上下文增长。上下文足够长时，<b>全局 KV 主导了运行时 KV cache 的体量</b>，这就是 V4.1 要集中火力的靶子。</p>
+
+<p>全局分支内部，V4 用 <b>CSA（压缩稀疏注意力）</b>解决「存」和「算」两件事（详见<a href="deepseek-v4-attention.html">背景报告</a>）：</p>
+<ul>
+  <li><b>存：序列维压缩。</b>每 m 个 token 经「可学习门控池化」压成 1 条 512 维的 main KV entry，entry 数从 N 变成 N/m；</li>
+  <li><b>算：稀疏检索。</b>一个轻量的 <b>Lightning Indexer</b> 用 indexer Q 和 indexer K 给每条 entry 打相关度分，每个查询只挑出得分最高的 Top-K 条 entry 参与真正的注意力计算——「先检索、后精读」，像搜索引擎先筛出前几页结果再逐条打开。</li>
+</ul>
+
+<p>这条路线把「算」的成本大幅压低了（V4.1 论文 §1 承认：prior advances in sparse attention 已显著降低长序列计算成本），但论文紧接着指出新瓶颈：<b>持久化存储（persistent KV cache）和数据搬运</b>。全局 KV 仍要挤在 HBM 里、复制到 SSD 上做前缀复用，I/O 和互联带宽限制了缓存的迁移与加载——「存」成了压垮部署成本的大头。V4.1 的目标因此非常聚焦：<b>把全局 KV 的字节数再往下压一个量级</b>。</p>
+
+<div class="infer">本节对 GQA/MLA/CSA/SWA 的白话展开，部分借用了 V4 论文与已有背景报告的结论（如 CSA 的门控池化压缩、Lightning Indexer 的先检索后精读），V4.1 论文正文只做了简要回顾；逐项技术细节请以背景报告为准。</div>
+
+<h3>1.3 前人在「层维」上走到了哪一步</h3>
+
+<p>论文 §2.3 还盘点了一层维压缩的已有尝试，并点出它们的不足（以下均为论文转述）：<b>IndexCache</b> 跨层复用 Top-K 索引、削减索引器计算，但「index reuse alone saves no main KV storage」——只省计算、不省存储；<b>YOIO</b> 全网只算一次稀疏路由、所有层共享，但「network-wide routing sharing limits performance」——共享得太狠、模型性能受损；<b>HySparse</b> 让稀疏层复用稠密层的 KV，但混合设计仍保留 full attention 层。论文的判词是：<b>没有任何一种已有方法同时覆盖三个乘法维度</b>。CSA2 的野心正是把三维一次性用满。</p>
+
+<h2 id="s2">2. CSA2 总览：一份 KV，三种分工</h2>
+
+<h3>2.1 CSA2 是什么</h3>
+
+<p>CSA2（Compressed Sparse Attention 2）是 V4 的 CSA 的第二代。它保留了 CSA 的骨架（论文 §2.3 原文概括）：</p>
+
+<blockquote>
+<p>「Similar to CSA, CSA2 includes a lightweight indexer that scores the main KV entries using indexer Q and indexer K and selects the Top-K entries for each query. Each Q attends to the selected entries together with the layer-local sliding-window KV (SWA KV).」</p>
+<p style="color:var(--muted);font-size:0.92em">（译：与 CSA 相同，CSA2 也含一个轻量索引器：用 indexer Q 给 main KV entry 打分（打分依据是 indexer Q 与 indexer K 的匹配），为每个查询选出 Top-K 条 entry；每个查询在「被选中的 entry + 本层滑窗 KV」上做注意力。）</p>
+</blockquote>
+
+<p>在这个骨架上，CSA2 新增两件武器：<b>跨层复用</b>（§3，共享 main KV、indexer K、Top-K 索引）和<b>层级稀疏索引器</b>（§4，先粗后细的漏斗式检索）。同时把 CSA 的压缩器和索引器做了简化（§7 详述）。</p>
+
+<h3>2.2 三种模式：Full / Reindex / Reuse</h3>
+
+<p>每个 CSA2 层在部署前就被<b>静态指定</b>三种模式之一（论文 §2.3.1）。三种模式都做同样的事——用「本层的查询 Q + 被选中的 main KV entry + 本层滑窗 KV」算出注意力输出；区别只在<b>三样东西从哪来</b>：main KV、indexer K、Top-K 索引。</p>
+
+<table>
+  <tr><th>模式</th><th>main KV</th><th>indexer K</th><th>Top-K 索引</th><th>一句话人设</th></tr>
+  <tr><td><b>Full</b></td><td>自己算</td><td>自己算（从自己的 main KV 投影）</td><td>自己全量打分选出</td><td>「大厨」：从原料做到上菜</td></tr>
+  <tr><td><b>Reindex</b></td><td>复用前面最近的 Full 层</td><td>复用同一份</td><td>用自己的 indexer Q 给复用的 indexer K <b>重新打分</b>，选出新的 Top-K</td><td>「复读生」：书是别人的，笔记自己做</td></tr>
+  <tr><td><b>Reuse</b></td><td>复用前面最近的 Full 层</td><td>—（不打分）</td><td>复用前面最近的「出索引层」（Full 或 Reindex）的 Top-K</td><td>「蹭读生」：书和笔记都用别人的</td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜CSA2 三种模式的分工（据论文 §2.3.1 与图 4 整理）。三种模式下，每层都保留<b>自己的 main Q 与 SWA KV</b>——局部、逐层的东西从不共享，共享的只有「全局 KV 与全局索引」这些层间高度冗余的部分。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 400" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs>
+    <marker id="t2-m1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker>
+  </defs>
+  <!-- 颜色图例 -->
+  <rect x="14" y="8" width="16" height="14" rx="3" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="36" y="20" fill="#5a6272">本层现算（绿）</text>
+  <rect x="150" y="8" width="16" height="14" rx="3" fill="#fff3c4" stroke="#d8a912"/>
+  <text x="172" y="20" fill="#5a6272">复用最近 Full 层的 main KV / indexer K（黄）</text>
+  <rect x="480" y="8" width="16" height="14" rx="3" fill="#f9d3d0" stroke="#c0564d"/>
+  <text x="502" y="20" fill="#5a6272">复用最近出索引层的 Top-K（红）</text>
+
+  <!-- 三列标题 -->
+  <g font-weight="bold" font-size="14" fill="#1a1f2e" text-anchor="middle">
+    <text x="150" y="52">Full Mode</text>
+    <text x="440" y="52">Reindex Mode</text>
+    <text x="730" y="52">Reuse Mode</text>
+  </g>
+  <g font-size="11.5" fill="#5a6272" text-anchor="middle">
+    <text x="150" y="70">全链路自产自销</text>
+    <text x="440" y="70">KV 借旧 · 索引自选</text>
+    <text x="730" y="70">KV 与索引全借</text>
+  </g>
+
+  <!-- ===== Full 列 ===== -->
+  <g>
+    <rect x="60" y="84" width="180" height="30" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+    <text x="150" y="104" text-anchor="middle">main KV（现算）</text>
+    <rect x="60" y="122" width="180" height="30" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+    <text x="150" y="142" text-anchor="middle">indexer K（由 main KV 投影）</text>
+    <rect x="60" y="160" width="180" height="30" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+    <text x="150" y="180" text-anchor="middle">indexer Q（现算）</text>
+    <rect x="60" y="198" width="180" height="30" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+    <text x="150" y="218" text-anchor="middle">全量打分 → Top-K 索引</text>
+    <rect x="60" y="236" width="180" height="30" rx="6" fill="#fff" stroke="#c9d2e0"/>
+    <text x="150" y="256" text-anchor="middle">main Q + SWA KV（现算）</text>
+    <rect x="60" y="274" width="180" height="40" rx="6" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+    <text x="150" y="292" text-anchor="middle" fill="#2456c4" font-weight="bold">核心注意力</text>
+    <text x="150" y="308" text-anchor="middle" fill="#5a6272">Top-K entry ∪ 滑窗</text>
+    <rect x="60" y="322" width="180" height="28" rx="6" fill="#fff" stroke="#c9d2e0"/>
+    <text x="150" y="341" text-anchor="middle">注意力输出</text>
+  </g>
+
+  <!-- ===== Reindex 列 ===== -->
+  <g>
+    <rect x="350" y="84" width="180" height="30" rx="6" fill="#fff3c4" stroke="#d8a912"/>
+    <text x="440" y="104" text-anchor="middle">main KV（复用）</text>
+    <rect x="350" y="122" width="180" height="30" rx="6" fill="#fff3c4" stroke="#d8a912"/>
+    <text x="440" y="142" text-anchor="middle">indexer K（复用同一份）</text>
+    <rect x="350" y="160" width="180" height="30" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+    <text x="440" y="180" text-anchor="middle">indexer Q（本层自己的）</text>
+    <rect x="350" y="198" width="180" height="30" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+    <text x="440" y="218" text-anchor="middle">在候选域重打分 → 新 Top-K</text>
+    <rect x="350" y="236" width="180" height="30" rx="6" fill="#fff" stroke="#c9d2e0"/>
+    <text x="440" y="256" text-anchor="middle">main Q + SWA KV（现算）</text>
+    <rect x="350" y="274" width="180" height="40" rx="6" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+    <text x="440" y="292" text-anchor="middle" fill="#2456c4" font-weight="bold">核心注意力</text>
+    <text x="440" y="308" text-anchor="middle" fill="#5a6272">新 Top-K entry ∪ 滑窗</text>
+    <rect x="350" y="322" width="180" height="28" rx="6" fill="#fff" stroke="#c9d2e0"/>
+    <text x="440" y="341" text-anchor="middle">注意力输出</text>
+  </g>
+
+  <!-- ===== Reuse 列 ===== -->
+  <g>
+    <rect x="640" y="84" width="180" height="30" rx="6" fill="#fff3c4" stroke="#d8a912"/>
+    <text x="730" y="104" text-anchor="middle">main KV（复用）</text>
+    <rect x="640" y="122" width="180" height="30" rx="6" fill="#f9d3d0" stroke="#c0564d"/>
+    <text x="730" y="142" text-anchor="middle">Top-K 索引（复用）</text>
+    <rect x="640" y="160" width="180" height="30" rx="6" fill="#f2f4f8" stroke="#c9d2e0" stroke-dasharray="5 3"/>
+    <text x="730" y="180" text-anchor="middle" fill="#98a0ad">无 indexer Q / 无打分</text>
+    <rect x="640" y="236" width="180" height="30" rx="6" fill="#fff" stroke="#c9d2e0"/>
+    <text x="730" y="256" text-anchor="middle">main Q + SWA KV（现算）</text>
+    <rect x="640" y="274" width="180" height="40" rx="6" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+    <text x="730" y="292" text-anchor="middle" fill="#2456c4" font-weight="bold">核心注意力</text>
+    <text x="730" y="308" text-anchor="middle" fill="#5a6272">借来的 Top-K entry ∪ 滑窗</text>
+    <rect x="640" y="322" width="180" height="28" rx="6" fill="#fff" stroke="#c9d2e0"/>
+    <text x="730" y="341" text-anchor="middle">注意力输出</text>
+  </g>
+
+  <!-- 汇聚箭头 -->
+  <g stroke="#5a6272" stroke-width="1.2" fill="none">
+    <polyline points="150,228 150,232"/>
+    <line x1="150" y1="266" x2="150" y2="274" marker-end="url(#t2-m1)"/>
+    <line x1="440" y1="228" x2="440" y2="236" marker-end="url(#t2-m1)"/>
+    <line x1="440" y1="266" x2="440" y2="274" marker-end="url(#t2-m1)"/>
+    <line x1="730" y1="152" x2="730" y2="160"/>
+    <line x1="730" y1="266" x2="730" y2="274" marker-end="url(#t2-m1)"/>
+  </g>
+  <!-- Reuse 列：Top-K 直连核心注意力 -->
+  <polyline points="820,137 838,137 838,294 820,294" fill="none" stroke="#c0564d" stroke-width="1.4" marker-end="url(#t2-m1)"/>
+  <!-- Full 列 KV 下游复用提示 -->
+  <polyline points="60,99 34,99 34,375 466,375" fill="none" stroke="#d8a912" stroke-width="1.3" stroke-dasharray="6 4"/>
+  <polyline points="466,375 350,375" fill="none" stroke="#d8a912" stroke-width="1.3" stroke-dasharray="6 4" marker-end="url(#t2-m1)"/>
+  <text x="240" y="390" font-size="12" fill="#b08a10">main KV / indexer K 沿「→ Reindex / Reuse 层」向后传递（同一模式组内共用一份）</text>
+</svg>
+<p class="cap"><b>图 1</b>｜CSA2 三种模式的数据流（对应论文图 4）。绿色 = 本层现算；黄色 = 从最近的 Full 层复用 main KV 与 indexer K；红色 = 从最近的出索引层（Full 或 Reindex）复用 Top-K 索引。注意三点：① 三种模式都现算自己的 main Q 和 SWA KV；② Reuse 模式完全没有 indexer——这是「复用索引省计算」的落点；③ Reindex 模式是「共享但不僵化」的关键：KV 共享了，但每层仍能凭自己的 indexer Q 选出不同的 Top-K。</p>
+</div>
+
+<h3>2.3 为什么「共享」在直觉上是成立的</h3>
+
+<p>不同层的注意力真的会看同一批历史 token 吗？经验上是：多层 Transformer 的注意力分布高度重叠——「这段话在讲什么」这个问题，第 10 层和第 14 层关心的答案位置往往差不多。V4.1 论文引用的三个前人工作（IndexCache / YOIO / HySparse）都验证了层间冗余真实存在，只是各自只敢共享一部分（索引或 KV）。CSA2 的赌注是：<b>全局 KV 在层间冗余度足够高，可以用「静态分组 + 三模式分工」把冗余几乎榨干，同时用 Reindex 模式保留层间选择的差异度，用训练策略兜住精度</b>。从 §6 的评测结果看，这个赌注赢了。</p>
+
+<div class="infer">「层间注意力分布重叠」是本文为帮助理解补充的直觉解释；论文没有直接给出层间注意力重叠度的测量，只以前人工作效果作为间接证据。</div>
+
+<h2 id="s3">3. 招式一：跨层 KV 与索引复用——共享的结构怎么组织</h2>
+
+<h3>3.1 全模型的模式编排</h3>
+
+<p>V4.1-Flash 共 40 层 Transformer，被 CED 架构切成 20 层<b>因果编码器（causal encoder）</b>和 20 层<b>解码器（decoder）</b>（CED 本身是第 1 讲的主题：解码器的全局 KV 不是从各层隐状态算的，而是直接从编码器第 L/2 层的最终隐状态 \(H^{L/2}\) 投影出来，从而省掉一半 prefill 计算）。CSA2 只用在编码器后 18 层和解码器全部 20 层，压缩率不同：</p>
+
+<table>
+  <tr><th>部分</th><th>注意力</th><th>压缩率 m</th><th>分组方式（论文 §4.2.1）</th></tr>
+  <tr><td>编码器第 1–2 层</td><td>纯 SWA</td><td>—</td><td>不参与 CSA2</td></tr>
+  <tr><td>编码器第 3–20 层（18 层）</td><td>CSA2，m=2</td><td>2（每 2 token 压 1 条 entry）</td><td><b>3 组 × 6 层</b>：每组第 1 层 Full，其余 5 层 Reuse</td></tr>
+  <tr><td>解码器全部 20 层</td><td>CSA2，m=1（即 main KV 不压缩的特殊情形）</td><td>1</td><td><b>5 组 × 4 层</b>：第 1 组第 1 层 Full、其余 3 层 Reuse；<b>第 2–5 组每组第 1 层 Reindex</b>、其余 3 层 Reuse</td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜DeepSeek-V4.1-Flash 的层模式编排（论文 §4.2.1 Model Setups，层结构示意见论文图 3）。全文 38 个 CSA2 层中只有 4 个「出 KV 层」（3 个编码器 Full + 1 个解码器 Full）和 4 个「出索引层」（上述 4 个 Full + 4 个解码器 Reindex）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 330" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="t2-m2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <!-- 编码器条 -->
+  <text x="14" y="34" font-weight="bold" fill="#1a1f2e">因果编码器（20 层）· CSA2 m=2</text>
+  <g>
+    <rect x="14" y="44" width="30" height="46" rx="5" fill="#f2f4f8" stroke="#c9d2e0"/>
+    <text x="29" y="63" text-anchor="middle" font-size="11">SWA</text><text x="29" y="77" text-anchor="middle" font-size="11">×2</text>
+    <!-- 组1 -->
+    <rect x="52" y="44" width="40" height="46" rx="5" fill="#d9f0e2" stroke="#2f9e63"/>
+    <text x="72" y="63" text-anchor="middle" font-size="11">Full</text><text x="72" y="77" text-anchor="middle" font-size="11">出KV</text>
+    <rect x="94" y="44" width="200" height="46" rx="5" fill="#fff3c4" stroke="#d8a912"/>
+    <text x="194" y="63" text-anchor="middle" font-size="11">Reuse ×5</text><text x="194" y="77" text-anchor="middle" font-size="11">共用组1的KV与索引</text>
+    <!-- 组2 -->
+    <rect x="302" y="44" width="40" height="46" rx="5" fill="#d9f0e2" stroke="#2f9e63"/>
+    <text x="322" y="63" text-anchor="middle" font-size="11">Full</text><text x="322" y="77" text-anchor="middle" font-size="11">出KV</text>
+    <rect x="344" y="44" width="200" height="46" rx="5" fill="#fff3c4" stroke="#d8a912"/>
+    <text x="444" y="63" text-anchor="middle" font-size="11">Reuse ×5</text><text x="444" y="77" text-anchor="middle" font-size="11">共用组2的KV与索引</text>
+    <!-- 组3 -->
+    <rect x="552" y="44" width="40" height="46" rx="5" fill="#d9f0e2" stroke="#2f9e63"/>
+    <text x="572" y="63" text-anchor="middle" font-size="11">Full</text><text x="572" y="77" text-anchor="middle" font-size="11">出KV</text>
+    <rect x="594" y="44" width="200" height="46" rx="5" fill="#fff3c4" stroke="#d8a912"/>
+    <text x="694" y="63" text-anchor="middle" font-size="11">Reuse ×5</text><text x="694" y="77" text-anchor="middle" font-size="11">共用组3的KV与索引</text>
+  </g>
+  <line x1="440" y1="100" x2="440" y2="122" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t2-m2)"/>
+  <text x="452" y="117" font-size="12" fill="#5a6272">解码器全局 KV 从编码器末层隐状态投影（CED，第 1 讲）</text>
+
+  <!-- 解码器条 -->
+  <text x="14" y="152" font-weight="bold" fill="#1a1f2e">解码器（20 层）· CSA2 m=1 · 配层级稀疏索引器</text>
+  <g>
+    <!-- 组1 -->
+    <rect x="14" y="162" width="40" height="46" rx="5" fill="#d9f0e2" stroke="#2f9e63"/>
+    <text x="34" y="181" text-anchor="middle" font-size="11">Full</text><text x="34" y="195" text-anchor="middle" font-size="11">出KV+池</text>
+    <rect x="56" y="162" width="128" height="46" rx="5" fill="#fff3c4" stroke="#d8a912"/>
+    <text x="120" y="181" text-anchor="middle" font-size="11">Reuse ×3</text><text x="120" y="195" text-anchor="middle" font-size="11">用组1索引</text>
+    <!-- 组2-5 -->
+    <rect x="192" y="162" width="46" height="46" rx="5" fill="#dbe6f8" stroke="#2456c4"/>
+    <text x="215" y="181" text-anchor="middle" font-size="11">Reindex</text><text x="215" y="195" text-anchor="middle" font-size="11">池内选</text>
+    <rect x="240" y="162" width="128" height="46" rx="5" fill="#fff3c4" stroke="#d8a912"/>
+    <text x="304" y="181" text-anchor="middle" font-size="11">Reuse ×3</text><text x="304" y="195" text-anchor="middle" font-size="11">用组2索引</text>
+    <rect x="376" y="162" width="46" height="46" rx="5" fill="#dbe6f8" stroke="#2456c4"/>
+    <text x="399" y="181" text-anchor="middle" font-size="11">Reindex</text><text x="399" y="195" text-anchor="middle" font-size="11">池内选</text>
+    <rect x="424" y="162" width="128" height="46" rx="5" fill="#fff3c4" stroke="#d8a912"/>
+    <text x="488" y="181" text-anchor="middle" font-size="11">Reuse ×3</text><text x="488" y="195" text-anchor="middle" font-size="11">用组3索引</text>
+    <rect x="560" y="162" width="46" height="46" rx="5" fill="#dbe6f8" stroke="#2456c4"/>
+    <text x="583" y="181" text-anchor="middle" font-size="11">Reindex</text><text x="583" y="195" text-anchor="middle" font-size="11">池内选</text>
+    <rect x="608" y="162" width="128" height="46" rx="5" fill="#fff3c4" stroke="#d8a912"/>
+    <text x="672" y="181" text-anchor="middle" font-size="11">Reuse ×3</text><text x="672" y="195" text-anchor="middle" font-size="11">用组4索引</text>
+    <rect x="744" y="162" width="46" height="46" rx="5" fill="#dbe6f8" stroke="#2456c4"/>
+    <text x="767" y="181" text-anchor="middle" font-size="11">Reindex</text><text x="767" y="195" text-anchor="middle" font-size="11">池内选</text>
+    <rect x="792" y="162" width="74" height="46" rx="5" fill="#fff3c4" stroke="#d8a912"/>
+    <text x="829" y="181" text-anchor="middle" font-size="11">Reuse ×3</text><text x="829" y="195" text-anchor="middle" font-size="11">用组5索引</text>
+  </g>
+  <text x="14" y="232" font-size="12" fill="#5a6272">解码器 5 组：第 1 组由 Full 层建立全局 KV 与候选池；第 2–5 组各由一个 Reindex 层「池内重选」Top-K，供组内 3 个 Reuse 层直接使用。</text>
+
+  <!-- 共享记账 -->
+  <rect x="14" y="252" width="852" height="60" rx="8" fill="#f4f7fd" stroke="#c9d2e0"/>
+  <text x="26" y="274" font-size="12.5" fill="#1a1f2e" font-weight="bold">这份编排意味着（全局 KV 只存 4 份）：</text>
+  <text x="26" y="296" font-size="12.5" fill="#2a3040">main KV / indexer K：编码器 3 份（m=2，每份只摊 N/2 条 entry）+ 解码器 1 份（m=1，N 条 entry）· 若无共享则 38 层各存一份</text>
+</svg>
+<p class="cap"><b>图 2</b>｜40 层的模式编排（据论文图 3 与 §4.2.1 绘制）。绿色 = Full（产 KV）、蓝色 = Reindex（借 KV、池内重选索引）、黄色 = Reuse（借 KV、借索引）、灰色 = 纯 SWA。所有 Reuse 层合计占总层数的 30/38 ≈ 79%。</p>
+</div>
+
+<h3>3.2 共享的「源」：Full 层怎么产 KV</h3>
+
+<p>与 CED 结合时（论文 §2.3.1 末段），解码器中唯一那个 Full Mode 层的 main KV 并非从本层隐状态计算，而是从编码器最后一层（第 L/2 层）的隐状态 \(H^{L/2}\) 用<b>逐层独立的投影矩阵</b>投影得到（论文式 1）：</p>
+
+<div class="formula">\[ C^{l} = H^{L/2}\, W^{KV}_{l}, \qquad Z^{l} = H^{L/2}\, W^{Z}_{l}, \qquad l > L/2 \]</div>
+
+<p>逐符号解释（记号照录论文式 1）：</p>
+<ul>
+  <li>\(H^{L/2} \in \mathbb{R}^{N \times d}\)：编码器第 L/2 层（本模型即第 20 层）输出的隐状态，N 为序列长度、d=5120 为隐藏维——它承载了整段输入「消化完毕」的语义；</li>
+  <li>\(W^{KV}_{l}, W^{Z}_{l}\)：第 l 层专属的两组投影权重，把同一个 \(H^{L/2}\) 分别变成该层的 KV 载体 \(C^{l}\) 与「压缩权重」 \(Z^{l}\)（CED 论述部分称 C 为 KV entries、Z 为对应压缩权重）；</li>
+  <li>关键含义：<b>各层看的是同一份「原料」\(H^{L/2}\)，只是各自的「切法」（投影矩阵）不同</b>。这就是跨层共享在数学上顺理成章的原因——解码器所有层的全局 KV 本来就出自同一个源头，让部分层连投影都省掉、直接借用别层的投影结果，只是把这个冗余推到极致。</li>
+</ul>
+
+<p>编码器的 3 个 Full 层则照常从各自隐状态计算 main KV，并「由 main KV entry 经投影得到 indexer K」（论文 §2.3：CSA2 obtains indexer K by projecting main KV entries）——这一点与 V4 的 CSA 不同（CSA 的 indexer K 有独立的压缩路径），§7 详述。</p>
+
+<h3>3.3 复用链条与「省」的落点</h3>
+
+<p>把三种模式串成一句话：<b>Full 层花全价生产 KV 和索引 → Reindex 层蹭 KV 但自己精挑索引 → Reuse 层连挑都懒得挑，直接用上游挑好的</b>。论文明确区分了两种节省的落点（§2.3.1）：</p>
+<ul>
+  <li><b>共享 main KV 与 indexer K → 省「存储」</b>（"Sharing main KV and indexer K reduces cache storage"）：38 层的全局 KV 从 38 份减到 4 份；</li>
+  <li><b>复用 Top-K 索引 → 省「计算」</b>（"reusing Top-K indices avoids additional indexer computation"）：30 个 Reuse 层完全不跑索引器。</li>
+</ul>
+<p>且两者<b>解耦</b>（"cache sharing and index reuse decoupled"）：一个层可以只借 KV、不借索引（Reindex），也可以两者都借（Reuse）。「解耦」是 CSA2 相对 YOIO（全网共享一路由、性能受损）的关键改良——想保留层间差异的层组用 Reindex，确认冗余的层组才用 Reuse。</p>
+
+<p>此外论文 §3.2 给了一个部署侧的硬数字：纯 Reuse 层推理时只需 <b>15 个 kernel（prefill）/ 11 个 kernel（decode）</b>——索引器、压缩器全被裁掉之后，层的执行流程极其精简，kernel 融合后硬件可以全流水跑满。</p>
+
+<h2 id="s4">4. 招式二：Hierarchical Sparse Indexer——先粗后细的检索漏斗</h2>
+
+<h3>4.1 问题：剩下的索引器仍在全量打分</h3>
+
+<p>跨层索引复用砍掉了 30 个 Reuse 层的索引计算，但剩下 8 个出索引层（4 Full + 4 Reindex）里，每个索引器仍要「对全部因果可见上下文打分」。论文 §2.3.2 的原话：「For extremely long contexts, this cost remains a major computational bottleneck.」——100 万 token 的上下文，解码的每个新 token 都要对 100 万条 entry 打分 4 次（1 个 Full + 4 个 Reindex，Full 只在解码器算一次全量），这本身就是一笔可观的算力。</p>
+
+<h3>4.2 漏斗：三层筛子</h3>
+
+<p>论文的观察非常巧妙（§2.3.2）：「in the decoder, information from shallower indexers can naturally be used to restrict the candidates considered by deeper indexers <b>without adding any extra state</b>」——浅层索引器反正已经把全上下文打过分了，它的打分结果天然可以告诉深层索引器「值得看的地方在哪」，不需要额外维护任何状态。于是设计出三级漏斗（只在解码器使用）：</p>
+
+<table>
+  <tr><th>层级</th><th>谁来做</th><th>做什么</th><th>规模</th></tr>
+  <tr><td>① 全量打分</td><td>解码器第 1 个 Full 层的索引器</td><td>对全部因果可见的 main KV 位置打分；先给自己选出 Top-512；再做<b>分块初筛</b>：把位置按 8 个一组分块，每块取块内<b>最大</b>索引分作为块分，选得分最高的 <b>2,048 个块</b></td><td>O(N)</td></tr>
+  <tr><td>② 建候选池</td><td>同上（一次性的副产品）</td><td>把被选块覆盖的所有位置收集成<b>共享候选池</b>：2,048 块 × 8 位置 = ≤16,384 个候选位置</td><td>固定 ≤16,384</td></tr>
+  <tr><td>③ 池内精选</td><td>后续 4 个 Reindex 层的索引器</td><td>只对候选池内的位置打分，各自选出自己的 Top-512</td><td>O(16,384) = 常数</td></tr>
+</table>
+<p class="cap"><b>表 4</b>｜层级稀疏索引器的三级漏斗（论文 §2.3.2 与 §4.2.1 配置）。注意：候选池是所有出索引层<b>共享</b>的搜索域，但各层最终的 Top-512 选择可以不同。</p>
+
+<p>用记号整理（论文以文字描述此流程，公式为本文按论文语义整理的记号）：对查询 t，设索引器对位置 i 的打分为 \(I_{t,i}\)，位置按每 8 个划入块 \(\mathcal{B}_j\)，则——</p>
+
+<div class="formula">\[ b_j = \max_{i \in \mathcal{B}_j} I_{t,i} \qquad\text{（块分 = 块内最大索引分）} \]</div>
+<div class="formula">\[ \mathcal{P} = \bigcup_{j \in \mathrm{TopK}_{2048}(\{b_j\})} \mathcal{B}_j, \qquad |\mathcal{P}| \le 2{,}048 \times 8 = 16{,}384 \qquad\text{（共享候选池）} \]</div>
+<div class="formula">\[ \mathcal{S}^{l}_{t} = \mathrm{TopK}_{512}\big(\{\, I^{l}_{t,i} \;:\; i \in \mathcal{P} \,\}\big) \qquad\text{（Reindex 层 } l \text{ 池内选 Top-512）} \]</div>
+
+<p>逐符号解释：\(I_{t,i}\) 是 indexer Q（每查询 32 个头、每头 128 维）与 indexer K 匹配产生的相关度分；\(b_j\) 是第 j 块的得分——取块内最大值而非平均值，意味着只要块里有<b>一个</b>强相关位置，整块就会被保送进候选池，宁可错收、不可漏收；\(\mathcal{P}\) 是候选池；\(\mathcal{S}^{l}_{t}\) 是第 l 层为查询 t 选出的 Top-512 entry 集合。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 430" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="t2-m3" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#2456c4"/></marker></defs>
+  <!-- 漏斗主体 -->
+  <polygon points="60,60 820,60 560,168 320,168" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <polygon points="320,180 560,180 480,288 400,288" fill="#fff3c4" stroke="#d8a912" stroke-width="1.6"/>
+  <polygon points="400,300 480,300 452,380 428,380" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <!-- 阶段标注 -->
+  <text x="80" y="88" font-size="13" fill="#1a1f2e" font-weight="bold">① 全量打分（O(N)）</text>
+  <text x="80" y="108" font-size="12" fill="#5a6272">解码器第 1 个 Full 层的索引器，对全部因果可见位置打分</text>
+  <text x="80" y="126" font-size="12" fill="#5a6272">给自己的注意力选 Top-512；同时按 8 位置/块算块分 b_j = max(块内分)</text>
+  <text x="80" y="144" font-size="12" fill="#5a6272">保留块分最高的 2,048 块（其余整块淘汰）</text>
+
+  <text x="300" y="216" font-size="13" fill="#8a6a0a" font-weight="bold">② 共享候选池（≤16,384）</text>
+  <text x="300" y="236" font-size="12" fill="#5a6272">被选块覆盖的位置并集，2,048 块 × 8 位置</text>
+  <text x="300" y="254" font-size="12" fill="#5a6272">所有出索引层共享的搜索域 · 不新增任何缓存状态</text>
+  <text x="300" y="272" font-size="12" fill="#5a6272">规模与上下文长度无关</text>
+
+  <text x="492" y="330" font-size="13" fill="#1d7a4a" font-weight="bold">③ 池内精选 Top-512</text>
+  <text x="492" y="350" font-size="12" fill="#5a6272">4 个 Reindex 层各自在池内打分、</text>
+  <text x="492" y="368" font-size="12" fill="#5a6272">选自己的 Top-512 → 组内 Reuse 层直接用</text>
+
+  <!-- 右侧规模标尺 -->
+  <g font-size="12" fill="#2456c4" font-weight="bold">
+    <text x="700" y="108">N 个位置</text>
+    <text x="700" y="126" font-size="11" fill="#5a6272">例：1M 上下文 = 1,000,000</text>
+    <text x="580" y="216">≤ 16,384 个位置</text>
+    <text x="580" y="234" font-size="11" fill="#5a6272">= 上下文长度的 ≤1.6%</text>
+    <text x="490" y="352">512 条 entry / 层</text>
+  </g>
+  <!-- 连接箭头 -->
+  <line x1="440" y1="146" x2="440" y2="176" stroke="#2456c4" stroke-width="1.6" marker-end="url(#t2-m3)"/>
+  <line x1="440" y1="266" x2="440" y2="296" stroke="#2456c4" stroke-width="1.6" marker-end="url(#t2-m3)"/>
+  <!-- 底部结论条 -->
+  <rect x="60" y="396" width="760" height="28" rx="6" fill="#f4f7fd" stroke="#c9d2e0"/>
+  <text x="440" y="415" text-anchor="middle" font-size="12.5" fill="#1a1f2e">效果（论文原文）：后续每个索引器的每查询打分成本从「随上下文线性增长」变为「与上下文长度无关的常数」</text>
+</svg>
+<p class="cap"><b>图 3</b>｜层级稀疏索引器的检索漏斗（对应论文图 5 与 §2.3.2）。绿色方块是被选中的位置、蓝色矩形是按块分选中的块（论文图 5 的配色约定）。注意两个「不忘本」的设计：第一级 Full 层仍然扫全量（保证 recall 的源头）；候选池大小固定后，深层索引器的成本从 O(N) 变为 O(1)。</p>
+</div>
+
+<h3>4.3 三个容易忽略的细节</h3>
+
+<ul>
+  <li><b>只在解码器用。</b>论文明确 "used only in the decoder of CED to reduce this repeated scoring during <b>decode</b>"——它优化的是解码阶段逐 token 反复打分的开销；prefill 阶段全量打分只发生一次，本身不是瓶颈。</li>
+  <li><b>训练感知、且在 post-training 引入。</b>"The mechanism is training-aware and introduced in post-training: the candidate restriction is applied identically during training and inference"——训练时深层索引器就在同一个 16,384 的池子里学习选择，推理时才不会「考试题型变了」。若训练全量、推理限池，分布突变会伤精度；「训练即所见」是这类硬约束设计的标准姿势。</li>
+  <li><b>零额外状态。</b>候选池由第一级打分的副产品（块分）直接导出，不需要为它缓存任何东西——这也是标题里 "without adding any extra state" 的分量：省计算但不反弹存储。</li>
+</ul>
+
+<div class="infer">「块分取 max 而非均值 ⇒ 宁可错收不可漏收」是本文对块级最大值池化的动机解读，论文未明说选 max 的理由；但「候选池大于最终 Top-K 集合」（论文原文 "a candidate pool larger than the final Top-K set"）确实体现了留冗余保召回的意图。</div>
+
+<h2 id="s5">5. 训练怎么配合：Attention Sharing Training（§3.1.2）</h2>
+
+<h3>5.1 共享会不会伤精度？</h3>
+
+<p>先给结论层面的证据（均为论文陈述）：</p>
+<ul>
+  <li><b>预训练完全绕开 dense attention：</b>「Sparse attention is trained from scratch at a sequence length of 64K, <b>without any dense attention warmup stages</b>」（§1）——稀疏注意力从零直接学，不需要「先稠密后稀疏」的过渡课程，且 45T token 训练「no instability」（§4.2.2）；</li>
+  <li><b>FP4 主 KV 缓存的 QAT 只带来 marginal 性能损失</b>（§1：with only marginal performance degradation）；</li>
+  <li><b>最终效果不降反升：</b>V4.1-Flash 整体性能优于 V4-Flash（§1、§6），BPB 评测全面领先（论文图 6）；</li>
+  <li><b>但论文诚实保留了边界：</b>§6 承认「Potential selection errors in CSA2 … may still cause capability degradation in untested boundary cases」——CSA2 的选择错误在未覆盖的极端用例下可能造成能力退化，团队将持续扩充压力测试。这是「共享有代价」最直接的论文表述。</li>
+</ul>
+
+<p>所以问题不是「共享不伤精度」，而是<b>「用什么工程手段把共享的精度风险按住」</b>。§3.1.2 给的答案是三件套——但它们的出发点其实不是精度，而是<b>分布式训练的可行性</b>：共享 KV 的层可能被切到不同的 pipeline stage（流水线并行是把 40 层切给多台 GPU 的标准做法），而传统训练框架假设「每层的模块只归自己的 stage 管」，跨 stage 共享参数根本没法直接跑。三件套分别是：</p>
+
+<table>
+  <tr><th>机制</th><th>解决的问题</th><th>怎么解决（论文原文转述）</th></tr>
+  <tr><td><b>Shadow indexers<br>（影子索引器）</b></td><td>共享的索引器参数被多个 stage 的层引用，但模块不能跨 stage 复用</td><td>在每个参与 stage 放一个<b>轻量可执行副本</b>，同时保留<b>唯一逻辑属主</b>：属主负责参数优化与 checkpoint；副本靠「参数同步 + 梯度聚合」与属主保持一致。流水线调度器因此无需把共享层当特殊单元对待</td></tr>
+  <tr><td><b>Pipeline payload extensions<br>（流水线载荷扩展）</b></td><td>共享 KV 的生产层和消费层跨流水线边界时，中间表示与稀疏路由信息传不过去</td><td>把这些状态并入<b>现有的点对点通信路径</b>，并按上下文并行（context parallelism）一致的方式切分——不额外复制数据，且保持对应梯度可回传</td></tr>
+  <tr><td><b>Micro-batch-level shared-state management<br>（微批次级共享状态管理）</b></td><td>多个微批次并发时，共享状态的生存期怎么管（何时可释放、重算时找谁要）</td><td>统一跟踪前向、激活重算、反向传播中的共享状态，<b>留到最后一个消费者用完才释放</b>；同一套运行时抽象还管理 stage 布局与生产-消费关系，使注意力实现不依赖物理流水线布局</td></tr>
+</table>
+<p class="cap"><b>表 5</b>｜Attention Sharing Training 三件套（论文 §3.1.2）。论文总结：配合对优化器、checkpoint、warm-up、计算图追踪的轻量适配，CSA2 可以「透明地」跑在既有分布式训练接口与流水线调度上。</p>
+
+<h3>5.2 训练侧的完整拼图</h3>
+
+<p>把散落在论文各处的训练相关决策拼到一起，可以看清「共享 KV 的模型是怎么被驯服的」：</p>
+
+<ul>
+  <li><b>预训练：</b>64K 序列长度从零直接训稀疏注意力（无 dense warmup），34T token 处扩到 1M（§4.2.2）。此时模型学的就是「在 Top-512 稀疏选择上做注意力」；</li>
+  <li><b>后训练：</b>层级稀疏索引器的候选池约束在 post-training 引入，且训练/推理完全一致（§2.3.2）；主 KV 的 FP4 量化感知训练（QAT）也在 post-training 加入（§2.4.4）；SWA Bounded Replay 的近似行为同样在后训练中模拟以做 train-aware adaptation（§3.2.2）。<b>后训练承担了所有「推理近似行为」的适配教学</b>；</li>
+  <li><b>梯度语义：</b>共享参数只有一个属主做优化（shadow indexer 机制），梯度经聚合回到属主——数学上等价于「一份参数、多处使用」的标准共享，不会出现多处各自更新导致的参数漂移。</li>
+</ul>
+
+<div class="infer">「后训练承担所有推理近似行为的适配」是本文对论文散落信息的归纳性表述（原文分别陈述了 HSI、FP4 QAT、SWA Bounded Replay 三项在后训练引入，未使用这一总括说法）；「梯度聚合等价于标准参数共享」亦是基于 §3.1.2 文字的合理解读。</div>
+
+<h2 id="s6">6. 算账：890 B/token 是怎么省出来的</h2>
+
+<h3>6.1 论文给出的硬数字</h3>
+
+<table>
+  <tr><th>指标</th><th>数值</th><th>出处</th></tr>
+  <tr><td>全局 KV cache（常驻 HBM）</td><td><b>890 字节 / token</b></td><td>摘要、§6</td></tr>
+  <tr><td>相对 DeepSeek-V4-Flash</td><td>约 <b>1/4</b></td><td>摘要、图 1(b)</td></tr>
+  <tr><td>相对 DeepSeek-V1</td><td>约 <b>1/437</b></td><td>图 1(b) 说明</td></tr>
+  <tr><td>持久 KV cache（SSD / 主机内存）</td><td>约 V4-Flash 的 <b>1/8</b></td><td>摘要、§3.2.1</td></tr>
+  <tr><td>持久 KV 减半来源</td><td>不再存 SWA KV（≈减半）× 全局 KV 压到 1/4</td><td>§3.2.1（两个乘法因子）</td></tr>
+  <tr><td>FP4 主 KV 相对 FP8</td><td><b>几乎减半</b>（HBM 与 SSD 均是）</td><td>§2.4.4</td></tr>
+</table>
+<p class="cap"><b>表 6</b>｜论文给出的 KV 压缩硬数字。注意区分两类缓存：全局 KV（每 token 随上下文线性累积，常驻 HBM）与持久 KV（跨请求复用前缀，落 SSD/主机内存）。本讲聚焦前者；持久 KV 的 SWA Bounded Replay 是第 4 讲的内容。</p>
+
+<h3>6.2 890 字节的构成：论文未给分解，我们推一笔账</h3>
+
+<p>论文只给了总量（890 B/token）和乘法因子，<b>没有给出逐项分解</b>。但结合 §4.2.1 的配置数字，这笔账可以推得八九不离十：</p>
+
+<div class="infer">以下推算基于的假设：① 主 KV entry 为 512 维 latent（§2.4.4 明言 "the 512-channel KV latent"），FP4 存储 = E2M1（4 bit/通道）+ 每 16 通道一个 E4M3 scale（8 bit）≈ 0.5625 B/通道 → <b>288 B/条</b>；② indexer K 每条 entry 按 128 维 FP4 存 → <b>72 B/条</b>（128 维取自索引器 head dim，V4 的 c_I 亦为 128）；③ 全局 KV 共 4 份：编码器 3 份（m=2，每份摊 N/2 条/token）+ 解码器 1 份（m=1，N 条/token）。全部假设均为推断，论文未逐一明说。</div>
+
+<table>
+  <tr><th>项目</th><th>算式</th><th>每 token 字节</th></tr>
+  <tr><td>编码器 main KV（3 份 × m=2）</td><td>3 × (1/2 条) × 288 B</td><td>432 B</td></tr>
+  <tr><td>解码器 main KV（1 份 × m=1）</td><td>1 × 1 条 × 288 B</td><td>288 B</td></tr>
+  <tr><td>编码器 indexer K（3 份 × m=2）</td><td>3 × (1/2 条) × 72 B</td><td>108 B</td></tr>
+  <tr><td>解码器 indexer K（1 份 × m=1）</td><td>1 × 1 条 × 72 B</td><td>72 B</td></tr>
+  <tr><td><b>合计（推断）</b></td><td></td><td><b>900 B</b> ≈ 论文 890 B（差 ~1%，来自格式细节假设的误差）</td></tr>
+</table>
+<p class="cap"><b>表 7</b>｜890 B/token 的推断构成。推算结果与论文总量吻合到 1% 以内，间接验证了「4 份共享 KV + FP4 量化」的账目结构。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 356" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+  <defs><marker id="t2-m4" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+  <text x="20" y="30" font-size="14" font-weight="bold" fill="#1a1f2e">全局 KV 每 token 字节数：三级瀑布（推断重构，终点锚定论文 890 B）</text>
+
+  <!-- 条1：无共享 FP8 -->
+  <rect x="20" y="60" width="820" height="44" rx="6" fill="#f2f4f8" stroke="#c9d2e0"/>
+  <text x="34" y="80" font-size="12.5" fill="#1a1f2e" font-weight="bold">反事实基线：38 层各存一份 main KV + indexer K，FP8 存储</text>
+  <text x="34" y="97" font-size="12" fill="#5a6272">编码器 18×0.5×(544+136) + 解码器 20×(544+136) ≈ 19.7 KB/token（推断）</text>
+
+  <!-- 箭头1 -->
+  <line x1="440" y1="110" x2="440" y2="136" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2-m4)"/>
+  <text x="456" y="128" font-size="12.5" fill="#2456c4" font-weight="bold">招式一 · 跨层共享：4 份（3 编码器 + 1 解码器）→ ≈11.6×</text>
+
+  <!-- 条2：共享 FP8 -->
+  <rect x="20" y="142" width="71" height="44" rx="6" fill="#fff3c4" stroke="#d8a912"/>
+  <text x="102" y="162" font-size="12.5" fill="#1a1f2e" font-weight="bold">共享后（仍 FP8）≈ 1.7 KB/token</text>
+  <text x="102" y="179" font-size="12" fill="#5a6272">main KV 3×0.5×544+544 = 1,360 B；indexer K 3×0.5×136+136 = 340 B（推断）</text>
+
+  <!-- 箭头2 -->
+  <line x1="55" y1="192" x2="55" y2="218" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2-m4)"/>
+  <text x="71" y="210" font-size="12.5" fill="#2456c4" font-weight="bold">招式三 · FP4 主 KV 量化（QAT）→ ≈1.9×</text>
+
+  <!-- 条3：共享 FP4 -->
+  <rect x="20" y="224" width="38" height="44" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="70" y="244" font-size="12.5" fill="#1a1f2e" font-weight="bold">共享 + FP4 ≈ 900 B/token（推断）</text>
+  <text x="70" y="261" font-size="12" fill="#5a6272">= 432 + 288 + 108 + 72 B，与论文实测 890 B 吻合（表 7）</text>
+
+  <!-- 论文锚点 -->
+  <rect x="20" y="286" width="820" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="34" y="306" font-size="12.5" fill="#2456c4" font-weight="bold">论文锚点：890 B/token 全局 KV = V4-Flash 的约 1/4、V1 的约 1/437（摘要与图 1b，事实）；条内分解为推断</text>
+
+  <text x="20" y="340" font-size="12" fill="#5a6272">注：招式二（层级稀疏索引器）省的是索引打分计算而非 KV 存储，故不出现在字节瀑布中；滑窗 KV（FP8，窗口固定 128 token）不属于全局 KV，另行单独计。</text>
+</svg>
+<p class="cap"><b>图 4</b>｜全局 KV 字节瀑布。从「无共享 FP8」的反事实基线（≈19.7 KB/token，推断）出发：跨层共享贡献 ≈11.6×，FP4 量化贡献 ≈1.9×，终点与论文 890 B 对上。<b>只有终点数字是论文事实，两级压缩倍率与中间条均为推断</b>。另可对照：V4-Flash 全局 KV ≈ 3.6–3.8 KB/token（<a href="deepseek-v4-kvcache.html">背景报告</a>推算），与「890 B ≈ 其 1/4」相容。</p>
+</div>
+
+<h3>6.3 招式二的账：省的是算力</h3>
+
+<p>层级稀疏索引器不省字节、省算力。论文的表述是：对固定的候选池大小，「每个后续索引器每查询打分的头数（位置数）从随上下文<b>线性</b>变为<b>常数</b>」（"changes the per-query cost of deeper indexers from linear in context length to constant"）。以 1M 上下文为例（推断演算）：不设池时每个 Reindex 索引器每查询要打 100 万分；设池后只打 ≤16,384 分——4 个 Reindex 层合计少打约 400 万次分/查询。加上 30 个 Reuse 层完全不跑索引器（招式一的另一面）与 Reuse 层仅 15/11 个 kernel 的极简执行流，解码阶段每个 token 的注意力相关计算被压到与上下文长度近乎无关——这正是论文图 2 展示的「上下文从 4K 扩到 1M（256 倍），单 token Decode FLOPs 只增加 1/4」的重要贡献来源之一。</p>
+
+<div class="infer">「4 个 Reindex 层合计少打约 400 万次分」与「Decode FLOPs 恒定的贡献来源」均为本文演算/归因，前者由论文配置数字直接推得，后者论文未做逐项归因。</div>
+
+<h2 id="s7">7. 与 V4 的 CSA 相比：新在哪里，代价是什么</h2>
+
+<h3>7.1 结构差异逐条对照</h3>
+
+<table>
+  <tr><th>维度</th><th>DeepSeek-V4（CSA + HCA 混合）</th><th>DeepSeek-V4.1-Flash（纯 CSA2）</th></tr>
+  <tr><td>压缩器</td><td>压缩率 m 时每条 entry 由 <b>2m</b> 个源 entry 生成，相邻 entry <b>源窗口重叠</b>；压缩时加<b>绝对位置编码</b>标记源位置</td><td><b>去掉重叠</b>与<b>去掉绝对位置编码</b>（简化实现、提高训练效率）</td></tr>
+  <tr><td>indexer K 来源</td><td>从隐状态走<b>独立压缩路径</b>生成</td><td>直接<b>由 main KV entry 投影</b>得到（少一条生产流水线）</td></tr>
+  <tr><td>层间关系</td><td>每层有自己的压缩 KV；CSA/HCA 混合编排</td><td><b>跨层共享</b> main KV / indexer K / Top-K，Full/Reindex/Reuse 三模式静态编排；弃用 HCA，纯 CSA2</td></tr>
+  <tr><td>索引计算</td><td>每个 CSA 层索引器各自全量打分</td><td>解码器用<b>层级稀疏索引器</b>先粗后细；Reuse 层零索引计算</td></tr>
+  <tr><td>缓存精度</td><td>主 KV FP8；indexer Q/K 已用 FP4 QAT</td><td>主 KV 也 FP4（E2M1 + 每 16 通道 E4M3 scale，RoPE 后量化）；SWA KV 因对量化敏感仍 FP8</td></tr>
+  <tr><td>结果</td><td>全局 KV ≈ 3.6–3.8 KB/token（背景报告推算）</td><td><b>890 B/token</b>（论文），性能反而更优</td></tr>
+</table>
+<p class="cap"><b>表 8</b>｜CSA2 相对 CSA 的变化（左列事实出自两代论文，V4 侧细节转述自 V4.1 论文 §2.3 与 <a href="csa-compression.html">CSA 压缩详解</a>）。去掉重叠双分支与绝对位置编码是「简化」而非「退化」——它们原本服务于压缩边界平滑，而在 m 很小（编码器 m=2、解码器 m=1）时收益有限、成本却在。</p>
+
+<h3>7.2 代价与取舍</h3>
+
+<ul>
+  <li><b>精度面：</b>复用意味着「层间选择不自由」。论文的兜底是三层的：Reindex 保留层间差异、训练-推理一致的候选池约束、FP4 QAT；最终评测全面占优。但 §6 明确承认 CSA2 潜在的选择错误是「尚未完全刻画的鲁棒性边界」，特别是<b>稀疏检索 over 长上下文</b>的极端情形是后续压力测试重点。</li>
+  <li><b>实现复杂度面：</b>静态模式编排本身简单（部署前定死），但训练系统要为跨 stage 共享补齐 shadow indexer、流水线载荷扩展、微批次共享状态管理三件套（§3.1.2）——这是不小的工程投入；推理侧反而变简单（Reuse 层 15/11 个 kernel）。</li>
+  <li><b>灵活性面：</b>模式是<b>静态指定</b>的，不随输入动态调整。论文没有给出「动态路由会不会更好」的讨论——这是设计空间的明确取舍：用灵活性换确定性与 kernel 融合友好性（推断）。</li>
+  <li><b>候选池与 Top-K 的固定开销：</b>16,384 池 + 512 Top-K 在短上下文时是纯开销（全量本来也不大），所以论文把层级索引器只放在解码器、且用「池大小固定」来控制上限——短上下文时第一级全量打分本身很便宜（推断）。</li>
+</ul>
+
+<h2 id="s8">8. 本讲小结与自测</h2>
+
+<h3>8.1 小结</h3>
+
+<ul>
+  <li><b>问题：</b>稀疏注意力已把长上下文的「算」压下来后，全局 KV 的「存」与「搬」成为部署瓶颈（§1）；KV 压缩存在 entry 大小 / 序列 / 层三个乘法维度，前人无一同时覆盖（§2.3）。</li>
+  <li><b>招式一（§2.3.1）：</b>38 个 CSA2 层按 Full / Reindex / Reuse 三模式静态分工，全局 KV（main KV + indexer K）只存 4 份、Top-K 索引组内复用，且「缓存共享」与「索引复用」解耦；每层保留自己的 main Q 与 SWA KV。</li>
+  <li><b>招式二（§2.3.2）：</b>解码器层级稀疏索引器——第一级 Full 层全量打分（自用 Top-512 + 块分 max 池化选 2,048 块），导出 ≤16,384 位置的共享候选池，后续 Reindex 层池内选各自 Top-512；深层索引器每查询打分成本从 O(N) 降为 O(1)，且零额外缓存状态、训练感知。</li>
+  <li><b>训练配合（§3.1.2）：</b>shadow indexers / 流水线载荷扩展 / 微批次共享状态管理三件套让跨 stage 共享在分布式训练下透明运行；预训练从零直训稀疏（64K、无 dense warmup），后训练引入候选池约束与 FP4 QAT 并保持训练-推理一致。</li>
+  <li><b>账本：</b>890 B/token 全局 KV（≈V4-Flash 的 1/4、V1 的 1/437）≈ 跨层共享（约 11.6×，推断）× FP4 量化（约 1.9×，推断）的结果；层级索引器另省索引算力；持久 KV 靠「不再存 SWA KV + 全局 KV 减到 1/4」两个乘法因子降到 1/8（第 4 讲展开）。</li>
+  <li><b>取舍：</b>精度靠「Reindex 保留差异 + 一致性训练 + QAT」兜住，评测反超 V4-Flash；代价是训练系统工程量与静态编排的灵活性损失，论文 §6 诚实标注了极端边界下的鲁棒性待验证。</li>
+</ul>
+
+<h3>8.2 自测清单</h3>
+
+<details open>
+<summary>Q1：CSA2 的三种模式分别复用什么、现算什么？</summary>
+<p><b>答：</b>三种模式都<b>现算</b>本层的 main Q 与 SWA KV。<b>Full</b> 层现算 main KV、indexer K（由自己的 main KV 投影）并全量打分产出 Top-K；<b>Reindex</b> 层复用前面最近 Full 层的 main KV 与 indexer K，但用自己的 indexer Q 重新打分、选出新的 Top-K；<b>Reuse</b> 层把 main KV 和最近出索引层（Full 或 Reindex）的 Top-K 索引都借来，完全不跑索引器。（§2.3.1、表 2、图 1）</p>
+</details>
+
+<details>
+<summary>Q2：跨层共享省的是「存储」还是「计算」？索引复用呢？</summary>
+<p><b>答：</b>共享 main KV 与 indexer K 省的是<b>存储</b>（全局 KV 从 38 份减到 4 份）；复用 Top-K 索引省的是<b>计算</b>（30 个 Reuse 层不做任何索引打分）。两者在 CSA2 中是解耦的——Reindex 模式就是「借 KV 但不借索引」的中间态。（§2.3.1）</p>
+</details>
+
+<details>
+<summary>Q3：层级稀疏索引器的漏斗有几级？每级保留多少？为什么块分取 max？</summary>
+<p><b>答：</b>三级：① 解码器第 1 个 Full 层对全部因果可见位置打分（O(N)），自用 Top-512，并按 8 位置/块取块内最大分为块分、选出 2,048 块；② 被选块覆盖的位置并集构成 ≤16,384 个候选位置的<b>共享候选池</b>；③ 后续 4 个 Reindex 层只在池内打分、各选自己的 Top-512。块分取 max 意味着块内只要有一个强相关位置整块入选——偏向保召回（此动机解读为推断，候选池大于 Top-K 集合为论文原文）。（§2.3.2、§4.2.1、图 3）</p>
+</details>
+
+<details>
+<summary>Q4：层级稀疏索引器为什么不增加存储负担？它优化的是哪个阶段的成本？</summary>
+<p><b>答：</b>候选池由第一级打分的副产品（块分排序）直接导出，"without adding any extra state"——不需要为池缓存任何数据。它优化的是<b>解码（decode）阶段</b>的成本：解码时每个新 token 的查询都要让各出索引层重新打分，池化把这从「随上下文线性」变成「常数」；且只用于解码器。（§2.3.2）</p>
+</details>
+
+<details>
+<summary>Q5：Attention Sharing Training 三件套各自解决什么问题？</summary>
+<p><b>答：</b>① <b>Shadow indexers</b>：共享索引器被切到多个 pipeline stage 时，在各 stage 放可执行副本、唯一逻辑属主管优化与 checkpoint，靠参数同步+梯度聚合保持一致；② <b>Pipeline payload extensions</b>：共享 KV 的生产/消费层跨流水线边界时，把中间表示与稀疏路由信息并入现有 P2P 通信、按上下文并行一致切分；③ <b>Micro-batch 共享状态管理</b>：跟踪并发微批次的共享状态生存期，留到最后一个消费者用完才释放。（§3.1.2、表 5）</p>
+</details>
+
+<details>
+<summary>Q6：890 B/token 里，跨层共享和 FP4 各贡献多少？（哪些是论文事实、哪些是推断？）</summary>
+<p><b>答：</b><b>事实</b>：总量 890 B/token、为 V4-Flash 的约 1/4、FP4 相对 FP8 几乎减半、全局 KV 共 4 份（3 编码器 Full + 1 解码器 Full 层各产一份）、编码器 m=2 / 解码器 m=1。<b>推断</b>：按 512 维 latent FP4 ≈288 B/条、indexer K 128 维 FP4 ≈72 B/条推算，main KV 共 720 B + indexer K 共 180 B ≈ 900 B，与 890 B 吻合到 1%；由此反推跨层共享（相对无共享 FP8 基线）贡献约 11.6×、FP4 约 1.9×（图 4）。论文未给出逐项分解。</p>
+</details>
+
+<h2>参考来源</h2>
+
+<ol class="refs">
+  <li>DeepSeek-AI. <i>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</i>. 本地归档 <code>paper/deepseek_v41.pdf</code>（51 页）。本讲引用：摘要、§1（Introduction）、§2.1（Overview）、§2.3–2.3.2（CSA2 / 跨层复用 / 层级稀疏索引器）、§2.4.4（FP4 Main KV Cache）、§3.1.2（Attention Sharing Training）、§3.2（推理系统数字）、§4.2.1（Model Setups 配置）、§4.2.2（Training Setups）、§6（Conclusion 与鲁棒性边界）。</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>. arXiv:2606.19348（本地 <code>paper/deepseek_v4.pdf</code>）。本讲仅经 V4.1 论文的转述引用其 CSA/Lightning Indexer 概念，细节见背景报告。</li>
+  <li>背景报告（本仓库 docs/）：<a href="deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读</a>、<a href="csa-compression.html">CSA 压缩过程详解</a>（含 V4-Pro 压缩器逐式拆解与字节口径）、<a href="deepseek-v4-lightning-indexer.html">Lightning Indexer 深度解读</a>、<a href="deepseek-v4-kvcache.html">V4 KV Cache 组织解读</a>（含 V4-Flash 每 token 字节推算口径）、<a href="quant-t5-kv-systems.html">KV Cache 量化与推理系统落地</a>。</li>
+  <li>论文中提及的层维压缩前人工作（转述自 §2.3）：IndexCache（arXiv:2603.12201）、YOIO、HySparse（arXiv:2602.03560）、Brandon et al., NeurIPS 2024（cross-layer attention）。</li>
+</ol>
+
+<div class="series-nav">
+  <a href="deepseek-v41-t0-overview.html">第 0 讲·总览</a>
+  <a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a>
+  <a class="here" href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a>
+  <a href="deepseek-v41-t3-extensions.html">第 3 讲·架构扩展</a>
+  <a href="deepseek-v41-t4-infra.html">第 4 讲·基础设施</a>
+  <a href="deepseek-v41-t5-pretraining.html">第 5 讲·预训练</a>
+  <a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>
+</div>
+
+<footer>生成于 2026-09-20 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

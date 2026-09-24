@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek-V4.1 零基础七讲·第 4 讲：基础设施——KV cache 的存储层级、持久缓存管理与 SWA Bounded Replay</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DeepSeek-V4.1 零基础七讲 · 第 4 讲<br>基础设施：把 KV cache 搬进便宜的存储层</h1>
+
+<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 18px;margin:20px 0 8px;font-size:0.9em;line-height:2">
+<b>系列导航 · DeepSeek-V4.1 零基础七讲</b><br>
+<a href="deepseek-v41-t0-overview.html">第 0 讲·总览</a> ｜
+<a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a> ｜
+<a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a> ｜
+<a href="deepseek-v41-t3-extensions.html">第 3 讲·架构扩展</a> ｜
+<span style="background:var(--accent);color:#fff;border-radius:6px;padding:2px 10px;font-weight:700">第 4 讲·基础设施（本篇）</span> ｜
+<a href="deepseek-v41-t5-pretraining.html">第 5 讲·预训练</a> ｜
+<a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>
+</div>
+
+<div class="meta">
+<p style="margin:4px 0"><b>日期：</b>2026-09-20　<b>所属系列：</b>DeepSeek-V4.1 零基础七讲（第 4 讲，共 7 讲）</p>
+<p style="margin:4px 0"><b>论文：</b><i>DeepSeek-V4.1 Technical Report</i>（本地归档 <code>paper/deepseek_v41.pdf</code>，51 页）。本讲覆盖 §1 Introduction、§2.3.1（背景）、§3 General Infrastructures 全节：重点讲 §3.1.1 多模态训练基础设施、§3.2 推理系统、§3.2.1 持久 KV 缓存管理（印刷 p.19）、§3.2.2 SWA Bounded Replay（印刷 p.20）。</p>
+<p style="margin:4px 0"><b>姊妹篇：</b>§3.1.2 Attention Sharing Training for CSA2 属<a href="deepseek-v41-t2-csa2.html">第 2 讲</a>、§3.1.3 Engram 属<a href="deepseek-v41-t3-extensions.html">第 3 讲</a>，本讲各一句话带过。</p>
+<p style="margin:4px 0"><b>背景报告（推荐先读）：</b><a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV cache 管理解读</a>（V4 的 Zero SWA Caching 与持久缓存背景）、<a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>、<a href="csa-compression.html">CSA 压缩过程详解</a>、<a href="quant-t5-kv-systems.html">KV 量化与系统</a>。</p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>模型再聪明，部署成本的大头之一是 <b>KV cache</b>——推理时必须随身携带的"记忆笔记"。这些笔记放在哪种存储介质上，直接决定成本：GPU 显存（HBM）最贵最快、SSD 最便宜最慢。DeepSeek-V4.1-Flash 用三层手段压缩这套账本：<b>①</b> 架构层 CSA2 + FP4 量化把"全局 KV cache"（必须常驻显存的那部分）压到 <b>890 字节/token</b>，约为 V4-Flash 的 1/4；<b>②</b> 部署层把"持久 KV cache"（存 SSD/主存、供跨请求复用的那部分）里的 SWA KV 整体移出，改放到每台机器 <b>10% 主存</b>组成的短寿命内存池（TTL 只有几分钟）；<b>③</b> 由此产生的缓存未命中，用 <b>SWA Bounded Replay</b> 兜底——只重算最近 \(n_{\text{win}}=128\) 个 token，而不是精确重建所需的 \(L\times n_{\text{win}}=5120\) 个 token，把"灾难性 miss"变成"廉价的近似降级"。两个乘法因子相乘：1/2 × 1/4 = <b>持久 KV cache 只有 V4-Flash 的约 1/8</b>。训练侧同样为多模态长序列做了三项改造：通信藏在计算后面、视觉编码器与 LLM 分离部署、图像按负载均衡切片加载。</p>
+</div>
+
+<h2 id="s0">0. 铺路：三分钟搞懂存储层级</h2>
+
+<h3 id="s0-1">0.1 三层介质：快而贵、中不溜、慢而便宜</h3>
+
+<p>先认识三个词。<b>HBM</b>（High Bandwidth Memory）是焊在 GPU 上的"显存"，可以理解为<b>你办公桌上伸手可及的桌面</b>：东西放桌上，拿起来极快，但桌面就那么大，而且每寸桌面都很贵。<b>主机内存（host DRAM）</b>是服务器机箱里的普通内存条，相当于<b>你身后的书架</b>：容量大得多、便宜得多，但取一本书要走两步，慢一个数量级。<b>SSD</b>（固态硬盘）相当于<b>地下仓库</b>：容量巨大、按 TB 算钱非常便宜，但每次取货要"下楼"，慢两个数量级以上。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 320" xmlns="http://www.w3.org/2000/svg" font-size="13" font-family="PingFang SC, sans-serif" id="fig-storage-pyramid">
+  <text x="430" y="26" text-anchor="middle" font-size="15" font-weight="700" fill="#1a1f2e">存储层级金字塔：越往上越快越贵，越往下越大越便宜</text>
+  <polygon points="330,60 530,60 500,120 360,120" fill="#2456c4"/>
+  <text x="430" y="85" text-anchor="middle" fill="#fff" font-weight="700">HBM（GPU 显存）</text>
+  <text x="430" y="106" text-anchor="middle" fill="#dce6f8">容量最小 · 带宽最高</text>
+  <text x="560" y="85" fill="#5a6272">容量：单卡几十~上百 GB 级</text>
+  <text x="560" y="106" fill="#5a6272">带宽：TB/s 级（最高）</text>
+  <polygon points="290,140 570,140 530,205 330,205" fill="#4d7fd6"/>
+  <text x="430" y="167" text-anchor="middle" fill="#fff" font-weight="700">主机内存（host DRAM）</text>
+  <text x="430" y="189" text-anchor="middle" fill="#eaf0fb">容量中等 · 带宽中等</text>
+  <text x="600" y="167" fill="#5a6272">容量：单机 TB 级</text>
+  <text x="600" y="189" fill="#5a6272">带宽：约百 GB/s 级</text>
+  <polygon points="240,225 620,225 560,295 300,295" fill="#93b3e8"/>
+  <text x="430" y="252" text-anchor="middle" fill="#1a1f2e" font-weight="700">SSD（固态硬盘）</text>
+  <text x="430" y="274" text-anchor="middle" fill="#1a1f2e">容量巨大 · 带宽最低</text>
+  <text x="640" y="252" fill="#5a6272">容量：数十 TB 级</text>
+  <text x="640" y="274" fill="#5a6272">带宽：GB/s 级（最低）</text>
+  <line x1="240" y1="308" x2="620" y2="308" stroke="#c9d2e0" stroke-dasharray="5 4"/>
+  <text x="430" y="318" text-anchor="middle" fill="#5a6272" font-size="12">图中容量/带宽数量级为业界常见示意值（论文未给出具体硬件参数），仅用于建立直觉</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>｜存储层级金字塔（辅助示意，非论文原图）。数量级为业界常识性示意，本讲所有论文数字均另以表格标明出处。</p>
+
+<p><b>为什么 KV cache 放在哪一层决定成本？</b>KV cache（后面细讲，先记成"模型推理时随身携带的记忆笔记"）有个特点：它和上下文长度成正比，长上下文智能体（agent）场景下，一个请求的笔记可以长达上百万 token。如果全部塞在 HBM 里——最贵的地方——要么显存装不下、能同时服务的请求数（并发数）极少，要么就得买更多 GPU，成本飙升。把它挪到 SSD——最便宜的地方——就能用同样的钱服务多得多的请求，代价是读取变慢、而且有些计算要重做。所以<b>工程的核心问题变成：哪些笔记必须一直在桌上（HBM），哪些可以进书架（DRAM）、进仓库（SSD），挪出去之后取不回来时怎么办？</b>这正是本讲 §3.2 的全部内容。</p>
+
+<h3 id="s0-2">0.2 两个最容易混的概念：全局 KV vs 持久 KV</h3>
+
+<p>论文开篇（§1 Introduction）对这两个词有明确定义，务必分清——它们不是按"内容"分，而是按<b>"放哪、活多久"分</b>：</p>
+
+<ul>
+<li><b>全局 KV cache（global KV）：always in HBM（始终在显存里）。</b>这是注意力机制里"看全文"那一支（global attention branch）产生的笔记，记录的是整个上下文的压缩摘要 + 索引。只要这个请求还在被服务，这部分笔记就必须躺在 HBM 里随时被翻阅——它是<b>运行时（runtime）</b>开销，受 HBM 容量约束。V4.1-Flash 把它压到 <b>890 字节/token</b>（论文摘要与结论，约为 V4-Flash 的 1/4）。</li>
+<li><b>持久 KV cache（persistent KV cache）：always on SSD 或 in host memory（始终在 SSD 或主机内存里）。</b>这是为了"下次别再算一遍"而<b>跨请求长期保存</b>的笔记：比如同一个用户的多轮对话、同一个 agent 任务的连续调用，前缀（开头那一大段）是一样的，没必要每次都重新计算——这叫<b>前缀复用（prefix reuse）</b>。这部分笔记放在 SSD/主存里，受 SSD 和主机内存容量约束，是<b>存储（storage）</b>开销。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg" font-size="13" font-family="PingFang SC, sans-serif" id="fig-global-vs-persistent">
+  <text x="430" y="26" text-anchor="middle" font-size="15" font-weight="700" fill="#1a1f2e">全局 KV（运行时·常驻 HBM）vs 持久 KV（跨请求·常驻 SSD/主存）</text>
+  <rect x="40" y="60" width="360" height="46" rx="8" fill="#2456c4"/>
+  <text x="220" y="89" text-anchor="middle" fill="#fff" font-weight="700">HBM（显存）— 贵而快</text>
+  <rect x="40" y="126" width="360" height="110" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="220" y="152" text-anchor="middle" fill="#1a1f2e" font-weight="700">全局 KV cache：890 B/token</text>
+  <text x="220" y="176" text-anchor="middle" fill="#5a6272">请求被服务期间必须常驻</text>
+  <text x="220" y="198" text-anchor="middle" fill="#5a6272">决定并发数（同一块卡能装几个请求）</text>
+  <text x="220" y="220" text-anchor="middle" fill="#5a6272">约束来源：HBM 容量（§1）</text>
+  <rect x="460" y="60" width="360" height="46" rx="8" fill="#6b7a95"/>
+  <text x="640" y="89" text-anchor="middle" fill="#fff" font-weight="700">SSD / 主机内存 — 便宜而慢</text>
+  <rect x="460" y="126" width="360" height="110" rx="8" fill="#f4f6f9" stroke="#6b7a95"/>
+  <text x="640" y="152" text-anchor="middle" fill="#1a1f2e" font-weight="700">持久 KV cache（前缀复用）</text>
+  <text x="640" y="176" text-anchor="middle" fill="#5a6272">跨请求、跨轮次长期保存</text>
+  <text x="640" y="198" text-anchor="middle" fill="#5a6272">决定多轮 agent 场景的存储账单</text>
+  <text x="640" y="220" text-anchor="middle" fill="#5a6272">约束来源：SSD 与主机内存容量（§1）</text>
+  <path d="M 400 170 C 420 170 440 170 460 170" stroke="#9a7b1c" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-gp)"/>
+  <defs><marker id="arr-gp" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#9a7b1c"/></marker></defs>
+  <text x="430" y="258" text-anchor="middle" fill="#9a7b1c">V4：持久缓存里同时存全局 KV 和 SWA KV；V4.1：持久缓存只存全局 KV</text>
+  <text x="430" y="280" text-anchor="middle" fill="#9a7b1c">（SWA KV 挪进 10% 主存池，TTL 几分钟 —— 见 §3.2.1）</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>｜两个概念的定义对照。依据论文 §1：「global KV … dominates the runtime KV footprint, which is constrained by HBM capacity」「persistent KV caches … constrained by SSD and host memory capacity」。</p>
+
+<div class="infer">
+<p>一个常见误解是"全局 KV 是持久 KV 的一部分"。两者有交集但不等同：持久缓存里存的是全局 KV 的副本（供前缀复用），而 HBM 里那份全局 KV 是运行时的工作副本；V4.1 把持久缓存里的 SWA KV 拿掉，但 HBM 里的 SWA KV（每层自己的滑动窗口笔记）依然存在。本讲只讲"部署/存储"视角，SWA KV 在模型内部的计算角色见第 1、2 讲。</p>
+</div>
+
+<h2 id="s1">1. 训练基础设施（§3.1）：让 45T token 的多模态大锅饭炒得动</h2>
+
+<p>先交代背景：V4.1-Flash 有 552B backbone 参数、每 token 激活 8B（prefill）/16B（decode），在 45T token 的多模态数据上从头训练，序列长度从 64K 扩展到 1M（§1、§4.2.2）。这么大的"锅"，灶台（集群）稍有堵塞就浪费几百万 GPU 小时。§3.1 讲了三件事，前两件属于多模态训练基础设施（§3.1.1），第三件是长序列优化。</p>
+
+<h3 id="s1-1">1.1 对比学习阶段的"通信藏进计算"（Communication–Computation Overlap）</h3>
+
+<p>视觉编码器（DeepSeek-ViT）先单独用<b>对比学习</b>训练——比喻：<b>让模型学会"看图配对"，同一张图和它的正确描述要"靠得近"，错误的描述要"离得远"</b>。对比损失要在一个 batch 内对<b>所有</b>图文对计算，因此每个数据并行副本（可以理解为"每台训练机各算一小份批数据"）都必须拿到别的机器上的图文特征——这个"大家把各自的数据汇总成完整名单"的通信操作叫 <b>all-gather</b>。如果不做优化，所有机器都得停下来等名单汇齐，GPU 就空转了。</p>
+
+<p>论文的关键观察是：文本特征的梯度只依赖汇总来的<b>视觉</b>特征，反之亦然——两者互相独立，所以通信可以和计算<b>并行</b>而非串行。论文原式（§3.1.1）：</p>
+
+<div class="formula">\[
+\text{Forward}(V)\ \rightarrow\ \text{Forward}(T)\,\|\,\text{AllGather}(V)\ \rightarrow\ \nabla_{\text{Text}}\ \rightarrow\ \text{Backward}(T)\,\|\,\text{AllGather}(T)\ \rightarrow\ \nabla_{\text{Vision}}\ \rightarrow\ \text{Backward}(V)
+\]</div>
+
+<p>逐符号解释：\(V\)、\(T\) 分别是视觉/文本特征；\(\|\) 表示"两件事同时做"（overlap）；\(\nabla\) 表示求梯度；AllGather 就是上面说的汇总名单操作。读法：先做视觉前向；然后<b>在跑文本前向的同时</b>汇总视觉特征（第一次 all-gather 完全被计算盖住）；再在跑文本反向的同时汇总文本特征（第二次同理）。两次通信都"藏"在了有用的计算背后，GPU 几乎不空等。</p>
+
+<h3 id="s1-2">1.2 端到端并行：视觉编码器与 LLM"分灶吃饭"</h3>
+
+<p>视觉编码器和语言模型（LLM）的模型结构、数据形态差别很大（一个吃图像 patch，一个吃 token），硬塞进同一套并行策略会互相拖累。论文采用<b>分离式编码器（disaggregated encoder）</b>设计：把视觉编码器复制在 LLM 参数体系<b>之外</b>，每个训练步拆成三个阶段——<b>①视觉编码器前向 → ②LLM 前向+反向 → ③视觉编码器反向</b>。视觉相关的负载均衡只发生在第①③阶段，第②阶段完全不含视觉计算，保住了纯文本训练原有的并行策略。比喻：<b>凉菜间和热菜灶分开，凉菜师傅备料时热菜灶专心炒菜，互不占灶眼</b>。</p>
+
+<h3 id="s1-3">1.3 超长序列多模态训练：图像切片要"负载均衡"，加载要"藏进计算"</h3>
+
+<p>训练序列最长 1M token，一条超长、图像密集的样本在加载时就能把<b>一台</b>机器的 I/O、CPU 和内存吃满。论文的解法是 <b>balanced image sharding（图像负载均衡切片）</b>：把每条序列里的图像摊到各 CP rank（context parallelism rank，"上下文并行"——把一条超长序列切成几份分给多张卡并行处理）上、按负载均衡分配，且<b>每张图只读一次</b>。加载能不能被计算盖住，论文给了一个判据（§3.1.1）：</p>
+
+<div class="formula">\[
+\frac{N\times\rho}{B_{\text{IO}}} &lt; \frac{N\times C}{B_{\text{GPU}}}
+\iff \rho &lt; \frac{B_{\text{IO}}}{B_{\text{GPU}}}\, C
+\]</div>
+
+<p>逐符号解释：\(N\) 是 token 数；\(\rho\) 是每 token 的原始字节数（图像数据折算下来很重）；\(C\) 是每 token 的计算量；\(B_{\text{IO}}\)、\(B_{\text{GPU}}\) 分别是文件系统和 GPU 的带宽。左边是"读数据要花的时间"，右边是"算一遍要花的时间"；只要读得比算得快，加载就完全藏在计算后面。妙处在于 \(N\) 被约掉了——<b>判据只和每 token 的量（\(\rho\) 和 \(C\)）有关，与序列长度、集群规模无关</b>。论文据此指出：只有每 token 计算量很小的小模型（如消融实验）才会被存储吞吐卡住，生产规模的大模型始终是"算力受限"而非"IO 受限"。</p>
+
+<p>另一项是 <b>incremental image transfer（图像增量传输）</b>：强化学习的 rollout（"让模型实际跑一遍任务收集数据"）环节，图像只<b>增量</b>传给推理引擎，引擎 CPU 侧的解码与预处理结果缓存到分布式文件系统，跨 rollout、跨后续训练复用——避免同一张图被反复解码。</p>
+
+<h3 id="s1-4">1.4 一句话带过的两小节（归属其他讲）</h3>
+
+<ul>
+<li><b>§3.1.2 Attention Sharing Training for CSA2</b>：CSA2 让部分层跨层共享 KV 和 Top-K 索引，但这些层可能被切到不同的流水线阶段，训练系统用 shadow indexer（影子副本）、流水线载荷扩展、micro-batch 级共享状态管理三件套保证共享参数在训练全程一致——机制详解见<a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a>。</li>
+<li><b>§3.1.3 Engram</b>：Engram 条件记忆模块的嵌入表按行切分、FP8 存取、预取与视觉编码器前后向重叠、RL rollout 期间常驻显存以避免主机内存碎片化导致的 OOM——见<a href="deepseek-v41-t3-extensions.html">第 3 讲·架构扩展</a>。</li>
+</ul>
+
+<h2 id="s2">2. 推理系统总览（§3.2）：架构复杂，内核简洁</h2>
+
+<p>先铺两个推理系统的黑话，后面反复用到。<b>Prefill（预填充）</b>：用户发来一大段输入，模型要"一口气读完"，把所有输入 token 的笔记（KV）一次性算好——特点是计算量大、一次性的，像<b>开学前把整本教材通读一遍并做笔记</b>。<b>Decode（解码）</b>：之后模型一个 token 一个 token 地往外蹦，每蹦一个词都要翻之前的笔记、再添一条新笔记——特点是每步计算量小但要反复做很多步，像<b>考试时边想边往草稿纸上写</b>。两种负载的计算特征完全不同，所以大数据中心常把它们拆到不同机器上分别优化（下面 EPD 就是这个思路）。</p>
+
+<p>论文对推理系统的总述是一个反差：V4.1-Flash 的架构概念上很复杂（CED 编码器-解码器、CSA2 三模式、Indexer、mHC、MoE……），但经过激进的<b>内核融合（kernel fusion）</b>——把很多小算子合并成一个大 GPU 函数，减少中间结果来回搬运——整条推理流程被装进<b>极少数融合内核</b>里，硬件始终满负荷流水作业。论文列出的内核家族（§3.2）：</p>
+
+<table>
+<tr><th>内核（库）</th><th>负责什么</th></tr>
+<tr><td><code>fused-RoPE-attention-RoPE-cast</code>（FlashMLA）</td><td>位置编码（RoPE）→ 注意力 → 位置编码 → 精度转换，一条内核做完</td></tr>
+<tr><td><code>Mega-Gate</code> / <code>Mega-mHC</code> / <code>Mega-MoE</code>（DeepGEMM）</td><td>门控、单遍 mHC 激活混合、MoE 的大矩阵乘</td></tr>
+<tr><td>TileKernels 内核</td><td>注意力分块计算</td></tr>
+<tr><td>TopK 内核（DeepSelect）</td><td>Indexer 的 top-k 稀疏选择</td></tr>
+</table>
+
+<p>收益立竿见影：处于 Reuse Mode 的 Transformer 层（直接复用上一层的全局 KV 和索引，见<a href="deepseek-v41-t2-csa2.html">第 2 讲</a>）整个前向只用 <b>15 个内核（prefill）/ 11 个内核（decode）</b>（§3.2），既保吞吐又保低延迟。部署层面采用 <b>EPD 分离（Encoder–Prefill–Decode disaggregation）</b>：把视觉编码、预填充（一次性读完整段输入）、解码（逐 token 生成）三种负载拆到不同机器上独立伸缩、重叠执行——输入重的 agent 任务可以多堆编码/预填充机器，生成侧按需扩容。</p>
+
+<h2 id="s3">3. Persistent KV Cache Management（§3.2.1）：持久缓存里该留什么</h2>
+
+<h3 id="s3-1">3.1 先看 V4 的部署怎么做的，痛点在哪</h3>
+
+<p>回忆第 0 节：持久 KV cache 是存在 SSD 上、供跨请求/跨轮次前缀复用的笔记。V4 的部署里它同时存两种东西：<b>全局 KV</b>（完整存储，命中就把整个前缀全部复用）和 <b>SWA KV</b>（滑动窗口注意力那一支的笔记）。SWA KV 只在<b>两个特定位置</b>缓存——<b>prompt 末尾</b>和<b>输出末尾</b>——命中就能从缓存位置"接着算"，服务于续写和多轮对话。两类 KV 各自独立管理，用 <b>LRU（Least Recently Used，最近最少使用）</b>策略淘汰：比喻成<b>仓库管理员优先清退最久没人借的货</b>。为了让命中率够高，V4 把 SSD 上的持久缓存配得足够大，典型负载下两类 KV 都能驻留 <b>超过 72 小时</b>（§3.2.1）。</p>
+
+<p>痛点由此而来：<b>SWA KV 的复用模式和"长期保存"根本不匹配。</b>论文的原话逻辑是——全局 KV 有"长尾复用"特性（几天后用户回来，前缀还有用）；而 SWA KV 只在活跃会话内一个<b>分钟级的窄窗口</b>里被复用，会话一结束、下一轮一开始就成了死数据。但 V4 却为了它占着 SSD 上 72 小时的坑：V4 部署中 SWA KV 占了持久缓存容量的<b>近一半</b>（§3.2.1），而缓存位置上其实只保留 \(n_{\text{win}}\) 条 entry——多轮短对话场景下，每轮都存一份"prompt 末尾 + 输出末尾"的 SWA 快照，浪费尤其严重。</p>
+
+<p>V4 技术报告其实已经提出 <b>Zero SWA Caching</b>——干脆不存 SWA KV，缺了就重算。但<b>精确</b>重建需要把最近 \(L\times n_{\text{win}}\) 个 token 完整重跑一遍前向（因为滑动窗口的依赖逐层累积，第 \(L\) 层的窗口笔记依赖它下面所有层的窗口笔记），生产环境实测代价过高、部署不起（§3.2.1）。</p>
+
+<h3 id="s3-2">3.2 V4.1 的改法：挪走 + 兜底</h3>
+
+<p>V4.1 对持久 KV 缓存管理做了两条修订（§3.2.1 原文归纳）：</p>
+
+<p><b>修订一：SWA KV 彻底移出持久缓存，改放"短租仓库"。</b>SWA KV 存进一个由<b>每台机器 10% 的主机内存（host DRAM）</b>组成的<b>分布式内存池</b>。这个池子总容量远小于 SSD 持久缓存，但它的存活时间（TTL，time-to-live，"缓存条目的保质期"）只有<b>几分钟</b>——正好匹配 SWA KV"分钟级窗口复用"的真实访问模式；过期条目立刻回收给新会话用。现实负载下，这种高周转足以覆盖绝大多数并发活跃会话。<b>全局 KV 则留在持久缓存里，寿命保证至少 72 小时。</b>一句话：把"分钟级的热数据"放进"分钟级的仓"，把"天级的长尾数据"放进"天级的仓"，各得其所。</p>
+
+<p><b>修订二：挪走必然造成 miss，用轻量兜底让 miss 变得便宜。</b>总会出现"全局 KV 命中、SWA KV 未命中"的请求（比如会话隔了一小时才回来）。这时不再做 \(L\times n_{\text{win}}\) 的全量精确重建，而是用 <b>Encoder SWA Bounded Replay</b> 只重算 \(n_{\text{win}}\) 个 token 恢复一个近似状态。论文称这个 bounded replay 是整个设计的<b>基石（cornerstone）</b>：它"把灾难性的 miss 变成优雅而廉价的降级"，从而让"把 SWA KV 踢出持久缓存"这件事在经济上成立。</p>
+
+<p>把"<b>一致性与生命周期怎么管</b>"单独拎出来回答，因为这是分布式缓存最容易翻车的地方。V4.1 的生命周期规则是"按数据的真实寿命分层"：SWA KV 的 TTL 只有几分钟、过期即回收复用；全局 KV 在持久缓存中保证至少 72 小时，淘汰仍用 LRU。一致性规则是"近似数据不得回流权威数据源"：重放只是临时重建一份<b>用完即弃</b>的 SWA 状态，<b>绝不写回</b>持久缓存；缓存里的全局 KV 只能由"未缓存后缀的正常计算"追加，重放段永远不碰它。这样无论命中点在哪，持久缓存里的全局 KV 始终只有一份权威版本，不会因多次近似重放被逐步污染（§3.2.1、§3.2.2）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 340" xmlns="http://www.w3.org/2000/svg" font-size="13" font-family="PingFang SC, sans-serif" id="fig-persistent-compare">
+  <text x="430" y="26" text-anchor="middle" font-size="15" font-weight="700" fill="#1a1f2e">持久 KV cache 的构成：V4 vs V4.1（1/2 × 1/4 = 1/8）</text>
+  <text x="60" y="66" font-weight="700" fill="#1a1f2e">V4 持久缓存</text>
+  <rect x="60" y="80" width="380" height="44" fill="#2456c4"/>
+  <text x="250" y="107" text-anchor="middle" fill="#fff" font-weight="700">全局 KV（占约一半）</text>
+  <rect x="440" y="80" width="360" height="44" fill="#c9d2e0"/>
+  <text x="620" y="107" text-anchor="middle" fill="#1a1f2e" font-weight="700">SWA KV（占近一半）</text>
+  <text x="812" y="107" text-anchor="end" fill="#5a6272" font-size="12">LRU，72h+ 驻留</text>
+  <path d="M 620 132 L 620 158" stroke="#9a7b1c" stroke-width="2" marker-end="url(#arr-pc)" fill="none"/>
+  <text x="632" y="150" fill="#9a7b1c" font-size="12">整体移出 → 10% 主存短租池（TTL 分钟级）</text>
+  <text x="60" y="182" font-weight="700" fill="#1a1f2e">V4.1 持久缓存</text>
+  <rect x="60" y="196" width="95" height="44" fill="#2456c4"/>
+  <text x="107" y="223" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">全局 KV</text>
+  <text x="176" y="223" fill="#5a6272" font-size="12">= 1/2（不再存 SWA）× 1/4（全局 KV 经 CSA2+FP4 再压缩）= 1/8</text>
+  <rect x="60" y="262" width="380" height="40" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="250" y="287" text-anchor="middle" fill="#1a1f2e">CSA2 跨层复用 + FP4 主 KV（§2.3 / §2.4.4）→ 全局 KV 压到 V4 的 1/4</text>
+  <rect x="460" y="262" width="340" height="40" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="630" y="287" text-anchor="middle" fill="#1a1f2e">SWA KV → 每机 10% host DRAM 分布式池，TTL 几分钟</text>
+  <defs><marker id="arr-pc" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#9a7b1c"/></marker></defs>
+</svg>
+</div>
+<p class="cap"><b>图 3</b>｜持久缓存构成对比，对应论文 §3.2.1：「the persistent KV cache no longer stores SWA KV, which almost halves its size, and the global KV retained in it is further compressed to 1/4 of V4's footprint」；SWA KV 占近一半、72 小时驻留、10% 主存池同出于该节。条宽为示意，非严格比例。</p>
+
+<div class="infer">
+<p>图中条形宽度按"全局占约一半、SWA 占近一半"的论文表述画成约 1:1，论文只给了"nearly half"的定性说法，未给出精确占比数字；1/8 的最终结论出自论文原文，是精确的。</p>
+</div>
+
+<h2 id="s4">4. 重头戏：SWA Bounded Replay（§3.2.2）</h2>
+
+<h3 id="s4-1">4.1 滑动窗口是什么，为什么精确重建要 \(L\times n_{\text{win}}\) 个 token</h3>
+
+<p><b>滑动窗口注意力（SWA, Sliding-Window Attention）</b>：普通注意力让每个 token 都能"回看"全文，计算和笔记都随上下文长度暴涨；SWA 只让每个 token 回看<b>最近 \(W\) 个 token</b>（比喻：<b>只记最近一小段对话的逐字草稿，更早的内容交给"全局摘要员"（全局 KV 分支）去管</b>）。这样 SWA 笔记的大小不随总长度增长。V4.1-Flash 的窗口 \(n_{\text{win}}=128\)（§4.2.1），每层都带一路 SWA。</p>
+
+<p>问题在于：第 \(L\) 层的 SWA 笔记是由<b>第 \(L-1\) 层的输出</b>算出来的，而第 \(L-1\) 层的输出又依赖更下面各层的 SWA……依赖逐层累积。所以要把第 \(L\) 层、位置 \(i\) 附近的 SWA 笔记<b>精确</b>还原，就得从第 1 层开始重跑最近 \(L\times n_{\text{win}}\) 个 token——窗口 128、层数 \(L=40\)（编码器 20 + 解码器 20，§4.2.1）就是 5120 个 token 的完整前向。这正是 Zero SWA Caching 在 V4 生产环境"贵到用不起"的原因。</p>
+
+<h3 id="s4-2">4.2 "bounded" 界在哪，"replay" 重放什么</h3>
+
+<p><b>Bounded Replay 的核心一步：放弃精确，接受近似。</b>重放（replay）= 把缓存前缀的<b>最后 \(n_{\text{win}}\) 个 token</b> 重新喂进模型再算一遍（"重放最后一段录音"）；bounded（有界）= 重算量被封顶在 \(n_{\text{win}}=128\) 个 token，与缓存前缀有多长<b>无关</b>。代价是：重放段只有 128 个 token 的"视野"，更早的 SWA 上下文丢了——所以干脆<b>把 SWA 截断到重放段</b>，接受一个近似状态。论文给出精确的数学表述（§3.2.2）：对从位置 \(s\) 开始的重放，位置 \(i\) 的 query 只注意</p>
+
+<div class="formula">\[
+\big[\,\max(s,\; i-W+1),\;\ i\,\big]
+\]</div>
+
+<p>逐符号解释：\(i\) 是当前 token 的位置；\(W\) 是窗口大小（本模型 \(W=n_{\text{win}}=128\)）；\(s\) 是重放起点。正常 SWA 本应看 \([i-W+1,\,i]\)，但当 \(i-W+1\) 落到重放段之前（即 &lt; \(s\)）时，就被硬性截到 \(s\)——<b>"想看得更早也没材料，只看手里这 128 个 token"</b>。这就是"近似"的全部来源：窗口内的老 token 缺席了。</p>
+
+<h3 id="s4-3">4.3 Encoder SWA Bounded Replay：让前缀缓存只依赖全局 KV</h3>
+
+<p>场景：一个请求命中了持久缓存里的全局 KV（前缀摘要在），但 SWA KV 不在（短租池已过期）。处理流程（§3.2.2）：</p>
+
+<ol>
+<li>取出缓存前缀的<b>最后 \(n_{\text{win}}\) 个 token</b>，连同<b>未缓存的后缀</b>（用户新输入的部分）一起送进编码器；</li>
+<li>重放的那 128 个 token <b>只重新生成 SWA KV</b>——它们的全局 KV 直接复用缓存，<b>既不重算、也不覆写</b>缓存里的全局 KV（保住"全局 KV 永远一致"这条命脉）；</li>
+<li>未缓存的后缀则照常生成<b>两种</b> KV（全局 + SWA），并把新的全局 KV 写回缓存。</li>
+</ol>
+
+<div class="fig">
+<svg viewBox="0 0 860 360" xmlns="http://www.w3.org/2000/svg" font-size="13" font-family="PingFang SC, sans-serif" id="fig-bounded-replay">
+  <text x="430" y="26" text-anchor="middle" font-size="15" font-weight="700" fill="#1a1f2e">Encoder SWA Bounded Replay：只重放最近 n_win=128 个 token</text>
+  <rect x="40" y="56" width="470" height="52" rx="8" fill="#f4f6f9" stroke="#6b7a95"/>
+  <text x="275" y="78" text-anchor="middle" fill="#1a1f2e" font-weight="700">缓存前缀（可长达几十万 token）</text>
+  <text x="275" y="98" text-anchor="middle" fill="#5a6272">全局 KV 命中持久缓存 → 直接复用，不重算不覆写</text>
+  <rect x="510" y="56" width="140" height="52" rx="8" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="580" y="78" text-anchor="middle" fill="#1a1f2e" font-weight="700">重放段：n_win=128</text>
+  <text x="580" y="98" text-anchor="middle" fill="#9a7b1c">只重生成 SWA KV</text>
+  <rect x="650" y="56" width="170" height="52" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="735" y="78" text-anchor="middle" fill="#1a1f2e" font-weight="700">未缓存后缀</text>
+  <text x="735" y="98" text-anchor="middle" fill="#2456c4">生成全局 KV + SWA KV</text>
+  <path d="M 510 130 L 650 130" stroke="#9a7b1c" stroke-width="2" marker-end="url(#arr-br)" fill="none"/>
+  <text x="580" y="148" text-anchor="middle" fill="#9a7b1c" font-size="12">重放段 + 后缀一起过一遍模型</text>
+  <rect x="40" y="170" width="780" height="86" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="430" y="196" text-anchor="middle" fill="#1a1f2e" font-weight="700">SWA 视野截断（§3.2.2）：重放起点 s，位置 i 的 query 只注意 [ max(s, i−W+1), i ]</text>
+  <line x1="80" y1="228" x2="700" y2="228" stroke="#93b3e8" stroke-width="3"/>
+  <text x="80" y="248" fill="#5a6272" font-size="12">更早的 SWA 上下文：缺席（近似来源）</text>
+  <rect x="300" y="218" width="180" height="20" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="390" y="233" text-anchor="middle" fill="#9a7b1c" font-size="12">重放段 128 token：可见</text>
+  <rect x="480" y="218" width="220" height="20" fill="#dbe6f7" stroke="#2456c4"/>
+  <text x="590" y="233" text-anchor="middle" fill="#1a1f2e" font-size="12">后缀：正常窗口 [i−W+1, i]</text>
+  <rect x="40" y="274" width="780" height="70" rx="8" fill="#f4f6f9" stroke="#6b7a95"/>
+  <text x="430" y="300" text-anchor="middle" fill="#1a1f2e" font-weight="700">重算量对比：精确重建 L×n_win = 40×128 = 5120 token 前向 vs Bounded Replay 仅 128 token（1/40）</text>
+  <text x="430" y="328" text-anchor="middle" fill="#5a6272" font-size="12">L=40、n_win=128 来自 §4.2.1 模型配置；5120 与 1/40 为按论文公式推得的算术（见"事实边界"）</text>
+  <defs><marker id="arr-br" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#9a7b1c"/></marker></defs>
+</svg>
+</div>
+<p class="cap"><b>图 4</b>｜Encoder SWA Bounded Replay 机制图，对应论文 §3.2.2 第 1–2 段与截断公式。重放段与后缀的宽度为示意，不代表真实 token 比例。</p>
+
+<p>必须诚实面对的代价：重放出的前缀状态是<b>近似的</b>，因此后缀算出的全局 KV 和 SWA KV 依赖于"命中点在哪"，<b>不同位置之间不再数学恒等</b>（同一前缀两次不同命中点会得到略不同的后缀全局 KV）。论文的报告是：实验证据确认这种 bounded replay 对回答质量的影响<b>微乎其微（barely compromises）</b>。也就是说，用一点点不可察觉的质量损失，换掉 SSD 上近一半的持久缓存。</p>
+
+<h3 id="s4-4">4.4 Decoder SWA Bounded Replay：让 prefill 在编码器就"收工"</h3>
+
+<p>这一段需要先补一句话背景（详见<a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a>）：V4.1 用<b>因果编码器-解码器（CED）</b>架构，解码器的全局 KV 不用解码器自己算——它直接<b>从编码器最后一层的隐藏状态投影出来</b>。好处巨大：prefill（处理整段输入）理论上到编码器就可以结束，解码器不用逐层重读整个 prompt。</p>
+
+<p>唯一的拦路虎是解码器的 SWA KV：它必须由<b>解码器各层自己的隐藏状态</b>生成，没法从编码器"投影"过来，而最初的几个解码步又立刻要用它。若要<b>精确</b>重建，就得让 20 层解码器（\(L/2\)）重跑最后 \((L/2)\times n_{\text{win}}\) 个 prompt token——当前缀很长而后缀很短时，为区区几十个新 token 重跑 2560 个 token 的解码器，太亏。于是同样套用 bounded replay（§3.2.2）：</p>
+
+<ul>
+<li><b>每次 prefill，重放 prompt 的最后 \(n_{\text{win}}\) 个 token</b>：把它们的编码器输出送进解码器各层，在同样的 SWA 截断规则下算出解码器 SWA KV；</li>
+<li>这份重建的解码器 SWA KV <b>只用于随后的解码（decode），不用于前缀缓存</b>——避免把近似状态污染进持久缓存（与编码器侧"不覆写全局 KV"是同一个卫生原则）。</li>
+</ul>
+
+<p>这一步还有一笔额外的巨大红利：解码器在 prefill 阶段只需处理 128 个 token 而非整个 prompt，论文原文说这使<b>总 prefill 计算量近乎减半（nearly halving total prefill computation）</b>。论文还提到一道保险：在后训练阶段<b>模拟同样的 replay 过程</b>做 train-aware adaptation（训练时就见过这种近似，推理时更不慌），实验同样显示对回答质量影响可忽略（negligible）。</p>
+
+<h3 id="s4-5">4.5 为什么这一招能带来 1/8：两个乘法因子</h3>
+
+<p>论文 §3.2.1 开篇给出了明确的分解——持久 KV cache 相对 V4 降到 1/8，由两个<b>乘法</b>因子构成：</p>
+
+<div class="formula">\[
+\underbrace{\frac{1}{2}}_{\text{不再存 SWA KV}}\ \times\ \underbrace{\frac{1}{4}}_{\text{全局 KV 经 CSA2+FP4 再压缩}}\ =\ \frac{1}{8}
+\]</div>
+
+<p>第一个因子来自本讲的部署优化（SWA KV 移出持久缓存，V4 中它占近一半）；第二个因子来自架构与精度优化（CSA2 跨层复用 + FP4 主 KV，属<a href="deepseek-v41-t2-csa2.html">第 2 讲</a>、<a href="deepseek-v41-t3-extensions.html">第 3 讲</a>的内容，这里只认结果：全局 KV 压到 V4 的 1/4）。两个因子各自成立、相乘得 1/8——这也是为什么"重算兜底"这么重要：没有便宜的 replay，第一个因子就永远拿不到。</p>
+
+<h3 id="s4-6">4.6 什么场景划算，什么场景不划算</h3>
+
+<p>论文给出的判据本质是<b>数据访问模式与存储介质的匹配度</b>：</p>
+
+<ul>
+<li><b>划算：</b>SWA KV 的复用只发生在活跃会话内分钟级窗口，会话结束或下一轮开始即"死亡"。把分钟级数据放进分钟级 TTL 的主存池、把 SSD 的 72 小时让给长尾复用的全局 KV，两个介质的钱都花在刀刃上。多轮短对话（agent 高频调用）收益最大——这正是 V4 部署里 SWA 快照浪费最严重的场景。</li>
+<li><b>不划算/需兜底：</b>请求在全局 KV 命中但 SWA KV 过期后返回（间隔超过几分钟），要付一次 128-token 的重算。但这个重算量与上下文长度无关、被封死，属于"小额固定开销"，换来的却是 SSD 容量减半。</li>
+</ul>
+
+<div class="infer">
+<p>论文未给出重算延迟的绝对毫秒数，也未量化"命中率随 TTL 的衰减曲线"；"128-token 重算在实际服务中占比很小"是论文的定性论断（"infrequent requests"），其概率分布依赖真实流量，报告未披露。</p>
+</div>
+
+<h2 id="s5">5. 端到端算账：三本账给小白看</h2>
+
+<h3 id="s5-1">账本一：HBM 账（全局 KV，每 token 890 字节）</h3>
+
+<p>论文摘要与结论给出的硬数字：<b>V4.1-Flash 的全局 KV cache footprint（always in HBM）为 890 bytes/token，约为 V4-Flash 的 1/4</b>。拿 1M（1,048,576）token 的满上下文请求算一笔账：</p>
+
+<table>
+<tr><th>量</th><th>V4.1-Flash</th><th>V4-Flash（由 1/4 反推）</th><th>出处</th></tr>
+<tr><td>全局 KV / token</td><td><b>890 B</b>（论文原数）</td><td>890 × 4 ≈ 3560 B（算术）</td><td>摘要、§6（p.37）</td></tr>
+<tr><td>1M 上下文单请求全局 KV</td><td>890 × 2<sup>20</sup> ≈ <b>0.89 GB</b>（算术）</td><td>≈ 3.6 GB（算术）</td><td>由 890 B/token 推算</td></tr>
+<tr><td>1000 路并发长会话</td><td>≈ 0.89 TB（算术）</td><td>≈ 3.6 TB（算术）</td><td>推算</td></tr>
+</table>
+
+<p>读法：890 B/token 是论文原数；把它乘上上下文长度是纯算术。结论的量级意义是：<b>单张几百 GB 的 HBM 在 V4 时代只够装一两百个满上下文请求的"工作记忆"，V4.1 时代能装约四倍</b>——同样的 GPU，并发数直接翻两番（后两句为基于论文数字的推算，论文未直接给并发数）。此外解码 FLOPs 也几乎不随上下文增长：上下文从 4K 扩到 1M（256 倍），单 token 解码 FLOPs 只增加 1/4（§1、Figure 2）。</p>
+
+<div class="infer">
+<p>实际部署中，相同前缀的请求可共享 KV（前缀复用），所以并发容量通常好于上面的线性估算；890 B 中 indexer K 的占比、FP4 与 FP8 各部分的精确构成，论文未在本报告引用范围内逐项拆分（构成分析见第 2 讲）。</p>
+</div>
+
+<h3 id="s5-2">账本二：SSD/主存账（持久 KV，V4-Flash 的 1/8）</h3>
+
+<table>
+<tr><th>因子</th><th>数值</th><th>机制</th><th>出处</th></tr>
+<tr><td>不再持久化 SWA KV</td><td>× 1/2（"almost halves"）</td><td>SWA KV 移到每机 10% host DRAM 池，TTL 几分钟</td><td>§3.2.1</td></tr>
+<tr><td>全局 KV 再压缩</td><td>× 1/4</td><td>CSA2 跨层复用 + FP4 主 KV（架构+精度）</td><td>§3.2.1、§2.4.4</td></tr>
+<tr><td><b>合计</b></td><td><b>× 1/8</b></td><td>两因子相乘</td><td>§1、§3.2.1、§6</td></tr>
+</table>
+
+<p>落地含义（定性为主，论文未给 SSD 采购金额）：同样规模的 SSD 集群，能容纳的<b>同时驻留的活跃会话前缀</b>多 8 倍；或者维持同样的会话量，SSD 预算降到 1/8。且全局 KV 驻留寿命保证 ≥ 72 小时不变——长尾复用的体验没有打折。</p>
+
+<h3 id="s5-3">账本三：算力账（重算代价）</h3>
+
+<table>
+<tr><th>方案</th><th>SWA KV 缺失时要算什么</th><th>相对代价（算术）</th></tr>
+<tr><td>V4 精确重建（Zero SWA Caching 的代价）</td><td>全量重放 \(L\times n_{\text{win}}=40\times128=5120\) token 前向</td><td>1（基准）</td></tr>
+<tr><td>V4.1 Encoder Bounded Replay</td><td>重放最近 128 token（编码器）</td><td>1/40</td></tr>
+<tr><td>V4.1 Decoder Bounded Replay</td><td>重放最近 128 token 过 20 层解码器（每 prefill 一次）</td><td>1/20（对比 \( (L/2)\times n_{\text{win}}=2560 \) token 的精确重建）</td></tr>
+</table>
+
+<p>其中 \(L=40\)、\(n_{\text{win}}=128\) 出自论文 §4.2.1 的模型配置；5120、2560、1/40、1/20 是按论文 §3.2.2 的公式做的算术。定性结论（论文原话）：bounded replay 把 miss 从"代价在生产环境不可接受（prohibitive）"降到"便宜、可接受"，且 decoder 版让<b>总 prefill 计算近乎减半</b>；两处 replay 对回答质量的影响分别是 "barely compromises" 与 "negligible"，后训练中还专门模拟 replay 做了 train-aware adaptation 加保险。</p>
+
+<h2 id="s6">6. 事实与推断的边界</h2>
+
+<table>
+<tr><th>类别</th><th>内容</th></tr>
+<tr><td>论文证实的事实</td><td>890 B/token 全局 KV（≈V4-Flash 的 1/4）；持久 KV ≈ V4-Flash 的 1/8（=1/2×1/4）；V4 中 SWA KV 占持久缓存近一半、LRU 管理、驻留 72h+；V4.1 用每机 10% host DRAM 的短 TTL（分钟级）内存池存 SWA KV；bounded replay 只重放 \(n_{\text{win}}\) 个 token、SWA 截断公式 \([\max(s,i-W+1),\,i]\)；重放段只生成 SWA KV、不覆写缓存全局 KV；decoder bounded replay 使总 prefill 计算近乎减半、重建 KV 只用于 decode 不进缓存；后训练模拟 replay 做适应；Reuse Mode 层 15 个 prefill 内核 / 11 个 decode 内核；EPD 分离部署；\(n_{\text{win}}=128\)、\(L=40\)（编码器/解码器各 20）；对比学习 all-gather 重叠调度；分离式视觉编码器三阶段；图像均衡切片判据 \(\rho &lt; B_{\text{IO}}C/B_{\text{GPU}}\)；上下文 4K→1M 解码 FLOPs 仅增 1/4。</td></tr>
+<tr><td>本报告的算术推演</td><td>5120/2560 token 的重放量、1/40 与 1/20 的比值、890 B/token 换算成 GB/ TB 级总量、V4-Flash 的 ≈3560 B/token（由 1/4 反推）。均为论文数字的直接四则运算，已标注。</td></tr>
+<tr><td>纯推断/示意</td><td>图 1 的容量与带宽数量级（业界常识示意，论文未给硬件参数）；图 3 条宽比例（论文只说 "nearly half"）；SWA 池命中率与 TTL 的定量关系、重算延迟的绝对毫秒数（论文未披露）；"并发数翻两番"的部署说法（由 1/4 线性推算，未计前缀共享等因素）。</td></tr>
+</table>
+
+<h2 id="s7">本讲小结</h2>
+
+<ul>
+<li><b>存储层级决定 KV cache 的账单：</b>HBM 贵而快、SSD 便宜而慢；"全局 KV（always in HBM）"是运行时开销、受显存约束，"持久 KV（always on SSD/主存）"是跨请求前缀复用的存储开销、受 SSD/主存约束——两个概念按"放哪、活多久"划分，不要混为一谈。</li>
+<li><b>训练侧三件套：</b>对比学习的 all-gather 通信与前后向计算重叠；视觉编码器与 LLM 分离部署、三阶段错峰；图像负载均衡切片 + "每 token 字节数 &lt; 带宽比 × 每 token 计算量"的 IO 隐藏判据。</li>
+<li><b>推理侧核心思想是"按访问模式分层存放"：</b>分钟级生命周期的 SWA KV 进 10% 主存短租池，天级长尾复用的全局 KV 独占 72 小时持久缓存——V4 中"错配"导致的近一半 SSD 容量被释放。</li>
+<li><b>SWA Bounded Replay 是整个设计的基石：</b>重放只算最近 \(n_{\text{win}}=128\) 个 token（精确重建需 \(L\times n_{\text{win}}=5120\) 个，1/40 的代价），SWA 截断到重放段、接受近似；编码器侧重放段只生成 SWA KV、不覆写缓存的全局 KV，解码器侧重放的 SWA KV 只用于 decode、不进缓存，还顺手把总 prefill 计算近乎减半。</li>
+<li><b>三本账合起来：</b>HBM 里的全局 KV 890 B/token（V4 的 1/4）、SSD 里的持久 KV 1/8（1/2×1/4）、miss 时重算 1/40——存储、算力两头同时大幅降压，这就是 V4.1-Flash 能"更便宜地服务长上下文 agent"的基础设施底座。</li>
+</ul>
+
+<h2 id="s8">自测清单</h2>
+
+<p><b>Q1：全局 KV cache 和持久 KV cache 的区别是什么？</b><br>
+答：全局 KV 是注意力"看全文"分支产生的运行时笔记，服务期间必须常驻 HBM，受显存容量约束；持久 KV 是为跨请求前缀复用而长期保存的副本，常驻 SSD 或主机内存，受其容量约束。前者决定并发能力，后者决定多轮场景的存储账单。</p>
+
+<p><b>Q2：V4 的持久缓存为什么"浪费"？SWA KV 的真实访问模式是什么？</b><br>
+答：V4 为提高命中率把 SWA KV 也放进 72 小时驻留的 SSD 持久缓存（占近一半容量），但 SWA KV 只在活跃会话内分钟级窗口被复用、会话结束即失效——分钟级的数据占了天级介质的坑，且多轮短对话下每个 prompt 末尾/输出末尾的快照浪费严重。</p>
+
+<p><b>Q3：为什么精确重建 SWA KV 需要 \(L\times n_{\text{win}}\) 个 token，而 Bounded Replay 只需要 \(n_{\text{win}}\) 个？</b><br>
+答：SWA 的依赖逐层累积——第 \(L\) 层的窗口笔记依赖下面各层的窗口笔记，精确还原必须从第 1 层重跑最近 \(L\times n_{\text{win}}=5120\) 个 token；Bounded Replay 放弃精确，只重放最近 \(n_{\text{win}}=128\) 个 token，并把 SWA 窗口截断到重放段（query \(i\) 只看 \([\max(s,i-W+1),\,i]\)），接受一个实验证明质量影响可忽略的近似状态。</p>
+
+<p><b>Q4：1/8 这个数字是怎么来的？</b><br>
+答：两个乘法因子：持久缓存不再存 SWA KV（V4 中占近一半）→ ×1/2；留下的全局 KV 经 CSA2 + FP4 再压到 V4 的 1/4 → ×1/4。1/2 × 1/4 = 1/8（§3.2.1）。</p>
+
+<p><b>Q5：编码器侧和解码器侧的 Bounded Replay 各有一条"卫生规则"，是什么？</b><br>
+答：编码器侧——重放段只重新生成 SWA KV，全局 KV 复用缓存，既不重算也不覆写；解码器侧——重放重建的解码器 SWA KV 只用于随后的 decode，不写入前缀缓存。共同目的：近似状态不得污染持久缓存。</p>
+
+<p><b>Q6：SWA KV 为什么放主机内存池而不是 SSD？池子容量小不怕不够用吗？</b><br>
+答：因为 SWA KV 的复用窗口只有分钟级，主存池配几分钟的短 TTL 正好匹配其生命周期，过期立刻回收给新会话；靠高周转而非大容量来覆盖绝大多数并发活跃会话（§3.2.1）。SSD 的价值在于天级驻留，留给全局 KV。</p>
+
+<h2 id="refs">参考来源</h2>
+
+<ol class="refs">
+<li>DeepSeek-AI, <i>DeepSeek-V4.1 Technical Report</i>. 本地归档 <code>paper/deepseek_v41.pdf</code>（51 页）。本讲引用：摘要（p.1）、§1 Introduction（p.4–5）、§2.3.1（p.10–11）、§2.4.4 FP4 Main KV Cache（p.14）、§3 General Infrastructures（p.16–20，本讲核心）、§4.2.1 模型配置（p.22）、§6 Conclusion（p.37）。注：该 PDF 中印刷页码与物理页一致。</li>
+<li>背景报告（本仓库）：<a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV cache 管理解读</a>（V4 的 LRU/Zero SWA Caching 背景与全局 KV 构成）；<a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>；<a href="csa-compression.html">CSA 压缩过程详解</a>；<a href="quant-t5-kv-systems.html">KV 量化与系统</a>（FP4/FP8 KV 量化的系统视角）。</li>
+<li>系列其他讲：<a href="deepseek-v41-t0-overview.html">第 0 讲·总览</a>、<a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a>、<a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a>（§3.1.2 训练协调详解）、<a href="deepseek-v41-t3-extensions.html">第 3 讲·架构扩展</a>（§3.1.3 Engram、§2.4.4 FP4 细节）、<a href="deepseek-v41-t5-pretraining.html">第 5 讲·预训练</a>、<a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>（replay 的 train-aware adaptation）。</li>
+</ol>
+
+<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 18px;margin:30px 0 8px;font-size:0.9em;line-height:2">
+<b>系列导航 · DeepSeek-V4.1 零基础七讲</b><br>
+<a href="deepseek-v41-t0-overview.html">第 0 讲·总览</a> ｜
+<a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a> ｜
+<a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a> ｜
+<a href="deepseek-v41-t3-extensions.html">第 3 讲·架构扩展</a> ｜
+<span style="background:var(--accent);color:#fff;border-radius:6px;padding:2px 10px;font-weight:700">第 4 讲·基础设施（本篇）</span> ｜
+<a href="deepseek-v41-t5-pretraining.html">第 5 讲·预训练</a> ｜
+<a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>
+</div>
+
+<footer>生成于 2026-09-20 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
