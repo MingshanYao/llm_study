@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DSpark：置信度调度的半自回归投机解码</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>DSpark：置信度调度的半自回归投机解码</h1>
+
+<div class="meta">
+  <b>论文</b>：DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation<br>
+  <b>作者</b>：Xin Cheng, Xingkai Yu, Chenze Shao, Jiashi Li, Yunfan Xiong 等（北京大学 &amp; DeepSeek-AI）<br>
+  <b>arXiv</b>：<a href="https://arxiv.org/abs/2607.05147">2607.05147</a>（2026-07-06，cs.AI） · <b>本地 PDF</b>：<code>paper/dspark.pdf</code><br>
+  <b>代码仓库</b>：<a href="https://github.com/deepseek-ai/DeepSpec">deepseek-ai/DeepSpec</a>（MIT 协议，训练 + 评测全栈；commit <code>005e03b</code>，2026-10-08 抓取） · 模型权重：<a href="https://huggingface.co/deepseek-ai/dspark_qwen3_4b_block7">deepseek-ai/dspark_*_block7</a>（HuggingFace）<br>
+  <b>生成日期</b>：2026-10-08
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：DSpark 面向高并发生产级 LLM 推理，用「半自回归 drafter」（并行主干 + 轻量串行头）解决并行草案的后缀接受率衰减问题，用「置信度调度的硬件感知前缀调度器」解决盲目验证长草案浪费批容量的问题；离线上把每轮接受长度相对 Eagle3 / DFlash 提升 16%–31%，在 DeepSeek-V4 生产环境中把同等吞吐下的单用户生成速度提高 57%–85%，并外推了服务系统的吞吐–交互性 Pareto 前沿。</p>
+  <p><b>三个杠杆</b>：投机解码每 token 延迟 \(L=(T_{\text{draft}}+T_{\text{verify}})/\tau\)，DSpark 同时优化了 <b>draft 更快</b>（并行主干，\(T_{\text{draft}}\) 与块长无关）、<b>draft 更好</b>（串行头注入块内依赖，提高 \(\tau\)）、<b>verify 更聪明</b>（按置信度与引擎负载动态截断验证长度）。</p>
+</div>
+
+<h2 id="sec1">一、为什么需要 DSpark：投机解码的两个新瓶颈</h2>
+
+<h3>1.1 基础回顾：三个杠杆</h3>
+<p>自回归 LLM 每生成一个 token 都要做一次完整前向。投机解码（Ge et al. 2022; Leviathan et al. 2023; Chen et al. 2023）用轻量 draft 模型一次性提议 \(\gamma\) 个候选 token，大 target 模型在一次前向中通过拒绝采样并行验证，接受与自身分布一致的最长前缀并附加一个 bonus token——接受规则保证输出分布与 target <b>完全一致（无损）</b>。论文第 2 节把每 token 平均延迟写成：</p>
+<div class="fig formula">\[
+L=\frac{T_{\text{draft}}+T_{\text{verify}}}{\tau}
+\tag{式 1}\]</div>
+<p class="cap">其中 \(\tau\) 是每轮接受的 token 数（含 bonus token），\(T_{\text{draft}}\)、\(T_{\text{verify}}\) 是起草与验证的墙钟时间（论文 §2.1，式 1）。</p>
+<p>加速归结为三个杠杆：<b>draft 更快</b>（降 \(T_{\text{draft}}\)）、<b>draft 更好</b>（升 \(\tau\)）、<b>verify 更聪明</b>（降有效 \(T_{\text{verify}}\)）。不同的 drafter 架构就是在这些杠杆之间做取舍。</p>
+
+<h3>1.2 自回归 drafter 与并行 drafter 的两难</h3>
+<table>
+  <tr><th>架构</th><th>代表方法</th><th>\(T_{\text{draft}}\)</th><th>建模能力</th><th>痛点</th></tr>
+  <tr><td>自回归 drafter</td><td>EAGLE、Eagle3、DeepSeek MTP</td><td>\(\propto \gamma\)，随块长线性增长</td><td>强：每个位置条件于已采样前缀</td><td>被迫用小 \(\gamma\) 和浅网络；树验证（如 EAGLE-2 的 tree attention）会进一步消耗批容量</td></tr>
+  <tr><td>并行 drafter</td><td>Medusa、DFlash 等</td><td>一次前向，与 \(\gamma\) 近似无关</td><td>弱：各位置互相独立</td><td>后缀接受率快速衰减；长块盲目验证浪费算力</td></tr>
+</table>
+<p>并行 drafter 可以享受很深的网络（DFlash 用 5 层，而 Eagle3 因 \(O(\gamma)\) 延迟只能用 1 层），这带来首个位置的条件接受率优势（论文实测 Math 域 0.88 vs 0.81、Chat 域 0.72 vs 0.53）；但由于每个位置都<b>边际化</b>所有可能的前驱而非条件于实际采样的那个，会出现「多模态碰撞」——上下文既可以是 "of course" 也可以是 "no problem" 时，并行 drafter 可能采样出 "of problem" 这种跨模式拼接（论文 §3.1，援引 NAT 的经典分析 Gu et al. 2018）。</p>
+
+<h3>1.3 高并发服务下的系统级瓶颈</h3>
+<p>即便草案质量够好，<b>不加区分地验证整个长块</b>在高并发场景也会损害总吞吐：轻负载时多验证几个被拒绝的 token 几乎免费；重负载时每个低置信 token 都占用 target 模型的批容量——本可以服务其他活跃请求（论文 §1、§3.2）。而理想的验证长度同时随数据域（代码接受率高、开放聊天低）和系统负载变化，静态阈值无法两全。DSpark 的两个组件正对应这两个瓶颈：</p>
+<ul>
+  <li><b>半自回归生成</b>（§3.1）：计算昂贵的并行主干保持 \(T_{\text{draft}}\) 与 \(\gamma\) 解耦，只追加一个轻量串行输出头注入块内依赖，缓解后缀衰减、提高 \(\tau\)。</li>
+  <li><b>置信度调度验证</b>（§3.2）：置信头估计每个位置的前缀存活概率，硬件感知调度器结合实时引擎吞吐画像，只为期望收益为正的 token 分配 target 验证预算。</li>
+</ul>
+
+<h2 id="sec2">二、一张图看懂 DSpark 的解码循环</h2>
+
+<div class="fig">
+<svg viewBox="0 0 860 470" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+    <marker id="arrg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b0631e"/>
+    </marker>
+  </defs>
+
+  <!-- Stage 0: target step -->
+  <rect x="20" y="30" width="170" height="64" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="105" y="56" text-anchor="middle" font-weight="bold" fill="#1a1f2e">① Target 前向一步</text>
+  <text x="105" y="76" text-anchor="middle" fill="#5a6272">prompt "ABC" → 生成 D</text>
+
+  <line x1="190" y1="62" x2="250" y2="62" stroke="#2456c4" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="220" y="52" text-anchor="middle" fill="#5a6272" font-size="11">anchor</text>
+
+  <!-- Stage 1: parallel backbone -->
+  <rect x="253" y="20" width="270" height="150" rx="10" fill="#fff" stroke="#2456c4"/>
+  <text x="388" y="42" text-anchor="middle" font-weight="bold" fill="#2456c4">② 并行主干（重，一次前向）</text>
+  <rect x="273" y="56" width="60" height="30" rx="6" fill="#2456c4"/>
+  <text x="303" y="76" text-anchor="middle" fill="#fff" font-weight="bold">D</text>
+  <rect x="343" y="56" width="46" height="30" rx="6" fill="#c9d4ee"/>
+  <text x="366" y="76" text-anchor="middle">[m]</text>
+  <rect x="397" y="56" width="46" height="30" rx="6" fill="#c9d4ee"/>
+  <text x="420" y="76" text-anchor="middle">[m]</text>
+  <rect x="451" y="56" width="46" height="30" rx="6" fill="#c9d4ee"/>
+  <text x="474" y="76" text-anchor="middle">[m]</text>
+  <text x="273" y="112" fill="#5a6272" font-size="12">anchor + γ−1 个 mask 输入</text>
+  <text x="273" y="130" fill="#5a6272" font-size="12">块内双向注意力 + target KV 注入</text>
+  <text x="273" y="148" fill="#5a6272" font-size="12">输出基础 logits U₁…Uγ 与隐藏态 h₁…hγ</text>
+
+  <line x1="523" y1="95" x2="583" y2="95" stroke="#2456c4" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Stage 2: sequential head -->
+  <rect x="586" y="20" width="254" height="150" rx="10" fill="#fff" stroke="#2456c4"/>
+  <text x="713" y="42" text-anchor="middle" font-weight="bold" fill="#2456c4">③ 串行头（轻，逐位采样）</text>
+  <text x="713" y="66" text-anchor="middle" fill="#5a6272" font-size="12">Markov/RNN 头逐位加转移偏置 B</text>
+  <text x="713" y="86" text-anchor="middle" fill="#5a6272" font-size="12">pₖ ∝ exp(Uₖ + Bₖ(x₀, x&lt;k))</text>
+  <rect x="626" y="104" width="40" height="28" rx="6" fill="#2456c4"/>
+  <text x="646" y="123" text-anchor="middle" fill="#fff" font-weight="bold">E</text>
+  <rect x="674" y="104" width="40" height="28" rx="6" fill="#2456c4"/>
+  <text x="694" y="123" text-anchor="middle" fill="#fff" font-weight="bold">F</text>
+  <rect x="722" y="104" width="40" height="28" rx="6" fill="#2456c4"/>
+  <text x="742" y="123" text-anchor="middle" fill="#fff" font-weight="bold">G</text>
+  <rect x="770" y="104" width="40" height="28" rx="6" fill="#2456c4"/>
+  <text x="790" y="123" text-anchor="middle" fill="#fff" font-weight="bold">H</text>
+  <text x="713" y="152" text-anchor="middle" fill="#5a6272" font-size="12">同时输出置信分 c₁…c₄</text>
+
+  <line x1="713" y1="170" x2="713" y2="205" stroke="#2456c4" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Stage 3: scheduler -->
+  <rect x="496" y="208" width="344" height="86" rx="10" fill="#fff8e8" stroke="#b0631e"/>
+  <text x="668" y="232" text-anchor="middle" font-weight="bold" fill="#b0631e">④ 硬件感知前缀调度器</text>
+  <text x="668" y="254" text-anchor="middle" fill="#5a6272" font-size="12">存活概率 a_j = Π c_i，按 a 全局排序贪心加入</text>
+  <text x="668" y="272" text-anchor="middle" fill="#5a6272" font-size="12">最大化 Θ = τ · SPS(B)；本例保留 E F G，丢弃 H</text>
+  <rect x="576" y="276" width="26" height="0" fill="none"/>
+  <text x="546" y="288" fill="#b0631e" font-size="12" text-anchor="middle">H ✗（低置信被剪）</text>
+
+  <line x1="496" y1="251" x2="436" y2="251" stroke="#b0631e" stroke-width="2" marker-end="url(#arrg)"/>
+
+  <!-- Stage 4: verify -->
+  <rect x="150" y="208" width="283" height="86" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="291" y="232" text-anchor="middle" font-weight="bold" fill="#2456c4">⑤ Target 并行验证（一次前向）</text>
+  <text x="291" y="254" text-anchor="middle" fill="#5a6272" font-size="12">拒绝采样：E ✓，F ✓，G ✗ → 丢弃 G 及之后</text>
+  <text x="291" y="272" text-anchor="middle" fill="#5a6272" font-size="12">target 重采样修正 token G*，本轮共前进 3 个</text>
+
+  <path d="M 291 294 C 291 350 291 360 291 385" stroke="#2456c4" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+  <path d="M 105 94 C 105 340 180 370 240 395" stroke="#2456c4" stroke-width="0" fill="none"/>
+
+  <!-- Cycle summary -->
+  <rect x="90" y="392" width="680" height="56" rx="10" fill="#f4f7fd" stroke="#e3e7ee"/>
+  <text x="430" y="415" text-anchor="middle" fill="#1a1f2e" font-weight="bold">循环回到 ①：E、F、G* 成为下一轮已确认上下文，D 作为上一轮的 anchor 参与 draft</text>
+  <text x="430" y="436" text-anchor="middle" fill="#5a6272" font-size="12">整轮只有 2 次 target 前向（① 生成 anchor + ⑤ 验证），却推进 3 个 token；H 未被验证，节省了批容量</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：DSpark 的一个完整解码循环（对应论文 Figure 1 的叙述）。并行主干与串行头共同产生草案 token 与置信分，调度器按置信分与引擎吞吐画像截断前缀，target 只验证被调度的前缀。早期拒绝使后续 token 全部作废——这正是首个位置接受率最重要的原因。</p>
+
+<h2 id="sec3">三、设计原理：半自回归 + 置信度调度</h2>
+
+<h3>3.1 半自回归生成（Semi-Autoregressive Generation）</h3>
+
+<div class="fig">
+<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5">
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <!-- Row 1: autoregressive -->
+  <text x="16" y="34" font-weight="bold" fill="#1a1f2e">自回归 drafter（Eagle3 / MTP）</text>
+  <text x="16" y="52" fill="#5a6272" font-size="11.5">每步条件于已采样 token，质量高但 T_draft ∝ γ，只能配浅网络</text>
+  <g>
+    <rect x="16" y="64" width="50" height="30" rx="6" fill="#2456c4"/><text x="41" y="84" text-anchor="middle" fill="#fff">x₀</text>
+    <line x1="66" y1="79" x2="118" y2="79" stroke="#2456c4" stroke-width="1.8" marker-end="url(#arr2)"/>
+    <rect x="120" y="64" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="145" y="84" text-anchor="middle">x₁</text>
+    <line x1="170" y1="79" x2="222" y2="79" stroke="#2456c4" stroke-width="1.8" marker-end="url(#arr2)"/>
+    <rect x="224" y="64" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="249" y="84" text-anchor="middle">x₂</text>
+    <line x1="274" y1="79" x2="326" y2="79" stroke="#2456c4" stroke-width="1.8" marker-end="url(#arr2)"/>
+    <rect x="328" y="64" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="353" y="84" text-anchor="middle">x₃</text>
+    <line x1="378" y1="79" x2="430" y2="79" stroke="#2456c4" stroke-width="1.8" marker-end="url(#arr2)"/>
+    <rect x="432" y="64" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="457" y="84" text-anchor="middle">…</text>
+    <text x="510" y="84" fill="#5a6272">γ 次串行前向；位置 1 能力受限于浅网络</text>
+  </g>
+  <!-- Row 2: parallel -->
+  <text x="16" y="134" font-weight="bold" fill="#1a1f2e">并行 drafter（Medusa / DFlash）</text>
+  <text x="16" y="152" fill="#5a6272" font-size="11.5">一次前向出全部位置，T_draft 与 γ 无关，可配深网络，但位置间独立 → 多模态碰撞</text>
+  <g>
+    <rect x="16" y="164" width="50" height="30" rx="6" fill="#2456c4"/><text x="41" y="184" text-anchor="middle" fill="#fff">x₀+[m]</text>
+    <rect x="120" y="164" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="145" y="184" text-anchor="middle">x₁</text>
+    <rect x="224" y="164" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="249" y="184" text-anchor="middle">x₂</text>
+    <rect x="328" y="164" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="353" y="184" text-anchor="middle">x₃</text>
+    <rect x="432" y="164" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="457" y="184" text-anchor="middle">…</text>
+    <line x1="91" y1="179" x2="530" y2="179" stroke="#2456c4" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <text x="548" y="184" fill="#5a6272">单次并行前向；位置 1 强（深网络），后缀衰减快</text>
+  </g>
+  <!-- Row 3: DSpark -->
+  <text x="16" y="234" font-weight="bold" fill="#b0631e">DSpark 半自回归（本文）</text>
+  <text x="16" y="252" fill="#5a6272" font-size="11.5">重并行主干出基础 logits，轻串行头（Markov/RNN）逐位加转移偏置，兼顾两端</text>
+  <g>
+    <rect x="16" y="262" width="130" height="30" rx="6" fill="#2456c4"/>
+    <text x="81" y="282" text-anchor="middle" fill="#fff">并行主干（深，1 次前向）</text>
+    <rect x="230" y="262" width="90" height="30" rx="6" fill="#fff8e8" stroke="#b0631e"/>
+    <text x="275" y="282" text-anchor="middle" fill="#b0631e">串行头（轻）</text>
+    <line x1="146" y1="277" x2="228" y2="277" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+    <rect x="330" y="262" width="490" height="30" rx="6" fill="#fff" stroke="#e3e7ee"/>
+    <text x="575" y="282" text-anchor="middle" fill="#5a6272">位置 1 继承并行深网络的高容量；位置 2…γ 由串行头条件于已采样前缀，抑制后缀衰减</text>
+  </g>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：三类 drafter 架构对比（对应论文 §2.2 与 §3.1 的论证）。DSpark 的核心观察：并行 drafter 输在「块内独立性」而不在「单点能力」，自回归 drafter 输在「单点能力受限于延迟预算」——那就各取所长。</p>
+
+<h4>并行阶段：对 DFlash 的两处沿用与一处修改</h4>
+<p>DSpark 的并行主干直接采用 DFlash（Chen et al. 2026）：draft 模型与 target 共享并冻结 embedding 层与 LM head；prefill 时从 target 的若干层 \(\{l_1,\dots,l_m\}\) 抽取隐藏态，拼接投影为上下文特征（论文式 2）：</p>
+<div class="fig formula">\[
+H_{\text{ctx}}=\mathrm{RMSNorm}\bigl(W_{c}\,[H^{(l_{1})};\,\dots;\,H^{(l_{m})}]\bigr),
+\tag{式 2}\]</div>
+<p>再把它作为前缀拼进每层 draft 的 K/V（KV 注入，论文式 3），块内所有位置双向互相注意并注意 target 上下文：</p>
+<div class="fig formula">\[
+K_{i}=[W_{i}^{K}H_{\text{ctx}};\;W_{i}^{K}H_{d}],\quad V_{i}=[W_{i}^{V}H_{\text{ctx}};\;W_{i}^{V}H_{d}]
+\tag{式 3}\]</div>
+<p>DSpark 对 DFlash 的修改很小：原版输入是 anchor token + \(\gamma\) 个 mask token、只预测 mask 位置；DSpark 把 anchor 本身当作第一个预测位，即 \(\gamma\) 个输入（anchor + \(\gamma-1\) 个 mask）产出 \(\gamma\) 个草案 logits——省一点计算，质量相当（论文 §3.1）。</p>
+
+<h4>串行阶段：用「转移偏置」做块内条件化</h4>
+<p>并行主干一次前向产出基础 logits \(U_1,\dots,U_\gamma\) 与隐藏态 \(h_1,\dots,h_\gamma\)。串行阶段不定义全局归一化的能量模型，而是用自回归因子化引入一个<b>前缀依赖的转移偏置</b> \(B_k(x_0,x_{&lt;k},\cdot)\)（论文式 4）：</p>
+<div class="fig formula">\[
+P(X\mid x_{0})=\prod_{k=1}^{\gamma}p_{k}(x_{k}\mid x_{0},x_{&lt;k}),\qquad
+p_{k}(v\mid x_{0},x_{&lt;k})=\frac{\exp\!\left(U_{k}(v)+B_{k}(x_{0},x_{&lt;k},v)\right)}{\sum_{u\in\mathcal{V}}\exp\!\left(U_{k}(u)+B_{k}(x_{0},x_{&lt;k},u)\right)}
+\tag{式 4}\]</div>
+<p>其中 \(x_0\) 是上一轮 target 生成的 anchor token（论文中 anchor 与 bonus token 同义）。这个设计有一个关键性质（论文 §6 Related Work）：串行修正保持<b>局部</b>，每个位置的 \(p_k\) 仍是精确的 softmax——因而拒绝采样所需的每 token 概率严格成立；而同为「并行隐藏态上叠串行模块」的 CRF-NAT（全局归一化配分函数）和 CTC-drafter（对齐路径的隐变量边际化）都无法给出精确的 per-token 概率。</p>
+<p>两种实例化：</p>
+<ul>
+  <li><b>Markov 头</b>（默认）：\(B_k\) 只依赖紧邻前一个 token，退化为 \(V\times V\) 的一阶转移矩阵 \(B\)，用低秩分解 \(B=W_1W_2\)（\(r=256\)）近似（论文式 5）：
+    <div class="fig formula">\[B(x_{k-1},\,\cdot\,)=W_{1}[x_{k-1}]\,W_{2}\in\mathbb{R}^{V}\tag{式 5}\]</div>
+    \(W_1\) 是 embedding 查找表、\(W_2\) 是 logit 投影。回到 "of course / no problem" 的例子：位置 1 采出 "of" 后，Markov 头会在位置 2 抬高 "course"、压低 "problem"，直接缓解跨模式碰撞。</li>
+  <li><b>RNN 头</b>：维护递归状态 \(s_k\) 累积整块前缀历史。每步把 \([s_{k-1};\,W_1[x_{k-1}];\,h_k]\in\mathbb{R}^{2r+d}\) 作为输入 \(z_k\)，做一次门控更新（论文式 6）：
+    <div class="fig formula">\[
+    s_{k}=\sigma(W_{g}\,z_{k})\odot s_{k-1}+\bigl(1-\sigma(W_{g}\,z_{k})\bigr)\odot\tanh(W_{c}\,z_{k}),\qquad
+    B_{k}(x_{&lt;k},\,\cdot\,)=W_{2}^{\top}\tanh(W_{o}\,z_{k})
+    \tag{式 6}\]</div>
+    \(W_g,W_c,W_o\in\mathbb{R}^{r\times(2r+d)}\) 由单个线性投影切分共享，\(s_0=0\)。实验显示 RNN 头只比 Markov 头带来边际收益且部署更复杂，故默认用 Markov 头（论文 §4.3.2）。</li>
+</ul>
+<p>因为采样天然串行，串行块必须足够轻（\(T_{\text{sequential}}\ll T_{\text{parallel}}\)），让总 draft 延迟仍由并行阶段主导。</p>
+
+<h3>3.2 置信度调度验证（Confidence-Scheduled Verification）</h3>
+
+<h4>置信头：预测「前缀存活概率」</h4>
+<p>置信头对每个草案位置 \(k\) 输出标量 \(c_k\in(0,1)\)，语义是：<b>在块内前缀全部被接受的前提下，位置 \(k\) 的草案 token 能通过 target 验证的条件概率</b>（论文 §3.2.1）。结构是线性投影 + sigmoid（论文式 7）：</p>
+<div class="fig formula">\[
+c_{k}=\sigma\bigl(w^{\top}[h_{k};\,W_{1}[x_{k-1}]]\bigr)
+\tag{式 7}\]</div>
+<p>注意特征里拼了前一个草案 token 的 Markov embedding \(W_1[x_{k-1}]\)——置信预测本身也依赖块内已采样的前缀。监督标签是解析的逐步接受率（论文式 8，源自 Leviathan et al. 2023）：</p>
+<div class="fig formula">\[
+c_{k}^{*}=1-\tfrac{1}{2}\|p_{k}^{d}-p_{k}^{t}\|_{1}
+\tag{式 8}\]</div>
+
+<div class="infer">式 (7) 中 \(w^\top[h_k;W_1[x_{k-1}]]\) 与开源代码的对应关系为：<code>AcceptRatePredictor</code> 的 <code>input_dim = hidden_size + markov_rank</code>（配置项 <code>confidence_head_with_markov=True</code>），即隐藏态 \(h_k\) 与 Markov embedding 拼接后过一个单层线性投影（见 §4.4）。</div>
+
+<h4>Sequential Temperature Scaling（STS）：校准到「绝对量级」</h4>
+<p>阈值类启发式只需置信分排序正确即可；而 DSpark 的调度器要用<b>累计乘积</b> \(\prod_{i\le k}c_i\) 去算期望接受长度 \(\tau\)，需要绝对概率准确。神经置信估计普遍过自信（论文引 Guo et al. 2017），因此引入 STS：利用链式法则，在留出验证集上从左到右逐位置校准联合概率——每个位置 \(k\) 做 1 维网格搜索，找最小化累计乘积期望校准误差（ECE）的温度标量，并固定前面位置已校准的分数。温度缩放是保序变换，只修正概率量级、不破坏 drafter 学到的排序（论文 §3.2.1）。实测原始置信头 ROC-AUC 0.81–0.90 但 ECE 3%–8%，STS 后平均 ECE 降到约 1%。</p>
+
+<h4>硬件感知前缀调度器：把验证长度选择建模为全局吞吐最大化</h4>
+<p>设一批有 \(R\) 个活跃请求，请求 \(r\) 的逐位置置信分为 \(c_{r,1},\dots,c_{r,\gamma}\)，调度长度 \(\ell_r\in\{0,\dots,\gamma\}\)。投机解码只按连续前缀接受，故位置 \(j\) 的存活概率是累计乘积 \(a_{r,j}=\prod_{i\le j}c_{r,i}\)。单次验证的批规模（按 token 计）与期望接受数为：</p>
+<div class="fig formula">\[
+B=\sum_{r=1}^{R}(1+\ell_{r}),\qquad
+\tau=\sum_{r=1}^{R}\Bigl(1+\sum_{j=1}^{\ell_{r}}a_{r,j}\Bigr)
+\]</div>
+<p>引擎吞吐 \(\mathrm{SPS}(B)\)（steps per second，每秒前向步数）在引擎初始化时对 batch size 画像一次、存成轻量成本表。调度器最大化期望系统吞吐 \(\Theta=\tau\cdot\mathrm{SPS}(B)\)（论文 Algorithm 1）：</p>
+<div class="fig">
+<svg viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5">
+  <defs>
+    <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <rect x="20" y="18" width="380" height="212" rx="10" fill="#fff" stroke="#e3e7ee"/>
+  <text x="210" y="44" text-anchor="middle" font-weight="bold" fill="#2456c4">贪心准入路径（Algorithm 1）</text>
+  <text x="34" y="70" fill="#2a3040">1. 每请求算前缀存活概率 a_r,j = Π c_r,i</text>
+  <text x="34" y="94" fill="#2a3040">2. 候选集 E = {(r,j) | a_r,j &gt; 0}，按 a 降序排序</text>
+  <text x="34" y="118" fill="#2a3040">3. 依序逐个加入：ℓ_r ← j，B ← B+1，τ* ← τ* + a_r,j</text>
+  <text x="34" y="142" fill="#2a3040">4. 查成本表算 Θ = τ* · SPS(B)</text>
+  <text x="34" y="166" fill="#b0631e" font-weight="bold">5. 若 Θ ≤ Θ_best → break（early-stopping）</text>
+  <text x="34" y="196" fill="#5a6272" font-size="11.5">单调性：a_r,j 随 j 非增，故按 a 全局排序天然满足</text>
+  <text x="34" y="214" fill="#5a6272" font-size="11.5">块内前缀依赖；Θ(B) 固定时贪心即最优分配</text>
+
+  <rect x="430" y="18" width="410" height="212" rx="10" fill="#fff" stroke="#e3e7ee"/>
+  <text x="635" y="44" text-anchor="middle" font-weight="bold" fill="#2456c4">为什么必须 early-stop？（非预期性）</text>
+  <text x="444" y="70" fill="#2a3040">无损投机解码要求准入决策不依赖未来 token：</text>
+  <text x="444" y="94" fill="#2a3040">置信头特征含 W₁[x_r,k−1]，算 a_r,k+1 需要先采样</text>
+  <text x="444" y="114" fill="#2a3040">出 x_r,k；若回溯全局搜索，x_r,k 的取值会泄漏进</text>
+  <text x="444" y="134" fill="#2a3040">第 k 步的截断决策 → 选择偏置，破坏目标分布恢复。</text>
+  <text x="444" y="162" fill="#2a3040">解法：Θ 一下降就 break，截断只依赖已处理前缀。</text>
+  <text x="444" y="186" fill="#5a6272" font-size="11.5">注：该逐步 early-stop 求得全局最优 ⟺ Θ 关于 B 单峰，</text>
+  <text x="444" y="204" fill="#5a6272" font-size="11.5">隐含假设 SPS(B) 曲线平滑；锯齿曲线的处理见 §5.2。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3</b>：硬件感知前缀调度器（对应论文 §3.2.2 与附录 A）。左侧是贪心准入流程；右侧解释 early-stopping 为何是无损性的必要条件。</p>
+
+<h4>生产环境的工程改造（论文 §5.2）</h4>
+<p>直接部署 Algorithm 1 会与真实基础设施冲突：真实 \(\mathrm{SPS}(B)\) 是离散锯齿状阶梯而非平滑单峰曲线；Zero-Overhead Scheduling（ZOS）要求下一步批规模在当前步结束前确定，同步调度会卡住 GPU 流水线。DeepSeek 的落地做法是<b>异步化</b>：当前步候选仍按最新的累计置信分严格排序，但截断长度（批容量上限 \(K\)）用<b>两步前</b>的置信头预测近似——本质上变成动态 top-\(K\) 选择。由于截断只依赖两步前的历史信息，异步设计天然构成因果屏障：既可以在锯齿 SPS 曲线上做不设 break 的全局搜索（找穿越硬件阶梯的最大吞吐），又不会把当前 token \(x_{r,k}\) 泄漏进准入决策，无损性保持成立。</p>
+
+<h3>3.3 训练目标</h3>
+<p>训练时从每条 target 序列随机采样多个 anchor 位置构成 \(\gamma\)-token 块；target 模型全程冻结，draft 共享并冻结 embedding 与 LM head，只更新主干、串行块与置信头。三项损失均按位置权重 \(w_k=\exp(-(k-1)/\gamma)\) 加权（早期位置对前缀式验证的期望接受长度贡献更大）：</p>
+<div class="fig formula">\[
+\mathcal{L}_{\text{ce}}=-\sum_{k=1}^{\gamma}w_{k}\log p^{d}_{k}(x_{k}^{*})
+\quad(9),\qquad
+\mathcal{L}_{\text{tv}}=\sum_{k=1}^{\gamma}w_{k}\|p_{k}^{d}-p_{k}^{t}\|_{1}
+\quad(10),\qquad
+\mathcal{L}_{\text{conf}}=-\sum_{k=1}^{\gamma}w_{k}\bigl[c_{k}^{*}\log c_{k}+(1-c_{k}^{*})\log(1-c_{k})\bigr]
+\quad(11)
+\]</div>
+<div class="fig formula">\[
+\mathcal{L}=\alpha_{\text{ce}}\,\mathcal{L}_{\text{ce}}+\alpha_{\text{tv}}\,\mathcal{L}_{\text{tv}}+\alpha_{\text{conf}}\,\mathcal{L}_{\text{conf}},
+\qquad \alpha_{\text{ce}}=0.1,\ \alpha_{\text{tv}}=0.9,\ \alpha_{\text{conf}}=1.0
+\tag{式 12}\]</div>
+<p>\(\mathcal{L}_{\text{tv}}\) 直接以总变差距离为损失——而逐步接受率恰为 \(1-\tfrac12\|p^d-p^t\|_1\)，所以最小化 \(\mathcal{L}_{\text{tv}}\) 就是在最大化期望接受率（论文 §3.3）。</p>
+
+<h2 id="sec4">四、代码实现讲解（DeepSpec 仓库，commit <code>005e03b</code>）</h2>
+
+<p>官方开源的 <a href="https://github.com/deepseek-ai/DeepSpec">DeepSpec</a> 是一个「算法驱动的投机解码训练仓库」，含 Eagle3 / DFlash / DSpark 三个 drafter 的数据准备、训练与评测全栈，并发布了论文 Table 1 所用的全部 checkpoint。DSpark 相关代码分布如下：</p>
+<table>
+  <tr><th>路径</th><th>内容</th></tr>
+  <tr><td><code>deepspec/modeling/dspark/markov_head.py</code></td><td>VanillaMarkov / GatedMarkovHead / RNNHead 三个串行头（式 4–6 的实现）</td></tr>
+  <tr><td><code>deepspec/modeling/dspark/qwen3/modeling.py</code>、<code>gemma4/</code></td><td>并行主干：KV 注入注意力、anchor+mask 输入、置信头、draft 采样</td></tr>
+  <tr><td><code>deepspec/modeling/dspark/common.py</code></td><td>anchor 采样、noise embedding、块掩码（flex_attention block mask）</td></tr>
+  <tr><td><code>deepspec/modeling/dspark/loss.py</code></td><td>三项损失（式 9–12 的实现）</td></tr>
+  <tr><td><code>deepspec/eval/dspark/</code></td><td>评测用提案构建、静态阈值截断、置信头校准诊断（ECE/AUROC）</td></tr>
+  <tr><td><code>config/dspark/dspark_qwen3_4b.py</code> 等</td><td>训练超参配置</td></tr>
+</table>
+
+<h3>4.1 串行头：式 (5) 的低秩 Markov 转移</h3>
+<p><code>deepspec/modeling/dspark/markov_head.py:17-32</code> 把 \(W_1\) 实现为 embedding 查找表、\(W_2\) 实现为无偏置线性层，逐 token 加转移偏置：</p>
+<pre><code class="language-python">class VanillaMarkov(nn.Module):
+    def __init__(self, *, vocab_size: int, markov_rank: int):
+        super().__init__()
+        ...
+        self.markov_w1 = nn.Embedding(self.vocab_size, self.markov_rank)
+        self.markov_w2 = nn.Linear(self.markov_rank, self.vocab_size, bias=False)
+
+    def get_prev_embeddings(self, token_ids: torch.Tensor) -&gt; torch.Tensor:
+        return self.markov_w1(token_ids.long())          # W1[x_{k-1}]
+
+    def project_bias(self, latent_states: torch.Tensor) -&gt; torch.Tensor:
+        return self.markov_w2(latent_states)             # W2
+
+    def compute_step_bias(self, token_ids, hidden_states):
+        del hidden_states
+        return self.project_bias(self.get_prev_embeddings(token_ids))
+        # ↑ B(x_{k-1}, ·) = W1[x_{k-1}] W2 ∈ R^V，即式 (5)</code></pre>
+<p class="cap"><code>markov_head.py:17-32</code>。\(W_1[x_{k-1}]\) 是 rank-256 的低维 embedding，\(W_2\) 把它投回词表维度——对 10 万级词表，存储与每步计算都很小。</p>
+
+<h3>4.2 推理时的逐位采样循环：式 (4) 的执行体</h3>
+<p>草案采样从 anchor 出发自左向右进行：每步先给该位置的基础 logits 加上前一个 token 的转移偏置，再采样，把样本喂给下一步（<code>markov_head.py:73-90</code>）：</p>
+<pre><code class="language-python">        sampled_tokens = []
+        corrected_logits = []
+        prev_token_ids = first_prev_token_ids.long()   # x_0 = anchor
+        for step_idx in range(proposal_len):
+            step_hidden = None if hidden_states is None else hidden_states[:, step_idx, ...]
+            step_logits = self.apply_step_logits(
+                base_logits[:, step_idx, :],            # U_k（并行主干基础 logits）
+                token_ids=prev_token_ids,               # x_{k-1}
+                hidden_states=step_hidden,
+            )                                           # U_k + B(x_{k-1}, ·)
+            corrected_logits.append(step_logits.unsqueeze(1))
+            next_token_ids = sample_tokens(
+                step_logits.unsqueeze(1), temperature=temperature,
+            ).squeeze(1)                                # 按 p_k(·|x_0, x_{&lt;k}) 采样
+            sampled_tokens.append(next_token_ids)
+            prev_token_ids = next_token_ids             # 条件于实际采样结果
+        return torch.stack(sampled_tokens, dim=1), torch.cat(corrected_logits, dim=1)</code></pre>
+<p class="cap"><code>markov_head.py:73-90</code>（<code>VanillaMarkov.sample_block_tokens</code>）。这个循环逐位执行、无法并行，但它只包含 embedding 查找 + 一次 rank-256 矩阵乘 + 一次 softmax 采样，因此 \(T_{\text{sequential}}\ll T_{\text{parallel}}\)。返回的 <code>corrected_logits</code>（加偏置后的 \(p^d_k\)）正是后续拒绝采样所需的草案分布。</p>
+
+<h3>4.3 RNN 头：式 (6) 的门控递归</h3>
+<p><code>RNNHead</code> 把 \(W_g, W_c, W_o\) 合并为单个 <code>joint_proj</code> 线性层再按三份切分（<code>markov_head.py:142-173</code>）：</p>
+<pre><code class="language-python">        # Joint projection: [s_{k-1}; W1[x_{k-1}]; h_k] -&gt; [gate; candidate; output]
+        self.state_size = markov_rank
+        self.joint_proj = nn.Linear(2 * markov_rank + hidden_size, 3 * markov_rank)
+
+    def _rnn_step(self, state, prev_embeddings, hidden_states):
+        z = torch.cat([state, prev_embeddings, hidden_states], dim=-1)  # z_k ∈ R^{2r+d}
+        proj = self.joint_proj(z)
+        gate_raw, candidate_raw, output_raw = proj.chunk(3, dim=-1)
+        gate = torch.sigmoid(gate_raw)
+        candidate = torch.tanh(candidate_raw)
+        new_state = gate * state + (1.0 - gate) * candidate             # 式 (6) 上半
+        bias = self.project_bias(torch.tanh(output_raw))                # B_k = W2^T tanh(W_o z_k)
+        return new_state, bias</code></pre>
+<p class="cap"><code>markov_head.py:142-173</code>。训练时 <code>apply_block_logits</code>（teacher-forced，状态沿块展开）与推理时 <code>sample_block_tokens</code>（采样与状态更新交替）共用这一个 <code>_rnn_step</code>。</p>
+
+<h3>4.4 并行主干：KV 注入与 anchor+mask 输入</h3>
+<p>式 (2) 的上下文特征投影在 <code>Qwen3DSparkModel._forward_backbone</code> 中（<code>qwen3/modeling.py:372-373</code>）：</p>
+<pre><code class="language-python">        hidden_states = noise_embedding                      # anchor + mask 的 embedding
+        target_hidden_states = self.hidden_norm(self.fc(target_hidden_states))
+        # ↑ fc: Linear(len(target_layer_ids)*d, d) + RMSNorm，即 H_ctx = RMSNorm(W_c [...])</code></pre>
+<p class="cap"><code>qwen3/modeling.py:372-373</code>；<code>target_layer_ids</code> 指定从 target 哪些层抽特征（默认配置取 \([1,9,17,25,33]\) 五层，含 embedding 输出 <code>-1</code> 的约定，见 <code>common.py:52-56</code> 的 <code>extract_context_feature</code>）。</p>
+<p>式 (3) 的 KV 注入在注意力层里体现为「上下文 K/V 与草案 K/V 沿序列维拼接」（<code>qwen3/modeling.py:103-116</code>）：</p>
+<pre><code class="language-python">        k_ctx = self.k_proj(target_hidden_states)     # 对注入的 target 上下文特征做 K/V 投影
+        k_noise = self.k_proj(hidden_states)          # 对本块（anchor+mask）表示做 K/V 投影
+        v_ctx = self.v_proj(target_hidden_states)
+        v_noise = self.v_proj(hidden_states)
+        k = torch.cat([k_ctx, k_noise], dim=1).view(...)   # K_i = [W_i^K H_ctx ; W_i^K H_d]
+        v = torch.cat([v_ctx, v_noise], dim=1).view(...)   # V_i = [W_i^V H_ctx ; W_i^V H_d]
+        ...
+        # is_causal=False：块内所有位置互相双向注意，并注意注入的 target 上下文</code></pre>
+<p class="cap"><code>qwen3/modeling.py:103-116</code>。训练时注意力掩码由 <code>create_dspark_attention_mask</code> 用 flex_attention 的 block mask 表达（<code>common.py:86-96</code>）：每个 draft 位置可以看 <code>kv_idx &lt; anchor_pos</code> 的全部上下文、以及<b>同一块内</b>的其他 draft 位置——多条训练块在序列维上打包但互不可见，这与论文 §5.1 的「anchor-bounded sequence packing（token 级注意力索引）」一致。</p>
+<p>anchor + mask 的输入构造在 <code>create_noise_embed</code>（<code>common.py:276-293</code>）：整块填 <code>mask_token_id</code>，仅把每块第一个位置替换为真实 anchor token 的 embedding。</p>
+
+<h3>4.5 置信头与三项损失</h3>
+<p>置信头的构建（<code>qwen3/modeling.py:262-267</code>）与式 (7) 的特征拼接一一对应：</p>
+<pre><code class="language-python">        self.confidence_head = None
+        if self.enable_confidence_head:
+            input_dim = int(config.hidden_size)
+            if self.confidence_head_with_markov:
+                input_dim += config.markov_rank       # 拼接 W1[x_{k-1}]（Markov embedding）
+            self.confidence_head = AcceptRatePredictor(input_dim=input_dim)
+            # AcceptRatePredictor = Linear(input_dim, 1)，输出 logit，外部再 sigmoid（common.py:43-49）</code></pre>
+<p class="cap"><code>qwen3/modeling.py:262-267</code>。</p>
+<p>式 (8) 的解析接受率标签直接由 draft/target 分布的 L1 距离算出（<code>loss.py:67-70</code>）：</p>
+<pre><code class="language-python">def _compute_accept_rate_3d(*, outputs, aligned_target_logits):
+    ...
+    draft_probs = torch.softmax(outputs.draft_logits.float(), dim=-1)
+    target_probs = torch.softmax(aligned_target_logits.float(), dim=-1)
+    accept_rate_3d = 1.0 - 0.5 * (draft_probs - target_probs).abs().sum(dim=-1)
+    return accept_rate_3d.clamp_(0.0, 1.0)          # c*_k = 1 - 1/2 ||p^d - p^t||_1</code></pre>
+<p class="cap"><code>loss.py:67-70</code>。式 (11) 的置信损失即以此（detach）为软标签做 BCE-with-logits（<code>loss.py:156-163</code>）；式 (9)(10) 分别对应 <code>loss.py:112-114</code> 的加权交叉熵与 <code>loss.py:73-87</code> 的加权 L1 距离；式 (12) 的权重合成在 <code>loss.py:248-252</code>。</p>
+<p>位置权重 \(w_k\) 的实现为指数衰减掩码（<code>loss.py:31-36</code>）：</p>
+<pre><code class="language-python">    if loss_decay_gamma is not None and loss_decay_gamma &gt; 0:
+        positions = torch.arange(block_size, device=device).view(1, 1, -1)
+        decay_weights = torch.exp(-positions.float() / float(loss_decay_gamma))
+        loss_weight_mask = loss_weight_mask * decay_weights</code></pre>
+<p class="cap"><code>loss.py:31-36</code>。默认配置 <code>loss_decay_gamma=4.0</code>，即 \(w_k=\exp(-k/4)\)（位置从 0 起算）。</p>
+<div class="infer">论文写 \(w_k=\exp(-(k-1)/\gamma)\)、代码是 \(\exp(-k/\gamma_{\text{cfg}})\) 且 \(\gamma_{\text{cfg}}=4.0\) 固定而非随块长变化——两者同属「指数衰减、强调早期位置」一族，但常数与记号细节略有出入，属于论文表述与开源实现间的轻微偏差。</div>
+
+<h3>4.6 推理提案与置信截断：开源的是「诊断版」</h3>
+<p>评测时草案块的构建流程在 <code>deepspec/eval/dspark/draft_ops.py:96-153</code>（<code>build_dspark_proposal</code>）：并行主干前向 → <code>sample_draft_tokens</code> 串行采样 → 置信头预测 → 按阈值截断前缀 → 拼出 <code>verify_input_ids</code>（anchor + 被调度前缀）并给出 <code>draft_probs</code> 供拒绝采样。静态阈值截断的核心（<code>draft_ops.py:88-93</code>）：</p>
+<pre><code class="language-python">def _confident_prefix_length(confidence_logits, *, block_size, threshold):
+    if threshold &lt;= 0.0:
+        return int(block_size)                      # 阈值 0 = 标准定长验证
+    below_threshold = confidence_logits.sigmoid() &lt; threshold
+    if not bool(below_threshold[0].any().item()):
+        return int(block_size)
+    return int(torch.nonzero(below_threshold[0], as_tuple=False)[0].item())
+    # 返回第一个低置信位置之前的长度（连续前缀）</code></pre>
+<p class="cap"><code>draft_ops.py:88-93</code>。论文 §4.3.3 的阈值扫描实验用的正是这个机制（阈值 0 等价于固定长度验证）。</p>
+<div class="infer"><b>开源边界</b>：论文 §3.2.2 的完整硬件感知前缀调度器（Algorithm 1 的全局吞吐最大化 + §5.2 的异步 top-\(K\) 改造）服务于 DeepSeek 内部 HAI-LLM/V4 生产引擎，<b>不在</b> DeepSpec 开源仓库中；开源侧提供的是静态阈值诊断版与置信头校准评测（ECE/AUROC/Brier，<code>eval/dspark/confidence_head.py</code> 的 <code>ConfidenceHeadRecorder</code> 以累计乘积 \(\prod c_i\) 对照实际接受前缀做逐位置校准诊断）。调度算法本身论文以伪代码 + 充分参数给出，可复现但无官方引擎代码。</div>
+
+<h3>4.7 训练配置一瞥</h3>
+<pre><code class="language-python"># config/dspark/dspark_qwen3_4b.py:10-30（节选）
+model = dict(
+    target_model_name_or_path=QWEN_3_4B,
+    block_size=7,                 # γ = 7
+    num_draft_layers=5,           # 并行主干 5 层
+    target_layer_ids=[1, 9, 17, 25, 33],   # KV 注入的 target 特征层
+    mask_token_id=151669,
+    num_anchors=512,              # 每条序列采样 512 个 anchor 训练块
+
+    markov_rank=256,              # Markov 头低秩 r = 256
+    markov_head_type='vanilla',
+
+    confidence_head_alpha=1.0,    # α_conf
+    confidence_head_with_markov=True,
+    loss_decay_gamma=4.0,         # 位置权重指数衰减
+    ce_loss_alpha=0.1,            # α_ce
+    l1_loss_alpha=0.9,            # α_tv（代码中 L_tv 记作 l1_loss）
+)</code></pre>
+<p class="cap">与论文式 (12) 的默认权重 \(\alpha_{\text{ce}}=0.1,\alpha_{\text{tv}}=0.9,\alpha_{\text{conf}}=1.0\) 完全一致；训练共 10 epoch、全局 batch 512、lr \(6\times10^{-4}\)（同文件 <code>train</code> 段）。</p>
+
+<h2 id="sec5">五、与相关方法的对比</h2>
+
+<table>
+  <tr><th>方法</th><th>drafter 形态</th><th>块内依赖</th><th>验证长度</th><th>与 DSpark 的关键差异</th></tr>
+  <tr><td>经典投机解码（Leviathan/Chen 2023）</td><td>独立小模型，串行起草</td><td>有（自回归）</td><td>固定 \(\gamma\)</td><td>DSpark 继承其拒绝采样与无损性框架，但 drafter 换成半自回归、验证长度动态调度</td></tr>
+  <tr><td>EAGLE / Eagle3</td><td>自回归特征外推 drafter（1 层，TTT horizon=7）</td><td>有</td><td>固定（可配树验证）</td><td>位置 1 条件接受率受限于浅网络（0.81 vs DSpark 0.93，Math，Qwen3-4B）；\(T_{\text{draft}}\propto\gamma\)</td></tr>
+  <tr><td>Medusa</td><td>target 上挂多解码头，并行出多头</td><td>无（靠树注意力缓解）</td><td>固定</td><td>并行草案的早期代表；无独立置信驱动的调度，块内独立性导致的后缀衰减同样存在</td></tr>
+  <tr><td>DFlash</td><td>块扩散式并行 drafter（5 层，KV 注入）</td><td>无</td><td>固定</td><td>DSpark 的直接基座：并行主干沿用 DFlash（含 KV 注入、共享 embedding/LM head），叠加串行头与置信调度</td></tr>
+  <tr><td>动态长度类（DISCO/SpecDec++/D-Cut 等）</td><td>各类 drafter + 置信阈值/bandit</td><td>—</td><td>静态阈值</td><td>只按置信排序截断，不看系统负载；DSpark 把调度建为 \(\Theta=\tau\cdot\mathrm{SPS}(B)\) 的全局吞吐最大化并按负载伸缩</td></tr>
+  <tr><td><b>DSpark</b></td><td>并行主干 + 轻量串行头（Markov/RNN）+ 置信头</td><td>有（局部、保持 per-token 概率精确）</td><td>硬件感知动态调度</td><td>同时动式 (1) 的三个杠杆；调度器满足非预期性（early-stop / 异步两步前近似），保持严格无损</td></tr>
+</table>
+
+<p>与并行生成文献的关系（论文 §6）：NAT 一系针对「多模态碰撞」的解法要么引入隐变量/迭代精化，要么改训练目标，但大多<b>无法给出精确的每 token 概率</b>，不能直接套进拒绝采样；CRF-NAT 同样在并行隐藏态上叠串行模块，但全局归一化配分函数破坏了 per-token 概率；CTC-drafter 受对齐路径边际化限制只能做贪婪验证。DSpark 让串行修正保持<b>局部</b>（逐位置 softmax），这是它能与标准拒绝采样无缝衔接的关键设计。同期的 Domino（CausalEncoder，概念上类似 RNN 头）与 DFlare（逐层融合）是并行工作。</p>
+
+<h2 id="sec6">六、实验结果</h2>
+
+<h3>6.1 离线主结果：每轮接受长度 \(\tau\)</h3>
+<p>评测设置：Qwen3-4B/8B/14B 与 Gemma4-12B 四个 target；Eagle3（1 层，TTT=7）与 DFlash（5 层，block 7）为基线，所有 drafter 在同一框架、同一数据（Open-PerfectBlend 130 万条，只用 prompt、target 自采样回答）重训 10 epoch；温度 1.0，链式起草，关闭置信调度以隔离草案质量（论文 §4.1–4.2）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 320" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5">
+  <!-- chart area -->
+  <g>
+    <!-- y gridlines: tau 2.0..6.0, x: chart 90..810, y: 270(tau=2)..40(tau=6) -->
+    <line x1="90" y1="270" x2="810" y2="270" stroke="#e3e7ee"/><text x="80" y="274" text-anchor="end" fill="#5a6272">2.0</text>
+    <line x1="90" y1="227.5" x2="810" y2="227.5" stroke="#eef1f6"/><text x="80" y="231" text-anchor="end" fill="#5a6272">3.0</text>
+    <line x1="90" y1="185" x2="810" y2="185" stroke="#eef1f6"/><text x="80" y="189" text-anchor="end" fill="#5a6272">4.0</text>
+    <line x1="90" y1="142.5" x2="810" y2="142.5" stroke="#eef1f6"/><text x="80" y="146" text-anchor="end" fill="#5a6272">5.0</text>
+    <line x1="90" y1="100" x2="810" y2="100" stroke="#eef1f6"/><text x="80" y="104" text-anchor="end" fill="#5a6272">6.0</text>
+    <line x1="90" y1="40" x2="90" y2="270" stroke="#c9d0da"/>
+    <line x1="90" y1="270" x2="810" y2="270" stroke="#c9d0da"/>
+
+    <!-- Group Math: x centers 190; bar width 38, gap 4 -->
+    <!-- Eagle3 4.56 -> h=(4.56-2)*47.5=121.65 -> y=148.35 ; DFlash 4.80 -> 133 -> y=137 ; DSpark 5.57 -> 169.7 -> y=100.3 -->
+    <rect x="133" y="148.3" width="38" height="121.7" fill="#9fb6e0"/>
+    <rect x="175" y="137" width="38" height="133" fill="#2456c4"/>
+    <rect x="217" y="100.3" width="38" height="169.7" fill="#b0631e"/>
+    <text x="152" y="142" text-anchor="middle" fill="#5a6272">4.56</text>
+    <text x="194" y="131" text-anchor="middle" fill="#5a6272">4.80</text>
+    <text x="236" y="94" text-anchor="middle" font-weight="bold" fill="#b0631e">5.57</text>
+    <text x="194" y="292" text-anchor="middle" font-weight="bold">Math</text>
+
+    <!-- Group Code: center 450; Eagle3 3.87 -> 88.8 -> y=181.2 ; DFlash 4.44 -> 115.9 -> y=154.1 ; DSpark 5.12 -> 148.2 -> y=121.8 -->
+    <rect x="393" y="181.2" width="38" height="88.8" fill="#9fb6e0"/>
+    <rect x="435" y="154.1" width="38" height="115.9" fill="#2456c4"/>
+    <rect x="477" y="121.8" width="38" height="148.2" fill="#b0631e"/>
+    <text x="412" y="175" text-anchor="middle" fill="#5a6272">3.87</text>
+    <text x="454" y="148" text-anchor="middle" fill="#5a6272">4.44</text>
+    <text x="496" y="116" text-anchor="middle" font-weight="bold" fill="#b0631e">5.12</text>
+    <text x="454" y="292" text-anchor="middle" font-weight="bold">Code</text>
+
+    <!-- Group Chat: center 710; Eagle3 2.40 -> 19 -> y=251 ; DFlash 2.95 -> 45.2 -> y=224.8 ; DSpark 3.49 -> 70.8 -> y=199.2 -->
+    <rect x="653" y="251" width="38" height="19" fill="#9fb6e0"/>
+    <rect x="695" y="224.8" width="38" height="45.2" fill="#2456c4"/>
+    <rect x="737" y="199.2" width="38" height="70.8" fill="#b0631e"/>
+    <text x="672" y="245" text-anchor="middle" fill="#5a6272">2.40</text>
+    <text x="714" y="219" text-anchor="middle" fill="#5a6272">2.95</text>
+    <text x="756" y="193" text-anchor="middle" font-weight="bold" fill="#b0631e">3.49</text>
+    <text x="714" y="292" text-anchor="middle" font-weight="bold">Chat</text>
+  </g>
+  <!-- legend -->
+  <rect x="90" y="8" width="14" height="14" fill="#9fb6e0"/><text x="110" y="19" fill="#2a3040">Eagle3（自回归）</text>
+  <rect x="240" y="8" width="14" height="14" fill="#2456c4"/><text x="260" y="19" fill="#2a3040">DFlash（并行）</text>
+  <rect x="390" y="8" width="14" height="14" fill="#b0631e"/><text x="410" y="19" fill="#2a3040">DSpark（半自回归）</text>
+  <text x="810" y="312" text-anchor="end" fill="#5a6272" font-size="11.5">纵轴：每轮接受长度 τ（含 bonus token），Qwen3-4B，九个基准按域平均（由论文 Table 1 计算）</text>
+</svg>
+</div>
+<p class="cap"><b>图 4</b>：离线主结果的域级平均（数据来自论文 Table 1，Qwen3-4B；Math=5.57/Code=5.12/Chat=3.49 的 DSpark 数值与论文 §4.2 正文引用一致）。DSpark 在三个模型规模上对 Eagle3 的 macro 平均提升分别为 30.9%/26.7%/30.0%，对 DFlash 为 16.3%/18.4%/18.3%；Gemma4-12B 上优势同样成立。</p>
+
+<p>Table 1 部分明细（每轮接受长度 \(\tau\)，Qwen3 系列逐基准）：</p>
+<table>
+  <tr><th>Target</th><th>Drafter</th><th>GSM8K</th><th>MATH</th><th>AIME25</th><th>MBPP</th><th>HumanEval</th><th>LCB</th><th>MT-Bench</th><th>Alpaca</th><th>Arena-Hard</th></tr>
+  <tr><td rowspan="3">Qwen3-4B</td><td>Eagle3</td><td>5.14</td><td>4.62</td><td>3.92</td><td>3.69</td><td>4.16</td><td>3.77</td><td>2.39</td><td>2.26</td><td>2.55</td></tr>
+  <tr><td>DFlash</td><td>5.40</td><td>4.85</td><td>4.15</td><td>4.40</td><td>4.74</td><td>4.18</td><td>3.07</td><td>2.96</td><td>2.83</td></tr>
+  <tr><td><b>DSpark</b></td><td><b>6.11</b></td><td><b>5.70</b></td><td><b>4.89</b></td><td><b>5.13</b></td><td><b>5.38</b></td><td><b>4.86</b></td><td><b>3.64</b></td><td><b>3.54</b></td><td><b>3.29</b></td></tr>
+  <tr><td rowspan="3">Qwen3-8B</td><td>Eagle3</td><td>5.30</td><td>4.77</td><td>3.91</td><td>3.96</td><td>4.33</td><td>4.17</td><td>2.66</td><td>2.54</td><td>2.54</td></tr>
+  <tr><td>DFlash</td><td>5.33</td><td>4.91</td><td>4.07</td><td>4.36</td><td>4.64</td><td>4.39</td><td>3.11</td><td>2.98</td><td>2.81</td></tr>
+  <tr><td><b>DSpark</b></td><td><b>6.17</b></td><td><b>5.78</b></td><td><b>5.01</b></td><td><b>5.16</b></td><td><b>5.52</b></td><td><b>5.17</b></td><td><b>3.72</b></td><td><b>3.58</b></td><td><b>3.21</b></td></tr>
+  <tr><td rowspan="3">Qwen3-14B</td><td>Eagle3</td><td>5.24</td><td>4.60</td><td>3.71</td><td>3.81</td><td>4.14</td><td>4.01</td><td>2.62</td><td>2.47</td><td>2.48</td></tr>
+  <tr><td>DFlash</td><td>5.41</td><td>4.84</td><td>3.98</td><td>4.44</td><td>4.59</td><td>4.33</td><td>3.10</td><td>2.94</td><td>2.72</td></tr>
+  <tr><td><b>DSpark</b></td><td><b>6.21</b></td><td><b>5.74</b></td><td><b>4.94</b></td><td><b>5.26</b></td><td><b>5.43</b></td><td><b>5.02</b></td><td><b>3.70</b></td><td><b>3.58</b></td><td><b>3.13</b></td></tr>
+</table>
+<p class="cap">论文 Table 1 的 Qwen3 部分（Gemma4-12B 上 DSpark 同样全面领先，此处略）。可见强域效应：Math/Code 接受长度天然高于开放 Chat。</p>
+
+<h3>6.2 消融与分析</h3>
+<ul>
+  <li><b>为什么并行能赢自回归</b>（§4.3.1，Qwen3-4B 逐位置条件接受率）：位置 1 上 DFlash 明显高于 Eagle3（Math 0.88 vs 0.81；Chat 0.72 vs 0.53）——这是深网络 vs 浅网络的容量差，而前缀存活过程使首个 token 杠杆最大；位置 2–7 上 Eagle3 稳中有升（Chat 0.53→0.74）而 DFlash 快速衰减（Code 0.87→0.78；Chat 0.72→0.63）。DSpark 兼得两端：起始 0.93（Math）且全程高而稳。</li>
+  <li><b>一点点自回归就很值</b>（§4.3.2）：块长固定 7 时，2 层 DSpark 就能在所有域上超过 5 层 DFlash——串行头带来的序列一致性比单纯堆深并行层更划算。块长从 4 扫到 16，DSpark 对 DFlash 的差距持续扩大：\(\gamma=7\) 时提升 16%（Math）/15%（Code）/18%（Chat），\(\gamma=15\) 时扩大到 30%/26%/22%。RNN 头只在长块上有边际增益，默认用 Markov 头。</li>
+  <li><b>延迟开销</b>：batch 128、上下文 {512,1024,2048,4096} 下，串行头使整轮（验证 + 并行 draft + 串行采样）延迟相对 DFlash 只增加 0.2%–1.3%，却带来最多 30% 的接受长度提升。</li>
+  <li><b>置信头诊断</b>（§4.3.3，静态阈值扫描）：Chat 域随阈值升高，整体接受率从 45.7% 升至 95.7%（被剪掉的「本会被拒」token 显著减少）；Math 76.9%→92.5%、Code 67.6%→92.0%。校准诊断：原始置信头 ROC-AUC 0.81–0.90 但 ECE 3%–8%（过自信），STS 校准后平均 ECE 约 1%。</li>
+</ul>
+
+<h3>6.3 生产部署：DeepSeek-V4 线上流量（论文 §5）</h3>
+<p>部署形态：与 DeepSeek-V4-Flash / V4-Pro（preview）协同部署，\(\gamma=5\)、Markov 头；并行主干为 3 个带 mHC 的 MoE 层 + 128 滑窗注意力。基线是此前的生产配置 MTP-1（单 token MTP——静态多 token drafter 在高并发下因验证开销过大反而降低总吞吐，故生产一直只敢开单 token）。关键结果：</p>
+<table>
+  <tr><th>引擎</th><th>SLA 锚点</th><th>结果</th></tr>
+  <tr><td rowspan="2">V4-Flash</td><td>80 tok/s/user</td><td>总吞吐较 MTP-1 提升 51%</td></tr>
+  <tr><td>120 tok/s/user</td><td>MTP-1 接近运行边界、只能维持很小并发，DSpark 名义吞吐高 661%（论文自己提示该点主要证明「可行交互性前沿被外推」，而非代表性倍数）</td></tr>
+  <tr><td rowspan="2">V4-Pro</td><td>35 tok/s/user</td><td>总吞吐提升 52%</td></tr>
+  <tr><td>50 tok/s/user</td><td>名义 406%；同为「前沿外推」证据</td></tr>
+  <tr><td colspan="2">同等实际吞吐水平对比</td><td>V4-Flash 单用户生成速度提升 <b>60%–85%</b>；V4-Pro 提升 <b>57%–78%</b></td></tr>
+  <tr><td colspan="2">调度行为（Figure 8）</td><td>中低并发（&lt;200/150 请求）下验证预算自动放宽到约 4–6 token/请求（MTP-1 静态 2 token）；并发升高、算力饱和时预算平滑收缩，保住关键批容量</td></tr>
+</table>
+<p>论文同时坦承局限：调度器只能省验证侧浪费，draft 侧为生成初始 \(\gamma\)-token 块的固定开销对低接受率请求不可回收——未来可做难度感知的 draft 侧早退。</p>
+
+<h2 id="sec7">七、事实与推断的边界</h2>
+<ul>
+  <li><b>论文证实</b>：所有公式（式 1–12）、Algorithm 1、Table 1 数字、位置级接受率、阈值扫描、校准（ECE/AUC）、线上 Pareto 前沿与 60%–85%/57%–78% 加速数字，均引自本地 <code>paper/dspark.pdf</code>（arXiv 2607.05147v1）对应章节。</li>
+  <li><b>源码证实</b>：§4 全部代码片段摘自 DeepSpec 仓库 commit <code>005e03b</code>（2026-10-08 克隆），行号可在该版本下核对。</li>
+  <li><b>标注为推断</b>：① 论文 \(w_k=\exp(-(k-1)/\gamma)\) 与代码 \(\exp(-k/4)\) 的细微差异（§4.5）；② 硬件感知调度器、异步 top-\(K\)、ZOS 集成与变长验证 kernel 改造属于 DeepSeek 内部引擎（HAI-LLM），开源仓库只有静态阈值诊断版——此边界基于仓库内容与论文 §5 的表述比对；③ V4 部署中「3 个带 mHC 的 MoE 层 + 滑窗 128」是论文对 DSpark draft 主干的描述，其内部实现细节无开源代码可对照。</li>
+  <li><b>时间背景提示</b>：论文及仓库均处于 2026 年发布窗口，文中引用的部分对比工作（DFlash、Eagle3 TTT=7 版本、DeepSeek-V4 preview 等）的具体版本以对应原始出处为准。</li>
+</ul>
+
+<h2 id="refs">参考来源</h2>
+<ol class="refs">
+  <li>X. Cheng et al. <i>DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation</i>. arXiv:2607.05147, 2026. <a href="https://arxiv.org/abs/2607.05147">abs</a> / <a href="https://arxiv.org/html/2607.05147v1">HTML 全文</a> / 本地归档 <code>paper/dspark.pdf</code></li>
+  <li>官方代码：deepseek-ai/DeepSpec，<a href="https://github.com/deepseek-ai/DeepSpec">github.com/deepseek-ai/DeepSpec</a>，commit <code>005e03b</code>（2026-10-08 抓取），MIT License</li>
+  <li>官方 checkpoint：HuggingFace <a href="https://huggingface.co/deepseek-ai/dspark_qwen3_4b_block7">deepseek-ai/dspark_qwen3_4b_block7</a>（另有 8B/14B/Gemma4-12B 与 Eagle3、DFlash 配套权重）</li>
+  <li>Y. Leviathan, M. Kalman, Y. Matias. <i>Fast Inference from Transformers via Speculative Decoding</i>. ICML 2023（拒绝采样与接受率 \(1-\tfrac12\|p^d-p^t\|_1\) 的出处）</li>
+  <li>C. Chen et al. <i>Accelerating Large Language Model Decoding with Speculative Sampling</i>. arXiv:2302.01318, 2023</li>
+  <li>T. Cai et al. <i>Medusa: Simple LLM Inference Acceleration Framework with Multiple Decoding Heads</i>. ICML 2024</li>
+  <li>J. Chen, Y. Liang, Z. Liu. <i>DFlash: Block Diffusion for Flash Speculative Decoding</i>. arXiv:2602.06036, 2026（DSpark 的并行基座）</li>
+  <li>Y. Li et al. <i>EAGLE-3</i>（Eagle3）, arXiv:2503.01840；DeepSeek-AI, <i>DeepSeek-V3 Technical Report</i>（MTP-1 基线）, arXiv:2412.19437</li>
+  <li>J. Gu et al. <i>Non-Autoregressive Transformer</i>. NeurIPS 2018（多模态碰撞概念的源头）；Z. Sun et al. <i>CRF-NAT</i>, NeurIPS 2019</li>
+</ol>
+
+<footer>生成于 2026-10-08 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

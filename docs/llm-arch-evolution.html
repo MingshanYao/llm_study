@@ -138,6 +138,7 @@ window.MathJax = {
       <li><b>Hybrid SSM 收敛</b>：Nemotron 3 Nano / Qwen3.5 / Mamba-3 殊途同归到"SSM + 稀疏 MoE"，印证纯 Linear 不取代 Hybrid、但 Linear 占比持续上升。</li>
       <li><b>低精度</b>：战线从"推理 FP8"推进到"<b>训练 FP4</b>"（NVFP4 预训练 12B/10T token 对标 FP8）；FP8 KV cache 成为长上下文<b>默认起点</b>（decode 延迟斜率降至 54%）。</li>
       <li><b>Agent 负载</b>：TraceLab 实测 prefix 命中 95.7%，但<b>历史重读占 ~60% 成本</b>——优化重点从"压字节"转向"让重读更便宜"（Mooncake SSD offload 把命中率从 36% 拉到 84%）。</li>
+      <li><b>投机解码</b>：DeepSeek-V4 生产环境用 <b>DSpark</b>（半自回归 drafter + 置信度调度验证）替换 MTP-1——同等吞吐下单用户生成速度 +57%~85%，验证预算随负载在 2↔6 token/请求间自适应，"多算的 FLOPs"第一次成为被显式调度的资源（§9.5）。</li>
       <li><b>硬件</b>：进入 <b>HBM4 时代</b>（Rubin 22 TB/s、MI455X 432 GB/23.3 TB/s、TPU v7 Ironwood 9216-chip pod）；NVIDIA <b>Rubin CPX 专用 decode 卡被取消</b>，说明"异构专用化"有上限。</li>
       <li><b>标配变化</b>：1M 上下文 + 稀疏 MoE 已从"卖点"变成旗舰模型的"入场券"（GPT-5.4/5.5、Gemini 3.1、Claude 4.6、Kimi K2.6、DeepSeek-V4 同窗口对齐）。</li>
     </ul>
@@ -829,7 +830,7 @@ FFN 侧：      512 专家 × 3.15M，激活 10+1
   <li>只压 Attention 不压 FFN → KV Cache 小了，但权重带宽成为新瓶颈（Decode 时 MoE 权重读取 656 GB/step 远超 KV）。</li>
   <li>只压 FFN 不压 Attention → 长上下文下 KV Cache 直接 OOM，batch 上不去，MoE 的摊薄效应失效。</li>
 </ul>
-<p><b>MTP 是一个特别值得注意的耦合点</b>：它与 §2.3 的 MLA、§9.4 的 CSA/HCA 同属"用算力换带宽"这一贯穿全报告的母题——在 memory bound 的 decode 场景下，多付出的 FLOPs 近乎免费，省下的 bytes 才值钱。</p>
+<p><b>MTP 是一个特别值得注意的耦合点</b>：它与 §2.3 的 MLA、§9.4 的 CSA/HCA 同属"用算力换带宽"这一贯穿全报告的母题——在 memory bound 的 decode 场景下，多付出的 FLOPs 近乎免费，省下的 bytes 才值钱。2026 年的 DSpark（§9.5）把这条哲学又推进一层：不止"多算"，还按引擎实时负载决定"多算多少"——验证预算本身成为调度对象。</p>
 
 <!-- ================================================================ -->
 <h2 id="sec4">4. 定量账本</h2>
@@ -1476,6 +1477,84 @@ NVMe (~10 GB/s,  PB 级)       ← 冷 KV、长期记忆
 </ul>
 <blockquote><p>⚠️ 修正说明：本节早期版本曾误写为"ridge point 下降、用算力换带宽红利收窄"，方向恰好相反。复算脚本见附录 C。</p></blockquote>
 
+<h3>9.5 投机解码的生产化拐点：DSpark 把"验证预算"变成调度对象</h3>
+<p>§3.7 把 MTP 列为"用算力换带宽"的耦合点——decode memory bound 下，多算几个 token 的 FLOPs 近乎免费。2026 年这条线走到系统化阶段：DSpark 🟢（DeepSeek-AI + 北京大学，arXiv:2607.05147，2026-07）回答了一个此前没有系统答案的问题——<b>"多算多少"不该是写死的超参，而应是随负载实时调度的资源</b>。它已在 DeepSeek-V4 生产环境替换 MTP-1 基线（论文称替换发生于 V4-preview 发布两周后）。</p>
+
+<h4>背景：为什么生产环境长期只敢开 MTP-1</h4>
+<p>静态多 token drafter（MTP-3/5）在离线 benchmark 上好看，但高并发下<b>总吞吐反而下降</b>：轻负载时，被拒 token 的验证 FLOPs 几乎免费（§9.4 的 ridge point 逻辑）；重负载时，每个低置信 token 都占用 target 模型的批容量——那本可服务其他活跃请求。于是 V3 以来生产一直只开单 token 的 MTP-1。DSpark 用两个组件解开这个锁：</p>
+<ul>
+  <li><b>半自回归 drafter（draft 更快 + 更好）</b>：并行主干（DFlash 式：共享并冻结 target 的 embedding / LM head，注入 target 层特征 KV，一次前向出全块，\(T_{\text{draft}}\) 与块长无关）+ 轻量串行头（Markov / RNN 转移偏置，逐位条件于已采样前缀）。并行 drafter 的"后缀接受率衰减"被抑制，离线每轮接受长度 τ 相对 Eagle3 / DFlash 提升 <b>16%–31%</b>。</li>
+  <li><b>置信度调度验证（verify 更聪明）</b>：置信头为每个草案位置输出"前缀存活概率" \(c_k\)；硬件感知前缀调度器结合引擎吞吐画像 \(\mathrm{SPS}(B)\)（steps per second，引擎初始化时画像一次存为成本表），最大化期望系统吞吐 \(\Theta=\tau\cdot\mathrm{SPS}(B)\)，只为期望收益为正的 token 分配 target 验证预算。调度满足无损性要求的非预期性（贪心 + early-stopping；生产中异步化为"两步前置信近似截断 + 最新置信分严格排序"的动态 top-K）。</li>
+</ul>
+
+<h4>离线效果：接受长度 τ（同一框架、同一数据重训，Qwen3-4B，τ 含 bonus token，九基准按域平均）</h4>
+<table>
+  <tr><th>域</th><th>Eagle3（自回归）</th><th>DFlash（并行）</th><th><b>DSpark（半自回归）</b></th></tr>
+  <tr><td>Math</td><td>4.56</td><td>4.80</td><td><b>5.57</b></td></tr>
+  <tr><td>Code</td><td>3.87</td><td>4.44</td><td><b>5.12</b></td></tr>
+  <tr><td>Chat</td><td>2.40</td><td>2.95</td><td><b>3.49</b></td></tr>
+</table>
+<p>macro 平均对 Eagle3 提升 30.9% / 26.7% / 30.0%（4B / 8B / 14B），对 DFlash 提升 16.3% / 18.4% / 18.3%；Gemma4-12B 上同样全面领先。块长从 4 扫到 16，对 DFlash 的领先持续扩大（γ=7 时 +16%/15%/18%，γ=15 时 +30%/26%/22%）——<b>串行头注入块内依赖的收益随块长增长而放大</b>。</p>
+
+<h4>生产落地：DeepSeek-V4 线上（DSpark-5）</h4>
+<table>
+  <tr><th>维度</th><th>配置 / 做法</th></tr>
+  <tr><td>部署形态</td><td>γ=5（每轮最多前进 6 token 含 bonus）、Markov 头；并行主干为 <b>3 个带 mHC 的 MoE 层 + 128 滑窗注意力</b>——与 §9.1 的 V4 主干技术栈同源</td></tr>
+  <tr><td>调度器（异步化）</td><td>候选仍按<b>最新</b>累计置信分严格排序，截断长度（批容量上限 K）用<b>两步前</b>的置信头预测近似——本质是动态 top-K；兼容 Zero-Overhead Scheduling 与 CUDA graph，不阻塞 GPU 流水线</td></tr>
+  <tr><td>无损性</td><td>在"两步前历史"上做不设 break 的全局搜索（穿越锯齿状 SPS 阶梯找最大吞吐），因截断决策与当前 token 的实现天然隔离（因果屏障），严格保持 target 分布（标准拒绝采样）</td></tr>
+  <tr><td>kernel 改造</td><td>各请求被调度的前缀<b>长度不一</b>：所有 token 拍平为独立元素，块内依赖经稀疏注意力的 marker tensor 传递；V4 上仅需改造 index-attention 与 compress 两个 kernel——§9.1 的稀疏注意力栈直接受益</td></tr>
+  <tr><td>开源栈 🟡</td><td><b>DeepSpec</b>（MIT，训练 + 评测全栈）：含 Eagle3 / DFlash / DSpark 三种 drafter 与论文 Table 1 全部 checkpoint（HuggingFace <code>deepseek-ai/dspark_*</code>）；<b>完整硬件感知调度器在内部 HAI-LLM 引擎中，未开源</b>——开源侧只有静态阈值诊断版与置信头校准工具（ECE / AUROC）</td></tr>
+</table>
+
+<p>线上流量实测（vs MTP-1，遥测散点 + 拟合前沿）：</p>
+<table>
+  <tr><th>引擎</th><th>SLA 锚点</th><th>总吞吐</th><th>同等吞吐下单用户速度</th></tr>
+  <tr><td rowspan="2">V4-Flash (preview)</td><td>80 tok/s/user</td><td><b>+51%</b></td><td rowspan="2"><b>+60% ~ +85%</b></td></tr>
+  <tr><td>120 tok/s/user</td><td>名义 +661% *</td></tr>
+  <tr><td rowspan="2">V4-Pro (preview)</td><td>35 tok/s/user</td><td><b>+52%</b></td><td rowspan="2"><b>+57% ~ +78%</b></td></tr>
+  <tr><td>50 tok/s/user</td><td>名义 +406% *</td></tr>
+</table>
+<p style="font-size:0.9em;color:var(--muted)">* 严格 SLA 下 MTP-1 已逼近运行边界、只能维持极小并发，倍数主要证明"可行交互性前沿被外推"；论文明确提示不作代表性倍数解读。</p>
+
+<p><b>调度行为（图 7）</b>：验证预算随负载自适应——中低并发（&lt;200 / 150 请求）下从 MTP-1 的静态 2 token 放宽到约 <b>4–6 token/请求</b>；并发升高、算力饱和后平滑收缩，把批容量让给关键请求。这是 §5"批容量是稀缺资源"判断的运行时体现。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <text x="440" y="22" font-size="12" fill="#1a1f2e" text-anchor="middle" font-weight="bold">每请求验证预算 vs 系统并发（示意）</text>
+  <line x1="90" y1="40" x2="90" y2="250" stroke="#c9d0da"/>
+  <line x1="90" y1="250" x2="830" y2="250" stroke="#c9d0da"/>
+  <line x1="90" y1="197.5" x2="830" y2="197.5" stroke="#eef1f6"/>
+  <line x1="90" y1="145" x2="830" y2="145" stroke="#eef1f6"/>
+  <line x1="90" y1="92.5" x2="830" y2="92.5" stroke="#eef1f6"/>
+  <text x="82" y="254" font-size="11" fill="#5a6272" text-anchor="end">0</text>
+  <text x="82" y="201" font-size="11" fill="#5a6272" text-anchor="end">2</text>
+  <text x="82" y="149" font-size="11" fill="#5a6272" text-anchor="end">4</text>
+  <text x="82" y="96" font-size="11" fill="#5a6272" text-anchor="end">6</text>
+  <text x="82" y="44" font-size="11" fill="#5a6272" text-anchor="end">8</text>
+  <text x="90" y="266" font-size="11" fill="#5a6272" text-anchor="middle">0</text>
+  <text x="238" y="266" font-size="11" fill="#5a6272" text-anchor="middle">100</text>
+  <text x="386" y="266" font-size="11" fill="#5a6272" text-anchor="middle">200</text>
+  <text x="534" y="266" font-size="11" fill="#5a6272" text-anchor="middle">300</text>
+  <text x="682" y="266" font-size="11" fill="#5a6272" text-anchor="middle">400</text>
+  <text x="830" y="266" font-size="11" fill="#5a6272" text-anchor="middle">500</text>
+  <text x="460" y="286" font-size="11" fill="#5a6272" text-anchor="middle">并发请求数（示意）</text>
+  <line x1="90" y1="197.5" x2="830" y2="197.5" stroke="#9aa3b2" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="640" y="220" font-size="11" fill="#5a6272">MTP-1：静态 2 token</text>
+  <polyline points="90,92.5 386,92.5 534,160 682,192 830,197.5" fill="none" stroke="#2456c4" stroke-width="2.5"/>
+  <text x="100" y="75" font-size="11" fill="#2456c4">轻负载平台 ~4–6 token/请求（V4-Flash &lt;200 请求、V4-Pro &lt;150）</text>
+  <text x="470" y="118" font-size="11" fill="#2456c4">算力饱和 → 预算收缩，保住批容量</text>
+</svg>
+</div>
+<p class="cap"><b>图 7</b> · 验证预算随并发自适应收缩（据论文 Figure 8 的定性形态重绘）：轻负载平台约 4–6 token/请求，饱和后回落；MTP-1 为静态 2 token。</p>
+
+<h4>对报告主线的三个呼应</h4>
+<ol>
+  <li><b>\(\Theta=\tau\cdot\mathrm{SPS}(B)\) 是 Roofline 的服务层版本</b>：§1.3 的 Roofline 回答"该优化什么"；Θ 把 §9.4 的容量曲线变成<b>运行时调度对象</b>——同一份"用算力换带宽"哲学，从结构层（MLA / MTP）延伸到了调度层。</li>
+  <li><b>decode 批容量成为一等稀缺资源</b>：§5 说 Agent 时代成本大头是 KV 的存储与搬运；DSpark 补上另一半——<b>饱和区的验证 FLOPs 同样要精打细算</b>。投机解码从"单请求加速技巧"升级为"系统吞吐分配问题"。</li>
+  <li><b>硬件红利放大器</b>：§9.4 判断 ridge point 持续上升 → 多验证一个 token 的边际 FLOPs 越来越便宜 → 投机解码的收益空间在 HBM4 时代<b>继续扩大</b>；反过来，只有配上 DSpark 式调度，这份红利才敢在高并发下兑现。</li>
+</ol>
+<blockquote><p>⚠️ 边界与局限：调度器只能省验证侧的浪费；draft 侧为生成初始 γ-token 块的固定开销对低接受率请求不可回收（论文展望：难度感知的 draft 侧早退）。开源栈不含完整硬件感知调度器，线上数字来自论文官方遥测，无法独立复现。</p></blockquote>
+
 <!-- ================================================================ -->
 <h2 id="sec10">10. 结论：短板迁移的下一站</h2>
 <p>把 §1–§9 收束成一条主线，并回答"下一个短板是什么"。</p>
@@ -1589,6 +1668,7 @@ NVMe (~10 GB/s,  PB 级)       ← 冷 KV、长期记忆
   <tr><td>EP</td><td>Expert Parallelism</td><td>专家跨卡切分的并行方式</td></tr>
   <tr><td>EPLB</td><td>EP Load Balancing</td><td>动态重排/复制热门专家以均衡负载</td></tr>
   <tr><td>MTP</td><td>Multi-Token Prediction</td><td>单次前向预测多个 token，兼作投机解码</td></tr>
+  <tr><td>DSpark</td><td>Confidence-Scheduled Speculative Decoding</td><td>半自回归 drafter（并行主干+串行头）+ 置信度调度验证；V4 线上替换 MTP-1（§9.5）</td></tr>
   <tr><td>AI</td><td>Arithmetic Intensity</td><td>FLOPs / Bytes，Roofline 的横轴</td></tr>
   <tr><td>Ridge Point</td><td>—</td><td>峰值算力 ÷ 峰值带宽，memory/compute bound 的分界</td></tr>
   <tr><td>UE8M0</td><td>—</td><td>8 位指数 0 位尾数的 scale 格式，即"2 的幂缩放"</td></tr>
@@ -1647,6 +1727,7 @@ NVMe (~10 GB/s,  PB 级)       ← 冷 KV、长期记忆
   <li>AMD. <i>Instinct MI400 Series / Helios</i>. AAI 2026.（MI455X：432 GB HBM4、23.3 TB/s、40 PFLOPS FP4；Helios 72 卡 = 31 TB / 2.9 FP4 EFLOPS）</li>
   <li>Google. <i>Ironwood: The First TPU for the Age of Inference</i> + SemiAnalysis <i>TPUv7</i>. 2026.（192 GB HBM3e、7.37 TB/s、4.6 PFLOPS FP8、9216-chip pod = 42.5 EFLOPS）</li>
   <li>Sebastian Raschka. <i>Recent Developments in LLM Architectures: KV Sharing, mHC, and …</i>. 2026.（mHC 与 hybrid SSM+MoE 收敛的综述视角）</li>
+  <li>X. Cheng, X. Yu, C. Shao 等（北京大学 &amp; DeepSeek-AI）. <i>DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation</i>. arXiv:2607.05147.（半自回归 drafter + 置信头 + 硬件感知前缀调度器；DeepSeek-V4 线上替换 MTP-1：同等吞吐单用户 +57%~85%；开源栈 DeepSpec 含 Eagle3/DFlash/DSpark checkpoint，调度器未开源）</li>
 </ul>
 
 <h4>本报告的一阶推导</h4>

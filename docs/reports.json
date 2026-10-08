@@ -222,5 +222,13 @@
     "paper": "mHC: Manifold-Constrained Hyper-Connections (paper/mhc.pdf)",
     "arxiv": "https://arxiv.org/abs/2512.24880",
     "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
+  },
+  {
+    "slug": "dspark-speculative-decoding",
+    "title": "DSpark：置信度调度的半自回归投机解码（DeepSeek 生产级 spec decoding）",
+    "date": "2026-10-08",
+    "paper": "DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation（本地 paper/dspark.pdf）",
+    "arxiv": "https://arxiv.org/abs/2607.05147",
+    "repo": "https://github.com/deepseek-ai/DeepSpec"
   }
 ]
