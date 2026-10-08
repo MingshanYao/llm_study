@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>逐算子看 DeepSeek-V4-Pro 的算术强度：prefill 与 decode 的 roofline 账本</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.8em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.38em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.1em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.92em; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .ok { color: #2f9e63; font-weight: 600; }
+  .bad { color: #b0631e; font-weight: 600; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.5;
+    font-size: 0.82em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>逐算子看 DeepSeek-V4-Pro 的算术强度：prefill 与 decode 的 roofline 账本</h1>
+
+<div class="meta">
+  <b>分析对象</b>：DeepSeek-V4-Pro（arXiv:2606.19348 §4.2.1 p.24–25，与官方 <code>config.json</code> 逐项核对，commit <code>b5968e9</code>）<br>
+  <b>复算脚本</b>：<code>scripts/ridge_point_v4pro.py</code>（逐算子推导见附录 A，脚本全文见附录 B，Python 3 标准库即可运行）<br>
+  <b>关联报告</b>：<a href="llm-arch-evolution.html">LLM 架构演进技术报告</a>（§4 定量账本、§6 训推硬件分野、§9 专题）、<a href="deepseek-v4-attention.html">V4 注意力</a>、<a href="deepseek-v4-kvcache.html">V4 KV cache</a>、<a href="dspark-speculative-decoding.html">DSpark</a><br>
+  <b>生成日期</b>：2026-10-08
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：把 V4-Pro 拆成 6 类算子核、分别算 \( \mathrm{AI}=\text{FLOPs}/\text{Bytes} \)，对照硬件 ridge point：在 H800（FP8 ridge ≈ 591）上，<b>decode 全线带宽受限</b>（AI 4.7~455），<b>prefill 全线计算受限</b>（AI 849~58254）。decode 每步搬运的 1.44 TB 字节里 <b>97.4% 是路由专家权重流</b>，曾被当作头号敌人的 KV cache 只占 0.6%。</p>
+  <p><b>三个推论</b>：① DSpark 把每步有效 token 从 150 抬到 750，本质是把 decode 的 GEMM 类核 AI 抬过 ridge——投影/共享专家/LM head 三个核翻转成计算受限（251→755、279→1093、287→1229），但注意力核 AI 与 batch 无关、路由专家要 21458 token/步才翻转，所以「验证预算调度」只能部分治愈带宽病；② 硬件 ridge 点右移（591→1125→2273）比算子 AI 的自然演化快——在 Rubin FP4 上 decode 陷得更深，连 prefill 的 MoE（849）与投影（1485）也够不着 ridge；③ 序列维压缩（CSA）改的是 bytes 不是 AI——它把 KV 踢出带宽主舞台，但带宽戏的主角换成了专家权重。</p>
+</div>
+
+<h2 id="sec1">一、口径：AI、ridge point 与硬件档位</h2>
+
+<p>Roofline 模型只问一件事：一个核每从 HBM 搬 1 字节，能配套做多少次浮点运算。定义<b>算术强度</b>：</p>
+
+<div class="fig formula">\[
+\mathrm{AI}=\frac{\text{FLOPs}}{\text{HBM Bytes}},\qquad
+\text{ridge point}=\frac{\text{峰值算力（FLOP/s）}}{\text{峰值带宽（Byte/s）}}
+\tag{式 1}\]</div>
+
+<p class="cap">AI 高于 ridge point → 计算受限（算力打满、带宽富余）；低于 → 带宽受限（带宽打满、算力空转）。ridge point 是二者的分界，只由硬件决定。</p>
+
+<p>四档参照硬件（公开规格的稠密峰值，不含稀疏加速）：</p>
+
+<table>
+  <tr><th>硬件</th><th>带宽</th><th>峰值算力</th><th>ridge point（FLOP/Byte）</th><th>定位</th></tr>
+  <tr><td>H800 SXM</td><td class="num">3.35 TB/s</td><td class="num">BF16 989 T / FP8 1979 T</td><td class="num">BF16 295 / FP8 <b>591</b></td><td>DeepSeek 现役主力（V3 系公开口径）</td></tr>
+  <tr><td>H20</td><td class="num">4.0 TB/s</td><td class="num">BF16 148 T / FP8 296 T</td><td class="num">BF16 37 / FP8 74</td><td>带宽富余、算力阉割的特化卡</td></tr>
+  <tr><td>B200</td><td class="num">8.0 TB/s</td><td class="num">BF16 2.25 P / FP8 4.5 P / FP4 9 P</td><td class="num">BF16 281 / FP8 563 / FP4 <b>1125</b></td><td>当前世代旗舰</td></tr>
+  <tr><td>Vera Rubin</td><td class="num">22 TB/s</td><td class="num">NVFP4 50 P（FP8 未公布）</td><td class="num">FP4 <b>2273</b></td><td>下一世代（2027 装机口径）</td></tr>
+</table>
+<p class="cap"><b>表 1</b>｜四档硬件的 ridge point。关键观察：从 H800 到 Rubin，带宽涨 6.6×，但 FP4 峰值算力涨 25×——<b>ridge point 右移 3.8×</b>。硬件越新，「够得着计算受限」所需的 AI 门槛越高。</p>
+
+<p>精度口径（全文统一，敏感处单独注明）：</p>
+<ul>
+  <li><b>权重 FP8</b>（1 B/参数）、<b>激活 BF16</b>（2 B/元素）——沿用 V3.2 以来的 UE8M0/FP8 推理路线；GEMM 与注意力 FLOPs 都按 FP8 峰值口径判定。</li>
+  <li><b>KV 条目</b>：主 entry 576 B（448 维 FP8 + 64 维 RoPE BF16），索引 entry 128 B（全 FP8，官方未明示精度，属推断口径）。</li>
+  <li>一阶账本：不计 softmax/top-k/路由/通信开销与 kernel 实际效率（MFU）。AI 是<b>结构上限口径</b>——实际系统只会更带宽受限。</li>
+</ul>
+
+<h2 id="sec2">二、V4-Pro 的算子清单：参数量与每 token FLOPs</h2>
+
+<p>V4-Pro 单层 = 注意力子层（含压缩器与索引器投影）+ DeepSeekMoE（1 共享 + 384 路由，top-6，专家中间维 3072），61 层 + 1 个 MTP 模块。逐算子参数与计算量：</p>
+
+<table>
+  <tr><th>算子</th><th>参数/层</th><th>每 token FLOPs/层</th><th>说明</th></tr>
+  <tr><td>投影 GEMM 组</td><td class="num">326.7 M</td><td class="num">653.4 M</td><td>wq_a 7168→1536、wq_b 1536→65536、压缩器 4×(7168→512)、wo_a 16 组×(4096→1024)（<b>分组块对角，非稠密</b>）、wo_b 16384→7168、索引器投影、router</td></tr>
+  <tr><td>共享专家</td><td class="num">66.1 M</td><td class="num">132.1 M</td><td>SwiGLU 三投影 3×7168×3072，每 token 必经</td></tr>
+  <tr><td>路由专家 ×384</td><td class="num">25.37 B</td><td class="num">792.7 M</td><td>单专家 66.06 M；每 token 激活 6 个 = 6×132.1 M</td></tr>
+  <tr><td>注意力核（CSA 层）</td><td class="num">—</td><td class="num">436.2 M @ s=32K</td><td>indexer 扫 s/4 条压缩条目（134.2 M）+ 主注意力读 top-k=1024 条 + 滑窗 128 条（302.0 M）</td></tr>
+  <tr><td>注意力核（HCA 层）</td><td class="num">—</td><td class="num">100.7 M @ s=32K</td><td>稠密读 s/128=256 条 + 滑窗 128 条，无 indexer</td></tr>
+  <tr><td>LM head</td><td class="num">926.9 M</td><td class="num">1.85 G</td><td>7168→129280，每生成步一次性</td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜V4-Pro 算子清单（config.json 口径）。注意力核本身无权重参数，其「bytes」是 KV 条目读取——这正是它与 GEMM 类核的本质区别。</p>
+
+<p><b>参数量对账</b>：61 × (326.7M + 66.1M + 384×66.06M) + 926.9M ≈ <b>1.572 T</b>（论文口径 1.6 T，差额 ≈ MTP 模块一层 🟢）；每 token 激活 61 × (326.7M + 66.1M + 6×66.06M) + 926.9M ≈ <b>49.06 B</b>（论文口径 49 B 🟢）。每 token 前向 FLOPs ≈ 2×激活参数 + 注意力增量 ≈ 110 GFLOPs，与账本自洽。</p>
+
+<h2 id="sec3">三、Prefill：全线计算受限，且离 ridge 很远</h2>
+
+<p>典型场景：单请求输入 L=32,768 token（agent 编码负载的中位输入是 142K，只会更饱和）。prefill 的 GEMM 一次看到全部 32K 个 token，权重只读一次、摊到每个 token 头上几乎为零：</p>
+
+<div class="fig formula">\[
+\mathrm{AI}_{\text{GEMM}}(B)=\frac{2B\,d_{\text{in}}d_{\text{out}}}{d_{\text{in}}d_{\text{out}}\,w_b+B(d_{\text{in}}+d_{\text{out}})\,a_b}
+\ \xrightarrow{\ B\to\infty\ }\ \frac{2}{a_b\!\left(\frac{1}{d_{\text{in}}}+\frac{1}{d_{\text{out}}}\right)}
+\tag{式 2}\]</div>
+
+<p class="cap">B 为该 GEMM 一次处理的 token 数，\(w_b\)/\(a_b\) 为权重/激活字节数。注意渐近上限只由维度和激活精度决定——与权重量化无关，因为大 batch 下<b>激活流量反超权重流量</b>。</p>
+
+<table>
+  <tr><th>算子核</th><th>AI @ L=32K</th><th>H800 FP8 (591)</th><th>B200 FP8 (563)</th><th>Rubin FP4 (2273)</th></tr>
+  <tr><td>投影 GEMM 组</td><td class="num">1,485</td><td class="ok">计算受限</td><td class="ok">计算受限</td><td class="bad">带宽受限</td></tr>
+  <tr><td>CSA 注意力（indexer+top-k+滑窗）</td><td class="num">16,384</td><td class="ok">计算受限</td><td class="ok">计算受限</td><td class="ok">计算受限</td></tr>
+  <tr><td>HCA 注意力（稠密压缩+滑窗）</td><td class="num">58,254</td><td class="ok">计算受限</td><td class="ok">计算受限</td><td class="ok">计算受限</td></tr>
+  <tr><td>路由专家 GEMM（512 token/专家）</td><td class="num">849</td><td class="ok">计算受限</td><td class="ok">计算受限</td><td class="bad">带宽受限</td></tr>
+  <tr><td>共享专家</td><td class="num">3,798</td><td class="ok">计算受限</td><td class="ok">计算受限</td><td class="ok">计算受限</td></tr>
+  <tr><td>LM head</td><td class="num">6,154</td><td class="ok">计算受限</td><td class="ok">计算受限</td><td class="ok">计算受限</td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜prefill 各核的算术强度与判定（注意力按 flash 分块、KV 每 128-query tile 读一次摊销）。L=142K（agent 中位）时 MoE 每 expert 摊 2224 token、AI 升至 ≈4400，结论不变。</p>
+
+<p>三个值得停一下的细节：</p>
+<ul>
+  <li><b>MoE 是 prefill 里最「瘦」的核</b>：每专家摊 512 个 token，理想公式 AI ≈ 2×512 = 1024（FP8 权重），计入激活流量后 849（表 3）——仍高于 H800/B200 的 ridge，但在 Rubin FP4 的 2273 面前不够看。「prefill = 计算受限」的旧等式在 FP4 世代开始松动——除非激活也走 FP4（NVFP4 训练栈的 RHT/2D 量化正是为此铺路）。</li>
+  <li><b>投影 GEMM 的渐近上限只有 ≈1520</b>（式 2，d=7168、BF16 激活），L=32K 时已到 1485、接近封顶。它的 prefill bytes 由激活主导（14.1 GB 激活 vs 0.33 GB 权重）——<b>换 FP4 权重几乎不帮忙</b>，降激活精度才有效。</li>
+  <li><b>indexer 不改变 prefill 的计算受限属性</b>：打分虽是 O(L²) FLOPs，但 flash 分块下索引条目也被 tile 摊销，AI 仍达 1.6 万量级。</li>
+</ul>
+
+<h2 id="sec4">四、Decode：全线带宽受限，路由专家是重灾区</h2>
+
+<p>典型场景：B=150 路并发请求（DSpark 论文 §5.4 的 V4-Pro 生产量级），平均上下文 s=32K。decode 的每一步只有 B×τ 个 token（τ = 每请求每步验证的 token 数），权重与 KV 都要<b>整份重新流过</b>。MoE 按「路由到的专家权重整份读一次」计，均匀路由（EPLB 均衡后）下每专家摊 b_e = 6B·τ/384 个 token：</p>
+
+<div class="fig formula">\[
+\mathrm{AI}_{\text{expert}}\approx\frac{2\,b_e}{w_b},\qquad
+\mathrm{AI}_{\text{attn}}=\frac{4\,n_h\,c}{\text{每条目字节}}\ (\text{与 }B\text{、}\tau\text{ 无关})
+\tag{式 3}\]</div>
+
+<table>
+  <tr><th>算子核</th><th>AI @ MTP-1<br>（τ=1，B·τ=150）</th><th>AI @ DSpark<br>（τ=5，B·τ=750）</th><th>H800 FP8 (591)</th><th>B200 FP8 (563)</th><th>Rubin FP4 (2273)<br>@DSpark</th></tr>
+  <tr><td>投影 GEMM 组</td><td class="num">251</td><td class="num">755</td><td><span class="bad">带宽</span> → <span class="ok">计算</span></td><td>同左</td><td class="bad">带宽</td></tr>
+  <tr><td>CSA 注意力核</td><td class="num">255</td><td class="num">255（不变）</td><td class="bad">带宽</td><td class="bad">带宽</td><td class="bad">带宽</td></tr>
+  <tr><td>HCA 注意力核</td><td class="num">455</td><td class="num">455（不变）</td><td class="bad">带宽</td><td class="bad">带宽</td><td class="bad">带宽</td></tr>
+  <tr><td>路由专家 GEMM（b_e = 2.3 → 11.7）</td><td class="num">4.7</td><td class="num">23.3</td><td class="bad">带宽</td><td class="bad">带宽</td><td class="bad">带宽</td></tr>
+  <tr><td>共享专家</td><td class="num">279</td><td class="num">1,093</td><td><span class="bad">带宽</span> → <span class="ok">计算</span></td><td>同左</td><td class="bad">带宽</td></tr>
+  <tr><td>LM head</td><td class="num">287</td><td class="num">1,229</td><td><span class="bad">带宽</span> → <span class="ok">计算</span></td><td>同左</td><td class="bad">带宽</td></tr>
+</table>
+<p class="cap"><b>表 4</b>｜decode 各核的算术强度与判定。注意力核的 bytes 随序列长度涨、FLOPs 同步涨（读多少条 entry 就算多少），所以 AI 只由「每条目字节数 vs 头维」决定：HCA 层 = 4×128×512/576 ≈ 455，CSA 层再混入 indexer（打分部分 AI = 2×64×128/128 = 128）后被拉低到 ≈255。<b>CSA 把 KV 压小 10×，但不改变这个比值</b>。</p>
+
+<div class="infer">若注意力改按 BF16 峰值口径判定（ridge 295），HCA 核（455）会翻转成「计算受限」——注意力核的 bound 判定对精度口径敏感，是六类核里唯一骑在 ridge 附近的。V4 官方 TileLang 内核走量化路径，主口径按 FP8。</div>
+
+<p><b>每步的带宽都花在哪了</b>（B=150、s=32K、MTP-1，EP 集群聚合口径）：</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12">
+  <text x="70" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">decode 每步 HBM 字节构成（合计 1.44 TB/步）</text>
+  <rect x="70" y="52" width="720.8" height="44" fill="#2456c4"/>
+  <rect x="790.8" y="52" width="12.6" height="44" fill="#8fb0e0"/>
+  <rect x="803.4" y="52" width="4.4" height="44" fill="#2f9e63"/>
+  <rect x="807.8" y="52" width="2.2" height="44" fill="#e8862a"/>
+  <text x="430" y="79" text-anchor="middle" fill="#ffffff" font-weight="bold">路由专家权重流 97.4%（1.40 TB）</text>
+  <rect x="70" y="130" width="14" height="12" fill="#2456c4"/>
+  <text x="90" y="140" fill="#2a3040">路由专家权重 97.4%</text>
+  <rect x="260" y="130" width="14" height="12" fill="#8fb0e0"/>
+  <text x="280" y="140" fill="#2a3040">其余权重 1.8%</text>
+  <rect x="420" y="130" width="14" height="12" fill="#2f9e63"/>
+  <text x="440" y="140" fill="#2a3040">KV cache 0.6%</text>
+  <rect x="570" y="130" width="14" height="12" fill="#e8862a"/>
+  <text x="590" y="140" fill="#2a3040">激活 0.3%</text>
+  <text x="70" y="172" fill="#5a6272">每步 1.44 TB ÷ 150 token ≈ 9.6 GB/token；DSpark τ=5 时同样的字节摊给 5× token ≈ 2.1 GB/token，带宽效率 ×4.5</text>
+  <text x="70" y="192" fill="#5a6272">口径：均匀路由下 348/384 专家被命中，命中即整份读权重；复算脚本见附录 B</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>｜decode 的带宽去哪了。V2/V3 时代 KV cache 是 decode 带宽的主角之一；CSA 的序列维压缩（5.42 KB/token）把它压到 0.6% 的配角地位——但让出的带宽立刻被专家权重流吃掉。MoE 的「参数量按专家数扩展、计算量只按 top-k 扩展」在 decode 有另一面：<b>带宽按专家数扩展、计算量只按 top-k 扩展</b>。</p>
+
+<h3>4.1 DSpark 在 roofline 上做了什么</h3>
+
+<p>把表 4 的两列并排看，DSpark（τ=1 → 5）的作用一目了然：<b>它不改变任何核的算法，只把每步有效 token 数 ×5</b>。效果按核分三类：</p>
+<ul>
+  <li><b>翻转组</b>：投影 GEMM（251→755）、共享专家（279→1093）、LM head（287→1229）越过 H800 的 ridge 591，从带宽受限变成计算受限——「反正带宽闲着，把算力也用上」。</li>
+  <li><b>不动组</b>：两个注意力核的 AI 与 batch 无关（每请求读自己的 KV），255/455 纹丝不动。DSpark 的置信度调度不碰它们，也碰不到。</li>
+  <li><b>追不上组</b>：路由专家 4.7→23.3，离 591 还差 25×——翻转需要每步 21458 个有效 token（B·τ），在可见的部署规模内不可能。decode 的第一带宽大头注定流过。</li>
+</ul>
+
+<p>这正是「把验证预算变成调度对象」的 roofline 本质：<b>在带宽受限的 decode 里，多验证的 FLOPs 近乎免费，而摊薄权重流是纯赚</b>。DSpark 论文报告的同吞吐单用户提速 57%~85%，在账本上对应 9.6 → 2.1 GB/token 的带宽效率差（图 1）。</p>
+
+<h2 id="sec5">五、两张全景图</h2>
+
+<div class="fig">
+<svg viewBox="0 0 880 470" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12">
+  <defs>
+    <marker id="arr1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b0631e"/>
+    </marker>
+  </defs>
+  <!-- grid -->
+  <g stroke="#e3e7ee" stroke-width="1">
+    <line x1="70" y1="340.9" x2="850" y2="340.9"/>
+    <line x1="70" y1="259.1" x2="850" y2="259.1"/>
+    <line x1="70" y1="177.4" x2="850" y2="177.4"/>
+    <line x1="70" y1="95.6" x2="850" y2="95.6"/>
+    <line x1="226" y1="30" x2="226" y2="390"/>
+    <line x1="382" y1="30" x2="382" y2="390"/>
+    <line x1="538" y1="30" x2="538" y2="390"/>
+    <line x1="694" y1="30" x2="694" y2="390"/>
+  </g>
+  <rect x="70" y="30" width="780" height="360" fill="none" stroke="#c9d2e0"/>
+  <!-- axes ticks -->
+  <g fill="#5a6272" font-size="11">
+    <text x="62" y="344.9" text-anchor="end">10¹³</text>
+    <text x="62" y="263.1" text-anchor="end">10¹⁴</text>
+    <text x="62" y="181.4" text-anchor="end">10¹⁵</text>
+    <text x="62" y="99.6" text-anchor="end">10¹⁶</text>
+    <text x="70" y="408" text-anchor="middle">1</text>
+    <text x="226" y="408" text-anchor="middle">10</text>
+    <text x="382" y="408" text-anchor="middle">10²</text>
+    <text x="538" y="408" text-anchor="middle">10³</text>
+    <text x="694" y="408" text-anchor="middle">10⁴</text>
+    <text x="850" y="408" text-anchor="middle">10⁵</text>
+  </g>
+  <text x="460" y="432" text-anchor="middle" fill="#5a6272" font-size="12">算术强度 AI（FLOP/Byte，log）</text>
+  <text x="75" y="22" fill="#5a6272" font-size="12">可达算力（FLOP/s，log）——可达 = min(峰值， 带宽×AI)</text>
+  <!-- legend -->
+  <g font-size="12" fill="#1a1f2e">
+    <line x1="85" y1="54" x2="115" y2="54" stroke="#2456c4" stroke-width="2.5"/>
+    <text x="122" y="58">H800 FP8 — ridge 591</text>
+    <line x1="85" y1="76" x2="115" y2="76" stroke="#b0631e" stroke-width="2.5"/>
+    <text x="122" y="80">B200 FP4 — ridge 1125</text>
+    <line x1="85" y1="98" x2="115" y2="98" stroke="#2f9e63" stroke-width="2.5"/>
+    <text x="122" y="102">Rubin FP4 — ridge 2273</text>
+  </g>
+  <!-- rooflines -->
+  <polyline points="70,383.5 502.4,155.6 850,155.6" fill="none" stroke="#2456c4" stroke-width="2"/>
+  <polyline points="70,352.6 546,101.8 850,101.8" fill="none" stroke="#b0631e" stroke-width="2"/>
+  <polyline points="70,316.7 593.6,40.3 850,40.3" fill="none" stroke="#2f9e63" stroke-width="2"/>
+  <circle cx="502.4" cy="155.6" r="4" fill="#2456c4"/>
+  <circle cx="546" cy="101.8" r="4" fill="#b0631e"/>
+  <circle cx="593.6" cy="40.3" r="4" fill="#2f9e63"/>
+  <!-- decode points (on H800 ramp) -->
+  <circle cx="174.8" cy="326" r="5.5" fill="#2456c4"/>
+  <circle cx="444.1" cy="186.2" r="5.5" fill="#2456c4"/>
+  <circle cx="484.6" cy="164.9" r="5.5" fill="#2456c4"/>
+  <circle cx="283.6" cy="269.1" r="5.5" fill="#ffffff" stroke="#b0631e" stroke-width="2"/>
+  <line x1="174.8" y1="331" x2="192" y2="350" stroke="#2456c4" stroke-width="1"/>
+  <text x="200" y="356" fill="#2456c4" font-size="11">路由专家 4.7</text>
+  <line x1="446" y1="191" x2="465" y2="212" stroke="#2456c4" stroke-width="1"/>
+  <text x="470" y="222" fill="#2456c4" font-size="11">投影/CSA/共享/LM 250~287</text>
+  <line x1="488" y1="170" x2="520" y2="184" stroke="#2456c4" stroke-width="1"/>
+  <text x="526" y="193" fill="#2456c4" font-size="11">HCA 注意力 455</text>
+  <!-- DSpark arrows -->
+  <line x1="182" y1="372" x2="276" y2="372" stroke="#b0631e" stroke-width="2" marker-end="url(#arr1a)"/>
+  <text x="290" y="376" fill="#b0631e" font-size="11">τ=5: →23</text>
+  <line x1="450" y1="372" x2="552" y2="372" stroke="#b0631e" stroke-width="2" marker-end="url(#arr1a)"/>
+  <text x="560" y="376" fill="#b0631e" font-size="11">τ=5: →1000+（越过 ridge 591）</text>
+  <!-- prefill points (on H800 ceiling) -->
+  <rect x="521.9" y="150.6" width="10" height="10" fill="#2f9e63"/>
+  <rect x="559.8" y="150.6" width="10" height="10" fill="#2f9e63"/>
+  <rect x="722.5" y="150.6" width="10" height="10" fill="#2f9e63"/>
+  <rect x="808.4" y="150.6" width="10" height="10" fill="#2f9e63"/>
+  <text x="527" y="144" text-anchor="middle" fill="#2f9e63" font-size="11">MoE 849</text>
+  <line x1="566" y1="150" x2="572" y2="134" stroke="#2f9e63" stroke-width="1"/>
+  <text x="580" y="131" fill="#2f9e63" font-size="11">投影 1485</text>
+  <text x="727" y="144" text-anchor="middle" fill="#2f9e63" font-size="11">CSA 1.6万</text>
+  <line x1="813" y1="150" x2="818" y2="134" stroke="#2f9e63" stroke-width="1"/>
+  <text x="822" y="131" fill="#2f9e63" font-size="11">HCA 5.8万</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>｜V4-Pro 算子的 roofline 全景（可达算力按 H800 FP8 计）。蓝点 = decode（MTP-1，贴着 H800 的 ramp 爬坡，离天花板远）；绿方 = prefill（顶在天花板上）；空心橙点与橙色箭头 = DSpark τ=5 把对应核沿 AI 横轴右推。注意绿方里的 MoE（849）与投影（1485）只是压住了 H800 的天花板——在 Rubin FP4（ridge 2273，最上那条线）下它们会跌回 ramp（表 3 判定）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 440" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12">
+  <!-- ridge lines -->
+  <line x1="70" y1="301.4" x2="850" y2="301.4" stroke="#2456c4" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <line x1="70" y1="221.3" x2="850" y2="221.3" stroke="#b0631e" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <line x1="70" y1="49.1" x2="850" y2="49.1" stroke="#2f9e63" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="846" y="295" text-anchor="end" fill="#2456c4" font-size="11">H800 FP8：591</text>
+  <text x="846" y="215" text-anchor="end" fill="#b0631e" font-size="11">B200 FP4：1125</text>
+  <text x="210" y="43" fill="#2f9e63" font-size="11">Rubin FP4：2273</text>
+  <!-- vertical markers -->
+  <line x1="444.1" y1="78" x2="444.1" y2="390" stroke="#5a6272" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="518.5" y1="78" x2="518.5" y2="390" stroke="#5a6272" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="745.7" y1="78" x2="745.7" y2="390" stroke="#5a6272" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="438" y="66" text-anchor="end" fill="#5a6272" font-size="11">B·τ=150（MTP-1）</text>
+  <text x="524" y="66" fill="#5a6272" font-size="11">750（DSpark τ=5）</text>
+  <text x="745.7" y="92" text-anchor="middle" fill="#b0631e" font-size="11">路由专家翻转点 21458</text>
+  <!-- curves -->
+  <polyline points="70,390 226,389.5 382,389.5 538,385.4 694,343.2 745.7,289.4 832,30" fill="none" stroke="#b0631e" stroke-width="2"/>
+  <polyline points="70,389.7 382,361.4 456,311.7 466,301.4 518.5,226.1 538,187.4 597,89.4 626,33" fill="none" stroke="#2f9e63" stroke-width="2"/>
+  <polyline points="70,389.7 382,363.5 488.7,301.4 518.5,276.9 694,180.2 850,163.7" fill="none" stroke="#2456c4" stroke-width="2"/>
+  <polyline points="70,389.7 382,360.9 461.6,301.4 518.5,205.7 580,30" fill="none" stroke="#5a6272" stroke-width="2"/>
+  <text x="845" y="158" text-anchor="end" fill="#2456c4" font-size="11">投影</text>
+  <text x="632" y="40" fill="#2f9e63" font-size="11">共享</text>
+  <text x="574" y="40" text-anchor="end" fill="#5a6272" font-size="11">LM head</text>
+  <text x="826" y="40" text-anchor="end" fill="#b0631e" font-size="11">路由</text>
+  <!-- operating points -->
+  <circle cx="444.1" cy="389.3" r="3.5" fill="#b0631e"/>
+  <circle cx="444.1" cy="352.4" r="3.5" fill="#2456c4"/>
+  <circle cx="444.1" cy="348.2" r="3.5" fill="#2f9e63"/>
+  <circle cx="444.1" cy="347" r="3.5" fill="#5a6272"/>
+  <circle cx="518.5" cy="386.5" r="3.5" fill="#b0631e"/>
+  <circle cx="518.5" cy="276.9" r="3.5" fill="#2456c4"/>
+  <circle cx="518.5" cy="226.1" r="3.5" fill="#2f9e63"/>
+  <circle cx="518.5" cy="205.7" r="3.5" fill="#5a6272"/>
+  <!-- legend -->
+  <g font-size="12" fill="#1a1f2e">
+    <line x1="90" y1="58" x2="120" y2="58" stroke="#b0631e" stroke-width="2.5"/>
+    <text x="127" y="62">路由专家 GEMM（AI ≈ B·6/384×2）</text>
+    <line x1="90" y1="80" x2="120" y2="80" stroke="#2f9e63" stroke-width="2.5"/>
+    <text x="127" y="84">共享专家 GEMM</text>
+    <line x1="90" y1="102" x2="120" y2="102" stroke="#2456c4" stroke-width="2.5"/>
+    <text x="127" y="106">投影 GEMM 组（每层 326.7M 权重）</text>
+    <line x1="90" y1="124" x2="120" y2="124" stroke="#5a6272" stroke-width="2.5"/>
+    <text x="127" y="128">LM head（926.9M 权重）</text>
+  </g>
+  <!-- axes -->
+  <g fill="#5a6272" font-size="11">
+    <text x="62" y="394" text-anchor="end">0</text>
+    <text x="62" y="244" text-anchor="end">1000</text>
+    <text x="62" y="94" text-anchor="end">2000</text>
+    <text x="70" y="408" text-anchor="middle">1</text>
+    <text x="226" y="408" text-anchor="middle">10</text>
+    <text x="382" y="408" text-anchor="middle">10²</text>
+    <text x="538" y="408" text-anchor="middle">10³</text>
+    <text x="694" y="408" text-anchor="middle">10⁴</text>
+    <text x="850" y="408" text-anchor="middle">10⁵</text>
+  </g>
+  <text x="460" y="432" text-anchor="middle" fill="#5a6272" font-size="12">每步有效 token 数 B·τ（log）—— 翻转点 = 曲线越过虚线处</text>
+  <text x="75" y="20" fill="#5a6272" font-size="12">算术强度 AI（线性 0~2400）</text>
+</svg>
+</div>
+<p class="cap"><b>图 3</b>｜GEMM 类核的 AI 随每步有效 token 数的变化（V4-Pro，FP8 权重/BF16 激活）。圆点 = 两个生产工作点。MTP-1（150）时四个核全在 H800 虚线之下；DSpark（750）把投影/共享/LM head 推过 591，但路由专家要到 21458 才翻转——MoE 细粒度专家把单份权重切小、可并行性换来的代价是 GEMM 更难喂饱。虚线右移（B200 FP4 1125、Rubin FP4 2273）意味着翻转门槛成倍提高。</p>
+
+<h2 id="sec6">六、与主线的呼应</h2>
+
+<ul>
+  <li><b>对 §2.3（MLA → CSA/HCA）</b>：序列维压缩改变的是 decode 的<b>字节构成</b>而不是任何核的 AI——V4-Pro 把 KV 压到 V3.2 的 10%，KV 在每步带宽里的占比从主角跌到 0.6% 的配角。但带宽总账省下的部分立刻被专家权重流（97.4%）接管：注意力上省带宽、MoE 上花带宽，是同一枚硬币的两面。</li>
+  <li><b>对 §3.7 与 §9.5（MTP 耦合与 DSpark）</b>：DSpark 的置信度调度在 roofline 上的位置很清楚——它把「免费的多余 FLOPs」变成「摊薄 1.40 TB 专家权重流的分母」，翻转了三个 GEMM 类核，但追不上路由专家（差 25×）也动不了注意力核。<b>调度能优化带宽的用法，改不了带宽是瓶颈这个事实</b>。</li>
+  <li><b>对 §9.4（硬件推理专用化）</b>：ridge point 从 H800 的 591 移到 Rubin FP4 的 2273，本质是「每字节算力」的通胀——decode 各核相对更深的陷入带宽侧（连 DSpark 翻转的三个核在 Rubin 上也跌回去），而 prefill 的 MoE 与投影也开始够不着 ridge。这给「推理专用硅」两条路线同时供了弹药：带宽优先的大 HBM 池（服务 decode），与算力/带宽比适中的 prefill 专用硅。</li>
+  <li><b>对 §9.3（PD 解耦）</b>：prefill 全线计算受限、decode 全线带宽受限——两阶段不仅负载形状不同，在 roofline 上根本住在两个世界。分池部署不是工程偏好，是算术必然。</li>
+  <li><b>对 EPLB / 大 EP</b>：命中模型下 B=150 时 348/384 个专家被命中、每个只摊 2.3 个 token——负载均衡的意义不只是「不空转专家」，更是<b>减少整份白读的权重</b>。专家粒度越细（V4 的 3072 vs V3 的 2048），这个矛盾越尖锐。</li>
+</ul>
+
+<blockquote class="infer">
+本账本的边界：① 一阶口径——不含 all-to-all 通信、softmax/top-k、路由与 kernel 实际效率，实际 decode 的有效 AI 更低；② 均匀路由假设（EPLB 均衡后近似成立，热点专家更差）；③ prefill 注意力按 tile=128 摊销、causal 平均 s/8 的简化；④ 注意力核的 bound 判定依赖精度口径（FP8 vs BF16 翻转，见 §4 推断框）；⑤ H800 是 DeepSeek 公开披露过的部署档位（V3 系），V4 实际部署硬件未披露——但 ridge 点的结论对档位不敏感（B200 FP8 的 563 与 591 几乎重合）。
+</blockquote>
+
+<h2 id="appa">附录 A · 逐算子推导</h2>
+
+<p>正文各表直接给出了 AI 数值；本附录从 config.json 规格出发，把每类核的 FLOPs 与 HBM 字节一步步数出来，直到表 3/表 4 的每一个数。所有中间量与附录 B 脚本末段 <code>worked examples</code> 的输出一一对应，可运行核对。典型参数：decode 取 B=150 请求、s=32K 上下文、B·τ = 150（MTP-1）或 750（DSpark τ=5）；prefill 取单请求 L=32,768。</p>
+
+<h3>A.0 记号与通用约定</h3>
+<ul>
+  <li>\(\mathrm{AI}=\text{FLOPs}/\text{HBM Bytes}\)（式 1）。矩阵乘 \([m{\times}k]\cdot[k{\times}n]\) 记 \(2mnk\) FLOPs（乘、加各计一次）。</li>
+  <li>字节口径：权重 FP8（\(w_b{=}1\) B/参数）、激活 BF16（\(a_b{=}2\) B/元素）；KV 主条目 576 B、索引条目 128 B（§1）。</li>
+  <li>decode：每步权重与 KV 整份读一次，无跨请求复用；prefill：权重读一次摊给全部 token，KV 条目按 flash tile（128 query）摊销。</li>
+  <li>61 层同构：投影与 MoE 的 AI 按单层计即可——分子分母同乘 61，比值不变。LM head 全局仅一个；prefill 按全部 L 个 token 计（账本口径，推理实现通常只算最后位置）。</li>
+</ul>
+
+<h3>A.1 投影 GEMM 组：8 个矩阵 → 251 / 755 / 1485</h3>
+
+<p>一个权重 GEMM 处理 b 个 token：读激活 \(X\,[b{\times}d_{in}]\)、权重 \(W\,[d_{in}{\times}d_{out}]\)，写输出 \(Y\,[b{\times}d_{out}]\)：</p>
+
+<div class="fig formula">\[
+F = 2b\,d_{in}d_{out}\,,\qquad
+\text{Bytes} = \underbrace{d_{in}d_{out}\,w_b}_{\text{权重，读一次}} + \underbrace{b\,(d_{in}{+}d_{out})\,a_b}_{\text{读 }X\text{ + 写 }Y}
+\tag{A-1}\]</div>
+
+<p>V4-Pro 每层的 8 个投影矩阵逐项列表（维度来自 config.json；激活字节 = \(2(d_{in}{+}d_{out})\)）：</p>
+
+<table>
+  <tr><th>分量</th><th>\(d_{in}{\to}d_{out}\)</th><th>参数</th><th>FLOPs/token</th><th>激活 B/token</th></tr>
+  <tr><td>wq_a</td><td class="num">7168 → 1536</td><td class="num">11.01 M</td><td class="num">22.02 M</td><td class="num">17,408</td></tr>
+  <tr><td>wq_b</td><td class="num">1536 → 65,536</td><td class="num">100.66 M</td><td class="num">201.33 M</td><td class="num">134,144</td></tr>
+  <tr><td>压缩器</td><td class="num">7168 → 2,048</td><td class="num">14.68 M</td><td class="num">29.36 M</td><td class="num">18,432</td></tr>
+  <tr><td>wo_a</td><td class="num">65,536 → 16,384</td><td class="num">67.11 M</td><td class="num">134.22 M</td><td class="num">163,840</td></tr>
+  <tr><td>wo_b</td><td class="num">16,384 → 7,168</td><td class="num">117.44 M</td><td class="num">234.88 M</td><td class="num">47,104</td></tr>
+  <tr><td>idx_q_b</td><td class="num">1536 → 8,192</td><td class="num">12.58 M</td><td class="num">25.17 M</td><td class="num">19,456</td></tr>
+  <tr><td>idx_w</td><td class="num">7168 → 64</td><td class="num">0.46 M</td><td class="num">0.92 M</td><td class="num">14,464</td></tr>
+  <tr><td>router</td><td class="num">7168 → 384</td><td class="num">2.75 M</td><td class="num">5.51 M</td><td class="num">15,104</td></tr>
+  <tr><td><b>合计 / 层</b></td><td class="num">—</td><td class="num"><b>326.70 M</b></td><td class="num"><b>653.39 M</b></td><td class="num"><b>429,952</b></td></tr>
+</table>
+<p class="cap">wo_a 是 16 个独立的 4096→1024 块对角矩阵（输出分组 \(g{=}16\)），不是稠密 65536→16384——按稠密记会多算 16× FLOPs（2.15 G vs 134.2 M），decode 投影 AI 会虚高 4 倍。</p>
+
+<p>记 \(P=326.70\) M（参数/层）、\(F=653.39\) M（FLOPs/token/层）、\(T=429{,}952\) B（激活/token/层），则 \(\mathrm{AI}(b)=bF/(Pw_b+bT)\)。三个工作点：</p>
+<ul>
+  <li><b>decode MTP-1（b = B·τ = 150）</b>：F = 150×653.39M = 98.01 GFLOP；bytes = 0.327 GB 权重 + 150×429,952 = 64.5 MB 激活 → AI = 98.01G / 0.391G = <b>250.5</b> → 表 4 的 251。</li>
+  <li><b>decode DSpark（b = 750）</b>：F = 490.05 G，激活 322.5 MB → AI = 490.05G / 0.649G = <b>754.9</b> → 755，越过 H800 ridge。</li>
+  <li><b>prefill（b = 32,768）</b>：F = 21.41 TFLOP，bytes = 14.09 GB 激活 + 0.33 GB 权重 → AI = 21.41T / 14.42G = <b>1485</b>。</li>
+</ul>
+
+<p>渐近上限即式 2 的数值：\(F/T = 653.39\text{M}/429{,}952 = \mathbf{1520}\)。prefill 32K 已达封顶值的 98%——权重项只剩 2.3%，再怎么量化权重都无济于事，与 §3「激活主导」的观察互为印证。</p>
+
+<p>翻转点闭式解：令 \(\mathrm{AI}(b^*)=r\)，移项得</p>
+
+<div class="fig formula">\[
+b^*(F-rT) = rPw_b \;\;\Rightarrow\;\; b^* = \frac{r\,P\,w_b}{F-r\,T}
+\tag{A-2}\]</div>
+
+<p>有解条件是渐近值 \(F/T > r\)。H800 FP8 的精确 ridge = 1979/3.35 = <b>590.7</b>（正文取整 591）：\(b^* = 590.7{\times}326.70\text{M}\,/\,(653.39\text{M} - 590.7{\times}429{,}952) = \mathbf{483}\)，与脚本二分结果一致。Rubin FP4 的 2273 &gt; 1520，分母为负——<b>无翻转点</b>：任何 batch 下投影 GEMM 在 Rubin 上都是带宽受限（脚本输出 <code>&gt;1e7</code> 即此意）。</p>
+
+<h3>A.2 decode 注意力：455 与 255 从哪来</h3>
+
+<p>decode 每步每个请求只有 1 个 query token（MTP-1 口径；DSpark 只是把 1 个变成 τ 个并列 draft，账目相同），注意力核的任务是：读若干条 KV 条目、逐条算一遍。推导分四步——先算<b>一条</b>条目的 FLOPs，再让条目数消掉得到结构值 455，然后分别代入 HCA 与 CSA 的条目清单。</p>
+
+<p><b>第 1 步：一条 KV 条目花多少 FLOPs？</b>关键前提是 MQA/MLA 式共享——<b>全部 128 个查询头共用同一条 576 B 的条目</b>（这条条目是该 token 的共享 KV 潜向量，V4 所有层的 KV cache 都按此组织）。读一条的成本因此固定为 576 B，而计算量随头数线性增长：</p>
+<ul>
+  <li>\(QK^\top\)：每个头拿自己的 512 维 q 向量与条目中 512 维的 k 做点积 = 512 次乘 + 512 次加 = 1,024 FLOPs；128 个头各做各的（k 是同一条）→ 128×1,024 = 2·n_h·c = 131,072 FLOPs。</li>
+  <li>\(AV\)：每个头把算出的注意力权重（标量）乘到 512 维的 v 上并累加 = 又是 1,024 FLOPs；×128 头 → 再 131,072 FLOPs。</li>
+</ul>
+
+<div class="fig formula">\[
+F_{\text{entry}} = 2c\,n_h + 2c\,n_h = 4\,n_h c = 4{\times}128{\times}512 = 262{,}144\ \text{FLOPs/条目}
+\tag{A-3}\]</div>
+
+<p>indexer 打分是「减配版」：只有 \(QK^\top\) 型点积、没有 \(AV\)，且头更小（64 头 × 128 维），\(2\,n_{ih}c_i = 2{\times}64{\times}128 = 16{,}384\) FLOPs/条目。</p>
+
+<p><b>第 2 步：条目数 e 在分子分母同时出现，消掉。</b>读 e 条主条目：F = 262,144·e，bytes = 576·e，于是</p>
+
+<div class="fig formula">\[
+\mathrm{AI}_{\text{attn}} = \frac{4\,n_hc\cdot e}{576\cdot e} = \frac{262{,}144}{576} = \mathbf{455.1}
+\tag{A-4}\]</div>
+
+<p>e 消掉后 AI 与「读多少条」无关；B 个请求各自读各自的条目，F 与 bytes 同乘 B，也不影响。只要读的全是主条目，AI 恒为 455.1——拿 HCA decode 验证（它没有 indexer，每步把 s/128 条压缩条目 + 128 条滑窗条目全部读一遍）：</p>
+
+<table>
+  <tr><th>s</th><th>条目 e = s/128 + 128</th><th>F = 262,144 × e</th><th>bytes = 576 × e</th><th>AI</th></tr>
+  <tr><td class="num">8K</td><td class="num">64 + 128 = 192</td><td class="num">50.3 M</td><td class="num">110.6 KB</td><td class="num"><b>455.1</b></td></tr>
+  <tr><td class="num">32K</td><td class="num">256 + 128 = 384</td><td class="num">100.7 M</td><td class="num">221 KB</td><td class="num"><b>455.1</b></td></tr>
+  <tr><td class="num">1M</td><td class="num">8,192 + 128 = 8,320</td><td class="num">2.18 G</td><td class="num">4.79 MB</td><td class="num"><b>455.1</b></td></tr>
+</table>
+<p class="cap">三行 AI 完全相同——这就是正文式 3 第二行「注意力 AI 与 B、τ、s 无关」的全部内容，也是 DSpark 碰不到注意力核的数学原因。顺带看清 MQA 的分量：若 128 头各持一份 KV（bytes ×128），AI 会从 455 跌到 4c/576 ≈ 3.6——注意力的高 AI 是「共享 KV」买来的。</p>
+
+<p><b>第 3 步：CSA 是两条流的串联，先分开算。</b>CSA（m=4）+ indexer 把读取拆成单价完全不同的两段：</p>
+
+<table>
+  <tr><th>流</th><th>条目数</th><th>每条 FLOPs</th><th>每条字节</th><th>F</th><th>bytes</th><th>单独 AI</th></tr>
+  <tr><td>indexer 打分（全扫压缩条目）</td><td class="num">s/4 = 8,192</td><td class="num">16,384</td><td class="num">128 B</td><td class="num">134.2 M</td><td class="num">1.049 MB</td><td class="num">16,384/128 = 128</td></tr>
+  <tr><td>主注意力（top-k 1024 + 滑窗 128）</td><td class="num">1,152</td><td class="num">262,144</td><td class="num">576 B</td><td class="num">302.0 M</td><td class="num">0.664 MB</td><td class="num">262,144/576 = 455.1</td></tr>
+</table>
+<p class="cap">为什么主流只读 1,152 条：indexer 已经在便宜的压缩域（128 B/条）把「读哪些」筛好——从 8,192 条压缩条目里选出 top-k 1,024 条，主流对选中的条目 + 滑窗做注意力，不看其余。<b>便宜流干粗活、昂贵流干精活</b>的分工就是 CSA 的账目结构。</p>
+
+<p><b>第 4 步：合并 = 按字节占比加权平均。</b>两条流在同一核内串联，FLOPs 相加、bytes 相加。由于每条流各自的 AI 是常数，合并值恰好是两个 AI 的<b>字节加权平均</b>：</p>
+
+<div class="fig formula">\[
+\mathrm{AI}_{\text{CSA}} = \frac{F_{\text{idx}}+F_{\text{main}}}{B_{\text{idx}}+B_{\text{main}}}
+= \frac{128\,B_{\text{idx}} + 455.1\,B_{\text{main}}}{B_{\text{idx}}+B_{\text{main}}}
+= \frac{134.2\text{M} + 302.0\text{M}}{1.049 + 0.664\ \text{MB}} = \mathbf{254.7}
+\tag{A-5}\]</div>
+
+<p>直觉版：indexer 流占 61.2% 的字节、主流占 38.8%，\(0.612{\times}128 + 0.388{\times}455 \approx 255\)——<b>谁的字节多，谁的 AI 说了算</b>。255 离 128 比离 455 近，原因即此。</p>
+
+<p><b>s 决定占比，从而决定 AI</b>：indexer 字节 (s/4)×128 随 s 线性涨，主流字节固定在 1,152×576。s 越长，字节权重越偏向 indexer，AI 从 455 单调滑向 128：</p>
+
+<table>
+  <tr><th>s</th><th>e_idx = s/4</th><th>indexer 字节占比</th><th>AI_CSA</th></tr>
+  <tr><td class="num">4K</td><td class="num">1,024</td><td class="num">16.5%</td><td class="num">401</td></tr>
+  <tr><td class="num">32K</td><td class="num">8,192</td><td class="num">61.2%</td><td class="num"><b>255</b></td></tr>
+  <tr><td class="num">128K</td><td class="num">32,768</td><td class="num">86.3%</td><td class="num">173</td></tr>
+  <tr><td class="num">1M</td><td class="num">262,144</td><td class="num">98.1%</td><td class="num">134</td></tr>
+</table>
+<p class="cap">这就是「区间 [128, 455]」的具体形状：s→0 时只剩滑窗（AI→455），s→∞ 时 indexer 流主导（AI→128），s=32K 落在 255。注意 CSA 压缩改变的是<b>总字节量</b>（主流从 s 条压到固定 1,152 条）和两条流的配比，但任何一条流自身的 AI 都没变——「压缩 ≠ 提高注意力 AI」。</p>
+
+<h3>A.3 prefill 注意力：×128 的 tile 摊销</h3>
+
+<p>prefill 的注意力核与 decode 跑的是同一种计算，账目上只变一件事：<b>字节的记账单位从「每 query」变成「每 tile」</b>。flash 注意力把 L 个 query 按 128 个一组（tile）处理：一条 KV 条目从 HBM 读进片上 SRAM 后，tile 里 128 个 query 复用同一份——576 B 只记一次账，FLOPs 却仍按「每 query 每条目全价」算。</p>
+
+<p><b>第 1 步：一个 tile 的账，e 第三次消掉。</b>设某 tile 覆盖 e 条主条目：</p>
+
+<div class="fig formula">\[
+\mathrm{AI}_{\text{tile}} = \frac{128\ \text{query}\times 262{,}144 \times e}{576 \times e}
+= 128\times\frac{4n_hc}{576} = 128{\times}455.1 = \mathbf{58{,}254}
+\tag{A-6}\]</div>
+
+<p>e 又一次同时出现在分子分母并消掉——<b>prefill 的注意力 AI = tile 大小 × decode 结构值</b>。同一条目在两种记账口径下的对照：</p>
+
+<table>
+  <tr><th>记账口径</th><th>一条条目的 F</th><th>一条条目的 bytes</th><th>AI</th></tr>
+  <tr><td>decode（1 query 独享）</td><td class="num">262,144</td><td class="num">576 B</td><td class="num">455.1</td></tr>
+  <tr><td>prefill（128 query 复用）</td><td class="num">128×262,144 = 33.6 M</td><td class="num">576 B（不变）</td><td class="num">58,254</td></tr>
+</table>
+
+<p><b>第 2 步：HCA 全序列核对。</b>位置 p 的 query 能看到 p/128 条压缩条目，对 p∈[0,s] 取平均得 s/256；再加固定的 128 条滑窗，\(e_{avg} = s/256 + 128\)。s=32K 时 e_avg = 256：</p>
+<ul>
+  <li>F = 32,768 query × 262,144 × 256 条 = 2.199 TFLOP；</li>
+  <li>bytes = (32,768/128) tile × 256 × 576 B = 37.7 MB；</li>
+  <li>AI = 2.199T / 37.7M = <b>58,254</b>——与 A-6 完全一致（e_avg 在分子分母消掉，代入平均值即可）。</li>
+</ul>
+
+<p><b>第 3 步：CSA = 两条流各自 ×128，再加权。</b>decode 里的两条流（A.2 第 3 步）在 prefill 下逐流成账：</p>
+<ul>
+  <li><b>indexer 流</b>：每 query 对当时可见的压缩条目打分，causal 平均 s/8 = 4,096 条；tile 内 128 个 query 的打分对象完全相同 → 条目读一次、128 query 全额复用，无利用率损失。AI = 128×(16,384/128) = <b>16,384</b>；全序列 F = 32,768×16,384×4,096 = 2.20 T，bytes = 256 tile×524 KB = 134 MB。</li>
+  <li><b>主注意力流</b>：F 侧每 query 仍只对自己的 top-k+滑窗 1,152 条做全价计算；但 bytes 侧 tile 读入的是 128 个 query 选择的<b>并集</b>——相邻 query 的选择高度重叠，一阶近似取并集 ≈ s/8 = 4,096 条。于是利用率 = 1,152/4,096 = 28%（每条读入的条目平均只被 36 个 query 用到）：AI = 128×455.1×0.281 = <b>16,384</b>；全序列 F = 32,768×302.0M = 9.90 T，bytes = 256×2.36 MB = 604 MB。</li>
+  <li><b>合并</b>：两流的 tile-AI 恰好都是 16,384，按字节加权（主 82%、indexer 18%）后仍是 16,384。全序列 F = 12.10 T、bytes = 738 MB → AI = <b>16,384</b>，即表 3 的数。</li>
+</ul>
+
+<p>两处近似要交代：① 主流「并集 ≈ s/8」是本账本最粗的一步（局限 ③）——它要求 s/8 ≳ 单 query 的 1,152 条（s ≳ 9K）才有意义；② indexer 的 s/8 是 causal 平均，实际逐 tile 波动。二者只影响分母的常数倍，不动「计算受限」的结论。</p>
+
+<table>
+  <tr><th>核</th><th>decode AI</th><th>prefill AI</th><th>倍数</th><th>机制</th></tr>
+  <tr><td>HCA 注意力</td><td class="num">455</td><td class="num">58,254</td><td class="num">×128</td><td>条目读一次、128 query 全额复用</td></tr>
+  <tr><td>CSA 注意力</td><td class="num">255</td><td class="num">16,384</td><td class="num">×64</td><td>同上，但 indexer 全扫 + top-k 利用率损耗</td></tr>
+</table>
+<p class="cap">即便 Rubin 的 ridge 右移到 2,273，两个 prefill 注意力核仍高出它 7~26 倍——注意力在 prefill 阶段「永远计算受限」，与表 3 一致。</p>
+
+<h3>A.4 MoE：2b_e、命中模型与 21,458</h3>
+
+<p><b>第 1 步：路由记账。</b>每 token 选 K=6 个专家，b 个 token 产生 6b 个「token→专家」指派；均匀路由（EPLB 均衡后）摊到每个专家头上：</p>
+
+<div class="fig formula">\[
+b_e = \frac{b\,K}{N} = \frac{b}{64}\ \text{token/专家}
+\tag{A-7}\]</div>
+
+<p>三个工作点：b=150 → b_e = 2.34；b=750 → 11.7；prefill b=32,768 → 512。这个数字是 MoE 一切特性的根源。</p>
+
+<p><b>第 2 步：FLOPs——每 expert·token 三个 GEMM。</b>专家 FFN = gate（D→I）+ up（D→I）+ down（I→D），每个 2DI FLOPs，合计 \(6DI = 132.12\) M/expert·token；全 MoE \(F = b\,K\,6DI\)。@150：118.9 GFLOP；@750：594.5 G；prefill：25.98 T。</p>
+
+<p><b>第 3 步：权重字节——MoE 与稠密 GEMM 的分水岭。</b>稠密 GEMM 的权重服务于<b>全部</b> b 个 token，摊薄后 AI 随 b 线性涨；专家的权重是「<b>只要有一个 token 路由到它，66.06 MB 就整份过一遍线</b>」——摊到 2 个 token 和摊到 200 个 token，字节一样。全命中口径（保守）：</p>
+
+<div class="fig formula">\[
+W = N\cdot 3DI = 384{\times}66.06\text{M} = 25.37\ \text{GB}
+\]</div>
+
+<p>把第 1、3 步合成一个专家的时间线（b=150，H800）：66.06 MB 过线要 66.06M/3.35TB/s = <b>19.7 µs</b>，而它挣的 FLOPs（2.34×132.12M = 309 M）只需 <b>0.16 µs</b>——算力利用率 0.8%，正是「AI 4.7 vs ridge 591」的时间域说法。</p>
+
+<p>共享专家对照：同样 66.06 MB 权重，却服务全部 b 个 token（相当于 b_e = b）。理想 AI = 2b = 300 @150，是路由专家（2b_e = 4.69）的 <b>N/K = 64 倍</b>——同一数学结构，只差「摊到几个 token」。</p>
+
+<p><b>第 4 步：命中模型——全读口径差多少？</b>均匀路由下每个指派落到特定专家的概率 K/N = 1/64；b 个指派里专家至少被命中一次的概率 \(1-(1-1/64)^b\)，期望命中专家数：</p>
+
+<div class="fig formula">\[
+\mathbb{E}[\text{hit}] = N\left(1-\left(1-\tfrac{K}{N}\right)^{b}\right) = 384\left(1-\left(\tfrac{63}{64}\right)^{b}\right)
+\tag{A-8}\]</div>
+
+<p>@b=150：\((63/64)^{150} = e^{150\ln(63/64)} = e^{-2.36} = 0.094\)，命中 384×0.906 = <b>348</b> 个——权重流量比全读口径低 9%（22.99 vs 25.37 GB），脚本取全读是保守上界。@750：\(e^{-11.8}\approx 0\)，384.0/384 全命中，两口径重合。</p>
+
+<p><b>第 5 步：激活字节。</b>每 token·命中：读隐状态 h（D 元素 × 2 B）+ 写 gate/up 输出（2I 元素 × 2 B）= \(2(D+2I) = 26{,}624\) B（一阶口径，down 侧读写并入常数）；总量 \(bK\times 26{,}624\)：@150 = 24.0 MB、@750 = 119.8 MB、prefill = 5.23 GB。</p>
+
+<p><b>第 6 步：汇总与翻转点。</b></p>
+
+<table>
+  <tr><th>场景</th><th>b_e</th><th>F</th><th>W（全命中）</th><th>激活</th><th>AI</th><th>理想 2b_e</th></tr>
+  <tr><td>decode MTP-1（b=150）</td><td class="num">2.3</td><td class="num">118.9 G</td><td class="num">25.37 GB</td><td class="num">24.0 MB</td><td class="num"><b>4.7</b></td><td class="num">4.69</td></tr>
+  <tr><td>decode DSpark（b=750）</td><td class="num">11.7</td><td class="num">594.5 G</td><td class="num">25.37 GB</td><td class="num">119.8 MB</td><td class="num"><b>23.3</b></td><td class="num">23.4</td></tr>
+  <tr><td>prefill（b=32,768）</td><td class="num">512</td><td class="num">25.98 T</td><td class="num">25.37 GB</td><td class="num">5.23 GB</td><td class="num"><b>849</b></td><td class="num">1,024</td></tr>
+</table>
+<p class="cap">忽略激活的理想式 \(\mathrm{AI} = F/W = 2b\,K/N = 2b_e\)，即正文式 3 第一行（\(w_b{=}1\)）。decode 两行的激活可忽略、AI ≈ 2b_e；prefill 激活占 17%，把 1,024 压到 849。</p>
+
+<p><b>翻转点</b>：每 token 的 FLOPs 系数 \(f = K\,6DI = 792.7\) M、激活系数 \(a = K\,2(D{+}2I) = 159{,}744\) B，解 \(b(f-ra) = rW\)：r = 590.7 时 \(b^* = 590.7{\times}25.37\text{G}\,/\,(792.7\text{M}-94.4\text{M}) = \mathbf{21{,}458}\)——每步要 2.1 万个有效 token，专家权重流才「值回带宽」，可见部署规模内不可能。渐近上限 \(f/a = 4{,}962\)：Rubin 的 2,273 低于它，理论上存在翻转点 134,179（约 13 万 token/步，更不可能）——这就是「追不上组」的完整算术。</p>
+
+<h3>A.5 共享专家与 LM head：单 GEMM 工作例与统一公式</h3>
+
+<p>这两个核都是 A-1 的裸 GEMM，推导只剩「代数字」；真正值得注意的是它们与投影组共享一个统一公式（本节末）。</p>
+
+<p><b>共享专家</b> = 一个永被激活的专家：3·D·I = 66.06 M 参数，F = 2·D·3I = 132.12 M/token，激活 2(D+3I) = 32,768 B/token：</p>
+<ul>
+  <li>@150：F = 19.82 G，bytes = 66.06 MB 权重 + 150×32,768 = 4.92 MB 激活 → AI = 19.82G / 70.98M = <b>279.2</b>。</li>
+  <li>@750：F = 99.09 G，激活 24.6 MB → AI = <b>1093.3</b>。</li>
+  <li>渐近 F/T = 132.12M/32,768 = 4,032；翻转 \(b^* = 590.7{\times}66.06\text{M}\,/\,(132.12\text{M}-19.36\text{M}) = \mathbf{346}\)。</li>
+</ul>
+
+<p><b>LM head</b>：D×V = 7168×129,280 = 926.6 M 参数，F = 2·D·V = 1.853 G/token，激活 = 读 h（2D）+ 写 logits（2V）= 272,896 B/token：</p>
+<ul>
+  <li>@150：F = 278.0 G，bytes = 926.6 MB 权重 + 40.9 MB 激活 → AI = <b>287.3</b>。</li>
+  <li>@750：F = 1390.0 G，激活 204.7 MB → AI = <b>1228.6</b>。</li>
+  <li>渐近 = 1.853G / 272,896 = 6,791；翻转 \(b^* = \mathbf{324}\)。</li>
+</ul>
+
+<p><b>统一公式</b>：三个 GEMM 类核（投影组、共享专家、LM head）都有 <b>F = 2P</b>——GEMM 的 FLOPs/token 恒为参数量的 2 倍（A-1 与 A.1 表格可逐行验证，wo_a 的分组结构也不例外）。代入 A-1 并除以 P：</p>
+
+<div class="fig formula">\[
+\mathrm{AI}(b) = \frac{2bP}{P+bT} = \frac{2b}{1+b\,T/P}\,,\qquad
+b^* = \frac{r}{2-r\,T/P}\,,\qquad
+\text{渐近} = \frac{2P}{T}
+\tag{A-9}\]</div>
+
+<p>整个核由一个比值 \(T/P\)（每参数摊到的激活字节）完全刻画：</p>
+
+<table>
+  <tr><th>核</th><th>P</th><th>T/P（B/参数）</th><th>渐近 2P/T</th><th>AI @150</th><th>AI @750</th><th>翻转 b*</th></tr>
+  <tr><td>投影组 / 层</td><td class="num">326.70 M</td><td class="num">1.32×10⁻³</td><td class="num">1,520</td><td class="num">250.5</td><td class="num">754.9</td><td class="num">483</td></tr>
+  <tr><td>共享专家</td><td class="num">66.06 M</td><td class="num">4.96×10⁻⁴</td><td class="num">4,032</td><td class="num">279.2</td><td class="num">1,093.3</td><td class="num">346</td></tr>
+  <tr><td>LM head</td><td class="num">926.6 M</td><td class="num">2.95×10⁻⁴</td><td class="num">6,791</td><td class="num">287.3</td><td class="num">1,228.6</td><td class="num">324</td></tr>
+</table>
+<p class="cap">T/P 越大（中间激活越宽），渐近越低、翻转越晚：投影组含 wq_b/wo_a 的 6.5 万维中间量，T/P 最大 → 渐近垫底（1,520）、翻转最晚（483）；LM head 输出虽宽但只写一次、P 又巨大，T/P 最小 → 翻转最早（324）。三个翻转点挤在 [324, 483] 的窄带里——同一结构、同一 ridge，DSpark 的 B·τ=750 一口气越过全部三个。</p>
+
+<h3>A.6 decode 每步字节账：1.44 TB 的构成</h3>
+
+<p>B=150、s=32K、τ=1，EP 集群聚合（所有专家所在节点都参与流量）：</p>
+
+<table>
+  <tr><th>项</th><th>推导</th><th>字节</th><th>占比</th></tr>
+  <tr><td>路由专家权重</td><td>61 层 × 命中 348 个 × 66.06M × 1 B</td><td class="num">1.402 TB</td><td class="num">97.4%</td></tr>
+  <tr><td>投影 + router 权重</td><td>61 × 326.70M × 1 B</td><td class="num">19.9 GB</td><td class="num">1.4%</td></tr>
+  <tr><td>KV cache 读取</td><td>CSA 30 层×150×(8,192×128 + 1,152×576) + HCA 31 层×150×384×576</td><td class="num">8.7 GB</td><td class="num">0.6%</td></tr>
+  <tr><td>共享专家权重</td><td>61 × 66.06M × 1 B</td><td class="num">4.0 GB</td><td class="num">0.3%</td></tr>
+  <tr><td>激活（投影组）</td><td>61 × 150 × 429,952 B</td><td class="num">3.9 GB</td><td class="num">0.3%</td></tr>
+  <tr><td>LM head 权重</td><td>129,280 × 7,168 × 1 B</td><td class="num">0.93 GB</td><td class="num">0.1%</td></tr>
+  <tr><td><b>合计</b></td><td class="num">—</td><td class="num"><b>1.439 TB</b></td><td class="num">100%</td></tr>
+</table>
+
+<p>命中数 348 的推导见 A.4 第 4 步（\(384\times(1-(63/64)^{150})\)）。合计 ÷ 150 请求 = <b>9.6 GB/token</b>。两点澄清：</p>
+<ul>
+  <li>KV 一行是<b>每步读取量</b>（只读被选中的条目），不是驻留总量——cache 里实际存着 150×32K×5.42 KB ≈ 26.6 GB，但每步只有 8.7 GB 流过 HBM。CSA 的压缩在驻留端与读取端同时兑现。</li>
+  <li>权重各行按「命中即整份读」计——被路由到的专家无论摊到几个 token，66.06 MB 都要过一遍线（A.4 第 3 步）。这是 decode MoE 与稠密 GEMM 的本质区别。</li>
+</ul>
+
+<p>DSpark τ=5 的同口径账（b = 750，384/384 全命中）：</p>
+
+<table>
+  <tr><th>项</th><th>推导</th><th>字节</th><th>占比</th></tr>
+  <tr><td>路由专家权重</td><td>61 层 × 384（全命中）× 66.06M × 1 B</td><td class="num">1.547 TB</td><td class="num">96.7%</td></tr>
+  <tr><td>投影 + router 权重</td><td>61 × 326.70M × 1 B</td><td class="num">19.9 GB</td><td class="num">1.2%</td></tr>
+  <tr><td>激活（投影组）</td><td>61 × 750 × 429,952 B</td><td class="num">19.7 GB</td><td class="num">1.2%</td></tr>
+  <tr><td>KV cache 读取</td><td>与 τ 无关（每请求读自己的条目）</td><td class="num">8.7 GB</td><td class="num">0.5%</td></tr>
+  <tr><td>共享专家权重</td><td>61 × 66.06M × 1 B</td><td class="num">4.0 GB</td><td class="num">0.2%</td></tr>
+  <tr><td>LM head 权重</td><td>129,280 × 7,168 × 1 B</td><td class="num">0.93 GB</td><td class="num">0.1%</td></tr>
+  <tr><td><b>合计</b></td><td class="num">—</td><td class="num"><b>1.601 TB</b></td><td class="num">100%</td></tr>
+</table>
+
+<p>1.601 TB ÷ 750 = <b>2.13 GB/token</b>——同样的权重流摊给 5× token，带宽效率 4.5×；激活从 0.3% 升到 1.2%，仍不成气候。</p>
+
+<h2 id="appb">附录 B · 复算脚本</h2>
+
+<p><code>scripts/ridge_point_v4pro.py</code>，Python 3 标准库，直接运行输出本文全部数字（末段 <code>worked examples</code> 打印附录 A 的全部中间量）：</p>
+
+<pre><code>#!/usr/bin/env python3
+# Roofline analysis of DeepSeek-V4-Pro core operators (prefill vs decode).
+# Config: DeepSeek-V4 paper §4.2.1 + official config.json (commit b5968e9).
+# Conventions: weights FP8 (1 B), activations BF16 (2 B), KV entry 576 B,
+# index entry 128 B; decode = no cross-request reuse; prefill = 128-query tiles.
+
+LAYERS = 61                     # 30 CSA (m=4) + 31 HCA (m'=128), +1 MTP block
+D, N_H, C = 7168, 128, 512      # hidden, query heads, head dim (= entry dim)
+D_C = 1536                      # q_lora_rank (shared with indexer)
+G, D_G = 16, 1024               # output groups x group rank
+N_EXP, K_TOP, I_EXP = 384, 6, 3072
+N_IH, C_I, TOPK, N_WIN = 64, 128, 1024, 128
+V = 129280
+W_B, A_B, KV_MAIN, KV_IDX = 1.0, 2.0, 576.0, 128.0
+
+HW = {"H800":  dict(bw=3.35e12, bf16=989e12, fp8=1979e12),
+      "H20":   dict(bw=4.00e12, bf16=148e12, fp8=296e12),
+      "B200":  dict(bw=8.00e12, bf16=2250e12, fp8=4500e12, fp4=9000e12),
+      "Rubin": dict(bw=22.0e12, fp4=50e15)}
+ridge = lambda hw, p: HW[hw][p] / HW[hw]["bw"]
+
+# (name, weight params, FLOPs/token, act bytes/token) -- wo_a is group-
+# block-diagonal: 16 groups x (4096->1024), NOT dense 65536->16384
+PROJ = [("wq_a", D*D_C, 2*D*D_C, 2*(D+D_C)),
+        ("wq_b", D_C*N_H*C, 2*D_C*N_H*C, 2*(D_C+N_H*C)),
+        ("compressor", 4*D*C, 2*D*4*C, 2*(D+4*C)),
+        ("wo_a", G*(N_H*C//G)*D_G, G*2*(N_H*C//G)*D_G, 2*(N_H*C+G*D_G)),
+        ("wo_b", G*D_G*D, 2*G*D_G*D, 2*(G*D_G+D)),
+        ("idx_q_b", D_C*N_IH*C_I, 2*D_C*N_IH*C_I, 2*(D_C+N_IH*C_I)),
+        ("idx_w", D*N_IH, 2*D*N_IH, 2*(D+N_IH)),
+        ("router", D*N_EXP, 2*D*N_EXP, 2*(D+N_EXP))]
+P_PROJ = sum(p for _, p, _, _ in PROJ)
+F_PROJ = sum(f for _, _, f, _ in PROJ)
+T_PROJ = sum(a for _, _, _, a in PROJ)
+P_SHARED = P_EXPERT = 3 * D * I_EXP
+P_LMHEAD = D * V
+
+total  = LAYERS*(P_PROJ + P_SHARED + N_EXP*P_EXPERT) + P_LMHEAD   # 1.572T ~ 1.6T
+active = LAYERS*(P_PROJ + P_SHARED + K_TOP*P_EXPERT) + P_LMHEAD   # 49.06B ~ 49B
+
+def proj_ai(b): return b*F_PROJ / (P_PROJ*W_B + b*T_PROJ)
+def gemm_ai(b, d_in, d_out, w_b=W_B, a_b=A_B):
+    return 2*b*d_in*d_out / (d_in*d_out*w_b + b*(d_in+d_out)*a_b)
+
+def csa_decode_ai(s):        # indexer scores s/4 entries; main over topk+window
+    e_idx, e_sel = s/4, TOPK + N_WIN
+    return (2*N_IH*C_I*e_idx + 4*N_H*C*e_sel) / (e_idx*KV_IDX + e_sel*KV_MAIN)
+def hca_decode_ai(s):        # dense over s/128 entries + window
+    e = s/128 + N_WIN
+    return 4*N_H*C*e / (e*KV_MAIN)
+def csa_prefill_ai(s, tile=128):
+    return s*(2*N_IH*C_I*(s/8) + 4*N_H*C*(TOPK+N_WIN)) \
+         / (s/tile * (s/8) * (KV_IDX + KV_MAIN))
+def hca_prefill_ai(s, tile=128):
+    e_avg = s/256 + N_WIN
+    return s*4*N_H*C*e_avg / (s/tile * e_avg * KV_MAIN)
+def moe_ai(b, w_b=W_B):      # uniform routing, all-hit weight streaming
+    return b*K_TOP*6*D*I_EXP / (N_EXP*P_EXPERT*w_b + b*K_TOP*2*(D+2*I_EXP))
+
+# scenarios: decode B=150 req s=32K (tau=1 / 5); prefill L=32K
+# verdicts: compare AI against ridge(hw, prec); flips via bisection on B
+</code></pre>
+
+<h2 id="appc">附录 C · 参考资料</h2>
+
+<ul class="refs">
+  <li>DeepSeek-AI. <i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Language Models</i>. arXiv:2606.19348.（§4.2.1 模型规格、CSA/HCA 混合配置、KV cache 口径）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V4-Pro</i> 官方推理实现. <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">huggingface.co/deepseek-ai/DeepSeek-V4-Pro（inference/）</a>, commit <code>b5968e9</code>.（config.json：61 层、d=7168、128×512、q_lora 1536、o_groups 16×1024、1+384 专家 top-6、indexer 64×128 top-k 1024、滑窗 128）</li>
+  <li>X. Cheng et al. <i>DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation</i>. arXiv:2607.05147.（B=150/200 生产并发口径、τ 预算 4~6、吞吐–交互性数据）</li>
+  <li>vLLM Blog. <i>DeepSeek-V3.2-Exp in vLLM: Fine-Grained Sparse Attention in Action</i>. 2025-09-29.（MLA FP8 KV 字节口径的实测先例）</li>
+  <li>NVIDIA. <i>Pretraining Large Language Models with NVFP4</i>. arXiv:2509.25149；<i>Inside the Vera Rubin Platform</i>. Developer Newsroom, 2026.（NVFP4 峰值、Rubin 288 GB HBM4 / 22 TB/s / 50 PFLOPS 口径）</li>
+  <li>AMD. <i>Instinct MI400 Series / Helios</i>. AAI 2026.（HBM4 世代带宽参照）</li>
+  <li>本站：<a href="llm-arch-evolution.html">LLM 架构演进技术报告</a>（ridge point 概念出处：§4、§6）、<a href="deepseek-v4-attention.html">DeepSeek-V4 注意力详解</a>、<a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV cache 组织</a>、<a href="csa-compression.html">CSA 压缩器</a>、<a href="deepseek-v4-lightning-indexer.html">Lightning Indexer</a>、<a href="dspark-speculative-decoding.html">DSpark 解读</a></li>
+</ul>
+
+<footer>
+  本报告为基于公开规格的一阶 roofline 账本，非 DeepSeek 官方数据；硬件峰值为厂商公开稠密口径。发现数字问题可对照附录 A 推导、运行附录 B 脚本核对。
+</footer>
+
+</main>
+</body>
+</html>

@@ -230,5 +230,13 @@
     "paper": "DSpark: Confidence-Scheduled Speculative Decoding with Semi-Autoregressive Generation（本地 paper/dspark.pdf）",
     "arxiv": "https://arxiv.org/abs/2607.05147",
     "repo": "https://github.com/deepseek-ai/DeepSpec"
+  },
+  {
+    "slug": "v4pro-ridge-point",
+    "title": "逐算子看 DeepSeek-V4-Pro 的算术强度：prefill 与 decode 的 roofline 账本",
+    "date": "2026-10-08",
+    "paper": "DeepSeek-V4 (arXiv:2606.19348) + 官方 config.json + DSpark (arXiv:2607.05147) 生产口径",
+    "arxiv": "https://arxiv.org/abs/2606.19348",
+    "repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference"
   }
 ]
