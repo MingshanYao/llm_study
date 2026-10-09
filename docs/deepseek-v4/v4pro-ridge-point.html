@@ -79,7 +79,7 @@ window.MathJax = {
 <div class="meta">
   <b>分析对象</b>：DeepSeek-V4-Pro（arXiv:2606.19348 §4.2.1 p.24–25，与官方 <code>config.json</code> 逐项核对，commit <code>b5968e9</code>）<br>
   <b>复算脚本</b>：<code>scripts/ridge_point_v4pro.py</code>（逐算子推导见附录 A，脚本全文见附录 B，Python 3 标准库即可运行）<br>
-  <b>关联报告</b>：<a href="llm-arch-evolution.html">LLM 架构演进技术报告</a>（§4 定量账本、§6 训推硬件分野、§9 专题）、<a href="deepseek-v4-attention.html">V4 注意力</a>、<a href="deepseek-v4-kvcache.html">V4 KV cache</a>、<a href="dspark-speculative-decoding.html">DSpark</a><br>
+  <b>关联报告</b>：<a href="../misc/llm-arch-evolution.html">LLM 架构演进技术报告</a>（§4 定量账本、§6 训推硬件分野、§9 专题）、<a href="deepseek-v4-attention.html">V4 注意力</a>、<a href="deepseek-v4-kvcache.html">V4 KV cache</a>、<a href="dspark-speculative-decoding.html">DSpark</a><br>
   <b>生成日期</b>：2026-10-08
 </div>
 
@@ -730,7 +730,7 @@ def moe_ai(b, w_b=W_B):      # uniform routing, all-hit weight streaming
   <li>vLLM Blog. <i>DeepSeek-V3.2-Exp in vLLM: Fine-Grained Sparse Attention in Action</i>. 2025-09-29.（MLA FP8 KV 字节口径的实测先例）</li>
   <li>NVIDIA. <i>Pretraining Large Language Models with NVFP4</i>. arXiv:2509.25149；<i>Inside the Vera Rubin Platform</i>. Developer Newsroom, 2026.（NVFP4 峰值、Rubin 288 GB HBM4 / 22 TB/s / 50 PFLOPS 口径）</li>
   <li>AMD. <i>Instinct MI400 Series / Helios</i>. AAI 2026.（HBM4 世代带宽参照）</li>
-  <li>本站：<a href="llm-arch-evolution.html">LLM 架构演进技术报告</a>（ridge point 概念出处：§4、§6）、<a href="deepseek-v4-attention.html">DeepSeek-V4 注意力详解</a>、<a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV cache 组织</a>、<a href="csa-compression.html">CSA 压缩器</a>、<a href="deepseek-v4-lightning-indexer.html">Lightning Indexer</a>、<a href="dspark-speculative-decoding.html">DSpark 解读</a></li>
+  <li>本站：<a href="../misc/llm-arch-evolution.html">LLM 架构演进技术报告</a>（ridge point 概念出处：§4、§6）、<a href="deepseek-v4-attention.html">DeepSeek-V4 注意力详解</a>、<a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV cache 组织</a>、<a href="csa-compression.html">CSA 压缩器</a>、<a href="deepseek-v4-lightning-indexer.html">Lightning Indexer</a>、<a href="dspark-speculative-decoding.html">DSpark 解读</a></li>
 </ul>
 
 <footer>

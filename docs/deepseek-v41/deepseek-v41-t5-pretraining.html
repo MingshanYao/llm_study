@@ -86,7 +86,7 @@ window.MathJax = {
   <p style="margin:4px 0"><b>日期：</b>2026-09-20　<b>范围：</b>DeepSeek-V4.1-Flash 技术报告 §4 Pre-Training（印刷页 20–25），含 §4.1 数据构建、§4.2 预训练设置、§4.3 基座评测；并借用 §1 引言与 §2/§3 的少量背景。</p>
   <p style="margin:4px 0"><b>依据：</b><i>DeepSeek-V4.1-Flash 技术报告</i>，本地 PDF：<code>paper/deepseek_v41.pdf</code>（51 页）。本讲所有数字均出自该 PDF；论文未写明的地方已明确标注。</p>
   <p style="margin:4px 0"><b>姊妹篇：</b><a href="deepseek-v41-t0-overview.html">第 0 讲·总览</a>（全景）｜<a href="deepseek-v41-t1-ced.html">第 1 讲·CED 架构</a>（8B/16B 激活的来历）｜<a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2 注意力</a>｜<a href="deepseek-v41-t3-extensions.html">第 3 讲·架构扩展</a>（FP4 KV、Engram、DSpark）｜<a href="deepseek-v41-t4-infra.html">第 4 讲·基础设施</a>｜<a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a></p>
-  <p style="margin:4px 0"><b>背景报告：</b>MoE 原理见 <a href="moe-t1-basics.html">MoE 基础</a> 与 <a href="deepseek-moe.html">DeepSeek MoE 演进</a>；V4 一代架构见 <a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>。</p>
+  <p style="margin:4px 0"><b>背景报告：</b>MoE 原理见 <a href="../moe/moe-t1-basics.html">MoE 基础</a> 与 <a href="../deepseek-v4/deepseek-moe.html">DeepSeek MoE 演进</a>；V4 一代架构见 <a href="../deepseek-v4/deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>。</p>
 </div>
 
 <div class="tldr">
@@ -258,7 +258,7 @@ window.MathJax = {
 
 <h2 id="s3">3. 模型设置（§4.2.1）：552B MoE 主干长什么样</h2>
 
-<p>先解释两个词。<b>MoE（Mixture-of-Experts，混合专家）</b>：把模型里的前馈层换成很多个"专家"小网络，每个 token 只请少数几位专家干活，从而"总参数很大、每次计算很小"（详见 <a href="moe-t1-basics.html">MoE 基础篇</a>与 <a href="deepseek-moe.html">DeepSeek MoE 演进</a>）。<b>激活参数</b>：每个 token 实际参与计算的那部分参数量。V4.1-Flash 的总参数（backbone）是 552B，但每个 token 激活的只有 8B（prefill，读入阶段）或 16B（decode，生成阶段）——这就是"Flash"名字的由来。</p>
+<p>先解释两个词。<b>MoE（Mixture-of-Experts，混合专家）</b>：把模型里的前馈层换成很多个"专家"小网络，每个 token 只请少数几位专家干活，从而"总参数很大、每次计算很小"（详见 <a href="../moe/moe-t1-basics.html">MoE 基础篇</a>与 <a href="../deepseek-v4/deepseek-moe.html">DeepSeek MoE 演进</a>）。<b>激活参数</b>：每个 token 实际参与计算的那部分参数量。V4.1-Flash 的总参数（backbone）是 552B，但每个 token 激活的只有 8B（prefill，读入阶段）或 16B（decode，生成阶段）——这就是"Flash"名字的由来。</p>
 
 <h3>3.1 超参数全表</h3>
 
@@ -647,7 +647,7 @@ window.MathJax = {
 <ol class="refs">
   <li>DeepSeek-AI. <i>DeepSeek-V4.1-Flash 技术报告</i>（本地 PDF：<code>paper/deepseek_v41.pdf</code>，51 页）。本讲主要依据 §1 Introduction（印刷页 1–3）、§2.1/§2.4/§2.5（背景）、§3.1 Training Infrastructure（背景）、§4 Pre-Training（印刷页 20–25，含 Table 1 与 Figure 6）。报告未给出公开 arXiv 编号，本页以本地归档为引用依据。</li>
   <li>背景术语对照：<a href="https://arxiv.org/abs/2401.06088">DeepSeekMoE（Dai et al., 2024）</a>、<a href="https://arxiv.org/abs/2303.15343">SigLIP（Zhai et al., 2023）</a>、<a href="https://arxiv.org/abs/2502.16982">Muon is Scalable for LLM Training（Liu et al., 2025）</a>、SmolVLM（Marafioti et al., 2025）、auxiliary-loss-free load balancing（Wang et al., 2024a）——均转引自 V4.1 技术报告参考文献，本讲未直接展开。</li>
-  <li>站内背景报告：<a href="moe-t1-basics.html">MoE 基础</a>、<a href="deepseek-moe.html">DeepSeek MoE 演进</a>、<a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>、<a href="deepseek-v41-t1-ced.html">第 1 讲·CED</a>、<a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2</a>、<a href="deepseek-v41-t4-infra.html">第 4 讲·基础设施</a>、<a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>。</li>
+  <li>站内背景报告：<a href="../moe/moe-t1-basics.html">MoE 基础</a>、<a href="../deepseek-v4/deepseek-moe.html">DeepSeek MoE 演进</a>、<a href="../deepseek-v4/deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>、<a href="deepseek-v41-t1-ced.html">第 1 讲·CED</a>、<a href="deepseek-v41-t2-csa2.html">第 2 讲·CSA2</a>、<a href="deepseek-v41-t4-infra.html">第 4 讲·基础设施</a>、<a href="deepseek-v41-t6-posttraining.html">第 6 讲·后训练</a>。</li>
 </ol>
 
 <footer>生成于 2026-09-20 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>

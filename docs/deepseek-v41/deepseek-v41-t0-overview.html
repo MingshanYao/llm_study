@@ -130,7 +130,7 @@ window.MathJax = {
 
 <p>打个比方：你读一本 1000 页的资料并写总结，为了不每次都重读全书，你会边读边在便签上记「每页的要点索引」。KV cache 就是这些便签。<b>便签的麻烦在于：读多长，就要存多长</b>——上下文 100 万 token，便签就要记 100 万份，而且每层网络都要单独记一份。这些便签存哪？主要存在 GPU 的 <b>HBM</b>（High Bandwidth Memory，GPU 显存，快但小且贵）里，装不下时溢出到 <b>SSD</b>（固态硬盘，大但慢）。KV cache 有多大，直接决定了单张显卡能同时伺候多少用户、部署成本多少——这就是整篇论文拼命压缩它的原因。</p>
 
-<p>延伸阅读：<a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV cache 设计解读</a>。</p>
+<p>延伸阅读：<a href="../deepseek-v4/deepseek-v4-kvcache.html">DeepSeek-V4 KV cache 设计解读</a>。</p>
 
 <h3>1.2 prefill vs decode：先「读完」再「作答」</h3>
 
@@ -144,11 +144,11 @@ window.MathJax = {
 
 <h3>1.3 MoE：一个超大公司，每次只派一支小分队</h3>
 
-<p><b>MoE（Mixture-of-Experts，混合专家）</b>是把 Transformer 里的前馈层换成许多个并行的「专家」网络，每个 token 由一个路由器挑出少数几个专家来处理。好处是<b>总参数可以做得非常大（知识储备多），但每个 token 实际激活的参数很少（算得便宜）</b>。V4.1-Flash 每个 MoE 层有 1 个共享专家 + 384 个路由专家，每个 token 只激活其中 6 个路由专家（§4.2.1）。延伸阅读：<a href="deepseek-moe.html">DeepSeekMoE 解读</a>与系列入门篇 <a href="moe-t0-foundation.html">MoE 零基础第 0 讲</a>。</p>
+<p><b>MoE（Mixture-of-Experts，混合专家）</b>是把 Transformer 里的前馈层换成许多个并行的「专家」网络，每个 token 由一个路由器挑出少数几个专家来处理。好处是<b>总参数可以做得非常大（知识储备多），但每个 token 实际激活的参数很少（算得便宜）</b>。V4.1-Flash 每个 MoE 层有 1 个共享专家 + 384 个路由专家，每个 token 只激活其中 6 个路由专家（§4.2.1）。延伸阅读：<a href="../deepseek-v4/deepseek-moe.html">DeepSeekMoE 解读</a>与系列入门篇 <a href="../moe/moe-t0-foundation.html">MoE 零基础第 0 讲</a>。</p>
 
 <h3>1.4 稀疏注意力：不必每句话都细读全文</h3>
 
-<p>标准注意力里，每个新 token 要和<b>所有</b>历史 token 算一遍相关度，长上下文下这笔账是平方级增长的。<b>稀疏注意力</b>的思路是：先用一个轻量的「索引器」（indexer，像一个图书管理员）快速给所有历史内容打分，只挑出最相关的 top-k 条参与精细的注意力计算，其余略过。代价是得额外维护一份「索引 KV」。V4 系列的 CSA（压缩稀疏注意力）更进一步：先把每 m 个 token 压缩成 1 条 KV entry，再在压缩后的条目上做稀疏选择。延伸阅读：<a href="deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读</a>、<a href="deepseek-v4-lightning-indexer.html">Lightning Indexer 解读</a>、<a href="csa-compression.html">CSA 压缩过程详解</a>。</p>
+<p>标准注意力里，每个新 token 要和<b>所有</b>历史 token 算一遍相关度，长上下文下这笔账是平方级增长的。<b>稀疏注意力</b>的思路是：先用一个轻量的「索引器」（indexer，像一个图书管理员）快速给所有历史内容打分，只挑出最相关的 top-k 条参与精细的注意力计算，其余略过。代价是得额外维护一份「索引 KV」。V4 系列的 CSA（压缩稀疏注意力）更进一步：先把每 m 个 token 压缩成 1 条 KV entry，再在压缩后的条目上做稀疏选择。延伸阅读：<a href="../deepseek-v4/deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读</a>、<a href="../deepseek-v4/deepseek-v4-lightning-indexer.html">Lightning Indexer 解读</a>、<a href="../deepseek-v4/csa-compression.html">CSA 压缩过程详解</a>。</p>
 
 <h2 id="s2">2. V4.1-Flash 是什么模型</h2>
 
@@ -564,8 +564,8 @@ window.MathJax = {
 <footer>
 <ul class="refs">
   <li><b>本系列</b>：<a href="deepseek-v41-t1-ced.html">第 1 讲 · CED</a>｜<a href="deepseek-v41-t2-csa2.html">第 2 讲 · CSA2</a>｜<a href="deepseek-v41-t3-extensions.html">第 3 讲 · 架构扩展</a>｜<a href="deepseek-v41-t4-infra.html">第 4 讲 · 基础设施</a>｜<a href="deepseek-v41-t5-pretraining.html">第 5 讲 · 预训练</a>｜<a href="deepseek-v41-t6-posttraining.html">第 6 讲 · 后训练</a></li>
-  <li><b>背景报告（交叉引用）</b>：<a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>｜<a href="deepseek-v4-attention.html">DeepSeek-V4 Attention（CSA/HCA）</a>｜<a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV cache</a>｜<a href="deepseek-v4-lightning-indexer.html">Lightning Indexer</a>｜<a href="csa-compression.html">CSA 压缩过程详解</a>｜<a href="deepseek-moe.html">DeepSeekMoE</a>｜<a href="deepseek-mhc.html">mHC</a></li>
-  <li><b>入门系列</b>：MoE <a href="moe-t0-foundation.html">第 0 讲</a>｜量化 <a href="quant-t0-foundation.html">第 0 讲</a>（FP4/FP8 背景见 <a href="quant-t4-ultra-low-bit.html">第 4 讲</a>、<a href="quant-t5-kv-systems.html">第 5 讲</a>）｜RL <a href="rl-t0-foundation.html">第 0 讲</a>（GRPO 背景 <a href="rl-t5-rlvr-grpo.html">第 5 讲</a>）</li>
+  <li><b>背景报告（交叉引用）</b>：<a href="../deepseek-v4/deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>｜<a href="../deepseek-v4/deepseek-v4-attention.html">DeepSeek-V4 Attention（CSA/HCA）</a>｜<a href="../deepseek-v4/deepseek-v4-kvcache.html">DeepSeek-V4 KV cache</a>｜<a href="../deepseek-v4/deepseek-v4-lightning-indexer.html">Lightning Indexer</a>｜<a href="../deepseek-v4/csa-compression.html">CSA 压缩过程详解</a>｜<a href="../deepseek-v4/deepseek-moe.html">DeepSeekMoE</a>｜<a href="../deepseek-v4/deepseek-mhc.html">mHC</a></li>
+  <li><b>入门系列</b>：MoE <a href="../moe/moe-t0-foundation.html">第 0 讲</a>｜量化 <a href="../quantization/quant-t0-foundation.html">第 0 讲</a>（FP4/FP8 背景见 <a href="../quantization/quant-t4-ultra-low-bit.html">第 4 讲</a>、<a href="../quantization/quant-t5-kv-systems.html">第 5 讲</a>）｜RL <a href="../rl/rl-t0-foundation.html">第 0 讲</a>（GRPO 背景 <a href="../rl/rl-t5-rlvr-grpo.html">第 5 讲</a>）</li>
   <li><b>论文</b>：DeepSeek-AI. <i>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</i>. 本地 <code>paper/deepseek_v41.pdf</code>；模型权重 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash">deepseek-ai/DeepSeek-V4.1-Flash</a>。本讲未引用官方推理源码（本讲为纯论文综述，代码级分析见后续讲次）。</li>
 </ul>
 </footer>

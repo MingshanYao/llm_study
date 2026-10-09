@@ -45,20 +45,22 @@ effort: high
 - **怎么实现的**：论文伪代码 + 真实源码逐段讲解，说明代码与公式的对应关系。
 
 ### 5. 产出 HTML 报告
-写入 `docs/<slug>.html`（slug 用英文短横线，如 `docs/deepseek-v4-attention.html`）。
+写入 `docs/<系列子目录>/<slug>.html`（slug 用英文短横线）。系列子目录按内容归入其一：`deepseek-v4`（DeepSeek V4 及配套技术的单篇专题解读）、`deepseek-v41`（V4.1 七讲）、`moe`、`quantization`、`rl`（三个零基础系列的新讲次）、`misc`（无法归入以上系列的单篇，如综述、跨领域速成）。
 - **以 `docs/_template.html` 为唯一模板**：Read 该文件，原样保留 head（内联 CSS 与钉死版本 + SRI 的 CDN 引用），只替换三个占位符：`{{TITLE}}`（报告标题）、`{{CONTENT}}`（`<main>` 内的全部正文）、`{{DATE}}`（生成日期）。禁止更换 CDN、升级版本或去掉 integrity/crossorigin；确需新第三方资源时先征得用户同意。
 - {{CONTENT}} 内部结构：元信息（日期、arxiv 链接、代码仓库链接 + commit hash 与抓取日期、本地 paper 文件名）→ TL;DR → 解决什么问题 → 设计原理（公式 + 对比表/示意图）→ 代码实现讲解（真实片段 + 逐段解释）→ 复杂度/效果对比 → 事实与推断的边界 → 参考来源列表。
 - 关键流程必须配图：核心机制的数据流/架构/对比类内容至少各配一张内联 SVG 图（总览图、机制流程图、量化对比图是最低要求），图的编号按出现顺序并在图注中说明对应论文章节或公式；辅助性内容可用 HTML 表格。不依赖外部图片。
 - 生成后自检（按顺序）：
   1. 标签闭合：统计 html/head/body/main/table/svg 等标签的开闭数量是否一致；
   2. 代码片段的 `文件:行号` 与克隆仓库逐一核对；
-  3. 实际渲染验证：在 repo 根目录后台起 `python3 -m http.server <端口>`，`curl -s -o /dev/null -w "%{http_code}"` 确认新报告、`docs/index.html`、`docs/reports.json` 均返回 200，且 reports.json 可被 `python3 -m json.tool` 解析，验证完停掉服务。
+  3. 实际渲染验证：在 repo 根目录后台起 `python3 -m http.server <端口>`，`curl -s -o /dev/null -w "%{http_code}"` 确认新报告、`docs/index.html`、`docs/reports.js` 均返回 200，且 reports.js 可通过 `node --check` 语法校验，验证完停掉服务。
 
 ### 6. 更新索引
-维护 `docs/reports.json`（数组，每项含 slug/title/date/paper/arxiv/repo 字段）与 `docs/index.html`：
-- index.html 是简洁的中文报告列表页，用内联 JS `fetch('reports.json')` 按日期倒序渲染卡片，链接到各报告 HTML。
-- 新增报告后更新 reports.json（追加条目）；index.html 只在缺失时创建。
-- docs/ 下不放构建产物，保持 GitHub Pages 可直接从 main 分支 /docs 目录发布。
+维护 `docs/reports.js`（`var REPORTS = [...]`，每项含 slug/title/date/paper/arxiv/repo/group 字段；slug 为 `<系列子目录>/<名称>`，group 即系列子目录名）与 `docs/index.html`：
+- 报告索引用 reports.js 而非 reports.json + fetch：`<script src>` 在 file:// 下双击 index.html 也能加载，fetch 会因 CORS 失败。
+- index.html 是简洁的中文报告列表页，`<script src="reports.js">` 加载后按 GROUPS 定义的系列顺序分组渲染卡片，链接到各报告 HTML（slug 直接拼 `.html`）。
+- 新增报告后更新 reports.js（追加到对应 group 的条目序列里）；index.html 只在缺失时创建。
+- 跨报告链接写相对路径：同系列直接文件名，跨系列用 `../<目录>/<文件>.html`。
+- docs/ 根目录只放 index.html、reports.js、_template.html，报告一律进系列子目录；不放构建产物，保持 GitHub Pages 可直接从 main 分支 /docs 目录发布。
 
 ### 7. 收尾汇报
 向用户报告：报告文件路径、一句话结论（该技术解决了什么问题）、引用的论文与代码仓库列表、GitHub Pages 发布提示（Settings → Pages → Deploy from a branch → main /docs）。

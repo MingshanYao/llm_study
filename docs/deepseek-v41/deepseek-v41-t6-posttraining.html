@@ -114,7 +114,7 @@ window.MathJax = {
 <div class="meta">
   <p style="margin:4px 0"><b>本讲范围：</b>论文 §5 Post-Training 全节（§5.1 后训练流水线 / 任务合成 / 合成任务上的 RL / DSec 沙箱平台 / 可控推理努力；§5.2 异步后训练基础设施；§5.3 评测）+ 附录 C（推理努力控制中的指数 token 惩罚）。</p>
   <p style="margin:4px 0"><b>论文：</b>DeepSeek-V4.1-Flash 技术报告；本地归档 <code>paper/deepseek_v41.pdf</code>（51 页英文）。本系列第 0–5 讲见顶部导航。</p>
-  <p style="margin:4px 0"><b>前置要求：</b>零基础可读。涉及 RL 训练机制的深入推导可延伸阅读系列 <a href="rl-t5-rlvr-grpo.html">RL 第 5 讲·RLVR 与 GRPO</a>、<a href="rl-t6-systems.html">RL 第 6 讲·系统与实战</a>；模型架构背景见 <a href="deepseek-v4-architecture.html">DeepSeek-V4 架构精读</a>。</p>
+  <p style="margin:4px 0"><b>前置要求：</b>零基础可读。涉及 RL 训练机制的深入推导可延伸阅读系列 <a href="../rl/rl-t5-rlvr-grpo.html">RL 第 5 讲·RLVR 与 GRPO</a>、<a href="../rl/rl-t6-systems.html">RL 第 6 讲·系统与实战</a>；模型架构背景见 <a href="../deepseek-v4/deepseek-v4-architecture.html">DeepSeek-V4 架构精读</a>。</p>
   <p style="margin:4px 0"><b>免责声明：</b>本文为个人学习笔记；所有数字均出自论文原文（注明出处），论文未明说的内容以「推断」标注框显式区分。</p>
 </div>
 
@@ -124,11 +124,11 @@ window.MathJax = {
 
 <h2>一、铺路：预训练之后，模型还差什么</h2>
 
-<p>第 5 讲讲过：预训练是让模型读完全世界的书，学会「接着上文写下一个 token」。这样得到的 <b>base model（基座模型）</b>像个博览群书但没上过班的实习生——知识很多，但不会按指令干活、不会用工具、答错了也不知道。把基座变成能用的助手，靠的就是<b>后训练（post-training）</b>。后训练的主流演进路线有三代，这里各用一两句白话交代（深入推导见 <a href="rl-t0-foundation.html">RL 零基础七讲</a>）：</p>
+<p>第 5 讲讲过：预训练是让模型读完全世界的书，学会「接着上文写下一个 token」。这样得到的 <b>base model（基座模型）</b>像个博览群书但没上过班的实习生——知识很多，但不会按指令干活、不会用工具、答错了也不知道。把基座变成能用的助手，靠的就是<b>后训练（post-training）</b>。后训练的主流演进路线有三代，这里各用一两句白话交代（深入推导见 <a href="../rl/rl-t0-foundation.html">RL 零基础七讲</a>）：</p>
 
-<p><b>① SFT（监督微调）</b>——「抄范文」。给模型看大量「问题 + 标准回答」的样本对，让它模仿着答。便宜、稳定，但模型只能学到「范文里有的招」，天花板是示范数据的质量。<b>② RLHF（基于人类反馈的强化学习）</b>——「请考官打分」。让人类（或模仿人类偏好的奖励模型）给模型的多个回答打分，模型通过强化学习（RL，一种「试错 + 奖励驱动」的学习方式，好比训练小狗：做对了给零食）学会朝高分方向调整。<b>③ RLVR（基于可验证奖励的强化学习）</b>——「只考有标准答案的题」。打分不再靠主观偏好，而是靠<b>可验证的判分器（verifier）</b>：数学题对不对、代码能不能跑过测试、任务有没有完成。奖励客观、难造假，是近两年推理能力突飞猛进的主力配方（详见 <a href="rl-t5-rlvr-grpo.html">RL 第 5 讲</a>）。本讲的 RL 全部属于 RLVR 范式，用的优势估计是 GRPO 一类的「组内比较」方法——同一道题采样一组回答，在组内互比算分，详见 §5.1.4 与 <a href="rl-t5-rlvr-grpo.html">RL 第 5 讲</a>。</p>
+<p><b>① SFT（监督微调）</b>——「抄范文」。给模型看大量「问题 + 标准回答」的样本对，让它模仿着答。便宜、稳定，但模型只能学到「范文里有的招」，天花板是示范数据的质量。<b>② RLHF（基于人类反馈的强化学习）</b>——「请考官打分」。让人类（或模仿人类偏好的奖励模型）给模型的多个回答打分，模型通过强化学习（RL，一种「试错 + 奖励驱动」的学习方式，好比训练小狗：做对了给零食）学会朝高分方向调整。<b>③ RLVR（基于可验证奖励的强化学习）</b>——「只考有标准答案的题」。打分不再靠主观偏好，而是靠<b>可验证的判分器（verifier）</b>：数学题对不对、代码能不能跑过测试、任务有没有完成。奖励客观、难造假，是近两年推理能力突飞猛进的主力配方（详见 <a href="../rl/rl-t5-rlvr-grpo.html">RL 第 5 讲</a>）。本讲的 RL 全部属于 RLVR 范式，用的优势估计是 GRPO 一类的「组内比较」方法——同一道题采样一组回答，在组内互比算分，详见 §5.1.4 与 <a href="../rl/rl-t5-rlvr-grpo.html">RL 第 5 讲</a>。</p>
 
-<p>此外还有第四件武器 <b>OPD（on-policy distillation，在线蒸馏）</b>：让「学生模型」自己生成回答，再由更强大的「老师模型」在同一份内容上给出它认为的概率分布，学生学着向老师靠拢——好比学生自己写作文，老师逐句示范「换我写会怎么写」，这比直接抄老师范文（SFT）学得更细致（细节见 <a href="rl-t6-systems.html">RL 第 6 讲</a>）。DeepSeek 的后训练配方就是 <b>SFT → RL → OPD</b> 三段式，V4.1 沿用不变。</p>
+<p>此外还有第四件武器 <b>OPD（on-policy distillation，在线蒸馏）</b>：让「学生模型」自己生成回答，再由更强大的「老师模型」在同一份内容上给出它认为的概率分布，学生学着向老师靠拢——好比学生自己写作文，老师逐句示范「换我写会怎么写」，这比直接抄老师范文（SFT）学得更细致（细节见 <a href="../rl/rl-t6-systems.html">RL 第 6 讲</a>）。DeepSeek 的后训练配方就是 <b>SFT → RL → OPD</b> 三段式，V4.1 沿用不变。</p>
 
 <h2>二、总路线：不发明新算法，把「练什么」做到极致（§5.1）</h2>
 
@@ -326,7 +326,7 @@ window.MathJax = {
 
 <h3>4.1 训练信号：GRPO 式组内比较</h3>
 
-<p>论文没有重新设计 RL 算法（§5.1 原话「不引入新算法」），但多处透露了其形态：§5.2.1 提到 dispatch 以「<b>GRPO group size</b>」为单位；§5.1.4 提到「同一 <code>(x, b)</code> 的回答构成 <b>subgroup（子组），组内奖励做均值中心化后计算组相对优势（group-relative advantages）</b>」。这正是 GRPO（Group Relative Policy Optimization）的标志性做法：同一道题采一组回答，用「组内均值」当基准线，高于均值的动作被加强、低于的被抑制——省掉了 PPO 那套额外的价值网络（原理与推导见 <a href="rl-t5-rlvr-grpo.html">RL 第 5 讲</a>）。</p>
+<p>论文没有重新设计 RL 算法（§5.1 原话「不引入新算法」），但多处透露了其形态：§5.2.1 提到 dispatch 以「<b>GRPO group size</b>」为单位；§5.1.4 提到「同一 <code>(x, b)</code> 的回答构成 <b>subgroup（子组），组内奖励做均值中心化后计算组相对优势（group-relative advantages）</b>」。这正是 GRPO（Group Relative Policy Optimization）的标志性做法：同一道题采一组回答，用「组内均值」当基准线，高于均值的动作被加强、低于的被抑制——省掉了 PPO 那套额外的价值网络（原理与推导见 <a href="../rl/rl-t5-rlvr-grpo.html">RL 第 5 讲</a>）。</p>
 
 <div class="infer">论文只确认了「组内均值中心化计算优势」这一 GRPO 核心要素，未公布完整的 RL 损失函数、clip 策略与超参数。把它归为「GRPO 类组相对方法」是安全的；具体实现细节属于未公开信息。</div>
 
@@ -562,7 +562,7 @@ a_x \exp\!\left(-\dfrac{\ell^*}{s_x}\right) = \dfrac{k_0 \exp\!\left(-\frac{b-b_
 
 <h3>7.1 为什么要异步：rollout 的长尾问题</h3>
 
-<p>先补一个背景（<a href="rl-t6-systems.html">RL 第 6 讲</a>有系统讲解）：RL 训练的一步分两个阶段——<b>rollout（采样）</b>：让当前模型在环境里做题、生成轨迹；<b>training（训练）</b>：拿轨迹算梯度、更新权重。同步做法是「所有人做完题 → 一起训练 → 再发下一批题」，但 agentic 任务的轨迹时长极度不均：有的样本几分钟跑完，有的（装环境、跑长测试）要几小时——<b>长尾问题</b>。同步模式下每一步都得等最慢的那个，GPU 大量时间在空转。DeepSeek 的解法是把后训练基建改成<b>异步生成样本</b>：滚动地派题、收样本、攒够就训，靠维持足够高的并发「淹没」长尾。论文称异步训练现已用于<b>几乎所有 RL 和 OPD 任务</b>，rollout 效率大幅提升。</p>
+<p>先补一个背景（<a href="../rl/rl-t6-systems.html">RL 第 6 讲</a>有系统讲解）：RL 训练的一步分两个阶段——<b>rollout（采样）</b>：让当前模型在环境里做题、生成轨迹；<b>training（训练）</b>：拿轨迹算梯度、更新权重。同步做法是「所有人做完题 → 一起训练 → 再发下一批题」，但 agentic 任务的轨迹时长极度不均：有的样本几分钟跑完，有的（装环境、跑长测试）要几小时——<b>长尾问题</b>。同步模式下每一步都得等最慢的那个，GPU 大量时间在空转。DeepSeek 的解法是把后训练基建改成<b>异步生成样本</b>：滚动地派题、收样本、攒够就训，靠维持足够高的并发「淹没」长尾。论文称异步训练现已用于<b>几乎所有 RL 和 OPD 任务</b>，rollout 效率大幅提升。</p>
 
 <h3>7.2 总体工作流：同机分时 + 样本级派发（§5.2.1）</h3>
 
@@ -594,7 +594,7 @@ a_x \exp\!\left(-\dfrac{\ell^*}{s_x}\right) = \dfrac{k_0 \exp\!\left(-\frac{b-b_
   <li><b>丢弃早到的短样本</b>：支持直接丢弃过早返回的短样本，平滑过渡到稳态长度分布，防止模型过拟合到过短的序列。</li>
 </ul>
 
-<p><b>副作用二：off-policy 样本（staleness，陈旧）。</b>异步下，样本的 token 可能部分或全部由<b>较早的 checkpoint</b> 生成——等你拿它训模型时，模型已经又走了几步，这份「旧模型的经验」与当前策略有偏差，这正是 RL 里的 off-policy 问题（概念详解见 <a href="rl-t2-llm-as-rl.html">RL 第 2 讲</a>；数值失配的极端情形见 <a href="rl-t7-score-centering.html">番外篇</a>）。论文的两条缓解：</p>
+<p><b>副作用二：off-policy 样本（staleness，陈旧）。</b>异步下，样本的 token 可能部分或全部由<b>较早的 checkpoint</b> 生成——等你拿它训模型时，模型已经又走了几步，这份「旧模型的经验」与当前策略有偏差，这正是 RL 里的 off-policy 问题（概念详解见 <a href="../rl/rl-t2-llm-as-rl.html">RL 第 2 讲</a>；数值失配的极端情形见 <a href="../rl/rl-t7-score-centering.html">番外篇</a>）。论文的两条缓解：</p>
 <ul>
   <li><b>限制最大 off-policy 比例</b>：通过调校样本派发逻辑与训练样本的等待条件，为「训练数据偏离当前模型的程度」设一个上界——太旧的样本干脆不攒进训练批；</li>
   <li><b>损失掩码（loss masking）</b>：训练时把<b>过度陈旧（excessive staleness）的 token 的梯度贡献直接抹掉</b>——旧数据可以参考，但过度过期的部分不让它污染梯度。</li>
@@ -665,7 +665,7 @@ a_x \exp\!\left(-\dfrac{\ell^*}{s_x}\right) = \dfrac{k_0 \exp\!\left(-\frac{b-b_
 
 <ul>
   <li><b>token 级打断</b>：生成可以在任意 token 边界停下；训练数据一够，所有在飞样本几乎立刻停，系统零延迟进入训练；</li>
-  <li><b>状态按 token 粒度持久化</b>：rollout 状态（KV cache——模型已读内容的「工作记忆」，见 <a href="deepseek-v4-kvcache.html">KV cache 精读</a>——以及 MoE 专家路由）在生成过程中随写随存；换新 checkpoint 恢复时直接复用，<b>省掉重新 prefill（重读前文）的开销</b>，样本从断点原样继续；</li>
+  <li><b>状态按 token 粒度持久化</b>：rollout 状态（KV cache——模型已读内容的「工作记忆」，见 <a href="../deepseek-v4/deepseek-v4-kvcache.html">KV cache 精读</a>——以及 MoE 专家路由）在生成过程中随写随存；换新 checkpoint 恢复时直接复用，<b>省掉重新 prefill（重读前文）的开销</b>，样本从断点原样继续；</li>
   <li><b>样本粒度垃圾回收</b>：要在飞样本的状态全都要留着，所以哪个样本完成就立刻释放它的状态；</li>
   <li>同一套「快打断 + 无缝续跑」机制还让训练任务能及时响应<b>集群调度抢占信号</b>而不丢进度，提升整体集群利用率。</li>
 </ul>

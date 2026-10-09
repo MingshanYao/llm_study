@@ -114,7 +114,7 @@ window.MathJax = {
 <p style="margin:4px 0"><b>日期：</b>2026-09-20　<b>系列：</b>DeepSeek-V4.1 零基础七讲（第 1 讲，架构篇）</p>
 <p style="margin:4px 0"><b>论文：</b><i>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</i>（DeepSeek-AI，本地 <code>paper/deepseek_v41.pdf</code>，51 页；模型卡 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash">huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash</a>）。本讲覆盖 §1 Introduction、§2.1 Overview、§2.1.1 Multimodal Architecture、§2.2 CED、§2.5 Optimization、§4.2.1 Model Setups（印刷页 4–9、14–15、21–22，物理页 7–12、17–18、24–25）。</p>
 <p style="margin:4px 0"><b>说明：</b>本讲聚焦 CED（Causal Encoder-Decoder）机制与模型总览。§2.3 CSA2（跨层 KV 复用注意力）归第 2 讲，§2.4 架构扩展（Single-Pass mHC / Engram / DSpark / FP4 KV）归第 3 讲，本讲各用一句话带过。</p>
-<p style="margin:4px 0"><b>姊妹篇交叉引用：</b><a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>、<a href="deepseek-v4-attention.html">DeepSeek-V4 Attention（CSA/HCA）</a>、<a href="deepseek-moe.html">DeepSeekMoE 解读</a>、<a href="moe-t0-foundation.html">MoE 零基础系列（t0–t4）</a>。</p>
+<p style="margin:4px 0"><b>姊妹篇交叉引用：</b><a href="../deepseek-v4/deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a>、<a href="../deepseek-v4/deepseek-v4-attention.html">DeepSeek-V4 Attention（CSA/HCA）</a>、<a href="../deepseek-v4/deepseek-moe.html">DeepSeekMoE 解读</a>、<a href="../moe/moe-t0-foundation.html">MoE 零基础系列（t0–t4）</a>。</p>
 </div>
 
 <div class="tldr">
@@ -170,7 +170,7 @@ window.MathJax = {
 
 <h2 id="s2">2. V4.1-Flash 模型总览：552B MoE，prefill 8B / decode 16B</h2>
 
-<p>先解决两个术语。<b>MoE（Mixture-of-Experts，专家混合）</b>：把每层的一个大前馈网络换成一大群小专家网络，每个 token 只挑其中几个用——好比一家大医院有很多专科医生，每个病人只看其中几位。这样「总参数多（知识渊博）」和「每次计算少（便宜快速）」可以兼得（详见 <a href="deepseek-moe.html">DeepSeekMoE 解读</a> 与 <a href="moe-t0-foundation.html">MoE 零基础系列</a>）。<b>激活参数</b>：处理每个 token 时真正参与计算的参数量，区别于存着不用的总参数量。</p>
+<p>先解决两个术语。<b>MoE（Mixture-of-Experts，专家混合）</b>：把每层的一个大前馈网络换成一大群小专家网络，每个 token 只挑其中几个用——好比一家大医院有很多专科医生，每个病人只看其中几位。这样「总参数多（知识渊博）」和「每次计算少（便宜快速）」可以兼得（详见 <a href="../deepseek-v4/deepseek-moe.html">DeepSeekMoE 解读</a> 与 <a href="../moe/moe-t0-foundation.html">MoE 零基础系列</a>）。<b>激活参数</b>：处理每个 token 时真正参与计算的参数量，区别于存着不用的总参数量。</p>
 
 <p>论文摘要与 §2.1 给出的整体规格如下（均为论文原文数字）：</p>
 
@@ -551,7 +551,7 @@ window.MathJax = {
   <li><b>主论文</b>：DeepSeek-AI. <i>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</i>（本地 <code>paper/deepseek_v41.pdf</code>）。本讲引用章节：摘要、§1（物理 7–9）、§2.1/§2.1.1（物理 10–11）、§2.2 CED（物理 12）、§2.3/§2.3.2（物理 12–14，一带而过）、§2.4/§2.5（物理 15–18）、§3.2.2（物理 23）、§4.2.1/§4.2.2（物理 24–25）、Table 1（物理 27）。</li>
   <li><b>模型</b>：<a href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash">deepseek-ai/DeepSeek-V4.1-Flash</a>（HuggingFace 模型卡，见论文摘要）。</li>
   <li><b>背景方法</b>：YoCo（Sun et al., 2024）、DeepSeekMoE（Dai et al., 2024）、辅助损失-free 负载均衡（Wang et al., 2024a）、mHC（Xie et al., 2026）、Engram（Cheng et al., 2026b）、DSpark（Cheng et al., 2026a）、Muon（Jordan et al., 2024；Liu et al., 2025）、SinkGD（Scetbon et al., 2025）——引用关系见论文参考文献。</li>
-  <li><b>站内交叉引用</b>：<a href="deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a> · <a href="deepseek-v4-attention.html">DeepSeek-V4 Attention（CSA/HCA）</a> · <a href="deepseek-moe.html">DeepSeekMoE 解读</a> · <a href="moe-t0-foundation.html">MoE 零基础系列</a> · <a href="csa-compression.html">CSA 压缩过程详解</a></li>
+  <li><b>站内交叉引用</b>：<a href="../deepseek-v4/deepseek-v4-architecture.html">DeepSeek-V4 架构解读</a> · <a href="../deepseek-v4/deepseek-v4-attention.html">DeepSeek-V4 Attention（CSA/HCA）</a> · <a href="../deepseek-v4/deepseek-moe.html">DeepSeekMoE 解读</a> · <a href="../moe/moe-t0-foundation.html">MoE 零基础系列</a> · <a href="../deepseek-v4/csa-compression.html">CSA 压缩过程详解</a></li>
 </ul>
 </footer>
 

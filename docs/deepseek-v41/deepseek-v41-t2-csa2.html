@@ -108,7 +108,7 @@ window.MathJax = {
 <div class="meta">
   <p style="margin:4px 0"><b>日期：</b>2026-09-20　<b>系列：</b>DeepSeek-V4.1 零基础七讲（第 2 讲 / 共 7 讲）</p>
   <p style="margin:4px 0"><b>论文：</b><i>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</i>（DeepSeek-AI，本地 <code>paper/deepseek_v41.pdf</code>，共 51 页；模型权重见 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash">HuggingFace</a>）。本讲对应论文 §2.3（CSA2）、§2.3.1（跨层复用）、§2.3.2（层级稀疏索引器）、§3.1.2（Attention Sharing 训练），并引用 §1、§2.4.4、§4.2.1、§6 的相关数字。</p>
-  <p style="margin:4px 0"><b>背景报告：</b><a href="deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读</a> · <a href="csa-compression.html">CSA 压缩过程详解</a> · <a href="deepseek-v4-lightning-indexer.html">Lightning Indexer 深度解读</a> · <a href="deepseek-v4-kvcache.html">V4 KV Cache 组织解读</a> · <a href="quant-t5-kv-systems.html">KV Cache 量化与推理系统</a></p>
+  <p style="margin:4px 0"><b>背景报告：</b><a href="../deepseek-v4/deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读</a> · <a href="../deepseek-v4/csa-compression.html">CSA 压缩过程详解</a> · <a href="../deepseek-v4/deepseek-v4-lightning-indexer.html">Lightning Indexer 深度解读</a> · <a href="../deepseek-v4/deepseek-v4-kvcache.html">V4 KV Cache 组织解读</a> · <a href="../quantization/quant-t5-kv-systems.html">KV Cache 量化与推理系统</a></p>
   <p style="margin:4px 0"><b>说明：</b>截至本讲撰写日，论文未附带官方开源参考实现，本讲全部代码级细节以论文文字与配置数字为准；所有「推断」内容均以黄色虚线框单独标注。</p>
 </div>
 
@@ -158,7 +158,7 @@ window.MathJax = {
 
 <p><b>V4 世代做了什么？</b>V4 采用「<b>全局注意力分支 + 滑窗注意力（SWA）</b>」的混合结构（论文 §1 回顾）：全局分支负责「看全部历史」，它的 KV 叫<b>全局 KV</b>，由两部分组成——<b>main KV</b>（真正参与注意力计算的主体）和 <b>indexer K</b>（给索引器用的检索钥匙）；SWA 只看最近一个窗口（如最近 128 个 token）的原始 token，窗口固定，所以 SWA 的 KV 存储量不随上下文增长。上下文足够长时，<b>全局 KV 主导了运行时 KV cache 的体量</b>，这就是 V4.1 要集中火力的靶子。</p>
 
-<p>全局分支内部，V4 用 <b>CSA（压缩稀疏注意力）</b>解决「存」和「算」两件事（详见<a href="deepseek-v4-attention.html">背景报告</a>）：</p>
+<p>全局分支内部，V4 用 <b>CSA（压缩稀疏注意力）</b>解决「存」和「算」两件事（详见<a href="../deepseek-v4/deepseek-v4-attention.html">背景报告</a>）：</p>
 <ul>
   <li><b>存：序列维压缩。</b>每 m 个 token 经「可学习门控池化」压成 1 条 512 维的 main KV entry，entry 数从 N 变成 N/m；</li>
   <li><b>算：稀疏检索。</b>一个轻量的 <b>Lightning Indexer</b> 用 indexer Q 和 indexer K 给每条 entry 打相关度分，每个查询只挑出得分最高的 Top-K 条 entry 参与真正的注意力计算——「先检索、后精读」，像搜索引擎先筛出前几页结果再逐条打开。</li>
@@ -580,7 +580,7 @@ window.MathJax = {
 
   <text x="20" y="340" font-size="12" fill="#5a6272">注：招式二（层级稀疏索引器）省的是索引打分计算而非 KV 存储，故不出现在字节瀑布中；滑窗 KV（FP8，窗口固定 128 token）不属于全局 KV，另行单独计。</text>
 </svg>
-<p class="cap"><b>图 4</b>｜全局 KV 字节瀑布。从「无共享 FP8」的反事实基线（≈19.7 KB/token，推断）出发：跨层共享贡献 ≈11.6×，FP4 量化贡献 ≈1.9×，终点与论文 890 B 对上。<b>只有终点数字是论文事实，两级压缩倍率与中间条均为推断</b>。另可对照：V4-Flash 全局 KV ≈ 3.6–3.8 KB/token（<a href="deepseek-v4-kvcache.html">背景报告</a>推算），与「890 B ≈ 其 1/4」相容。</p>
+<p class="cap"><b>图 4</b>｜全局 KV 字节瀑布。从「无共享 FP8」的反事实基线（≈19.7 KB/token，推断）出发：跨层共享贡献 ≈11.6×，FP4 量化贡献 ≈1.9×，终点与论文 890 B 对上。<b>只有终点数字是论文事实，两级压缩倍率与中间条均为推断</b>。另可对照：V4-Flash 全局 KV ≈ 3.6–3.8 KB/token（<a href="../deepseek-v4/deepseek-v4-kvcache.html">背景报告</a>推算），与「890 B ≈ 其 1/4」相容。</p>
 </div>
 
 <h3>6.3 招式二的账：省的是算力</h3>
@@ -602,7 +602,7 @@ window.MathJax = {
   <tr><td>缓存精度</td><td>主 KV FP8；indexer Q/K 已用 FP4 QAT</td><td>主 KV 也 FP4（E2M1 + 每 16 通道 E4M3 scale，RoPE 后量化）；SWA KV 因对量化敏感仍 FP8</td></tr>
   <tr><td>结果</td><td>全局 KV ≈ 3.6–3.8 KB/token（背景报告推算）</td><td><b>890 B/token</b>（论文），性能反而更优</td></tr>
 </table>
-<p class="cap"><b>表 8</b>｜CSA2 相对 CSA 的变化（左列事实出自两代论文，V4 侧细节转述自 V4.1 论文 §2.3 与 <a href="csa-compression.html">CSA 压缩详解</a>）。去掉重叠双分支与绝对位置编码是「简化」而非「退化」——它们原本服务于压缩边界平滑，而在 m 很小（编码器 m=2、解码器 m=1）时收益有限、成本却在。</p>
+<p class="cap"><b>表 8</b>｜CSA2 相对 CSA 的变化（左列事实出自两代论文，V4 侧细节转述自 V4.1 论文 §2.3 与 <a href="../deepseek-v4/csa-compression.html">CSA 压缩详解</a>）。去掉重叠双分支与绝对位置编码是「简化」而非「退化」——它们原本服务于压缩边界平滑，而在 m 很小（编码器 m=2、解码器 m=1）时收益有限、成本却在。</p>
 
 <h3>7.2 代价与取舍</h3>
 
@@ -663,7 +663,7 @@ window.MathJax = {
 <ol class="refs">
   <li>DeepSeek-AI. <i>DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression</i>. 本地归档 <code>paper/deepseek_v41.pdf</code>（51 页）。本讲引用：摘要、§1（Introduction）、§2.1（Overview）、§2.3–2.3.2（CSA2 / 跨层复用 / 层级稀疏索引器）、§2.4.4（FP4 Main KV Cache）、§3.1.2（Attention Sharing Training）、§3.2（推理系统数字）、§4.2.1（Model Setups 配置）、§4.2.2（Training Setups）、§6（Conclusion 与鲁棒性边界）。</li>
   <li>DeepSeek-AI. <i>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</i>. arXiv:2606.19348（本地 <code>paper/deepseek_v4.pdf</code>）。本讲仅经 V4.1 论文的转述引用其 CSA/Lightning Indexer 概念，细节见背景报告。</li>
-  <li>背景报告（本仓库 docs/）：<a href="deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读</a>、<a href="csa-compression.html">CSA 压缩过程详解</a>（含 V4-Pro 压缩器逐式拆解与字节口径）、<a href="deepseek-v4-lightning-indexer.html">Lightning Indexer 深度解读</a>、<a href="deepseek-v4-kvcache.html">V4 KV Cache 组织解读</a>（含 V4-Flash 每 token 字节推算口径）、<a href="quant-t5-kv-systems.html">KV Cache 量化与推理系统落地</a>。</li>
+  <li>背景报告（本仓库 docs/）：<a href="../deepseek-v4/deepseek-v4-attention.html">DeepSeek-V4 Attention 设计解读</a>、<a href="../deepseek-v4/csa-compression.html">CSA 压缩过程详解</a>（含 V4-Pro 压缩器逐式拆解与字节口径）、<a href="../deepseek-v4/deepseek-v4-lightning-indexer.html">Lightning Indexer 深度解读</a>、<a href="../deepseek-v4/deepseek-v4-kvcache.html">V4 KV Cache 组织解读</a>（含 V4-Flash 每 token 字节推算口径）、<a href="../quantization/quant-t5-kv-systems.html">KV Cache 量化与推理系统落地</a>。</li>
   <li>论文中提及的层维压缩前人工作（转述自 §2.3）：IndexCache（arXiv:2603.12201）、YOIO、HySparse（arXiv:2602.03560）、Brandon et al., NeurIPS 2024（cross-layer attention）。</li>
 </ol>
 

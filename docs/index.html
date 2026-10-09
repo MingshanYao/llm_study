@@ -18,13 +18,19 @@
   main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
   h1 { font-size: 1.7em; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 32px; font-size: 0.95em; }
+  h2.series {
+    font-size: 1.15em; margin: 36px 0 4px; color: var(--ink);
+    padding-bottom: 6px; border-bottom: 2px solid var(--line);
+  }
+  h2.series:first-of-type { margin-top: 0; }
+  .series .count { color: var(--muted); font-size: 0.8em; font-weight: 400; margin-left: 8px; }
   .card {
     display: block; background: #fff; border: 1px solid var(--line); border-radius: 12px;
     padding: 18px 22px; margin: 14px 0; text-decoration: none; color: inherit;
     transition: border-color .15s, box-shadow .15s;
   }
   .card:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(36,86,196,.08); text-decoration: none; }
-  .card h2 { font-size: 1.08em; margin: 0 0 6px; color: var(--accent); }
+  .card h3 { font-size: 1.02em; margin: 0 0 6px; color: var(--accent); font-weight: 600; }
   .card p { margin: 2px 0; color: var(--muted); font-size: 0.88em; }
   .card .tags { margin-top: 8px; }
   .pill {
@@ -37,29 +43,49 @@
 <body>
 <main>
   <h1>LLM 论文研究报告</h1>
-  <p class="sub">按日期倒序排列 · 报告为自包含单文件 HTML，公式用 MathJax 渲染</p>
-  <div id="list"><p id="err">正在加载 reports.json …</p></div>
+  <p class="sub">按系列分组 · 报告为自包含单文件 HTML，公式用 MathJax 渲染</p>
+  <div id="list"><p id="err">正在加载报告索引 …</p></div>
 </main>
+<script src="reports.js"></script>
 <script>
-fetch('reports.json')
-  .then(r => r.json())
-  .then(items => {
-    items.sort((a, b) => b.date.localeCompare(a.date));
-    const list = document.getElementById('list');
-    list.innerHTML = items.map(it =>
-      '<a class="card" href="' + it.slug + '.html">' +
-        '<h2>' + it.title + '</h2>' +
-        '<p>' + it.date + (it.paper ? ' · ' + it.paper : '') + '</p>' +
-        '<div class="tags">' +
-          (it.arxiv ? '<span class="pill">arXiv</span>' : '') +
-          (it.repo ? '<span class="pill">官方代码</span>' : '') +
-        '</div>' +
-      '</a>'
-    ).join('');
-  })
-  .catch(() => {
-    document.getElementById('err').textContent = 'reports.json 加载失败（如直接以 file:// 打开，请通过本地 HTTP 服务访问，例如：python3 -m http.server）。';
-  });
+const GROUPS = [
+  ['deepseek-v4',    'DeepSeek V4 专题解读'],
+  ['deepseek-v41',   'DeepSeek-V4.1 零基础七讲'],
+  ['moe',            'MoE 零基础五讲'],
+  ['quantization',   '大模型量化零基础七讲'],
+  ['rl',             'RL 训练工程师零基础七讲'],
+  ['misc',           '综述与其他'],
+];
+const card = it =>
+  '<a class="card" href="' + it.slug + '.html">' +
+    '<h3>' + it.title + '</h3>' +
+    '<p>' + it.date + (it.paper ? ' · ' + it.paper : '') + '</p>' +
+    '<div class="tags">' +
+      (it.arxiv ? '<span class="pill">arXiv</span>' : '') +
+      (it.repo ? '<span class="pill">官方代码</span>' : '') +
+    '</div>' +
+  '</a>';
+
+if (typeof REPORTS === 'undefined') {
+  document.getElementById('err').textContent = '报告索引 reports.js 加载失败，请确认它与 index.html 在同一目录。';
+} else {
+  const byGroup = {};
+  for (const it of REPORTS) (byGroup[it.group] = byGroup[it.group] || []).push(it);
+  let html = '';
+  for (const [id, label] of GROUPS) {
+    const list = byGroup[id] || [];
+    if (!list.length) continue;
+    html += '<h2 class="series">' + label +
+            '<span class="count">' + list.length + ' 篇</span></h2>' +
+            list.map(card).join('');
+    delete byGroup[id];
+  }
+  const rest = Object.values(byGroup).flat();
+  if (rest.length)
+    html += '<h2 class="series">其他<span class="count">' + rest.length + ' 篇</span></h2>' +
+            rest.map(card).join('');
+  document.getElementById('list').innerHTML = html;
+}
 </script>
 </body>
 </html>

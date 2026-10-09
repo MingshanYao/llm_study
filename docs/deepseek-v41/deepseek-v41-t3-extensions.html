@@ -86,7 +86,7 @@ window.MathJax = {
 <div class="meta">
 <p style="margin:4px 0"><b>日期：</b>2026-09-20　<b>系列：</b>DeepSeek-V4.1 零基础七讲 · 第 3 讲（架构扩展篇）</p>
 <p style="margin:4px 0"><b>论文：</b><i>DeepSeek-V4.1-Flash Technical Report</i>（DeepSeek-AI），本地 <code>paper/deepseek_v41.pdf</code>（51 页）。本讲覆盖 §2.4 Efficient Architectural Extensions 全部四小节、§3.1.3（Engram 训练侧）、§2.5（Engram 相关优化器）、§1 Introduction（定位）与 §4.2.1/§6（配置与验证数字）。</p>
-<p style="margin:4px 0"><b>背景阅读：</b><a href="deepseek-mhc.html">DeepSeek mHC 解读</a>（mHC 原版详解）· <a href="deepseek-v4-architecture.html">DeepSeek-V4 总体架构解读</a> · <a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV Cache 组织解读</a> · <a href="quant-t4-ultra-low-bit.html">量化七讲·第 4 讲（MXFP4/NVFP4）</a> · <a href="quant-t5-kv-systems.html">量化七讲·第 5 讲（KV Cache 量化）</a></p>
+<p style="margin:4px 0"><b>背景阅读：</b><a href="../deepseek-v4/deepseek-mhc.html">DeepSeek mHC 解读</a>（mHC 原版详解）· <a href="../deepseek-v4/deepseek-v4-architecture.html">DeepSeek-V4 总体架构解读</a> · <a href="../deepseek-v4/deepseek-v4-kvcache.html">DeepSeek-V4 KV Cache 组织解读</a> · <a href="../quantization/quant-t4-ultra-low-bit.html">量化七讲·第 4 讲（MXFP4/NVFP4）</a> · <a href="../quantization/quant-t5-kv-systems.html">量化七讲·第 5 讲（KV Cache 量化）</a></p>
 <p style="margin:4px 0"><b>说明：</b>本讲只讲四个「架构扩展」；CED 架构与 CSA2 注意力这两条 KV 压缩主线见 <a href="deepseek-v41-t1-ced.html">第 1 讲</a> 与 <a href="deepseek-v41-t2-csa2.html">第 2 讲</a>。</p>
 </div>
 
@@ -128,7 +128,7 @@ window.MathJax = {
 
 <h3>1.1 背景一分钟：mHC 原版是什么</h3>
 
-<p>标准 Transformer 的<b>残差连接</b>（residual connection，即「每层的输出直接加回输入」这条主干道，像高速公路的主车道）只有一条 \(d\) 维的信息流。<b>Hyper-Connections（HC）</b>把它加宽成 \(n\) 条并行流（\(n \times d\)），用一个「读出」映射从 n 条流里调出本层的输入、一个「写回」映射把输出写回去、一个 \(n\times n\) 的「流间混合」矩阵管 n 条流互相串门。DeepSeek 的 <b>mHC</b>（流形约束超连接）在 HC 基础上把流间混合矩阵约束成「双随机矩阵」（行和 = 列和 = 1），解决 HC 复合增益失控导致的训练不稳定。<a href="deepseek-mhc.html">背景详解见姊妹篇</a>，此处只需记住：mHC 在 V4 里全面启用，本讲配置为 \(n=4\) 条流。</p>
+<p>标准 Transformer 的<b>残差连接</b>（residual connection，即「每层的输出直接加回输入」这条主干道，像高速公路的主车道）只有一条 \(d\) 维的信息流。<b>Hyper-Connections（HC）</b>把它加宽成 \(n\) 条并行流（\(n \times d\)），用一个「读出」映射从 n 条流里调出本层的输入、一个「写回」映射把输出写回去、一个 \(n\times n\) 的「流间混合」矩阵管 n 条流互相串门。DeepSeek 的 <b>mHC</b>（流形约束超连接）在 HC 基础上把流间混合矩阵约束成「双随机矩阵」（行和 = 列和 = 1），解决 HC 复合增益失控导致的训练不稳定。<a href="../deepseek-v4/deepseek-mhc.html">背景详解见姊妹篇</a>，此处只需记住：mHC 在 V4 里全面启用，本讲配置为 \(n=4\) 条流。</p>
 
 <p>记号对应关系要先说清（两篇论文记号不同）：mHC 论文里的三个映射 \(H^{pre}\)（读出）、\(H^{post}\)（写回）、\(H^{res}\)（流间混合），在 V4.1 论文式 (2) 里分别写作 <b>\(A\)（\(\mathbb{R}^{1\times n}\)，读出/输入混合）、\(C\)（\(\mathbb{R}^{n\times 1}\)，写回）、\(B\)（\(\mathbb{R}^{n\times n}\)，流间混合）</b>。本讲统一用 V4.1 论文的 \(A/B/C\)。</p>
 
@@ -376,13 +376,13 @@ window.MathJax = {
 
 <h3>4.1 背景：为什么主 KV「敢」用 4-bit</h3>
 
-<p>第 2 讲说过，V4.1 的全局 KV（CED + CSA2 之下，跨层共享的那份）常驻 HBM，是长上下文 KV 占用的大头；V4 已把主 KV 存成 FP8（8-bit 浮点）。现在要再砍到 FP4（4-bit）。这为什么可行？关键在 V4.1 的注意力结构：<b>被量化的缓存值在进入注意力计算前会先反量化（dequantize）回高精度</b>——也就是说 FP4 只用于「存」，不用于「算」，因此<b>不需要硬件原生支持 FP4 矩阵乘</b>，任何平台都能跑。论文原话：「Dequantizing cached values before attention allows us to use a more accurate format without requiring native matrix-multiplication support for that format, preserving compatibility across hardware platforms.」（FP4 格式背景见 <a href="quant-t4-ultra-low-bit.html">量化七讲·第 4 讲</a>；KV cache 量化系统落地见 <a href="quant-t5-kv-systems.html">第 5 讲</a>。）</p>
+<p>第 2 讲说过，V4.1 的全局 KV（CED + CSA2 之下，跨层共享的那份）常驻 HBM，是长上下文 KV 占用的大头；V4 已把主 KV 存成 FP8（8-bit 浮点）。现在要再砍到 FP4（4-bit）。这为什么可行？关键在 V4.1 的注意力结构：<b>被量化的缓存值在进入注意力计算前会先反量化（dequantize）回高精度</b>——也就是说 FP4 只用于「存」，不用于「算」，因此<b>不需要硬件原生支持 FP4 矩阵乘</b>，任何平台都能跑。论文原话：「Dequantizing cached values before attention allows us to use a more accurate format without requiring native matrix-multiplication support for that format, preserving compatibility across hardware platforms.」（FP4 格式背景见 <a href="../quantization/quant-t4-ultra-low-bit.html">量化七讲·第 4 讲</a>；KV cache 量化系统落地见 <a href="../quantization/quant-t5-kv-systems.html">第 5 讲</a>。）</p>
 
 <h3>4.2 用什么格式：E2M1 + 每 16 通道一个 E4M3 scale（去全局 scale）</h3>
 
 <p>论文的表述分两层，需要掰开：</p>
 <ul>
-<li>论文首先说「采用 <b>OCP 标准的 MXFP4</b> 格式以支持尽可能多的硬件平台，尽管实验中其他格式精度更高」。MXFP4 与 NVFP4 的元素格式同为 <b>E2M1</b>（1 符号 + 2 指数 + 1 尾数，每数量级只有几个刻度、天生很粗），差别在 scale（缩放因子）：<a href="quant-t4-ultra-low-bit.html">第 4 讲</a>讲过，MXFP4 是每 32 个数共享一个 E8M0（纯 2 的幂）scale，NVFP4 是每 16 个数一个 E4M3 scale 外加一个张量级二级全局 scale。</li>
+<li>论文首先说「采用 <b>OCP 标准的 MXFP4</b> 格式以支持尽可能多的硬件平台，尽管实验中其他格式精度更高」。MXFP4 与 NVFP4 的元素格式同为 <b>E2M1</b>（1 符号 + 2 指数 + 1 尾数，每数量级只有几个刻度、天生很粗），差别在 scale（缩放因子）：<a href="../quantization/quant-t4-ultra-low-bit.html">第 4 讲</a>讲过，MXFP4 是每 32 个数共享一个 E8M0（纯 2 的幂）scale，NVFP4 是每 16 个数一个 E4M3 scale 外加一个张量级二级全局 scale。</li>
 <li>随后论文给出最终选择：「在评估的约 4-bit 格式中，选择 <b>E2M1 + 每 16 通道一个 E4M3 scale</b>，跟随 <b>NVFP4</b>，但<b>省去其二级全局 scale</b>，以平衡精度与简洁。」即 scale 布局取 NVFP4 的（组大小 16、E4M3），但只有一级 scale。</li>
 </ul>
 
@@ -536,11 +536,11 @@ A：论文 §2.4.4 标题与内容针对的是主 KV cache（全局注意力的�
 <h2 id="s9">参考来源</h2>
 <ol class="refs">
 <li>DeepSeek-AI. <i>DeepSeek-V4.1-Flash Technical Report</i>. 本地归档 <code>paper/deepseek_v41.pdf</code>（51 页）。本讲引用：§1（定位、图 2）、§2.1（总览、图 3）、§2.4.1–§2.4.4、§2.5（Sinkhorn 平衡更新、算法 1）、§3.1.3（Engram 训练侧）、§4.2.1/§4.2.2（模型与训练配置）、§6（结论与 890 B/token）。</li>
-<li>Xie et al., 2026. <i>mHC: Manifold-Constrained Hyper-Connections</i>. arXiv:2512.24880. 本地归档 <code>paper/mhc.pdf</code>；中文详解见 <a href="deepseek-mhc.html">DeepSeek mHC 解读</a>。</li>
+<li>Xie et al., 2026. <i>mHC: Manifold-Constrained Hyper-Connections</i>. arXiv:2512.24880. 本地归档 <code>paper/mhc.pdf</code>；中文详解见 <a href="../deepseek-v4/deepseek-mhc.html">DeepSeek mHC 解读</a>。</li>
 <li>Cheng et al., 2026c. <i>Conditional memory via scalable lookup: A new axis of sparsity for large language models</i>. ACL 2026（Engram 原论文，V4.1 报告参考文献页）。</li>
 <li>Cheng et al., 2026a. <i>DSpark: Confidence-scheduled speculative decoding with semi-autoregressive generation</i>. arXiv:2607.05147（V4.1 报告参考文献页）。</li>
-<li>Rouhani et al., 2023（OCP MXFP4）；Alvarez et al., 2025（NVFP4）。背景见 <a href="quant-t4-ultra-low-bit.html">大模型量化零基础七讲 · 第 4 讲</a>。</li>
-<li>背景报告：<a href="deepseek-v4-architecture.html">DeepSeek-V4 总体架构解读</a> · <a href="deepseek-v4-kvcache.html">DeepSeek-V4 KV Cache 组织解读</a> · <a href="quant-t5-kv-systems.html">大模型量化零基础七讲 · 第 5 讲：KV Cache 量化</a>。</li>
+<li>Rouhani et al., 2023（OCP MXFP4）；Alvarez et al., 2025（NVFP4）。背景见 <a href="../quantization/quant-t4-ultra-low-bit.html">大模型量化零基础七讲 · 第 4 讲</a>。</li>
+<li>背景报告：<a href="../deepseek-v4/deepseek-v4-architecture.html">DeepSeek-V4 总体架构解读</a> · <a href="../deepseek-v4/deepseek-v4-kvcache.html">DeepSeek-V4 KV Cache 组织解读</a> · <a href="../quantization/quant-t5-kv-systems.html">大模型量化零基础七讲 · 第 5 讲：KV Cache 量化</a>。</li>
 </ol>
 
 <nav style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 20px;margin:20px 0;font-size:0.93em">
