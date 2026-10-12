@@ -244,11 +244,11 @@ L=\frac{T_{\text{draft}}+T_{\text{verify}}}{\tau}
   <text x="16" y="234" font-weight="bold" fill="#b0631e">DSpark 半自回归（本文）</text>
   <text x="16" y="252" fill="#5a6272" font-size="11.5">重并行主干出基础 logits，轻串行头（Markov/RNN）逐位加转移偏置，兼顾两端</text>
   <g>
-    <rect x="16" y="262" width="130" height="30" rx="6" fill="#2456c4"/>
-    <text x="81" y="282" text-anchor="middle" fill="#fff">并行主干（深，1 次前向）</text>
+    <rect x="16" y="262" width="150" height="30" rx="6" fill="#2456c4"/>
+    <text x="91" y="282" text-anchor="middle" fill="#fff">并行主干（深，1 次前向）</text>
     <rect x="230" y="262" width="90" height="30" rx="6" fill="#fff8e8" stroke="#b0631e"/>
     <text x="275" y="282" text-anchor="middle" fill="#b0631e">串行头（轻）</text>
-    <line x1="146" y1="277" x2="228" y2="277" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+    <line x1="168" y1="277" x2="228" y2="277" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
     <rect x="330" y="262" width="490" height="30" rx="6" fill="#fff" stroke="#e3e7ee"/>
     <text x="575" y="282" text-anchor="middle" fill="#5a6272">位置 1 继承并行深网络的高容量；位置 2…γ 由串行头条件于已采样前缀，抑制后缀衰减</text>
   </g>
@@ -266,6 +266,16 @@ H_{\text{ctx}}=\mathrm{RMSNorm}\bigl(W_{c}\,[H^{(l_{1})};\,\dots;\,H^{(l_{m})}]\
 K_{i}=[W_{i}^{K}H_{\text{ctx}};\;W_{i}^{K}H_{d}],\quad V_{i}=[W_{i}^{V}H_{\text{ctx}};\;W_{i}^{V}H_{d}]
 \tag{式 3}\]</div>
 <p>DSpark 对 DFlash 的修改很小：原版输入是 anchor token + \(\gamma\) 个 mask token、只预测 mask 位置；DSpark 把 anchor 本身当作第一个预测位，即 \(\gamma\) 个输入（anchor + \(\gamma-1\) 个 mask）产出 \(\gamma\) 个草案 logits——省一点计算，质量相当（论文 §3.1）。</p>
+
+<h4>马尔科夫基础：转移矩阵与一阶假设</h4>
+<p>串行头为什么叫「Markov」？马尔可夫性（得名于俄国数学家 A. A. Markov）一句话：<b>「下一步去哪，只取决于现在在哪，与怎么来的无关。」</b>满足该性质的随机过程叫<b>马尔可夫链</b>，由一张转移矩阵完整刻画——每行是「当前状态已知时，下一个状态的概率分布」，每行和为 1：</p>
+<table>
+  <tr><th>今天 \ 明天</th><th>晴</th><th>雨</th></tr>
+  <tr><td><b>晴</b></td><td>0.8</td><td>0.2</td></tr>
+  <tr><td><b>雨</b></td><td>0.6</td><td>0.4</td></tr>
+</table>
+<p class="cap">晴雨两状态的一阶转移矩阵示例。明天若还受前天影响，这张表就不够用，概率得写成 P(明天 | 今天, 昨天, …)；「只依赖最近一步」称为<b>一阶</b>，依赖最近 k 步称为 k 阶。</p>
+<p>阶数与表大小的权衡：状态有 \(V\) 种取值时，k 阶链需要约 \(V^{k+1}\) 个条目——阶数越高表达力越强、表越大。语言上的现成例子：只看前一个词预测下一个词的 bigram 模型，就是词表上的（一阶）马尔可夫链，转移矩阵一行即一个词的接续分布；GPT 这类模型通过注意力看到全部历史，<b>不是</b>马尔可夫链。DSpark 的 Markov 头正卡在两者之间：并行主干已经看完整个上下文，唯独「块内上一个采出的是谁」它不知道——Markov 头要补的恰好就是这一阶。</p>
 
 <h4>串行阶段：用「转移偏置」做块内条件化</h4>
 <p>并行主干一次前向产出基础 logits \(U_1,\dots,U_\gamma\) 与隐藏态 \(h_1,\dots,h_\gamma\)。串行阶段不定义全局归一化的能量模型，而是用自回归因子化引入一个<b>前缀依赖的转移偏置</b> \(B_k(x_0,x_{&lt;k},\cdot)\)（论文式 4）：</p>
@@ -287,6 +297,38 @@ p_{k}(v\mid x_{0},x_{&lt;k})=\frac{\exp\!\left(U_{k}(v)+B_{k}(x_{0},x_{&lt;k},v)
     \(W_g,W_c,W_o\in\mathbb{R}^{r\times(2r+d)}\) 由单个线性投影切分共享，\(s_0=0\)。实验显示 RNN 头只比 Markov 头带来边际收益且部署更复杂，故默认用 Markov 头（论文 §4.3.2）。</li>
 </ul>
 <p>因为采样天然串行，串行块必须足够轻（\(T_{\text{sequential}}\ll T_{\text{parallel}}\)），让总 draft 延迟仍由并行阶段主导。</p>
+
+<h4>逐步计算：一个草案块里 Markov 头做了什么（PyTorch 伪代码）</h4>
+<p>把式 (4)(5) 落到张量操作，一个 γ 步草案块的全部计算如下（低秩 \(r=256\)）。四个步骤与式 (5) 的对应：① 即查 \(W_1\) 的第 \(x_{k-1}\) 行，② 即 \(W_2\) 投影，③ 即式 (4) 的逐位置 softmax，④ 即把样本回灌为下一步条件：</p>
+<pre><code class="language-python">import torch, torch.nn.functional as F
+
+V, r = vocab_size, 256
+W1 = torch.nn.Embedding(V, r)           # 转移表低秩因子①：V×r，第 i 行 = 前词 i 的「接续倾向」向量
+W2 = torch.nn.Linear(r, V, bias=False)  # 转移表低秩因子②：r×V，把倾向向量投回词表维度
+conf_w = torch.nn.Linear(d + r, 1)      # 置信头（式 7）：[h_k; W1[x_{k-1}]] → 标量
+
+def draft_block(U, x0, h):
+    """U: (gamma, V) 并行主干一次前向给出的基础 logits
+       x0: anchor token（上一轮 target 的 bonus token）
+       h : (gamma, d) 并行主干隐藏态"""
+    x, xs, ps, cs = x0, [], [], []
+    for k in range(gamma):              # 串行循环——逐位执行，无法并行
+        e  = W1.weight[x]               # ① 查表：取前一 token 的行向量 (r,)
+        Bk = W2(e)                      # ② 投影：256→V，一阶转移偏置 (V,)
+        p  = F.softmax(U[k] + Bk, dim=-1)        # ③ 修正：加偏置后 softmax——仍是精确逐位置分布
+        x  = torch.multinomial(p, 1).squeeze()   # ④ 采样：采出 x_k，回灌为下一步的「前一 token」
+        xs.append(x); ps.append(p)      # p^d_k 留给 target 侧拒绝采样
+        cs.append(torch.sigmoid(conf_w(torch.cat([h[k], e]))))  # 置信分 c_k（式 7，复用 ① 的 e）
+    return xs, ps, cs
+</code></pre>
+<p class="cap">伪代码；真实实现见 §4.1（<code>VanillaMarkov</code>，<code>markov_head.py:17-32</code> 与采样循环 <code>:73-90</code>）。循环内每次迭代变量 <code>x</code> 持有的正是式 (4) 的 \(x_{k-1}\)——首轮即 anchor \(x_0\)。</p>
+<p>四个要点：</p>
+<ul>
+  <li><b>全程没有 transformer 前向</b>：每步只有一次 embedding 查找 + 一次 r×V 矩阵乘 + 一次 softmax 采样，微秒级——总 draft 延迟仍由并行主干那一次前向主导，这是「半自回归」成立的延迟前提。</li>
+  <li><b>为什么低秩够用</b>：完整转移表是 \(V\times V\)（13 万词 ≈ 170 亿条目）；\(W_1W_2\) 用 \(2Vr\approx 6600\) 万参数近似它，且推理时只取用得到的一行 \(W_1[x_{k-1}]\)——相当于「每个前词配一个 256 维接续倾向向量」。</li>
+  <li><b>逐位置精确 softmax 是硬约束</b>：验证用拒绝采样，要求草案是逐 token 的精确分布；Markov 头是局部加偏置，不破坏这一性质（对比 CRF-NAT 的全局归一化，见 §2）。</li>
+  <li><b>置信头复用同一张表</b>：式 (7) 的输入 \([h_k; W_1[x_{k-1}]]\) 拼的就是 ① 查出的 embedding——「位置 k 靠不靠谱」同样依赖块内已采样的前缀。</li>
+</ul>
 
 <h3>3.2 置信度调度验证（Confidence-Scheduled Verification）</h3>
 
