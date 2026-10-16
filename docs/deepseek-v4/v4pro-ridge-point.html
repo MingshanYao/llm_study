@@ -188,23 +188,26 @@ window.MathJax = {
 <p><b>每步的带宽都花在哪了</b>（B=150、s=32K、MTP-1，EP 集群聚合口径）：</p>
 
 <div class="fig">
-<svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12">
-  <text x="70" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">decode 每步 HBM 字节构成（合计 1.44 TB/步）</text>
-  <rect x="70" y="52" width="720.8" height="44" fill="#2456c4"/>
-  <rect x="790.8" y="52" width="12.6" height="44" fill="#8fb0e0"/>
-  <rect x="803.4" y="52" width="4.4" height="44" fill="#2f9e63"/>
-  <rect x="807.8" y="52" width="2.2" height="44" fill="#e8862a"/>
-  <text x="430" y="79" text-anchor="middle" fill="#ffffff" font-weight="bold">路由专家权重流 97.4%（1.40 TB）</text>
-  <rect x="70" y="130" width="14" height="12" fill="#2456c4"/>
-  <text x="90" y="140" fill="#2a3040">路由专家权重 97.4%</text>
-  <rect x="260" y="130" width="14" height="12" fill="#8fb0e0"/>
-  <text x="280" y="140" fill="#2a3040">其余权重 1.8%</text>
-  <rect x="420" y="130" width="14" height="12" fill="#2f9e63"/>
-  <text x="440" y="140" fill="#2a3040">KV cache 0.6%</text>
-  <rect x="570" y="130" width="14" height="12" fill="#e8862a"/>
-  <text x="590" y="140" fill="#2a3040">激活 0.3%</text>
-  <text x="70" y="172" fill="#5a6272">每步 1.44 TB ÷ 150 token ≈ 9.6 GB/token；DSpark τ=5 时同样的字节摊给 5× token ≈ 2.1 GB/token，带宽效率 ×4.5</text>
-  <text x="70" y="192" fill="#5a6272">口径：均匀路由下 348/384 专家被命中，命中即整份读权重；复算脚本见附录 B</text>
+<svg viewBox="0 0 784 218" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="392" y="34" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">decode 每步 HBM 字节构成（合计 1.44 TB/步）</text>
+  <!-- stacked bar: x 22..762 -->
+  <rect x="22" y="52" width="720.8" height="44" fill="#3b82f6"/>
+  <rect x="742.8" y="52" width="12.6" height="44" fill="#93c5fd"/>
+  <rect x="755.4" y="52" width="4.4" height="44" fill="#22c55e"/>
+  <rect x="759.8" y="52" width="2.2" height="44" fill="#f59e0b"/>
+  <text x="382" y="78" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">路由专家权重流 97.4%（1.40 TB）</text>
+  <!-- legend -->
+  <rect x="22" y="130" width="14" height="12" fill="#3b82f6"/>
+  <text x="42" y="141" font-size="10" fill="#1e293b">路由专家权重 97.4%</text>
+  <rect x="212" y="130" width="14" height="12" fill="#93c5fd"/>
+  <text x="232" y="141" font-size="10" fill="#1e293b">其余权重 1.8%</text>
+  <rect x="372" y="130" width="14" height="12" fill="#22c55e"/>
+  <text x="392" y="141" font-size="10" fill="#1e293b">KV cache 0.6%</text>
+  <rect x="522" y="130" width="14" height="12" fill="#f59e0b"/>
+  <text x="542" y="141" font-size="10" fill="#1e293b">激活 0.3%</text>
+  <text x="22" y="172" font-size="10" fill="#64748b">每步 1.44 TB ÷ 150 token ≈ 9.6 GB/token；DSpark τ=5 时同样的字节摊给 5× token ≈ 2.1 GB/token，带宽效率 ×4.5</text>
+  <text x="22" y="192" font-size="10" fill="#64748b">口径：均匀路由下 348/384 专家被命中，命中即整份读权重；复算脚本见附录 B</text>
 </svg>
 </div>
 <p class="cap"><b>图 1</b>｜decode 的带宽去哪了。V2/V3 时代 KV cache 是 decode 带宽的主角之一；CSA 的序列维压缩（5.42 KB/token）把它压到 0.6% 的配角地位——但让出的带宽立刻被专家权重流吃掉。MoE 的「参数量按专家数扩展、计算量只按 top-k 扩展」在 decode 有另一面：<b>带宽按专家数扩展、计算量只按 top-k 扩展</b>。</p>
@@ -223,145 +226,147 @@ window.MathJax = {
 <h2 id="sec5">五、两张全景图</h2>
 
 <div class="fig">
-<svg viewBox="0 0 880 470" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12">
+<svg viewBox="0 0 880 470" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="arr1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#b0631e"/>
+    <marker id="arrow2-orange" markerWidth="12" markerHeight="12" refX="3" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 L3,6 z" fill="#f59e0b"/>
     </marker>
   </defs>
   <!-- grid -->
-  <g stroke="#e3e7ee" stroke-width="1">
-    <line x1="70" y1="340.9" x2="850" y2="340.9"/>
-    <line x1="70" y1="259.1" x2="850" y2="259.1"/>
-    <line x1="70" y1="177.4" x2="850" y2="177.4"/>
-    <line x1="70" y1="95.6" x2="850" y2="95.6"/>
-    <line x1="226" y1="30" x2="226" y2="390"/>
-    <line x1="382" y1="30" x2="382" y2="390"/>
-    <line x1="538" y1="30" x2="538" y2="390"/>
-    <line x1="694" y1="30" x2="694" y2="390"/>
+  <g stroke="#e2e8f0" stroke-width="1">
+    <line x1="70" y1="350.9" x2="850" y2="350.9"/>
+    <line x1="70" y1="269.1" x2="850" y2="269.1"/>
+    <line x1="70" y1="187.4" x2="850" y2="187.4"/>
+    <line x1="70" y1="105.6" x2="850" y2="105.6"/>
+    <line x1="226" y1="40" x2="226" y2="400"/>
+    <line x1="382" y1="40" x2="382" y2="400"/>
+    <line x1="538" y1="40" x2="538" y2="400"/>
+    <line x1="694" y1="40" x2="694" y2="400"/>
   </g>
-  <rect x="70" y="30" width="780" height="360" fill="none" stroke="#c9d2e0"/>
+  <rect x="70" y="40" width="780" height="360" fill="none" stroke="#cbd5e1"/>
   <!-- axes ticks -->
-  <g fill="#5a6272" font-size="11">
-    <text x="62" y="344.9" text-anchor="end">10¹³</text>
-    <text x="62" y="263.1" text-anchor="end">10¹⁴</text>
-    <text x="62" y="181.4" text-anchor="end">10¹⁵</text>
-    <text x="62" y="99.6" text-anchor="end">10¹⁶</text>
-    <text x="70" y="408" text-anchor="middle">1</text>
-    <text x="226" y="408" text-anchor="middle">10</text>
-    <text x="382" y="408" text-anchor="middle">10²</text>
-    <text x="538" y="408" text-anchor="middle">10³</text>
-    <text x="694" y="408" text-anchor="middle">10⁴</text>
-    <text x="850" y="408" text-anchor="middle">10⁵</text>
+  <g fill="#64748b" font-size="11">
+    <text x="62" y="354.9" text-anchor="end">10¹³</text>
+    <text x="62" y="273.1" text-anchor="end">10¹⁴</text>
+    <text x="62" y="191.4" text-anchor="end">10¹⁵</text>
+    <text x="62" y="109.6" text-anchor="end">10¹⁶</text>
+    <text x="70" y="418" text-anchor="middle">1</text>
+    <text x="226" y="418" text-anchor="middle">10</text>
+    <text x="382" y="418" text-anchor="middle">10²</text>
+    <text x="538" y="418" text-anchor="middle">10³</text>
+    <text x="694" y="418" text-anchor="middle">10⁴</text>
+    <text x="850" y="418" text-anchor="middle">10⁵</text>
   </g>
-  <text x="460" y="432" text-anchor="middle" fill="#5a6272" font-size="12">算术强度 AI（FLOP/Byte，log）</text>
-  <text x="75" y="22" fill="#5a6272" font-size="12">可达算力（FLOP/s，log）——可达 = min(峰值， 带宽×AI)</text>
+  <text x="460" y="442" text-anchor="middle" fill="#64748b" font-size="11">算术强度 AI（FLOP/Byte，log）</text>
+  <text x="75" y="32" fill="#64748b" font-size="11">可达算力（FLOP/s，log）——可达 = min(峰值， 带宽×AI)</text>
   <!-- legend -->
-  <g font-size="12" fill="#1a1f2e">
-    <line x1="85" y1="54" x2="115" y2="54" stroke="#2456c4" stroke-width="2.5"/>
-    <text x="122" y="58">H800 FP8 — ridge 591</text>
-    <line x1="85" y1="76" x2="115" y2="76" stroke="#b0631e" stroke-width="2.5"/>
-    <text x="122" y="80">B200 FP4 — ridge 1125</text>
-    <line x1="85" y1="98" x2="115" y2="98" stroke="#2f9e63" stroke-width="2.5"/>
-    <text x="122" y="102">Rubin FP4 — ridge 2273</text>
+  <g font-size="11" fill="#1e293b">
+    <line x1="85" y1="64" x2="115" y2="64" stroke="#3b82f6" stroke-width="2.5"/>
+    <text x="122" y="68">H800 FP8 — ridge 591</text>
+    <line x1="85" y1="86" x2="115" y2="86" stroke="#f59e0b" stroke-width="2.5"/>
+    <text x="122" y="90">B200 FP4 — ridge 1125</text>
+    <line x1="85" y1="108" x2="115" y2="108" stroke="#22c55e" stroke-width="2.5"/>
+    <text x="122" y="112">Rubin FP4 — ridge 2273</text>
   </g>
   <!-- rooflines -->
-  <polyline points="70,383.5 502.4,155.6 850,155.6" fill="none" stroke="#2456c4" stroke-width="2"/>
-  <polyline points="70,352.6 546,101.8 850,101.8" fill="none" stroke="#b0631e" stroke-width="2"/>
-  <polyline points="70,316.7 593.6,40.3 850,40.3" fill="none" stroke="#2f9e63" stroke-width="2"/>
-  <circle cx="502.4" cy="155.6" r="4" fill="#2456c4"/>
-  <circle cx="546" cy="101.8" r="4" fill="#b0631e"/>
-  <circle cx="593.6" cy="40.3" r="4" fill="#2f9e63"/>
+  <polyline points="70,393.5 502.4,165.6 850,165.6" fill="none" stroke="#3b82f6" stroke-width="2"/>
+  <polyline points="70,362.6 546,111.8 850,111.8" fill="none" stroke="#f59e0b" stroke-width="2"/>
+  <polyline points="70,326.7 593.6,50.3 850,50.3" fill="none" stroke="#22c55e" stroke-width="2"/>
+  <circle cx="502.4" cy="165.6" r="4" fill="#3b82f6"/>
+  <circle cx="546" cy="111.8" r="4" fill="#f59e0b"/>
+  <circle cx="593.6" cy="50.3" r="4" fill="#22c55e"/>
   <!-- decode points (on H800 ramp) -->
-  <circle cx="174.8" cy="326" r="5.5" fill="#2456c4"/>
-  <circle cx="444.1" cy="186.2" r="5.5" fill="#2456c4"/>
-  <circle cx="484.6" cy="164.9" r="5.5" fill="#2456c4"/>
-  <circle cx="283.6" cy="269.1" r="5.5" fill="#ffffff" stroke="#b0631e" stroke-width="2"/>
-  <line x1="174.8" y1="331" x2="192" y2="350" stroke="#2456c4" stroke-width="1"/>
-  <text x="200" y="356" fill="#2456c4" font-size="11">路由专家 4.7</text>
-  <line x1="446" y1="191" x2="465" y2="212" stroke="#2456c4" stroke-width="1"/>
-  <text x="470" y="222" fill="#2456c4" font-size="11">投影/CSA/共享/LM 250~287</text>
-  <line x1="488" y1="170" x2="520" y2="184" stroke="#2456c4" stroke-width="1"/>
-  <text x="526" y="193" fill="#2456c4" font-size="11">HCA 注意力 455</text>
+  <circle cx="174.8" cy="336" r="5.5" fill="#3b82f6"/>
+  <circle cx="444.1" cy="196.2" r="5.5" fill="#3b82f6"/>
+  <circle cx="484.6" cy="174.9" r="5.5" fill="#3b82f6"/>
+  <circle cx="283.6" cy="279.1" r="5.5" fill="#ffffff" stroke="#f59e0b" stroke-width="2"/>
+  <line x1="174.8" y1="341" x2="192" y2="360" stroke="#3b82f6" stroke-width="1"/>
+  <text x="200" y="366" fill="#1e40af" font-size="11">路由专家 4.7</text>
+  <line x1="446" y1="201" x2="465" y2="222" stroke="#3b82f6" stroke-width="1"/>
+  <text x="470" y="232" fill="#1e40af" font-size="11">投影/CSA/共享/LM 250~287</text>
+  <line x1="488" y1="180" x2="520" y2="194" stroke="#3b82f6" stroke-width="1"/>
+  <text x="526" y="203" fill="#1e40af" font-size="11">HCA 注意力 455</text>
   <!-- DSpark arrows -->
-  <line x1="182" y1="372" x2="276" y2="372" stroke="#b0631e" stroke-width="2" marker-end="url(#arr1a)"/>
-  <text x="290" y="376" fill="#b0631e" font-size="11">τ=5: →23</text>
-  <line x1="450" y1="372" x2="552" y2="372" stroke="#b0631e" stroke-width="2" marker-end="url(#arr1a)"/>
-  <text x="560" y="376" fill="#b0631e" font-size="11">τ=5: →1000+（越过 ridge 591）</text>
+  <line x1="182" y1="382" x2="276" y2="382" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow2-orange)"/>
+  <text x="290" y="386" fill="#b45309" font-size="11">τ=5: →23</text>
+  <line x1="450" y1="382" x2="552" y2="382" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow2-orange)"/>
+  <text x="560" y="386" fill="#b45309" font-size="11">τ=5: →1000+（越过 ridge 591）</text>
   <!-- prefill points (on H800 ceiling) -->
-  <rect x="521.9" y="150.6" width="10" height="10" fill="#2f9e63"/>
-  <rect x="559.8" y="150.6" width="10" height="10" fill="#2f9e63"/>
-  <rect x="722.5" y="150.6" width="10" height="10" fill="#2f9e63"/>
-  <rect x="808.4" y="150.6" width="10" height="10" fill="#2f9e63"/>
-  <text x="527" y="144" text-anchor="middle" fill="#2f9e63" font-size="11">MoE 849</text>
-  <line x1="566" y1="150" x2="572" y2="134" stroke="#2f9e63" stroke-width="1"/>
-  <text x="580" y="131" fill="#2f9e63" font-size="11">投影 1485</text>
-  <text x="727" y="144" text-anchor="middle" fill="#2f9e63" font-size="11">CSA 1.6万</text>
-  <line x1="813" y1="150" x2="818" y2="134" stroke="#2f9e63" stroke-width="1"/>
-  <text x="822" y="131" fill="#2f9e63" font-size="11">HCA 5.8万</text>
+  <rect x="521.9" y="160.6" width="10" height="10" fill="#22c55e"/>
+  <rect x="559.8" y="160.6" width="10" height="10" fill="#22c55e"/>
+  <rect x="722.5" y="160.6" width="10" height="10" fill="#22c55e"/>
+  <rect x="808.4" y="160.6" width="10" height="10" fill="#22c55e"/>
+  <text x="527" y="154" text-anchor="middle" fill="#166534" font-size="11">MoE 849</text>
+  <line x1="566" y1="160" x2="572" y2="144" stroke="#22c55e" stroke-width="1"/>
+  <text x="580" y="141" fill="#166534" font-size="11">投影 1485</text>
+  <text x="727" y="154" text-anchor="middle" fill="#166534" font-size="11">CSA 1.6万</text>
+  <line x1="813" y1="160" x2="818" y2="144" stroke="#22c55e" stroke-width="1"/>
+  <text x="848" y="141" text-anchor="end" fill="#166534" font-size="11">HCA 5.8万</text>
 </svg>
 </div>
 <p class="cap"><b>图 2</b>｜V4-Pro 算子的 roofline 全景（可达算力按 H800 FP8 计）。蓝点 = decode（MTP-1，贴着 H800 的 ramp 爬坡，离天花板远）；绿方 = prefill（顶在天花板上）；空心橙点与橙色箭头 = DSpark τ=5 把对应核沿 AI 横轴右推。注意绿方里的 MoE（849）与投影（1485）只是压住了 H800 的天花板——在 Rubin FP4（ridge 2273，最上那条线）下它们会跌回 ramp（表 3 判定）。</p>
 
 <div class="fig">
-<svg viewBox="0 0 880 440" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12">
+<svg viewBox="0 0 880 470" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <!-- ridge lines -->
-  <line x1="70" y1="301.4" x2="850" y2="301.4" stroke="#2456c4" stroke-width="1.5" stroke-dasharray="6 4"/>
-  <line x1="70" y1="221.3" x2="850" y2="221.3" stroke="#b0631e" stroke-width="1.5" stroke-dasharray="6 4"/>
-  <line x1="70" y1="49.1" x2="850" y2="49.1" stroke="#2f9e63" stroke-width="1.5" stroke-dasharray="6 4"/>
-  <text x="846" y="295" text-anchor="end" fill="#2456c4" font-size="11">H800 FP8：591</text>
-  <text x="846" y="215" text-anchor="end" fill="#b0631e" font-size="11">B200 FP4：1125</text>
-  <text x="210" y="43" fill="#2f9e63" font-size="11">Rubin FP4：2273</text>
+  <line x1="70" y1="311.4" x2="850" y2="311.4" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <line x1="70" y1="231.3" x2="850" y2="231.3" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <line x1="70" y1="59.1" x2="850" y2="59.1" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="846" y="305" text-anchor="end" fill="#1e40af" font-size="11">H800 FP8：591</text>
+  <text x="846" y="225" text-anchor="end" fill="#b45309" font-size="11">B200 FP4：1125</text>
+  <text x="210" y="53" fill="#166534" font-size="11">Rubin FP4：2273</text>
   <!-- vertical markers -->
-  <line x1="444.1" y1="78" x2="444.1" y2="390" stroke="#5a6272" stroke-width="1" stroke-dasharray="3 3"/>
-  <line x1="518.5" y1="78" x2="518.5" y2="390" stroke="#5a6272" stroke-width="1" stroke-dasharray="3 3"/>
-  <line x1="745.7" y1="78" x2="745.7" y2="390" stroke="#5a6272" stroke-width="1" stroke-dasharray="3 3"/>
-  <text x="438" y="66" text-anchor="end" fill="#5a6272" font-size="11">B·τ=150（MTP-1）</text>
-  <text x="524" y="66" fill="#5a6272" font-size="11">750（DSpark τ=5）</text>
-  <text x="745.7" y="92" text-anchor="middle" fill="#b0631e" font-size="11">路由专家翻转点 21458</text>
+  <line x1="444.1" y1="88" x2="444.1" y2="400" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="518.5" y1="88" x2="518.5" y2="400" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="745.7" y1="88" x2="745.7" y2="400" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="438" y="76" text-anchor="end" fill="#64748b" font-size="11">B·τ=150（MTP-1）</text>
+  <text x="524" y="86" fill="#64748b" font-size="11">750（DSpark τ=5）</text>
+  <text x="745.7" y="102" text-anchor="middle" fill="#b45309" font-size="11">路由专家翻转点 21458</text>
   <!-- curves -->
-  <polyline points="70,390 226,389.5 382,389.5 538,385.4 694,343.2 745.7,289.4 832,30" fill="none" stroke="#b0631e" stroke-width="2"/>
-  <polyline points="70,389.7 382,361.4 456,311.7 466,301.4 518.5,226.1 538,187.4 597,89.4 626,33" fill="none" stroke="#2f9e63" stroke-width="2"/>
-  <polyline points="70,389.7 382,363.5 488.7,301.4 518.5,276.9 694,180.2 850,163.7" fill="none" stroke="#2456c4" stroke-width="2"/>
-  <polyline points="70,389.7 382,360.9 461.6,301.4 518.5,205.7 580,30" fill="none" stroke="#5a6272" stroke-width="2"/>
-  <text x="845" y="158" text-anchor="end" fill="#2456c4" font-size="11">投影</text>
-  <text x="632" y="40" fill="#2f9e63" font-size="11">共享</text>
-  <text x="574" y="40" text-anchor="end" fill="#5a6272" font-size="11">LM head</text>
-  <text x="826" y="40" text-anchor="end" fill="#b0631e" font-size="11">路由</text>
+  <polyline points="70,400 226,399.5 382,399.5 538,395.4 694,353.2 745.7,299.4 832,40" fill="none" stroke="#f59e0b" stroke-width="2"/>
+  <polyline points="70,399.7 382,371.4 456,321.7 466,311.4 518.5,236.1 538,197.4 597,99.4 626,43" fill="none" stroke="#22c55e" stroke-width="2"/>
+  <polyline points="70,399.7 382,373.5 488.7,311.4 518.5,286.9 694,190.2 850,173.7" fill="none" stroke="#3b82f6" stroke-width="2"/>
+  <polyline points="70,399.7 382,370.9 461.6,311.4 518.5,215.7 580,40" fill="none" stroke="#94a3b8" stroke-width="2"/>
+  <text x="845" y="168" text-anchor="end" fill="#1e40af" font-size="11">投影</text>
+  <text x="632" y="50" fill="#166534" font-size="11">共享</text>
+  <text x="574" y="50" text-anchor="end" fill="#64748b" font-size="11">LM head</text>
+  <text x="826" y="50" text-anchor="end" fill="#b45309" font-size="11">路由</text>
   <!-- operating points -->
-  <circle cx="444.1" cy="389.3" r="3.5" fill="#b0631e"/>
-  <circle cx="444.1" cy="352.4" r="3.5" fill="#2456c4"/>
-  <circle cx="444.1" cy="348.2" r="3.5" fill="#2f9e63"/>
-  <circle cx="444.1" cy="347" r="3.5" fill="#5a6272"/>
-  <circle cx="518.5" cy="386.5" r="3.5" fill="#b0631e"/>
-  <circle cx="518.5" cy="276.9" r="3.5" fill="#2456c4"/>
-  <circle cx="518.5" cy="226.1" r="3.5" fill="#2f9e63"/>
-  <circle cx="518.5" cy="205.7" r="3.5" fill="#5a6272"/>
+  <circle cx="444.1" cy="399.3" r="3.5" fill="#f59e0b"/>
+  <circle cx="444.1" cy="362.4" r="3.5" fill="#3b82f6"/>
+  <circle cx="444.1" cy="358.2" r="3.5" fill="#22c55e"/>
+  <circle cx="444.1" cy="357" r="3.5" fill="#94a3b8"/>
+  <circle cx="518.5" cy="396.5" r="3.5" fill="#f59e0b"/>
+  <circle cx="518.5" cy="286.9" r="3.5" fill="#3b82f6"/>
+  <circle cx="518.5" cy="236.1" r="3.5" fill="#22c55e"/>
+  <circle cx="518.5" cy="215.7" r="3.5" fill="#94a3b8"/>
   <!-- legend -->
-  <g font-size="12" fill="#1a1f2e">
-    <line x1="90" y1="58" x2="120" y2="58" stroke="#b0631e" stroke-width="2.5"/>
-    <text x="127" y="62">路由专家 GEMM（AI ≈ B·6/384×2）</text>
-    <line x1="90" y1="80" x2="120" y2="80" stroke="#2f9e63" stroke-width="2.5"/>
-    <text x="127" y="84">共享专家 GEMM</text>
-    <line x1="90" y1="102" x2="120" y2="102" stroke="#2456c4" stroke-width="2.5"/>
-    <text x="127" y="106">投影 GEMM 组（每层 326.7M 权重）</text>
-    <line x1="90" y1="124" x2="120" y2="124" stroke="#5a6272" stroke-width="2.5"/>
-    <text x="127" y="128">LM head（926.9M 权重）</text>
+  <g font-size="11" fill="#1e293b">
+    <line x1="90" y1="68" x2="120" y2="68" stroke="#f59e0b" stroke-width="2.5"/>
+    <text x="127" y="72">路由专家 GEMM（AI ≈ B·6/384×2）</text>
+    <line x1="90" y1="90" x2="120" y2="90" stroke="#22c55e" stroke-width="2.5"/>
+    <text x="127" y="94">共享专家 GEMM</text>
+    <line x1="90" y1="112" x2="120" y2="112" stroke="#3b82f6" stroke-width="2.5"/>
+    <text x="127" y="116">投影 GEMM 组（每层 326.7M 权重）</text>
+    <line x1="90" y1="134" x2="120" y2="134" stroke="#94a3b8" stroke-width="2.5"/>
+    <text x="127" y="138">LM head（926.9M 权重）</text>
   </g>
   <!-- axes -->
-  <g fill="#5a6272" font-size="11">
-    <text x="62" y="394" text-anchor="end">0</text>
-    <text x="62" y="244" text-anchor="end">1000</text>
-    <text x="62" y="94" text-anchor="end">2000</text>
-    <text x="70" y="408" text-anchor="middle">1</text>
-    <text x="226" y="408" text-anchor="middle">10</text>
-    <text x="382" y="408" text-anchor="middle">10²</text>
-    <text x="538" y="408" text-anchor="middle">10³</text>
-    <text x="694" y="408" text-anchor="middle">10⁴</text>
-    <text x="850" y="408" text-anchor="middle">10⁵</text>
+  <g fill="#64748b" font-size="11">
+    <text x="62" y="404" text-anchor="end">0</text>
+    <text x="62" y="254" text-anchor="end">1000</text>
+    <text x="62" y="104" text-anchor="end">2000</text>
+    <text x="70" y="418" text-anchor="middle">1</text>
+    <text x="226" y="418" text-anchor="middle">10</text>
+    <text x="382" y="418" text-anchor="middle">10²</text>
+    <text x="538" y="418" text-anchor="middle">10³</text>
+    <text x="694" y="418" text-anchor="middle">10⁴</text>
+    <text x="850" y="418" text-anchor="middle">10⁵</text>
   </g>
-  <text x="460" y="432" text-anchor="middle" fill="#5a6272" font-size="12">每步有效 token 数 B·τ（log）—— 翻转点 = 曲线越过虚线处</text>
-  <text x="75" y="20" fill="#5a6272" font-size="12">算术强度 AI（线性 0~2400）</text>
+  <text x="460" y="442" text-anchor="middle" fill="#64748b" font-size="11">每步有效 token 数 B·τ（log）—— 翻转点 = 曲线越过虚线处</text>
+  <text x="75" y="30" fill="#64748b" font-size="11">算术强度 AI（线性 0~2400）</text>
 </svg>
 </div>
 <p class="cap"><b>图 3</b>｜GEMM 类核的 AI 随每步有效 token 数的变化（V4-Pro，FP8 权重/BF16 激活）。圆点 = 两个生产工作点。MTP-1（150）时四个核全在 H800 虚线之下；DSpark（750）把投影/共享/LM head 推过 591，但路由专家要到 21458 才翻转——MoE 细粒度专家把单份权重切小、可并行性换来的代价是 GEMM 更难喂饱。虚线右移（B200 FP4 1125、Rubin FP4 2273）意味着翻转门槛成倍提高。</p>

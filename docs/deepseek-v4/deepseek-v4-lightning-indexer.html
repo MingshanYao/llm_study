@@ -134,55 +134,56 @@ window.MathJax = {
 <p class="cap"><b>表 1</b>｜两代索引器对照。V3.2 数字出自 paper/deepseek_v32.pdf §2.1–2.2（p.3–5）；V4 数字出自 paper/deepseek_v4.pdf §2.3.1、§4.2.1（p.10、24–25）与 §5.2.1（p.33）。\(d_I\) 的具体取值 V3.2 论文未给出，此处不展开。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 420" xmlns="http://www.w3.org/2000/svg" font-size="11" font-family="PingFang SC, sans-serif">
-  <defs><marker id="m2a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
-  <text x="20" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">V3.2 · DSA：token 粒度索引（候选 = 每个 token）</text>
+<svg viewBox="0 0 814 408" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/></marker></defs>
+  <text x="24" y="32" font-size="13" font-weight="bold" fill="#1e293b">V3.2 · DSA：token 粒度索引（候选 = 每个 token）</text>
   <g>
-    <rect x="20" y="50" width="170" height="76" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-    <text x="105" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">每 token 缓存</text>
-    <text x="105" y="90" text-anchor="middle" fill="#1a1f2e">1 条索引 key k^I_s ∈ R^d_I</text>
-    <text x="105" y="108" text-anchor="middle" fill="#5a6272">（FP8 可行，V3.2 p.3）</text>
-    <rect x="235" y="50" width="170" height="76" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-    <text x="320" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Lightning Indexer</text>
-    <text x="320" y="90" text-anchor="middle" fill="#1a1f2e">L×L 逐 token 打分</text>
-    <text x="320" y="108" text-anchor="middle" fill="#5a6272">ReLU + 逐头加权（式 1）</text>
-    <rect x="450" y="50" width="170" height="76" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-    <text x="535" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Top-k = 2048</text>
-    <text x="535" y="90" text-anchor="middle" fill="#1a1f2e">选出 2048 个 token</text>
-    <text x="535" y="108" text-anchor="middle" fill="#5a6272">（需 KL 门控损失对齐）</text>
-    <rect x="665" y="50" width="170" height="76" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-    <text x="750" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">主注意力 MLA-MQA</text>
-    <text x="750" y="90" text-anchor="middle" fill="#1a1f2e">只在选中 token 上算</text>
-    <text x="750" y="108" text-anchor="middle" fill="#5a6272">O(Lk)，k=2048</text>
-    <line x1="190" y1="88" x2="231" y2="88" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
-    <line x1="405" y1="88" x2="446" y2="88" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
-    <line x1="620" y1="88" x2="661" y2="88" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
+    <rect x="24" y="50" width="170" height="76" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="109" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">每 token 缓存</text>
+    <text x="109" y="90" text-anchor="middle" font-size="11" fill="#1e293b">1 条索引 key k^I_s ∈ R^d_I</text>
+    <text x="109" y="108" text-anchor="middle" font-size="10" fill="#64748b">（FP8 可行，V3.2 p.3）</text>
+    <rect x="224" y="50" width="170" height="76" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="309" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">Lightning Indexer</text>
+    <text x="309" y="90" text-anchor="middle" font-size="11" fill="#1e293b">L×L 逐 token 打分</text>
+    <text x="309" y="108" text-anchor="middle" font-size="10" fill="#64748b">ReLU + 逐头加权（式 1）</text>
+    <rect x="424" y="50" width="170" height="76" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="509" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">Top-k = 2048</text>
+    <text x="509" y="90" text-anchor="middle" font-size="11" fill="#1e293b">选出 2048 个 token</text>
+    <text x="509" y="108" text-anchor="middle" font-size="10" fill="#64748b">（需 KL 门控损失对齐）</text>
+    <rect x="624" y="50" width="170" height="76" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="709" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">主注意力 MLA-MQA</text>
+    <text x="709" y="90" text-anchor="middle" font-size="11" fill="#1e293b">只在选中 token 上算</text>
+    <text x="709" y="108" text-anchor="middle" font-size="10" fill="#64748b">O(Lk)，k=2048</text>
+    <path d="M199,88 L 213,88" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <path d="M399,88 L 413,88" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <path d="M599,88 L 613,88" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
   </g>
-  <text x="20" y="160" fill="#5a6272">索引 KV：每 token 1 条 d_I 维 → 随 L 线性增长；打分计算量 O(L²)（V3.2 论文 §2.3 明确承认 indexer 仍为 O(L²)）</text>
+  <text x="24" y="160" font-size="11" fill="#64748b">索引 KV：每 token 1 条 d_I 维 → 随 L 线性增长；打分计算量 O(L²)（V3.2 论文 §2.3 明确承认 indexer 仍为 O(L²)）</text>
 
-  <text x="20" y="248" font-size="13" font-weight="bold" fill="#2456c4">V4 · CSA：压缩 entry 粒度索引（候选 = 每 m=4 token 一条）</text>
+  <text x="24" y="248" font-size="13" font-weight="bold" fill="#1e40af">V4 · CSA：压缩 entry 粒度索引（候选 = 每 m=4 token 一条）</text>
   <g>
-    <rect x="20" y="266" width="170" height="76" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-    <text x="105" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">索引 KV 同样压缩</text>
-    <text x="105" y="306" text-anchor="middle" fill="#1a1f2e">K^I,Comp：(n/4) × 128</text>
-    <text x="105" y="324" text-anchor="middle" fill="#5a6272">（同一压缩机制，式 9–12）</text>
-    <rect x="235" y="266" width="170" height="76" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-    <text x="320" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Lightning Indexer</text>
-    <text x="320" y="306" text-anchor="middle" fill="#1a1f2e">L×(n/4) 逐 entry 打分</text>
-    <text x="320" y="324" text-anchor="middle" fill="#5a6272">QK 路径 FP4（式 15–16）</text>
-    <rect x="450" y="266" width="170" height="76" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-    <text x="535" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Top-k = 1024</text>
-    <text x="535" y="306" text-anchor="middle" fill="#1a1f2e">1024 条 entry</text>
-    <text x="535" y="324" text-anchor="middle" fill="#5a6272">≈ 4096 token 的信息</text>
-    <rect x="665" y="266" width="170" height="76" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-    <text x="750" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">SKV-MQA 核心注意力</text>
-    <text x="750" y="306" text-anchor="middle" fill="#1a1f2e">选中 entry 即 K=V</text>
-    <text x="750" y="324" text-anchor="middle" fill="#5a6272">选择单元 = 注意力单元</text>
-    <line x1="190" y1="304" x2="231" y2="304" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
-    <line x1="405" y1="304" x2="446" y2="304" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
-    <line x1="620" y1="304" x2="661" y2="304" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
+    <rect x="24" y="266" width="170" height="76" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+    <text x="109" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">索引 KV 同样压缩</text>
+    <text x="109" y="306" text-anchor="middle" font-size="11" fill="#1e293b">K^I,Comp：(n/4) × 128</text>
+    <text x="109" y="324" text-anchor="middle" font-size="10" fill="#64748b">（同一压缩机制，式 9–12）</text>
+    <rect x="224" y="266" width="170" height="76" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+    <text x="309" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">Lightning Indexer</text>
+    <text x="309" y="306" text-anchor="middle" font-size="11" fill="#1e293b">L×(n/4) 逐 entry 打分</text>
+    <text x="309" y="324" text-anchor="middle" font-size="10" fill="#64748b">QK 路径 FP4（式 15–16）</text>
+    <rect x="424" y="266" width="170" height="76" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+    <text x="509" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">Top-k = 1024</text>
+    <text x="509" y="306" text-anchor="middle" font-size="11" fill="#1e293b">1024 条 entry</text>
+    <text x="509" y="324" text-anchor="middle" font-size="10" fill="#64748b">≈ 4096 token 的信息</text>
+    <rect x="624" y="266" width="170" height="76" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+    <text x="709" y="288" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">SKV-MQA 核心注意力</text>
+    <text x="709" y="306" text-anchor="middle" font-size="11" fill="#1e293b">选中 entry 即 K=V</text>
+    <text x="709" y="324" text-anchor="middle" font-size="10" fill="#64748b">选择单元 = 注意力单元</text>
+    <path d="M199,304 L 213,304" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <path d="M399,304 L 413,304" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <path d="M599,304 L 613,304" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
   </g>
-  <text x="20" y="382" fill="#2f9e63">索引 KV 条数 L → L/4（−75%）；打分计算 O(L²/4)；top-k 在 n/4=25 万级候选上排序，比 V3.2 的 100 万级候选更省且覆盖更大</text>
+  <text x="24" y="382" font-size="11" fill="#166534">索引 KV 条数 L → L/4（−75%）；打分计算 O(L²/4)；top-k 在 n/4=25 万级候选上排序，比 V3.2 的 100 万级候选更省且覆盖更大</text>
 </svg>
 <p class="cap"><b>图 1</b>｜两代索引器的粒度对比（对照 V3.2 论文式 1 与 V4 论文式 13–17）。核心差异在最左一格：V4 先把索引 key 本身压到 1/m（m=4），后续每一环——打分量、排序量、缓存条数——都跟着 ÷4；且「选择单元」与「注意力单元」合一，选中即可用。</p>
 </div>
@@ -211,67 +212,71 @@ window.MathJax = {
 </ul>
 
 <div class="fig">
-<svg viewBox="0 0 860 516" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="m1a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker><marker id="m1b" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2f9e63"/></marker></defs>
+<svg viewBox="0 0 850 518" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/></marker>
+    <marker id="arrow2-green" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#22c55e"/></marker>
+  </defs>
   <!-- 行1：query 侧 -->
-  <rect x="20" y="54" width="96" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="68" y="72" text-anchor="middle" font-weight="bold" fill="#1a1f2e">h_t</text>
-  <text x="68" y="90" text-anchor="middle" font-size="10" fill="#5a6272">∈ R^7168</text>
-  <rect x="160" y="40" width="130" height="32" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="225" y="60" text-anchor="middle" fill="#1a1f2e">W^DQ：7168→1536</text>
-  <rect x="330" y="40" width="130" height="32" rx="6" fill="#dbe6f8" stroke="#2456c4"/>
-  <text x="395" y="60" text-anchor="middle" fill="#1a1f2e">c^Q_t ∈ R^1536</text>
-  <rect x="160" y="96" width="130" height="32" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="225" y="116" text-anchor="middle" fill="#1a1f2e">W^w：7168→64</text>
-  <rect x="330" y="96" width="130" height="32" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="395" y="116" text-anchor="middle" fill="#1a1f2e">w^I ∈ R^64</text>
-  <rect x="500" y="40" width="130" height="32" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="565" y="60" text-anchor="middle" fill="#1a1f2e">W^IUQ：1536→8192</text>
-  <rect x="670" y="40" width="150" height="32" rx="6" fill="#2456c4"/>
-  <text x="745" y="60" text-anchor="middle" fill="#fff">q^I：64 头 × 128 维</text>
-  <rect x="500" y="96" width="240" height="32" rx="6" fill="none" stroke="#2f9e63" stroke-dasharray="5 4"/>
-  <text x="620" y="116" text-anchor="middle" font-size="11" fill="#2f9e63">latent 同时供主注意力升维（式 18）</text>
-  <line x1="116" y1="66" x2="156" y2="56" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <line x1="116" y1="86" x2="156" y2="112" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <line x1="290" y1="56" x2="326" y2="56" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <line x1="290" y1="112" x2="326" y2="112" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <line x1="460" y1="56" x2="496" y2="56" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <line x1="630" y1="56" x2="666" y2="56" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <polyline points="460,64 480,64 480,112 496,112" fill="none" stroke="#2f9e63" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#m1b)"/>
-  <text x="139" y="32" text-anchor="middle" font-size="10" fill="#5a6272">式 13</text>
-  <text x="480" y="30" text-anchor="middle" font-size="10" fill="#5a6272">式 14</text>
-  <text x="245" y="90" text-anchor="middle" font-size="10" fill="#5a6272">式 15</text>
+  <rect x="20" y="54" width="96" height="44" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="68" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">h_t</text>
+  <text x="68" y="90" text-anchor="middle" font-size="10" fill="#64748b">∈ R^7168</text>
+  <rect x="160" y="40" width="130" height="32" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="225" y="60" text-anchor="middle" font-size="12" fill="#1e293b">W^DQ：7168→1536</text>
+  <rect x="330" y="40" width="130" height="32" rx="6" fill="#bfdbfe" stroke="#3b82f6"/>
+  <text x="395" y="60" text-anchor="middle" font-size="12" fill="#1e293b">c^Q_t ∈ R^1536</text>
+  <rect x="160" y="96" width="130" height="32" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="225" y="116" text-anchor="middle" font-size="12" fill="#166534">W^w：7168→64</text>
+  <rect x="330" y="96" width="130" height="32" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="395" y="116" text-anchor="middle" font-size="12" fill="#166534">w^I ∈ R^64</text>
+  <rect x="500" y="40" width="130" height="32" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="565" y="60" text-anchor="middle" font-size="12" fill="#1e293b">W^IUQ：1536→8192</text>
+  <rect x="670" y="40" width="150" height="32" rx="6" fill="#3b82f6"/>
+  <text x="745" y="60" text-anchor="middle" font-size="12" fill="#ffffff">q^I：64 头 × 128 维</text>
+  <rect x="500" y="96" width="240" height="32" rx="6" fill="none" stroke="#22c55e" stroke-dasharray="6,4"/>
+  <text x="620" y="116" text-anchor="middle" font-size="11" fill="#166534">latent 同时供主注意力升维（式 18）</text>
+  <path d="M121,66 L 149,56" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M121,86 L 149,112" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M295,56 L 319,56" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M295,112 L 319,112" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M465,56 L 489,56" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M635,56 L 659,56" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M465,64 L 471,64 Q 480,64 480,73 L 480,96 Q 480,112 489,112" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow2-green)"/>
+  <text x="139" y="32" text-anchor="middle" font-size="10" fill="#64748b">式 13</text>
+  <text x="480" y="30" text-anchor="middle" font-size="10" fill="#64748b">式 14</text>
+  <text x="245" y="90" text-anchor="middle" font-size="10" fill="#64748b">式 15</text>
   <!-- 行2：KV 侧 -->
-  <rect x="20" y="190" width="140" height="36" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="90" y="204" text-anchor="middle" font-size="11" fill="#1a1f2e">KV token 隐状态</text>
-  <text x="90" y="219" text-anchor="middle" font-size="10" fill="#5a6272">（每 4 token 一组）</text>
-  <rect x="200" y="190" width="160" height="36" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="280" y="204" text-anchor="middle" font-size="11" fill="#1a1f2e">Indexer 专用压缩器</text>
-  <text x="280" y="219" text-anchor="middle" font-size="10" fill="#5a6272">（rotate=True，式 9–12）</text>
-  <rect x="400" y="190" width="180" height="36" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="490" y="204" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1f2e">K^I,Comp</text>
-  <text x="490" y="219" text-anchor="middle" font-size="10" fill="#5a6272">(n/4) × 128 维</text>
-  <line x1="160" y1="208" x2="196" y2="208" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <line x1="360" y1="208" x2="396" y2="208" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <text x="20" y="262" font-size="10" fill="#5a6272">打分全程可低精度化：QK 路径 FP4，索引分数 BF16（§5.2.1）</text>
+  <rect x="20" y="190" width="140" height="36" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="90" y="204" text-anchor="middle" font-size="11" fill="#1e293b">KV token 隐状态</text>
+  <text x="90" y="219" text-anchor="middle" font-size="10" fill="#64748b">（每 4 token 一组）</text>
+  <rect x="200" y="190" width="160" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="280" y="204" text-anchor="middle" font-size="11" fill="#1e293b">Indexer 专用压缩器</text>
+  <text x="280" y="219" text-anchor="middle" font-size="10" fill="#64748b">（rotate=True，式 9–12）</text>
+  <rect x="400" y="190" width="180" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="490" y="204" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e293b">K^I,Comp</text>
+  <text x="490" y="219" text-anchor="middle" font-size="10" fill="#64748b">(n/4) × 128 维</text>
+  <path d="M165,208 L 189,208" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M365,208 L 389,208" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <text x="20" y="262" font-size="10" fill="#64748b">打分全程可低精度化：QK 路径 FP4，索引分数 BF16（§5.2.1）</text>
   <!-- 行3：打分 -->
-  <rect x="180" y="290" width="500" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="430" y="314" text-anchor="middle" fill="#1a1f2e">I_t,s = Σ(h=1..64) w^I_t,h · ReLU( q^I_t,h · K_s^I,Comp )</text>
-  <text x="430" y="334" text-anchor="middle" font-size="10" fill="#5a6272">逐头内积 → ReLU → 逐头加权求和为单一标量分（式 16）</text>
-  <line x1="395" y1="128" x2="395" y2="286" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <line x1="510" y1="226" x2="510" y2="286" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <polyline points="760,72 760,318 684,318" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
+  <rect x="180" y="290" width="500" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="430" y="314" text-anchor="middle" font-size="12" fill="#1e293b">I_t,s = Σ(h=1..64) w^I_t,h · ReLU( q^I_t,h · K_s^I,Comp )</text>
+  <text x="430" y="334" text-anchor="middle" font-size="10" fill="#64748b">逐头内积 → ReLU → 逐头加权求和为单一标量分（式 16）</text>
+  <path d="M395,133 L 395,279" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M510,231 L 510,279" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M760,77 L 760,308 Q 760,318 752,318 L 691,318" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
   <!-- 行4：top-k -->
-  <line x1="430" y1="346" x2="430" y2="376" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <rect x="240" y="380" width="360" height="40" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="420" y="405" text-anchor="middle" fill="#1a1f2e">Top-k 选择：保留 k=1024 条 entry（式 17）</text>
-  <rect x="650" y="378" width="180" height="44" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="740" y="396" text-anchor="middle" font-size="11" fill="#1a1f2e">主 KV entry C^Comp</text>
-  <text x="740" y="412" text-anchor="middle" font-size="10" fill="#5a6272">(n/4) × 512 维</text>
-  <line x1="650" y1="400" x2="604" y2="400" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <line x1="430" y1="420" x2="430" y2="452" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1a)"/>
-  <rect x="240" y="456" width="360" height="40" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="420" y="481" text-anchor="middle" fill="#1a1f2e">被选 entry C^SprsComp_t → SKV-MQA 核心注意力</text>
+  <path d="M430,351 L 430,369" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <rect x="240" y="380" width="360" height="40" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="420" y="404" text-anchor="middle" font-size="12" fill="#1e293b">Top-k 选择：保留 k=1024 条 entry（式 17）</text>
+  <rect x="650" y="378" width="180" height="44" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="740" y="396" text-anchor="middle" font-size="11" fill="#1e293b">主 KV entry C^Comp</text>
+  <text x="740" y="412" text-anchor="middle" font-size="10" fill="#64748b">(n/4) × 512 维</text>
+  <path d="M645,400 L 611,400" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M430,425 L 430,445" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <rect x="240" y="456" width="360" height="40" rx="8" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="420" y="480" text-anchor="middle" font-size="12" fill="#166534">被选 entry C^SprsComp_t → SKV-MQA 核心注意力</text>
 </svg>
 <p class="cap"><b>图 2</b>｜Lightning Indexer 完整数据流与张量形状（V4-Pro 配置；对应 V4 论文图 3 的 Indexer 部分，式 13–17）。蓝色：低秩索引 query（式 13–14）；绿色：独立投影的逐头权重（式 15）与 latent 共享支路；橙色：索引器专用的压缩器与 128 维索引 key。打分输出单一标量序列，top-k 直接索引主 KV entry。</p>
 </div>
@@ -296,37 +301,38 @@ window.MathJax = {
 <div class="infer">每条索引 entry 的字节数取决于存储精度：论文口径下 QK 激活按 FP4 缓存加载（§5.2.1），则约 128×0.5=64 B/条；参考实现当前用 BF16 存（model.py:419 注释原文「kv could also use fp8 format, though current implementation uses bf16」），则约 256 B/条。主 entry（512 维，RoPE 64 维 BF16 + 其余 FP8）约 576 B/条。逐条目字节的推算口径详见 kvcache 报告 §6。</div>
 
 <div class="fig">
-<svg viewBox="0 0 860 360" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="m3a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
-  <rect x="20" y="56" width="110" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="75" y="74" text-anchor="middle" font-size="11" fill="#1a1f2e">解码 token</text>
-  <text x="75" y="90" text-anchor="middle" font-size="10" fill="#5a6272">x_t（隐状态）</text>
-  <line x1="130" y1="78" x2="176" y2="78" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <rect x="180" y="36" width="240" height="140" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="300" y="58" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">indexer.compressor</text>
-  <text x="300" y="74" text-anchor="middle" font-size="10" fill="#5a6272">（rotate=True：Hadamard 旋转 + FP4）</text>
-  <rect x="196" y="86" width="100" height="30" rx="4" fill="#fff" stroke="#e8862a"/>
-  <text x="246" y="105" text-anchor="middle" font-size="11" fill="#1a1f2e">kv_state</text>
-  <rect x="304" y="86" width="100" height="30" rx="4" fill="#fff" stroke="#e8862a"/>
-  <text x="354" y="105" text-anchor="middle" font-size="11" fill="#1a1f2e">score_state</text>
-  <text x="300" y="138" text-anchor="middle" font-size="10" fill="#5a6272">在途 token 的门控分数 + KV（未满窗口）</text>
-  <text x="300" y="154" text-anchor="middle" font-size="10" fill="#5a6272">ape = 压缩位置偏置 B_a,B_b（式 11）</text>
-  <line x1="300" y1="176" x2="300" y2="210" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <text x="312" y="198" font-size="10" fill="#5a6272">每攒满 4 token 压出 1 条 128 维 entry</text>
-  <rect x="180" y="214" width="240" height="60" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="300" y="238" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Indexer.kv_cache</text>
-  <text x="300" y="258" text-anchor="middle" font-size="10" fill="#5a6272">⌊pos/4⌋ 条 × 128 维（每 CSA 层独立）</text>
-  <rect x="560" y="36" width="270" height="90" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="695" y="60" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">Attention.kv_cache（主注意力）</text>
-  <text x="695" y="82" text-anchor="middle" font-size="10" fill="#1a1f2e">[ SWA 段 128×512 | 压缩段 ⌊pos/4⌋×512 ]</text>
-  <text x="695" y="100" text-anchor="middle" font-size="10" fill="#5a6272">512 维 entry，与 SWA 共用同一缓冲</text>
-  <text x="560" y="152" font-size="10" fill="#5a6272">元素量比 ≈ 128/512 = 1:4（同为每 4 token 1 条）</text>
-  <rect x="560" y="214" width="270" height="60" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="695" y="238" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">打分（式 16）→ Top-k=1024</text>
-  <text x="695" y="258" text-anchor="middle" font-size="10" fill="#5a6272">新 query 与全部 ⌊pos/4⌋ 条 entry 算分</text>
-  <line x1="420" y1="244" x2="556" y2="244" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <text x="20" y="320" font-size="10.5" fill="#5a6272">两类缓冲分工：kv_state / score_state 只装未满压缩窗口的在途 token（有界，随请求固定，对应论文 §3.5.1 的 State Cache）；</text>
-  <text x="20" y="340" font-size="10.5" fill="#5a6272">Indexer.kv_cache 追加压缩 entry（随上下文线性增长，进分页 KV Cache）——缓存布局总览见 deepseek-v4-kvcache.html 图 1–3。</text>
+<svg viewBox="0 0 850 354" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs><marker id="arrow3" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/></marker></defs>
+  <rect x="20" y="44" width="110" height="44" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="75" y="62" text-anchor="middle" font-size="11" fill="#1e293b">解码 token</text>
+  <text x="75" y="77" text-anchor="middle" font-size="10" fill="#64748b">x_t（隐状态）</text>
+  <path d="M135,66 L 169,66" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <rect x="180" y="24" width="240" height="140" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="300" y="46" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">indexer.compressor</text>
+  <text x="300" y="62" text-anchor="middle" font-size="10" fill="#64748b">（rotate=True：Hadamard 旋转 + FP4）</text>
+  <rect x="196" y="74" width="100" height="30" rx="4" fill="#ffffff" stroke="#f59e0b"/>
+  <text x="246" y="93" text-anchor="middle" font-size="11" fill="#1e293b">kv_state</text>
+  <rect x="304" y="74" width="100" height="30" rx="4" fill="#ffffff" stroke="#f59e0b"/>
+  <text x="354" y="93" text-anchor="middle" font-size="11" fill="#1e293b">score_state</text>
+  <text x="300" y="126" text-anchor="middle" font-size="10" fill="#64748b">在途 token 的门控分数 + KV（未满窗口）</text>
+  <text x="300" y="142" text-anchor="middle" font-size="10" fill="#64748b">ape = 压缩位置偏置 B_a,B_b（式 11）</text>
+  <path d="M300,169 L 300,191" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <text x="312" y="184" font-size="10" fill="#64748b">每攒满 4 token 压出 1 条 128 维 entry</text>
+  <rect x="180" y="202" width="240" height="60" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="300" y="226" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">Indexer.kv_cache</text>
+  <text x="300" y="246" text-anchor="middle" font-size="10" fill="#64748b">⌊pos/4⌋ 条 × 128 维（每 CSA 层独立）</text>
+  <rect x="560" y="24" width="270" height="90" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="695" y="48" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">Attention.kv_cache（主注意力）</text>
+  <text x="695" y="70" text-anchor="middle" font-size="10" fill="#1e293b">[ SWA 段 128×512 | 压缩段 ⌊pos/4⌋×512 ]</text>
+  <text x="695" y="88" text-anchor="middle" font-size="10" fill="#64748b">512 维 entry，与 SWA 共用同一缓冲</text>
+  <text x="560" y="140" font-size="10" fill="#64748b">元素量比 ≈ 128/512 = 1:4（同为每 4 token 1 条）</text>
+  <rect x="560" y="202" width="270" height="60" rx="8" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="695" y="226" text-anchor="middle" font-size="12" font-weight="bold" fill="#166534">打分（式 16）→ Top-k=1024</text>
+  <text x="695" y="246" text-anchor="middle" font-size="10" fill="#166534">新 query 与全部 ⌊pos/4⌋ 条 entry 算分</text>
+  <path d="M425,232 L 549,232" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <text x="20" y="308" font-size="10" fill="#64748b">两类缓冲分工：kv_state / score_state 只装未满压缩窗口的在途 token（有界，随请求固定，对应论文 §3.5.1 的 State Cache）；</text>
+  <text x="20" y="328" font-size="10" fill="#64748b">Indexer.kv_cache 追加压缩 entry（随上下文线性增长，进分页 KV Cache）——缓存布局总览见 deepseek-v4-kvcache.html 图 1–3。</text>
 </svg>
 <p class="cap"><b>图 3</b>｜索引器缓存的代码视角（对应 <code>inference/model.py</code> 的 <code>Indexer</code> 与 <code>Compressor</code> 类）。橙色：索引器专用压缩器（rotate=True）及其状态缓冲；蓝色：随序列增长的 128 维索引 entry 缓存；绿色：每步打分–选择。注意 <code>score_state</code> 属于压缩器、是「状态」而非「索引缓存」。</p>
 </div>

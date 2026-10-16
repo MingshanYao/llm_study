@@ -157,44 +157,45 @@ window.MathJax = {
 <p>两种坏法，两种病因：<b>离线 + 负奖励</b>崩在「压低别人」（logp 无下界）；<b>在线 + 全正奖励</b>崩在另一件事上——而这件事正是本篇主角。关键观察：在线 +1/0 奖励的 RL，本质上是<b>蒸馏</b>：只把成功的 rollout 喂给训练器做最大似然，老师就是采样器。离线蒸馏之所以稳，是因为<b>老师是固定的</b>，学生收敛到老师的拟合就停了。而在线蒸馏的老师<b>不是别人，是学生自己的一个有偏拷贝</b>，每一步都被学生反向更新——</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 380" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 860 380" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="a1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    <marker id="arrow-lg" markerWidth="12" markerHeight="12" refX="3" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 L3,6 z" fill="#64748b"/>
     </marker>
-    <marker id="a1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    <marker id="arrow-blue-lg" markerWidth="12" markerHeight="12" refX="3" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 L3,6 z" fill="#3b82f6"/>
     </marker>
   </defs>
-  <text x="40" y="36" font-size="13" font-weight="bold" fill="#1a1f2e">图 A-1 TIM 反馈回路：训练引擎每一步都被拉向「自己的有偏拷贝」</text>
+  <text x="435" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">图 A-1 TIM 反馈回路：训练引擎每一步都被拉向「自己的有偏拷贝」</text>
 
   <!-- trainer box -->
-  <rect x="80" y="120" width="220" height="96" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="190" y="148" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">训练引擎 Trainer</text>
-  <text x="190" y="168" font-size="11" text-anchor="middle" fill="#5a6272">p_θ · bf16 · 求梯度</text>
-  <text x="190" y="188" font-size="10" text-anchor="middle" fill="#5a6272">修改权重的地方</text>
+  <rect x="55" y="120" width="220" height="96" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="165" y="153" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">训练引擎 Trainer</text>
+  <text x="165" y="172" font-size="10" text-anchor="middle" fill="#64748b">p_θ · bf16 · 求梯度</text>
+  <text x="165" y="190" font-size="10" text-anchor="middle" fill="#64748b">修改权重的地方</text>
 
   <!-- sampler box -->
-  <rect x="640" y="120" width="220" height="96" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="750" y="148" font-size="13" font-weight="bold" text-anchor="middle" fill="#1a1f2e">推理引擎 Sampler</text>
-  <text x="750" y="168" font-size="11" text-anchor="middle" fill="#5a6272">q_θ · int8/fp4/旧权重</text>
-  <text x="750" y="188" font-size="10" text-anchor="middle" fill="#5a6272">生成 rollout 的地方</text>
+  <rect x="615" y="120" width="220" height="96" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="725" y="153" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">推理引擎 Sampler</text>
+  <text x="725" y="172" font-size="10" text-anchor="middle" fill="#64748b">q_θ · int8/fp4/旧权重</text>
+  <text x="725" y="190" font-size="10" text-anchor="middle" fill="#64748b">生成 rollout 的地方</text>
 
-  <!-- arrow 1: sync -->
-  <line x1="300" y1="150" x2="638" y2="150" stroke="#2456c4" stroke-width="1.8" marker-end="url(#a1b)"/>
-  <text x="468" y="138" font-size="11" text-anchor="middle" fill="#2456c4">① 同步权重（两边本该一模一样）</text>
-
-  <!-- arrow 2: rollouts -->
-  <line x1="640" y1="186" x2="302" y2="186" stroke="#5a6272" stroke-width="1.8" marker-end="url(#a1a)"/>
-  <text x="468" y="204" font-size="11" text-anchor="middle" fill="#5a6272">② rollout 轨迹 + 奖励 R 回传</text>
+  <!-- arrow 1: sync (thick -> 12x12 marker) -->
+  <line x1="280" y1="146" x2="601" y2="146" stroke="#3b82f6" stroke-width="1.8" marker-end="url(#arrow-blue-lg)"/>
+  <text x="445" y="133" font-size="11" text-anchor="middle" fill="#1e40af">① 同步权重（两边本该一模一样）</text>
 
   <!-- drift note -->
-  <text x="468" y="168" font-size="12" font-weight="bold" text-anchor="middle" fill="#e8862a">s̄ = q − π ≠ 0（TIM 时）</text>
+  <text x="445" y="168" font-size="12" font-weight="bold" text-anchor="middle" fill="#b45309">s̄ = q − π ≠ 0（TIM 时）</text>
+
+  <!-- arrow 2: rollouts (thick -> 12x12 marker) -->
+  <line x1="610" y1="190" x2="289" y2="190" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow-lg)"/>
+  <text x="445" y="209" font-size="11" text-anchor="middle" fill="#64748b">② rollout 轨迹 + 奖励 R 回传</text>
 
   <!-- bottom annotations -->
-  <text x="60" y="300" font-size="11" fill="#1a1f2e">把 ② 的样本喂给训练器，梯度里混着 drift：平均奖励 × s̄——把 p 往 q 拉一小步。</text>
-  <text x="60" y="326" font-size="11" fill="#1a1f2e">随后 ① 把「已被拉动」的权重同步给采样器：现在 q 也偏了，且和 p 的偏差同向。</text>
-  <text x="60" y="352" font-size="11" fill="#1a1f2e">下一步又从更偏的 q 采样、又朝更偏的 q 蒸馏……偏差滚雪球，直到 reward 崩塌（轻 TIM 只是滚得慢）。</text>
+  <text x="35" y="300" font-size="11" fill="#1e293b">把 ② 的样本喂给训练器，梯度里混着 drift：平均奖励 × s̄——把 p 往 q 拉一小步。</text>
+  <text x="35" y="326" font-size="11" fill="#1e293b">随后 ① 把「已被拉动」的权重同步给采样器：现在 q 也偏了，且和 p 的偏差同向。</text>
+  <text x="35" y="352" font-size="11" fill="#1e293b">下一步又从更偏的 q 采样、又朝更偏的 q 蒸馏……偏差滚雪球，直到 reward 崩塌（轻 TIM 只是滚得慢）。</text>
 </svg>
 </div>
 <p class="cap"><b>图 A-1</b>｜没有 TIM 时 s̄ = 0，回路里没有这股拉力，训练正常；有 TIM 时，每一步的更新都混进「朝采样器的蒸馏」，且采样器同步跟进、偏差代代放大。类比复印机：母本每代都被换成上一代的复印件，每代带一点色偏——越印越歪。</p>
@@ -298,49 +299,50 @@ s_a = \nabla_\theta \log \pi(a) = e_a - \pi
 <p>与 signal 完全一致——橙色部分被精确剪掉（下图）：</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 360" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
-  <text x="40" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">手算验证：中心化恰好减掉 drift，剩下的与 on-policy 更新完全一致</text>
+<svg viewBox="0 0 880 377" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="439" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">手算验证：中心化恰好减掉 drift，剩下的与 on-policy 更新完全一致</text>
 
   <!-- legend -->
-  <rect x="60" y="40" width="32" height="12" fill="#2456c4"/>
-  <text x="100" y="50" font-size="11" fill="#1a1f2e">原始更新（未修正）</text>
-  <rect x="230" y="40" width="32" height="12" fill="#e8862a"/>
-  <text x="270" y="50" font-size="11" fill="#1a1f2e">其中混入的 drift</text>
-  <rect x="400" y="40" width="32" height="12" fill="#2f9e63"/>
-  <text x="440" y="50" font-size="11" fill="#1a1f2e">中心化后的更新</text>
+  <rect x="35" y="44" width="32" height="12" fill="#3b82f6"/>
+  <text x="75" y="54" font-size="11" fill="#1e293b">原始更新（未修正）</text>
+  <rect x="205" y="44" width="32" height="12" fill="#f59e0b"/>
+  <text x="245" y="54" font-size="11" fill="#1e293b">其中混入的 drift</text>
+  <rect x="375" y="44" width="32" height="12" fill="#22c55e"/>
+  <text x="415" y="54" font-size="11" fill="#1e293b">中心化后的更新</text>
 
   <!-- zero line -->
-  <line x1="60" y1="190" x2="880" y2="190" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="52" y="194" font-size="10" text-anchor="end" fill="#5a6272">0</text>
+  <line x1="35" y1="190" x2="855" y2="190" stroke="#64748b" stroke-width="1.2"/>
+  <text x="29" y="194" font-size="10" text-anchor="end" fill="#64748b">0</text>
 
   <!-- group 甲: total +0.78, drift +0.18, centered +0.60 -->
-  <rect x="138" y="73" width="36" height="117" fill="#2456c4"/>
-  <text x="156" y="67" font-size="11" text-anchor="middle" fill="#1a1f2e">0.78</text>
-  <rect x="182" y="163" width="36" height="27" fill="#e8862a"/>
-  <text x="200" y="157" font-size="11" text-anchor="middle" fill="#1a1f2e">0.18</text>
-  <rect x="226" y="100" width="36" height="90" fill="#2f9e63"/>
-  <text x="244" y="94" font-size="11" text-anchor="middle" fill="#1a1f2e">0.60</text>
-  <text x="200" y="330" font-size="11" text-anchor="middle" fill="#1a1f2e">token 甲 · R=3</text>
+  <rect x="113" y="73" width="36" height="117" fill="#3b82f6"/>
+  <text x="131" y="67" font-size="11" text-anchor="middle" fill="#1e293b">0.78</text>
+  <rect x="157" y="163" width="36" height="27" fill="#f59e0b"/>
+  <text x="175" y="157" font-size="11" text-anchor="middle" fill="#1e293b">0.18</text>
+  <rect x="201" y="100" width="36" height="90" fill="#22c55e"/>
+  <text x="219" y="94" font-size="11" text-anchor="middle" fill="#1e293b">0.60</text>
+  <text x="175" y="330" font-size="11" text-anchor="middle" fill="#1e293b">token 甲 · R=3</text>
 
   <!-- group 乙: total -0.33, drift -0.09, centered -0.24 -->
-  <rect x="408" y="190" width="36" height="50" fill="#2456c4"/>
-  <text x="426" y="254" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.33</text>
-  <rect x="452" y="190" width="36" height="14" fill="#e8862a"/>
-  <text x="470" y="218" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.09</text>
-  <rect x="496" y="190" width="36" height="36" fill="#2f9e63"/>
-  <text x="514" y="240" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.24</text>
-  <text x="470" y="330" font-size="11" text-anchor="middle" fill="#1a1f2e">token 乙 · R=1</text>
+  <rect x="383" y="190" width="36" height="50" fill="#3b82f6"/>
+  <text x="401" y="254" font-size="11" text-anchor="middle" fill="#1e293b">−0.33</text>
+  <rect x="427" y="190" width="36" height="14" fill="#f59e0b"/>
+  <text x="445" y="218" font-size="11" text-anchor="middle" fill="#1e293b">−0.09</text>
+  <rect x="471" y="190" width="36" height="36" fill="#22c55e"/>
+  <text x="489" y="240" font-size="11" text-anchor="middle" fill="#1e293b">−0.24</text>
+  <text x="445" y="330" font-size="11" text-anchor="middle" fill="#1e293b">token 乙 · R=1</text>
 
   <!-- group 丙: total -0.45, drift -0.09, centered -0.36 -->
-  <rect x="678" y="190" width="36" height="68" fill="#2456c4"/>
-  <text x="696" y="272" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.45</text>
-  <rect x="722" y="190" width="36" height="14" fill="#e8862a"/>
-  <text x="740" y="218" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.09</text>
-  <rect x="766" y="190" width="36" height="54" fill="#2f9e63"/>
-  <text x="784" y="258" font-size="11" text-anchor="middle" fill="#1a1f2e">−0.36</text>
-  <text x="740" y="330" font-size="11" text-anchor="middle" fill="#1a1f2e">token 丙 · R=0</text>
+  <rect x="653" y="190" width="36" height="68" fill="#3b82f6"/>
+  <text x="671" y="272" font-size="11" text-anchor="middle" fill="#1e293b">−0.45</text>
+  <rect x="697" y="190" width="36" height="14" fill="#f59e0b"/>
+  <text x="715" y="218" font-size="11" text-anchor="middle" fill="#1e293b">−0.09</text>
+  <rect x="741" y="190" width="36" height="54" fill="#22c55e"/>
+  <text x="759" y="258" font-size="11" text-anchor="middle" fill="#1e293b">−0.36</text>
+  <text x="715" y="330" font-size="11" text-anchor="middle" fill="#1e293b">token 丙 · R=0</text>
 
-  <text x="60" y="352" font-size="11" fill="#5a6272">蓝 = 橙 + 绿（原始更新 = drift + signal）；三根橙条被中心化精确减掉，剩下三根绿条。q=[0.5,0.3,0.2]，π=[0.4,0.35,0.25]。</text>
+  <text x="35" y="352" font-size="11" fill="#64748b">蓝 = 橙 + 绿（原始更新 = drift + signal）；三根橙条被中心化精确减掉，剩下三根绿条。q=[0.5,0.3,0.2]，π=[0.4,0.35,0.25]。</text>
 </svg>
 </div>
 <p class="cap"><b>图 A-2</b>｜§4.1 手算的可视化：纵轴 1 单位 = 150px，方向沿策略参数的三个坐标分解。绿色（中心化后）= 蓝色（原始）− 橙色（drift），三个坐标全部成立。</p>

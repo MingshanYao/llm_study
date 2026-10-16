@@ -136,58 +136,56 @@ window.MathJax = {
 <p>论文的做法用一句话就能说完：<b>把每个专家 FFN 切成 \(m\) 个小专家，同时把激活数从 \(K\) 提到 \(mK\)，激活参数量保持不变</b>。\(m\) 叫分割比（16B 模型取 \(m=4\)）。专家变小 = 每个专家的中间维缩到原来的 \(1/m\)，职责可以更单一。</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 330" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
-  <defs>
-    <marker id="t2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
-    </marker>
-  </defs>
-  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">等激活参数量的对比：16 个大专家 top-2 → 切成 64 个小专家 top-8</text>
+<svg viewBox="0 0 900 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="细粒度专家分割前后对比">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+
+  <!-- content spans x 40..860, center 450 -->
+  <text x="450" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">等激活参数量的对比：16 个大专家 top-2 → 切成 64 个小专家 top-8</text>
 
   <!-- top row: 16 big experts top-2 -->
-  <text x="40" y="56" font-size="11.5" fill="#5a6272">GShard 式：16 个大专家，每次激活 2 个（每个大专家 = 中间维 4 单位）</text>
-  <rect x="60" y="70" width="110" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="115" y="97" font-size="11.5" text-anchor="middle" fill="#1a1f2e">大专家 1</text>
-  <rect x="186" y="70" width="110" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="241" y="97" font-size="11.5" text-anchor="middle" fill="#1a1f2e">大专家 2</text>
-  <rect x="312" y="70" width="110" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="367" y="97" font-size="11.5" text-anchor="middle" fill="#1a1f2e">大专家 3</text>
-  <rect x="438" y="70" width="110" height="44" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="493" y="97" font-size="11.5" text-anchor="middle" fill="#1a1f2e">大专家 4</text>
-  <text x="562" y="97" font-size="14" fill="#5a6272">…</text>
-  <text x="600" y="97" font-size="11" fill="#5a6272">共 16 个</text>
-  <rect x="700" y="62" width="220" height="60" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="810" y="86" font-size="11.5" text-anchor="middle" fill="#1a1f2e">top-2 组合数</text>
-  <text x="810" y="108" font-size="12" text-anchor="middle" fill="#b4551d" font-weight="bold">C(16,2) = 120 种</text>
+  <text x="40" y="62" font-size="11" fill="#64748b">GShard 式：16 个大专家，每次激活 2 个（每个大专家 = 中间维 4 单位）</text>
+  <rect x="40" y="70" width="110" height="44" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="95" y="96" font-size="12" text-anchor="middle" fill="#1e293b">大专家 1</text>
+  <rect x="175" y="70" width="110" height="44" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="230" y="96" font-size="12" text-anchor="middle" fill="#1e293b">大专家 2</text>
+  <rect x="310" y="70" width="110" height="44" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="365" y="96" font-size="12" text-anchor="middle" fill="#1e293b">大专家 3</text>
+  <rect x="445" y="70" width="110" height="44" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="500" y="96" font-size="12" text-anchor="middle" fill="#1e293b">大专家 4</text>
+  <text x="580" y="96" font-size="14" fill="#64748b">…</text>
+  <text x="610" y="96" font-size="11" fill="#64748b">共 16 个</text>
+  <rect x="690" y="62" width="170" height="60" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="775" y="85" font-size="12" text-anchor="middle" fill="#1e293b">top-2 组合数</text>
+  <text x="775" y="108" font-size="12" text-anchor="middle" fill="#b45309" font-weight="bold">C(16,2) = 120 种</text>
 
-  <text x="40" y="160" font-size="12" font-weight="bold" fill="#2456c4">↓ 每个大专家切成 m=4 份小专家（参数缩到 1/4），激活数 2 → 8，激活参数量不变</text>
+  <text x="40" y="160" font-size="12" font-weight="bold" fill="#1e40af">↓ 每个大专家切成 m=4 份小专家（参数缩到 1/4），激活数 2 → 8，激活参数量不变</text>
 
   <!-- bottom row: 64 small experts top-8 -->
-  <text x="40" y="186" font-size="11.5" fill="#5a6272">DeepSeekMoE：64 个小专家，每次激活 8 个（每个小专家 = 中间维 1 单位）</text>
-  <rect x="60" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="86" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小1</text>
-  <rect x="124" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="150" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小2</text>
-  <rect x="188" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="214" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小3</text>
-  <rect x="252" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="278" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小4</text>
-  <rect x="316" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="342" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小5</text>
-  <rect x="380" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="406" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小6</text>
-  <rect x="444" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="470" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小7</text>
-  <rect x="508" y="200" width="52" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="534" y="227" font-size="11" text-anchor="middle" fill="#1a1f2e">小8</text>
-  <text x="574" y="227" font-size="14" fill="#5a6272">…</text>
-  <text x="612" y="227" font-size="11" fill="#5a6272">共 64 个</text>
-  <rect x="700" y="192" width="220" height="60" rx="8" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.5"/>
-  <text x="810" y="216" font-size="11.5" text-anchor="middle" fill="#1a1f2e">top-8 组合数</text>
-  <text x="810" y="238" font-size="12" text-anchor="middle" fill="#2f9e63" font-weight="bold">C(64,8) ≈ 44.3 亿种</text>
+  <text x="40" y="190" font-size="11" fill="#64748b">DeepSeekMoE：64 个小专家，每次激活 8 个（每个小专家 = 中间维 1 单位）</text>
+  <rect x="40" y="200" width="44" height="44" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="62" y="226" font-size="11" text-anchor="middle" fill="#1e40af">小1</text>
+  <rect x="109" y="200" width="44" height="44" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="131" y="226" font-size="11" text-anchor="middle" fill="#1e40af">小2</text>
+  <rect x="178" y="200" width="44" height="44" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="200" y="226" font-size="11" text-anchor="middle" fill="#1e40af">小3</text>
+  <rect x="247" y="200" width="44" height="44" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="269" y="226" font-size="11" text-anchor="middle" fill="#1e40af">小4</text>
+  <rect x="316" y="200" width="44" height="44" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="338" y="226" font-size="11" text-anchor="middle" fill="#1e40af">小5</text>
+  <rect x="385" y="200" width="44" height="44" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="407" y="226" font-size="11" text-anchor="middle" fill="#1e40af">小6</text>
+  <rect x="454" y="200" width="44" height="44" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="476" y="226" font-size="11" text-anchor="middle" fill="#1e40af">小7</text>
+  <rect x="523" y="200" width="44" height="44" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="545" y="226" font-size="11" text-anchor="middle" fill="#1e40af">小8</text>
+  <text x="592" y="226" font-size="14" fill="#64748b">…</text>
+  <text x="622" y="226" font-size="11" fill="#64748b">共 64 个</text>
+  <rect x="690" y="192" width="170" height="60" rx="8" fill="#d1fae5" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="775" y="215" font-size="12" text-anchor="middle" fill="#1e293b">top-8 组合数</text>
+  <text x="775" y="238" font-size="12" text-anchor="middle" fill="#166534" font-weight="bold">C(64,8) ≈ 44.3 亿种</text>
 
-  <text x="40" y="290" font-size="11" fill="#5a6272">同样的激活参数量，专家团队的搭配方案从 120 种涨到 44.3 亿种（约 3688 万倍）——「每个 token 定制专属加工团队」的自由度彻底放开。</text>
-  <text x="40" y="310" font-size="11" fill="#5a6272">代价：单个专家变小变多，负载不均的风险被放大（第 1 讲的矛盾更尖锐），均衡机制必须跟上——这是后面几代反复打磨均衡的原因。</text>
+  <text x="40" y="296" font-size="11" fill="#64748b">同样的激活参数量，专家团队的搭配方案从 120 种涨到 44.3 亿种（约 3688 万倍）——「每个 token 定制专属加工团队」的自由度彻底放开。</text>
+  <text x="40" y="316" font-size="11" fill="#64748b">代价：单个专家变小变多，负载不均的风险被放大（第 1 讲的矛盾更尖锐），均衡机制必须跟上——这是后面几代反复打磨均衡的原因。</text>
 </svg>
 </div>
 <p class="cap"><b>图 2-1</b>｜细粒度分割的交换逻辑：专家数量 ×m、单个规模 ÷m、激活数 ×m → 激活参数与计算量不变，组合空间指数级放大。</p>
@@ -227,53 +225,55 @@ window.MathJax = {
 \]</div>
 
 <div class="fig">
-<svg viewBox="0 0 940 320" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 900 325" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="V1-16B：2 个共享专家恒激活 + 64 个路由专家选 6 个">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="t2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    <marker id="arrow2" viewBox="0 0 8 8" refX="2" refY="4" markerWidth="8" markerHeight="8" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
     </marker>
-    <marker id="t2c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    <marker id="arrow2-green" viewBox="0 0 8 8" refX="2" refY="4" markerWidth="8" markerHeight="8" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#22c55e"/>
     </marker>
   </defs>
-  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">V1-16B：2 个共享专家恒激活 + 64 个路由专家选 6 个</text>
+  <text x="425" y="32" font-size="16" font-weight="bold" text-anchor="middle" fill="#1e293b">V1-16B：2 个共享专家恒激活 + 64 个路由专家选 6 个</text>
 
-  <rect x="40" y="134" width="110" height="52" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="95" y="155" font-size="11.5" text-anchor="middle" fill="#1a1f2e">token x</text>
-  <text x="95" y="173" font-size="10" text-anchor="middle" fill="#5a6272">[T, 7168]</text>
-  <polyline points="150,160 170,160 170,90 196,90" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2b)"/>
-  <polyline points="170,160 170,230 196,230" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2b)"/>
+  <rect x="40" y="132" width="110" height="54" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="95" y="155" font-size="12" text-anchor="middle" fill="#1e293b">token x</text>
+  <text x="95" y="173" font-size="10" text-anchor="middle" fill="#64748b">[T, 7168]</text>
+  <path d="M155,159 L162,159" fill="none" stroke="#64748b" stroke-width="1.5"/>
+  <path d="M162,159 C162,128 169,96 189,96" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M162,159 C162,192 169,222 189,222" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
 
   <!-- shared branch -->
-  <rect x="202" y="64" width="210" height="52" rx="8" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
-  <text x="307" y="85" font-size="11.5" text-anchor="middle" fill="#1a1f2e">共享专家 ×2</text>
-  <text x="307" y="104" font-size="10" text-anchor="middle" fill="#2f9e63">恒激活 · 不参与路由竞争</text>
-  <line x1="412" y1="90" x2="584" y2="90" stroke="#2f9e63" stroke-width="1.5" marker-end="url(#t2c)"/>
+  <rect x="200" y="69" width="210" height="54" rx="8" fill="#d1fae5" stroke="#22c55e" stroke-width="1.6"/>
+  <text x="305" y="92" font-size="12" text-anchor="middle" fill="#1e293b">共享专家 ×2</text>
+  <text x="305" y="110" font-size="10" text-anchor="middle" fill="#166534">恒激活 · 不参与路由竞争</text>
+  <line x1="415" y1="96" x2="577" y2="96" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrow2-green)"/>
 
-  <circle cx="598" cy="90" r="12" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
-  <text x="598" y="95" font-size="13" text-anchor="middle" fill="#2456c4">+</text>
+  <circle cx="600" cy="96" r="12" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="600" y="101" font-size="13" text-anchor="middle" fill="#1e40af">+</text>
 
   <!-- routed branch -->
-  <rect x="202" y="206" width="120" height="48" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="262" y="226" font-size="11.5" text-anchor="middle" fill="#1a1f2e">门控打分</text>
-  <text x="262" y="244" font-size="10" text-anchor="middle" fill="#5a6272">64 个分数</text>
-  <line x1="322" y1="230" x2="350" y2="230" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2b)"/>
-  <rect x="354" y="206" width="104" height="48" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="406" y="226" font-size="11.5" text-anchor="middle" fill="#1a1f2e">top-6 选择</text>
-  <text x="406" y="244" font-size="10" text-anchor="middle" fill="#5a6272">bias 只进选择</text>
-  <line x1="458" y1="230" x2="486" y2="230" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2b)"/>
-  <rect x="490" y="192" width="140" height="76" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-dasharray="5,3"/>
-  <text x="560" y="220" font-size="11.5" text-anchor="middle" fill="#1a1f2e">被选中的 6 个</text>
-  <text x="560" y="240" font-size="10" text-anchor="middle" fill="#5a6272">路由专家各按权重 g 输出</text>
-  <text x="560" y="258" font-size="10" text-anchor="middle" fill="#5a6272">g = 选中分数归一化</text>
+  <rect x="200" y="198" width="120" height="48" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="260" y="218" font-size="12" text-anchor="middle" fill="#1e40af">门控打分</text>
+  <text x="260" y="236" font-size="10" text-anchor="middle" fill="#64748b">64 个分数</text>
+  <line x1="325" y1="222" x2="343" y2="222" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <rect x="354" y="198" width="104" height="48" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="406" y="218" font-size="12" text-anchor="middle" fill="#b45309">top-6 选择</text>
+  <text x="406" y="236" font-size="10" text-anchor="middle" fill="#64748b">bias 只进选择</text>
+  <line x1="463" y1="222" x2="475" y2="222" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <rect x="486" y="184" width="148" height="76" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-dasharray="5,3"/>
+  <text x="560" y="208" font-size="12" text-anchor="middle" fill="#1e40af">被选中的 6 个</text>
+  <text x="560" y="227" font-size="10" text-anchor="middle" fill="#64748b">路由专家各按权重 g 输出</text>
+  <text x="560" y="245" font-size="10" text-anchor="middle" fill="#64748b">g = 选中分数归一化</text>
 
-  <polyline points="630,230 650,230 650,90 612,90" fill="none" stroke="#2f9e63" stroke-width="1.5" marker-end="url(#t2c)"/>
+  <path d="M639,222 C662,222 600,150 600,119" fill="none" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrow2-green)"/>
 
-  <line x1="610" y1="90" x2="696" y2="90" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t2b)"/>
-  <rect x="700" y="64" width="110" height="52" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="755" y="94" font-size="11.5" text-anchor="middle" fill="#1a1f2e">层输出</text>
+  <line x1="617" y1="96" x2="689" y2="96" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <rect x="700" y="69" width="110" height="54" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="755" y="100" font-size="12" text-anchor="middle" fill="#1e293b">层输出</text>
 
-  <text x="40" y="300" font-size="11" fill="#5a6272">输出 = 共享专家输出之和 + Σ gᵢ·路由专家输出。共性加工由共享专家兜底，路由专家的名额（384 选 6 / 64 选 6）留给真正的差异化加工。</text>
+  <text x="40" y="296" font-size="11" fill="#64748b">输出 = 共享专家输出之和 + Σ gᵢ·路由专家输出。共性加工由共享专家兜底，路由专家的名额（384 选 6 / 64 选 6）留给真正的差异化加工。</text>
 </svg>
 </div>
 <p class="cap"><b>图 2-2</b>｜共享 / 路由解耦结构。这个「恒激活支路 + 路由支路」的两段式结构从 V1 一直沿用到 V4，从未动摇。</p>
@@ -297,49 +297,50 @@ window.MathJax = {
 <p>V2 总参数 236B、每 token 激活 21B，每层 160 个路由专家 + 2 个共享专家。这么多的专家显然放不进一张 GPU，解决办法是<b>专家并行（Expert Parallelism）</b>：把专家拆到不同卡上，每张卡只持有一部分专家。</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 350" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 900 375" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="专家并行下，一个 MoE 层的两次全卡大快递（all-to-all）">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="t2d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#e8862a"/>
+    <marker id="arrow3-orange-lg" viewBox="0 0 12 12" refX="3" refY="6" markerWidth="12" markerHeight="12" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 L3,6 z" fill="#f59e0b"/>
     </marker>
-    <marker id="t2e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    <marker id="arrow3-green-lg" viewBox="0 0 12 12" refX="3" refY="6" markerWidth="12" markerHeight="12" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 L3,6 z" fill="#22c55e"/>
     </marker>
   </defs>
-  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">专家并行下，一个 MoE 层的两次全卡大快递（all-to-all）</text>
+  <text x="450" y="32" font-size="16" font-weight="bold" text-anchor="middle" fill="#1e293b">专家并行下，一个 MoE 层的两次全卡大快递（all-to-all）</text>
 
   <!-- GPU frames -->
-  <rect x="40" y="60" width="250" height="210" rx="10" fill="#fafbfd" stroke="#c9d2e0"/>
-  <text x="56" y="84" font-size="12" font-weight="bold" fill="#1a1f2e">GPU 0</text>
-  <rect x="60" y="110" width="90" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="105" y="135" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E1</text>
-  <rect x="60" y="165" width="90" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="105" y="190" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E2</text>
-  <text x="60" y="245" font-size="10" fill="#5a6272">只画 2 个，实际每卡几十个</text>
+  <rect x="45" y="60" width="250" height="210" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="61" y="84" font-size="12" font-weight="bold" fill="#1e293b">GPU 0</text>
+  <rect x="65" y="110" width="90" height="40" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="110" y="134" font-size="11" text-anchor="middle" fill="#1e293b">专家 E1</text>
+  <rect x="65" y="165" width="90" height="40" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="110" y="189" font-size="11" text-anchor="middle" fill="#1e293b">专家 E2</text>
+  <text x="65" y="245" font-size="10" fill="#64748b">只画 2 个，实际每卡几十个</text>
 
-  <rect x="350" y="60" width="250" height="210" rx="10" fill="#fafbfd" stroke="#c9d2e0"/>
-  <text x="366" y="84" font-size="12" font-weight="bold" fill="#1a1f2e">GPU 1</text>
-  <rect x="370" y="110" width="90" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="415" y="135" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E3</text>
-  <rect x="370" y="165" width="90" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="415" y="190" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E4</text>
+  <rect x="325" y="60" width="250" height="210" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="341" y="84" font-size="12" font-weight="bold" fill="#1e293b">GPU 1</text>
+  <rect x="345" y="110" width="90" height="40" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="390" y="134" font-size="11" text-anchor="middle" fill="#1e293b">专家 E3</text>
+  <rect x="345" y="165" width="90" height="40" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="390" y="189" font-size="11" text-anchor="middle" fill="#1e293b">专家 E4</text>
 
-  <rect x="660" y="60" width="250" height="210" rx="10" fill="#fafbfd" stroke="#c9d2e0"/>
-  <text x="676" y="84" font-size="12" font-weight="bold" fill="#1a1f2e">GPU 2</text>
-  <rect x="680" y="110" width="90" height="40" rx="6" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.5"/>
-  <text x="725" y="135" font-size="11" text-anchor="middle" fill="#1a1f2e">热门专家 E5</text>
-  <rect x="680" y="165" width="90" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="725" y="190" font-size="11" text-anchor="middle" fill="#1a1f2e">专家 E6</text>
+  <rect x="605" y="60" width="250" height="210" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="621" y="84" font-size="12" font-weight="bold" fill="#1e293b">GPU 2</text>
+  <rect x="625" y="110" width="90" height="40" rx="6" fill="#fce7f3" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="670" y="134" font-size="11" text-anchor="middle" fill="#9d174d">热门专家 E5</text>
+  <rect x="625" y="165" width="90" height="40" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="670" y="189" font-size="11" text-anchor="middle" fill="#1e293b">专家 E6</text>
 
   <!-- dispatch line -->
-  <line x1="290" y1="296" x2="654" y2="296" stroke="#e8862a" stroke-width="2" marker-end="url(#t2d)"/>
-  <text x="40" y="288" font-size="11" fill="#b4551d">① Dispatch（送出去）</text>
-  <text x="330" y="288" font-size="10.5" fill="#5a6272">把每个 token 快递给「拥有它目标专家」的那张卡</text>
+  <line x1="300" y1="296" x2="591" y2="296" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow3-orange-lg)"/>
+  <text x="45" y="284" font-size="11" fill="#b45309">① Dispatch（送出去）</text>
+  <text x="335" y="284" font-size="10.5" fill="#64748b">把每个 token 快递给「拥有它目标专家」的那张卡</text>
 
   <!-- combine line -->
-  <line x1="660" y1="326" x2="296" y2="326" stroke="#2f9e63" stroke-width="2" stroke-dasharray="7,4" marker-end="url(#t2e)"/>
-  <text x="40" y="344" font-size="11" fill="#2f9e63">② Combine（取回来）</text>
-  <text x="330" y="344" font-size="10.5" fill="#5a6272">专家算完的结果送回原卡，按权重加起来</text>
+  <line x1="600" y1="326" x2="309" y2="326" stroke="#22c55e" stroke-width="2" stroke-dasharray="7,4" marker-end="url(#arrow3-green-lg)"/>
+  <text x="45" y="348" font-size="11" fill="#166534">② Combine（取回来）</text>
+  <text x="335" y="348" font-size="10.5" fill="#64748b">专家算完的结果送回原卡，按权重加起来</text>
 </svg>
 </div>
 <p class="cap"><b>图 2-3</b>｜每次过 MoE 层，每个 token 都要跨网络两次（Dispatch / Combine），这在 V2 论文里被称为 all-to-all 通信——2000 亿参数模型的训练里，它贵得惊人。</p>
@@ -459,24 +460,25 @@ g_{i,t} = \frac{s_{i,t}}{\sum_{j \in \mathrm{Topk}} s_{j,t}}\ (\text{仅对选�
 <p>另一个值得注意的数值对比（观察为推断，V3 论文未展开）：top-2 选中 E1、E2 时，softmax 版内部权重是 0.867 : 0.117 ≈ 7.4 : 1（赢家通吃，第二名近乎陪跑）；sigmoid 版归一化后是 0.953 : 0.731 ≈ 1.3 : 1（两位专家贡献接近对半）。<b>后者让「多专家组队」真正有意义</b>——对 V3 这种一次激活 8 个专家的模型，8 个合伙人每人都该出力，而不是一个独裁者加七个观众。</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 240" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
-  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">耦合 vs 独立：V3 换 sigmoid 的核心差异</text>
+<svg viewBox="0 0 900 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="耦合 vs 独立：V3 换 sigmoid 的核心差异">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="450" y="32" font-size="16" font-weight="bold" text-anchor="middle" fill="#1e293b">耦合 vs 独立：V3 换 sigmoid 的核心差异</text>
 
-  <rect x="40" y="56" width="420" height="130" rx="10" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="60" y="84" font-size="12.5" font-weight="bold" fill="#1a1f2e">Softmax（V1 / V2 门控）</text>
-  <text x="60" y="110" font-size="12" fill="#1a1f2e">sᵢ = e^(zᵢ) / Σⱼ e^(zⱼ)</text>
-  <text x="60" y="136" font-size="11" fill="#5a6272">分母含全部专家分数 → 全局耦合：</text>
-  <text x="60" y="156" font-size="11" fill="#5a6272">一家分数爆炸，其余所有权重被压扁</text>
-  <text x="60" y="176" font-size="11" fill="#5a6272">万亿规模下，离群值会被这个机制放大成不稳定</text>
+  <rect x="40" y="56" width="390" height="130" rx="10" fill="#fce7f3" stroke="#ec4899"/>
+  <text x="60" y="84" font-size="12" font-weight="bold" fill="#9d174d">Softmax（V1 / V2 门控）</text>
+  <text x="60" y="110" font-size="12" fill="#1e293b">sᵢ = e^(zᵢ) / Σⱼ e^(zⱼ)</text>
+  <text x="60" y="136" font-size="11" fill="#64748b">分母含全部专家分数 → 全局耦合：</text>
+  <text x="60" y="156" font-size="11" fill="#64748b">一家分数爆炸，其余所有权重被压扁</text>
+  <text x="60" y="176" font-size="11" fill="#64748b">万亿规模下，离群值会被这个机制放大成不稳定</text>
 
-  <rect x="480" y="56" width="420" height="130" rx="10" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="500" y="84" font-size="12.5" font-weight="bold" fill="#1a1f2e">Sigmoid（V3 起的门控）</text>
-  <text x="500" y="110" font-size="12" fill="#1a1f2e">sᵢ = 1 / (1 + e^(−zᵢ))</text>
-  <text x="500" y="136" font-size="11" fill="#5a6272">无分母 → 每个专家独立打分，互不干扰</text>
-  <text x="500" y="156" font-size="11" fill="#5a6272">选中后仅在 top-k 内归一化，恢复「占比」含义</text>
-  <text x="500" y="176" font-size="11" fill="#5a6272">组队混合更均衡：8 个合伙人，不是 1 个独裁者</text>
+  <rect x="470" y="56" width="390" height="130" rx="10" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="490" y="84" font-size="12" font-weight="bold" fill="#166534">Sigmoid（V3 起的门控）</text>
+  <text x="490" y="110" font-size="12" fill="#1e293b">sᵢ = 1 / (1 + e^(−zᵢ))</text>
+  <text x="490" y="136" font-size="11" fill="#64748b">无分母 → 每个专家独立打分，互不干扰</text>
+  <text x="490" y="156" font-size="11" fill="#64748b">选中后仅在 top-k 内归一化，恢复「占比」含义</text>
+  <text x="490" y="176" font-size="11" fill="#64748b">组队混合更均衡：8 个合伙人，不是 1 个独裁者</text>
 
-  <text x="40" y="222" font-size="11" fill="#5a6272">sigmoid 的新代价：输出封顶在 1、大分数饱和失去区分度——V4 换 √Softplus 的伏笔（第 3 讲）。</text>
+  <text x="40" y="222" font-size="11" fill="#64748b">sigmoid 的新代价：输出封顶在 1、大分数饱和失去区分度——V4 换 √Softplus 的伏笔（第 3 讲）。</text>
 </svg>
 </div>
 <p class="cap"><b>图 2-4</b>｜三代亲和度演化的中间站。注意「独立打分 + 局部归一化」的两段式结构自此定型。</p>

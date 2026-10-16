@@ -144,60 +144,82 @@ window.MathJax = {
 <p>关键的性质检查：\(n=1\) 时双随机条件退化为标量 1，恰好<b>恢复原始残差的恒等映射</b>——mHC 是残差连接的严格泛化，而非另一个孤立设计。另外 \(H^{pre}\)、\(H^{post}\) 加非负有界约束（\(H^{pre}=\sigma(\cdot)\)、\(H^{post}=2\sigma(\cdot)\)），防止正负系数叠加造成信号抵消。</p>
 
 <div class="fig">
-<svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="arA" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+<svg viewBox="0 0 892 245" xmlns="http://www.w3.org/2000/svg" font-size="12" role="img" aria-label="三种残差范式对比">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#22c55e"/>
+    </marker>
+    <marker id="arrow-lg" markerWidth="12" markerHeight="12" refX="3" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 L3,6 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue-lg" markerWidth="12" markerHeight="12" refX="3" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 L3,6 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+  <g transform="translate(-4,3)">
   <!-- (a) 残差 -->
-  <text x="130" y="26" text-anchor="middle" font-weight="bold" fill="#1a1f2e">(a) 残差连接</text>
-  <line x1="30" y1="70" x2="230" y2="70" stroke="#2456c4" stroke-width="2.5" marker-end="url(#arA)"/>
-  <text x="24" y="60" fill="#5a6272">x</text>
-  <text x="222" y="60" fill="#5a6272">x+F</text>
-  <rect x="96" y="52" width="70" height="36" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="131" y="74" text-anchor="middle" fill="#1a1f2e">层 F</text>
-  <path d="M 60 70 C 60 110, 160 110, 196 84" fill="none" stroke="#8fb3e8" stroke-width="1.6" marker-end="url(#arA)"/>
-  <text x="122" y="128" text-anchor="middle" fill="#5a6272">x 直接透传（恒等）</text>
-  <text x="130" y="150" text-anchor="middle" fill="#5a6272">xₗ₊₁ = xₗ + F(xₗ)</text>
+  <text x="130" y="26" text-anchor="middle" font-weight="bold" fill="#1e293b">(a) 残差连接</text>
+  <line x1="30" y1="70" x2="221" y2="70" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#arrow-blue-lg)"/>
+  <text x="24" y="60" fill="#64748b">x</text>
+  <text x="222" y="60" fill="#64748b">x+F</text>
+  <rect x="96" y="52" width="70" height="36" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="131" y="74" text-anchor="middle" fill="#1e40af">层 F</text>
+  <path d="M 60 70 C 60 110, 160 110, 196 84" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="122" y="128" text-anchor="middle" fill="#64748b">x 直接透传（恒等）</text>
+  <text x="130" y="150" text-anchor="middle" fill="#64748b">xₗ₊₁ = xₗ + F(xₗ)</text>
   <!-- (b) HC -->
-  <text x="450" y="26" text-anchor="middle" font-weight="bold" fill="#1a1f2e">(b) Hyper-Connections</text>
-  <line x1="330" y1="52" x2="570" y2="52" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
-  <line x1="330" y1="76" x2="570" y2="76" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
-  <line x1="330" y1="100" x2="570" y2="100" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
-  <line x1="330" y1="124" x2="570" y2="124" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
-  <text x="318" y="56" text-anchor="end" fill="#5a6272">流 1</text>
-  <text x="318" y="104" text-anchor="end" fill="#5a6272">流 n</text>
-  <text x="450" y="42" text-anchor="middle" font-size="11" fill="#5a6272">n 条并行流（n×d）</text>
+  <text x="450" y="26" text-anchor="middle" font-weight="bold" fill="#1e293b">(b) Hyper-Connections</text>
+  <line x1="330" y1="52" x2="561" y2="52" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow-lg)"/>
+  <line x1="330" y1="76" x2="561" y2="76" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow-lg)"/>
+  <line x1="330" y1="100" x2="561" y2="100" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow-lg)"/>
+  <line x1="330" y1="124" x2="561" y2="124" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow-lg)"/>
+  <text x="318" y="56" text-anchor="end" fill="#64748b">流 1</text>
+  <text x="318" y="104" text-anchor="end" fill="#64748b">流 n</text>
+  <text x="450" y="42" text-anchor="middle" font-size="11" fill="#64748b">n 条并行流（n×d）</text>
   <!-- pre 聚合 -->
-  <path d="M 336 52 C 300 52, 296 160, 306 160 L 384 160" fill="none" stroke="#e8862a" stroke-width="1.6" marker-end="url(#arA)"/>
-  <path d="M 336 124 C 306 124, 296 160, 306 160" fill="none" stroke="#e8862a" stroke-width="1.6"/>
-  <text x="282" y="150" text-anchor="end" fill="#b05e10">Hpre 读出</text>
-  <rect x="386" y="144" width="66" height="32" rx="6" fill="#fff" stroke="#e8862a"/>
-  <text x="419" y="164" text-anchor="middle" fill="#1a1f2e">层 F</text>
+  <path d="M 336 52 C 300 52, 296 160, 311 160 L 375 160" fill="none" stroke="#f59e0b" stroke-width="1.6" marker-end="url(#arrow-orange)"/>
+  <path d="M 336 124 C 306 124, 296 160, 306 160" fill="none" stroke="#f59e0b" stroke-width="1.6"/>
+  <text x="282" y="150" text-anchor="end" fill="#b45309">Hpre 读出</text>
+  <rect x="386" y="144" width="66" height="32" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="419" y="164" text-anchor="middle" fill="#1e293b">层 F</text>
   <!-- post 写回 -->
-  <path d="M 452 144 C 452 132, 560 60, 566 56" fill="none" stroke="#4a9e6f" stroke-width="1.6" marker-end="url(#arA)"/>
-  <text x="556" y="150" text-anchor="start" fill="#2e7351">Hpost 写回</text>
+  <path d="M 452 139 C 452 127, 560 60, 566 56" fill="none" stroke="#22c55e" stroke-width="1.6" marker-end="url(#arrow-green)"/>
+  <text x="556" y="150" text-anchor="start" fill="#166534">Hpost 写回</text>
   <!-- res 混合 -->
-  <path d="M 500 46 L 500 130" fill="none" stroke="#2456c4" stroke-width="1.4"/>
-  <path d="M 404 46 L 404 130" fill="none" stroke="#2456c4" stroke-width="1.4"/>
-  <path d="M 404 50 C 420 66, 484 66, 498 52" fill="none" stroke="#2456c4" stroke-width="1.2" marker-end="url(#arA)"/>
-  <path d="M 498 126 C 482 110, 420 110, 406 124" fill="none" stroke="#2456c4" stroke-width="1.2" marker-end="url(#arA)"/>
-  <text x="452" y="94" text-anchor="middle" font-size="11" fill="#2456c4">Hres 混合</text>
-  <text x="450" y="186" text-anchor="middle" fill="#8a2b2b" font-weight="bold">三个映射均无约束 → 复合映射增益可达 ~3000×</text>
-  <text x="450" y="208" text-anchor="middle" fill="#5a6272">xₗ₊₁ = Hres·xₗ + Hpostᵀ·F(Hpre·xₗ)</text>
+  <path d="M 500 46 L 500 130" fill="none" stroke="#3b82f6" stroke-width="1.4"/>
+  <path d="M 404 46 L 404 130" fill="none" stroke="#3b82f6" stroke-width="1.4"/>
+  <path d="M 404 50 C 420 66, 484 66, 498 52" fill="none" stroke="#3b82f6" stroke-width="1.2" marker-end="url(#arrow-blue)"/>
+  <path d="M 498 126 C 482 110, 420 110, 406 124" fill="none" stroke="#3b82f6" stroke-width="1.2" marker-end="url(#arrow-blue)"/>
+  <text x="452" y="94" text-anchor="middle" font-size="11" fill="#1e40af">Hres 混合</text>
+  <text x="450" y="186" text-anchor="middle" fill="#9d174d" font-weight="bold">三个映射均无约束 → 复合映射增益可达 ~3000×</text>
+  <text x="450" y="208" text-anchor="middle" fill="#64748b">xₗ₊₁ = Hres·xₗ + Hpostᵀ·F(Hpre·xₗ)</text>
   <!-- (c) mHC -->
-  <text x="762" y="26" text-anchor="middle" font-weight="bold" fill="#1a1f2e">(c) mHC</text>
-  <line x1="648" y1="52" x2="876" y2="52" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
-  <line x1="648" y1="76" x2="876" y2="76" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
-  <line x1="648" y1="100" x2="876" y2="100" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
-  <line x1="648" y1="124" x2="876" y2="124" stroke="#c9d2e0" stroke-width="2" marker-end="url(#arA)"/>
-  <path d="M 726 46 L 726 130" fill="none" stroke="#2456c4" stroke-width="1.4"/>
-  <path d="M 802 46 L 802 130" fill="none" stroke="#2456c4" stroke-width="1.4"/>
-  <path d="M 726 50 C 742 66, 786 66, 800 52" fill="none" stroke="#2456c4" stroke-width="1.2" marker-end="url(#arA)"/>
-  <path d="M 800 126 C 784 110, 742 110, 728 124" fill="none" stroke="#2456c4" stroke-width="1.2" marker-end="url(#arA)"/>
-  <rect x="716" y="80" width="96" height="22" rx="11" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="764" y="95" text-anchor="middle" font-size="11" fill="#2456c4">P(Hres) 双随机</text>
-  <text x="762" y="160" text-anchor="middle" fill="#2456c4" font-weight="bold">Hres = Sinkhorn(H̃res)</text>
-  <text x="762" y="180" text-anchor="middle" fill="#5a6272">行和=列和=1，‖H‖₂≤1，乘法封闭</text>
-  <text x="762" y="200" text-anchor="middle" fill="#5a6272">复合增益被压到 ~1.6 以内；n=1 退化为恒等</text>
-  <text x="762" y="220" text-anchor="middle" fill="#5a6272">Hpre/Hpost 加非负有界约束（σ / 2σ）</text>
+  <text x="762" y="26" text-anchor="middle" font-weight="bold" fill="#1e293b">(c) mHC</text>
+  <line x1="648" y1="52" x2="867" y2="52" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow-lg)"/>
+  <line x1="648" y1="76" x2="867" y2="76" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow-lg)"/>
+  <line x1="648" y1="100" x2="867" y2="100" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow-lg)"/>
+  <line x1="648" y1="124" x2="867" y2="124" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow-lg)"/>
+  <path d="M 726 46 L 726 130" fill="none" stroke="#3b82f6" stroke-width="1.4"/>
+  <path d="M 802 46 L 802 130" fill="none" stroke="#3b82f6" stroke-width="1.4"/>
+  <path d="M 726 50 C 742 66, 786 66, 800 52" fill="none" stroke="#3b82f6" stroke-width="1.2" marker-end="url(#arrow-blue)"/>
+  <path d="M 800 126 C 784 110, 742 110, 728 124" fill="none" stroke="#3b82f6" stroke-width="1.2" marker-end="url(#arrow-blue)"/>
+  <rect x="716" y="80" width="96" height="22" rx="11" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="764" y="95" text-anchor="middle" font-size="11" fill="#1e40af">P(Hres) 双随机</text>
+  <text x="762" y="160" text-anchor="middle" fill="#1e40af" font-weight="bold">Hres = Sinkhorn(H̃res)</text>
+  <text x="762" y="180" text-anchor="middle" fill="#64748b">行和=列和=1，‖H‖₂≤1，乘法封闭</text>
+  <text x="762" y="200" text-anchor="middle" fill="#64748b">复合增益被压到 ~1.6 以内；n=1 退化为恒等</text>
+  <text x="762" y="220" text-anchor="middle" fill="#64748b">Hpre/Hpost 加非负有界约束（σ / 2σ）</text>
+  </g>
 </svg>
 <p class="cap"><b>图 1</b>｜三种残差范式（仿论文 Fig 1）。残差连接靠恒等透传保证守恒；HC 用无约束可学习映射换取表达力，牺牲了守恒；mHC 只把流内混合 \(H^{res}\) 约束到双随机流形——「可混合、不放大」，读出/写回通道仅加轻量非负有界约束。</p>
 </div>
@@ -238,159 +260,181 @@ window.MathJax = {
 <p>投影全程只含 exp 与除法，均为可微操作——整条链 \(\tilde H^{res} \to \exp \to 20\) 次归一化 \(\to H^{res}\) 对 \(\tilde H^{res}\) 可微，autograd 穿过 20 次迭代把梯度送回 \(\varphi^{res}\)。所以 Sinkhorn 不是「训练时加惩罚、部署时才合法」的事后补救，而是端到端可训练的严格参数化：<b>混合策略照常学习，稳定性由前向计算的结构保证</b>。代价是反向需要 20 次迭代的中间量——§2.3 的自定义反向 kernel（片上重算再遍历迭代）就是为它服务的。</p>
 
 <div class="fig">
-<svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="arD" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+<svg viewBox="0 0 900 264" xmlns="http://www.w3.org/2000/svg" font-size="12" role="img" aria-label="mHC 单层数据流">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow2-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="arrow2-orange" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrow2-green" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#22c55e"/>
+    </marker>
+  </defs>
+  <g transform="translate(10,7)">
   <!-- 输入流 -->
-  <rect x="10" y="120" width="96" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="58" y="144" text-anchor="middle" fill="#1a1f2e">Xₗ</text>
-  <text x="58" y="162" text-anchor="middle" fill="#5a6272">n×d 流矩阵</text>
+  <rect x="10" y="120" width="96" height="64" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="58" y="144" text-anchor="middle" fill="#1e40af" font-weight="bold">Xₗ</text>
+  <text x="58" y="162" text-anchor="middle" fill="#64748b">n×d 流矩阵</text>
   <!-- 系数支路 -->
-  <rect x="152" y="34" width="150" height="40" rx="6" fill="#fff" stroke="#8ea6d8"/>
-  <text x="227" y="50" text-anchor="middle" fill="#1a1f2e">展平 → matmul(φ)</text>
-  <text x="227" y="66" text-anchor="middle" fill="#5a6272">×rsqrt（RMSNorm 后置）</text>
-  <rect x="348" y="34" width="120" height="40" rx="6" fill="#fff" stroke="#8ea6d8"/>
-  <text x="408" y="50" text-anchor="middle" fill="#1a1f2e">24 个系数</text>
-  <text x="408" y="66" text-anchor="middle" fill="#5a6272">α·mix + b</text>
+  <rect x="152" y="34" width="150" height="40" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="227" y="50" text-anchor="middle" fill="#1e293b">展平 → matmul(φ)</text>
+  <text x="227" y="66" text-anchor="middle" fill="#64748b">×rsqrt（RMSNorm 后置）</text>
+  <rect x="348" y="34" width="120" height="40" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="408" y="50" text-anchor="middle" fill="#1e293b">24 个系数</text>
+  <text x="408" y="66" text-anchor="middle" fill="#64748b">α·mix + b</text>
   <!-- 三分支 -->
-  <rect x="520" y="14" width="130" height="32" rx="6" fill="#fff" stroke="#e8862a"/>
-  <text x="585" y="34" text-anchor="middle" fill="#1a1f2e">pre = σ(·)　读出</text>
-  <rect x="520" y="58" width="130" height="32" rx="6" fill="#fff" stroke="#4a9e6f"/>
-  <text x="585" y="78" text-anchor="middle" fill="#1a1f2e">post = 2σ(·)　写回</text>
-  <rect x="520" y="102" width="150" height="44" rx="6" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
-  <text x="595" y="120" text-anchor="middle" fill="#1a1f2e">comb = Sinkhorn(·)</text>
-  <text x="595" y="137" text-anchor="middle" fill="#5a6272">20 次行/列归一化 → 双随机</text>
+  <rect x="520" y="14" width="130" height="32" rx="6" fill="#fff" stroke="#f59e0b"/>
+  <text x="585" y="34" text-anchor="middle" fill="#1e293b">pre = σ(·)　读出</text>
+  <rect x="520" y="58" width="130" height="32" rx="6" fill="#fff" stroke="#22c55e"/>
+  <text x="585" y="78" text-anchor="middle" fill="#1e293b">post = 2σ(·)　写回</text>
+  <rect x="520" y="102" width="150" height="44" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.6"/>
+  <text x="595" y="120" text-anchor="middle" fill="#1e40af">comb = Sinkhorn(·)</text>
+  <text x="595" y="137" text-anchor="middle" font-size="10" fill="#64748b">20 次行/列归一化 → 双随机</text>
   <!-- 主干 -->
-  <rect x="152" y="126" width="150" height="40" rx="6" fill="#fff" stroke="#e8862a"/>
-  <text x="227" y="142" text-anchor="middle" fill="#1a1f2e">层输入 = Σ pre·Xₗ</text>
-  <text x="227" y="158" text-anchor="middle" fill="#5a6272">n 流加权求和 → d 维</text>
-  <rect x="348" y="126" width="120" height="40" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="408" y="150" text-anchor="middle" fill="#1a1f2e">RMSNorm → 层 F</text>
-  <text x="408" y="166" text-anchor="middle" fill="#5a6272">Attn / MoE</text>
+  <rect x="152" y="126" width="150" height="40" rx="6" fill="#fff" stroke="#f59e0b"/>
+  <text x="227" y="142" text-anchor="middle" fill="#1e293b">层输入 = Σ pre·Xₗ</text>
+  <text x="227" y="158" text-anchor="middle" fill="#64748b">n 流加权求和 → d 维</text>
+  <rect x="348" y="126" width="120" height="40" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="408" y="150" text-anchor="middle" fill="#1e40af">RMSNorm → 层 F</text>
+  <text x="408" y="166" text-anchor="middle" fill="#64748b">Attn / MoE</text>
   <!-- 合并 -->
-  <rect x="720" y="96" width="150" height="76" rx="8" fill="#fff" stroke="#2456c4" stroke-width="1.4"/>
-  <text x="795" y="122" text-anchor="middle" fill="#1a1f2e">Xₗ₊₁ = comb·Xₗ</text>
-  <text x="795" y="140" text-anchor="middle" fill="#1a1f2e">+ post ⊗ F输出</text>
-  <text x="795" y="158" text-anchor="middle" fill="#5a6272">融合 kernel：读 (n+1)d</text>
+  <rect x="720" y="96" width="150" height="76" rx="8" fill="#fff" stroke="#3b82f6" stroke-width="1.4"/>
+  <text x="795" y="122" text-anchor="middle" fill="#1e293b">Xₗ₊₁ = comb·Xₗ</text>
+  <text x="795" y="140" text-anchor="middle" fill="#1e293b">+ post ⊗ F输出</text>
+  <text x="795" y="158" text-anchor="middle" font-size="10" fill="#64748b">融合 kernel：读 (n+1)d</text>
   <!-- 箭头 -->
-  <polyline points="106,132 128,132 128,54 152,54" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arD)"/>
-  <line x1="106" y1="146" x2="152" y2="146" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arD)"/>
-  <polyline points="106,160 128,160 128,236 740,236 740,172" fill="none" stroke="#c9d2e0" stroke-width="1.4" stroke-dasharray="5 4"/>
-  <text x="420" y="228" text-anchor="middle" font-size="11" fill="#5a6272">原始流 Xₗ 保留至合并步（残差主体）</text>
-  <line x1="302" y1="54" x2="348" y2="54" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arD)"/>
-  <polyline points="468,44 494,44 494,30 520,30" fill="none" stroke="#e8862a" stroke-width="1.4" marker-end="url(#arD)"/>
-  <polyline points="468,58 494,58 494,74 520,74" fill="none" stroke="#4a9e6f" stroke-width="1.4" marker-end="url(#arD)"/>
-  <polyline points="468,70 480,70 480,124 520,124" fill="none" stroke="#2456c4" stroke-width="1.4" marker-end="url(#arD)"/>
-  <line x1="302" y1="146" x2="348" y2="146" stroke="#5a6272" stroke-width="1.4" marker-end="url(#arD)"/>
-  <polyline points="650,30 690,30 690,84 720,84 720,108" fill="none" stroke="#e8862a" stroke-width="1.4" marker-end="url(#arD)"/>
-  <polyline points="670,124 700,124 700,134 720,134" fill="none" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arD)"/>
-  <polyline points="468,146 490,146 490,188 660,188 660,148 720,148" fill="none" stroke="#4a9e6f" stroke-width="1.4" marker-end="url(#arD)"/>
-  <text x="565" y="204" text-anchor="middle" font-size="11" fill="#2e7351">层 F 输出（d 维）</text>
+  <path d="M111,132 C 128,132 125,54 141,54" fill="none" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
+  <line x1="111" y1="146" x2="141" y2="146" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
+  <path d="M111,160 C 126,160 128,168 128,182 L 128,224 C 128,233 136,236 150,236 L 724,236 C 737,236 740,210 740,183" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#arrow2)"/>
+  <text x="420" y="226" text-anchor="middle" font-size="11" fill="#64748b">原始流 Xₗ 保留至合并步（残差主体）</text>
+  <line x1="307" y1="54" x2="337" y2="54" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
+  <path d="M473,44 C 490,44 494,30 509,30" fill="none" stroke="#f59e0b" stroke-width="1.4" marker-end="url(#arrow2-orange)"/>
+  <path d="M473,58 C 490,58 494,74 509,74" fill="none" stroke="#22c55e" stroke-width="1.4" marker-end="url(#arrow2-green)"/>
+  <path d="M473,70 C 484,70 492,124 509,124" fill="none" stroke="#3b82f6" stroke-width="1.4" marker-end="url(#arrow2-blue)"/>
+  <line x1="307" y1="146" x2="337" y2="146" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
+  <path d="M655,30 C 678,30 690,36 690,50 L 690,92 C 690,103 697,108 709,108" fill="none" stroke="#f59e0b" stroke-width="1.4" marker-end="url(#arrow2-orange)"/>
+  <path d="M675,124 C 690,124 694,134 709,134" fill="none" stroke="#3b82f6" stroke-width="1.6" marker-end="url(#arrow2-blue)"/>
+  <path d="M473,146 C 486,146 490,150 490,162 L 490,174 C 490,183 497,188 510,188 L 644,188 C 657,188 660,182 660,170 L 660,161 C 660,152 666,148 709,148" fill="none" stroke="#22c55e" stroke-width="1.4" marker-end="url(#arrow2-green)"/>
+  <text x="565" y="204" text-anchor="middle" font-size="11" fill="#166534">层 F 输出（d 维）</text>
+  </g>
 </svg>
 <p class="cap"><b>图 2</b>｜mHC 单层数据流（对应官方实现 <code>Block.forward</code>）。系数支路把 n×d 流矩阵展平后与融合的投影矩阵 \(\varphi\) 做 matmul，<b>除以 RMS 范数挪到 matmul 之后</b>（数学等价，省一次大张量读写），产出 24 个原始系数；按语义拆成 pre（σ）、post（2σ）、comb（Sinkhorn ×20）三组。层输入 = pre 加权聚合的 d 维向量；层输出经 post 写回，与 comb 混合的原始流相加得到下一代流矩阵。</p>
 </div>
 
 <div class="fig">
-<svg viewBox="0 0 960 580" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="m3a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
-  <text x="20" y="26" font-size="13" font-weight="bold" fill="#1a1f2e">hc_pre / hc_post 全步骤数据流（n = 4）</text>
+<svg viewBox="0 0 900 580" xmlns="http://www.w3.org/2000/svg" font-size="12" role="img" aria-label="hc_pre / hc_post 全步骤数据流（n = 4）">
+  <defs>
+    <marker id="arrow3" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/></marker>
+    <marker id="arrow3-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/></marker>
+    <marker id="arrow3-orange" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#f59e0b"/></marker>
+    <marker id="arrow3-green" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#22c55e"/></marker>
+  </defs>
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="450" y="30" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e293b">hc_pre / hc_post 全步骤数据流（n = 4）</text>
 
   <!-- ===== 上带：系数生成 ①–⑦ ===== -->
-  <text x="20" y="48" font-size="11" fill="#5a6272">系数生成</text>
-  <rect x="20" y="56" width="118" height="44" rx="6" fill="#fff" stroke="#8ea6d8"/>
-  <text x="79" y="76" text-anchor="middle" fill="#1a1f2e">Xₗ 流矩阵</text>
-  <text x="79" y="91" text-anchor="middle" font-size="10" fill="#5a6272">[4×d]</text>
-  <rect x="186" y="56" width="150" height="44" rx="6" fill="#fff" stroke="#8ea6d8"/>
-  <text x="261" y="76" text-anchor="middle" fill="#1a1f2e">① 展平 + fp32</text>
-  <text x="261" y="91" text-anchor="middle" font-size="10" fill="#5a6272">vec(X) → 4d 维向量</text>
-  <rect x="384" y="56" width="150" height="44" rx="6" fill="#fff" stroke="#8ea6d8"/>
-  <text x="459" y="76" text-anchor="middle" fill="#1a1f2e">② RMS 统计</text>
-  <text x="459" y="91" text-anchor="middle" font-size="10" fill="#5a6272">rsqrt(mean(x²)+ε)</text>
-  <rect x="582" y="56" width="150" height="44" rx="6" fill="#fff" stroke="#8ea6d8"/>
-  <text x="657" y="76" text-anchor="middle" fill="#1a1f2e">③ matmul φ</text>
-  <text x="657" y="91" text-anchor="middle" font-size="10" fill="#5a6272">[4d]×[24,4d]ᵀ → 24</text>
-  <rect x="780" y="56" width="160" height="44" rx="6" fill="#fff" stroke="#8ea6d8"/>
-  <text x="860" y="76" text-anchor="middle" fill="#1a1f2e">④ ×rsqrt（等价重排）</text>
-  <text x="860" y="91" text-anchor="middle" font-size="10" fill="#5a6272">先 matmul 后除 RMS</text>
+  <text x="20" y="54" font-size="11" fill="#64748b">系数生成</text>
+  <rect x="20" y="62" width="118" height="46" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="79" y="81" text-anchor="middle" fill="#1e293b">Xₗ 流矩阵</text>
+  <text x="79" y="96" text-anchor="middle" font-size="10" fill="#64748b">[4×d]</text>
+  <rect x="169" y="62" width="146" height="46" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="242" y="81" text-anchor="middle" fill="#1e293b">① 展平 + fp32</text>
+  <text x="242" y="96" text-anchor="middle" font-size="10" fill="#64748b">vec(X) → 4d 维向量</text>
+  <rect x="347" y="62" width="146" height="46" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="420" y="81" text-anchor="middle" fill="#1e293b">② RMS 统计</text>
+  <text x="420" y="96" text-anchor="middle" font-size="10" fill="#64748b">rsqrt(mean(x²)+ε)</text>
+  <rect x="524" y="62" width="150" height="46" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="599" y="81" text-anchor="middle" fill="#1e293b">③ matmul φ</text>
+  <text x="599" y="96" text-anchor="middle" font-size="10" fill="#64748b">[4d]×[24,4d]ᵀ → 24</text>
+  <rect x="706" y="62" width="154" height="46" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="783" y="81" text-anchor="middle" fill="#1e293b">④ ×rsqrt（等价重排）</text>
+  <text x="783" y="96" text-anchor="middle" font-size="10" fill="#64748b">先 matmul 后除 RMS</text>
 
-  <line x1="140" y1="78" x2="184" y2="78" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <line x1="338" y1="78" x2="382" y2="78" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <line x1="536" y1="78" x2="580" y2="78" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <line x1="734" y1="78" x2="778" y2="78" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <line x1="143" y1="85" x2="158" y2="85" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <line x1="320" y1="85" x2="336" y2="85" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <line x1="498" y1="85" x2="513" y2="85" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <line x1="679" y1="85" x2="695" y2="85" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
 
   <!-- 24 维系数条带 -->
-  <text x="512" y="124" text-anchor="end" font-size="10" fill="#5a6272">24 维系数</text>
-  <rect x="520" y="130" width="40" height="28" fill="#fbe3cc" stroke="#c9d2e0"/>
-  <rect x="560" y="130" width="40" height="28" fill="#d9f0e2" stroke="#c9d2e0"/>
-  <rect x="600" y="130" width="160" height="28" fill="#eef3fc" stroke="#c9d2e0"/>
-  <text x="540" y="148" text-anchor="middle" font-size="10" fill="#1a1f2e">pre</text>
-  <text x="580" y="148" text-anchor="middle" font-size="10" fill="#1a1f2e">post</text>
-  <text x="680" y="148" text-anchor="middle" font-size="10" fill="#1a1f2e">comb ×16</text>
-  <polyline points="860,100 860,144 761,144" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <text x="572" y="147" text-anchor="end" font-size="10" fill="#64748b">24 维系数</text>
+  <rect x="580" y="130" width="40" height="28" fill="#fef3c7" stroke="#f59e0b"/>
+  <rect x="620" y="130" width="40" height="28" fill="#d1fae5" stroke="#22c55e"/>
+  <rect x="660" y="130" width="160" height="28" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="600" y="148" text-anchor="middle" font-size="10" fill="#b45309">pre</text>
+  <text x="640" y="148" text-anchor="middle" font-size="10" fill="#166534">post</text>
+  <text x="740" y="148" text-anchor="middle" font-size="10" fill="#1e40af">comb ×16</text>
+  <line x1="599" y1="113" x2="599" y2="119" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
 
-  <line x1="540" y1="158" x2="430" y2="198" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <line x1="580" y1="158" x2="620" y2="198" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <line x1="680" y1="158" x2="828" y2="198" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <line x1="600" y1="163" x2="410" y2="189" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <line x1="640" y1="163" x2="575" y2="189" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <line x1="740" y1="163" x2="770" y2="189" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
 
-  <rect x="360" y="200" width="140" height="52" rx="6" fill="#fff" stroke="#e8862a"/>
-  <text x="430" y="224" text-anchor="middle" fill="#1a1f2e">⑤ σ(α·x+b)+ε</text>
-  <text x="430" y="242" text-anchor="middle" font-size="10.5" fill="#5a6272">Hpre 读出权重 [4]</text>
-  <rect x="550" y="200" width="140" height="52" rx="6" fill="#fff" stroke="#2f9e63"/>
-  <text x="620" y="224" text-anchor="middle" fill="#1a1f2e">⑥ 2σ(α·x+b)</text>
-  <text x="620" y="242" text-anchor="middle" font-size="10.5" fill="#5a6272">Hpost 写回权重 [4]</text>
-  <rect x="730" y="200" width="196" height="52" rx="6" fill="#fff" stroke="#2456c4"/>
-  <text x="828" y="224" text-anchor="middle" fill="#1a1f2e">⑦ mat 4×4 → Sinkhorn ×20</text>
-  <text x="828" y="242" text-anchor="middle" font-size="10.5" fill="#5a6272">Hres 双随机 [4×4]</text>
+  <rect x="340" y="200" width="140" height="52" rx="6" fill="#fff" stroke="#f59e0b"/>
+  <text x="410" y="224" text-anchor="middle" fill="#1e293b">⑤ σ(α·x+b)+ε</text>
+  <text x="410" y="242" text-anchor="middle" font-size="10.5" fill="#64748b">Hpre 读出权重 [4]</text>
+  <rect x="510" y="200" width="130" height="52" rx="6" fill="#fff" stroke="#22c55e"/>
+  <text x="575" y="224" text-anchor="middle" fill="#1e293b">⑥ 2σ(α·x+b)</text>
+  <text x="575" y="242" text-anchor="middle" font-size="10.5" fill="#64748b">Hpost 写回权重 [4]</text>
+  <rect x="672" y="200" width="196" height="52" rx="6" fill="#fff" stroke="#3b82f6"/>
+  <text x="770" y="224" text-anchor="middle" fill="#1e293b">⑦ mat 4×4 → Sinkhorn ×20</text>
+  <text x="770" y="242" text-anchor="middle" font-size="10.5" fill="#64748b">Hres 双随机 [4×4]</text>
 
   <!-- ===== 中带：层计算 ⑧–⑨ ===== -->
-  <text x="20" y="340" font-size="11" fill="#5a6272">层计算</text>
-  <polyline points="79,100 79,335 236,335" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <polyline points="79,335 79,445 226,445" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <text x="157" y="326" text-anchor="middle" font-size="10" fill="#5a6272">X [4×d]（原始流）</text>
-  <text x="152" y="437" text-anchor="middle" font-size="10" fill="#5a6272">原始流 X</text>
+  <text x="20" y="339" font-size="11" fill="#64748b">层计算</text>
+  <path d="M79,113 L79,326 C79,331 83,335 89,335 L209,335" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <path d="M79,113 L79,436 C79,441 83,445 89,445 L219,445" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <text x="150" y="327" text-anchor="middle" font-size="10" fill="#64748b">X [4×d]（原始流）</text>
+  <text x="154" y="437" text-anchor="middle" font-size="10" fill="#64748b">原始流 X</text>
 
-  <rect x="240" y="310" width="170" height="50" rx="6" fill="#fff" stroke="#8ea6d8"/>
-  <text x="325" y="332" text-anchor="middle" fill="#1a1f2e">⑧ 读出 Σ pre[k]·X[k]</text>
-  <text x="325" y="350" text-anchor="middle" font-size="10" fill="#5a6272">4 条流 → 1 条 [d]</text>
-  <rect x="450" y="310" width="150" height="50" rx="6" fill="#fff" stroke="#8ea6d8"/>
-  <text x="525" y="332" text-anchor="middle" fill="#1a1f2e">⑨ RMSNorm → 层 F</text>
-  <text x="525" y="350" text-anchor="middle" font-size="10" fill="#5a6272">（Attn / MoE）</text>
-  <rect x="640" y="310" width="170" height="50" rx="6" fill="#fff" stroke="#8ea6d8"/>
-  <text x="725" y="332" text-anchor="middle" fill="#1a1f2e">F(y) 层输出 [d]</text>
-  <text x="725" y="350" text-anchor="middle" font-size="10" fill="#5a6272">（本子层计算完成）</text>
+  <rect x="220" y="310" width="170" height="50" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="305" y="332" text-anchor="middle" fill="#1e293b">⑧ 读出 Σ pre[k]·X[k]</text>
+  <text x="305" y="350" text-anchor="middle" font-size="10" fill="#64748b">4 条流 → 1 条 [d]</text>
+  <rect x="434" y="310" width="132" height="50" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="500" y="332" text-anchor="middle" fill="#1e293b">⑨ RMSNorm → 层 F</text>
+  <text x="500" y="350" text-anchor="middle" font-size="10" fill="#64748b">（Attn / MoE）</text>
+  <rect x="600" y="310" width="170" height="50" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="685" y="332" text-anchor="middle" fill="#1e293b">F(y) 层输出 [d]</text>
+  <text x="685" y="350" text-anchor="middle" font-size="10" fill="#64748b">（本子层计算完成）</text>
 
-  <line x1="430" y1="252" x2="325" y2="308" stroke="#e8862a" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <text x="450" y="290" text-anchor="middle" font-size="10" fill="#b05e10">Hpre [4]</text>
-  <line x1="412" y1="335" x2="448" y2="335" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <text x="429" y="326" text-anchor="middle" font-size="10" fill="#5a6272">y [d]</text>
-  <line x1="602" y1="335" x2="638" y2="335" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
+  <line x1="410" y1="257" x2="330" y2="299" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arrow3-orange)"/>
+  <text x="445" y="290" text-anchor="middle" font-size="10" fill="#b45309">Hpre [4]</text>
+  <line x1="395" y1="335" x2="423" y2="335" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <text x="409" y="326" text-anchor="middle" font-size="10" fill="#64748b">y [d]</text>
+  <line x1="571" y1="335" x2="589" y2="335" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
 
   <!-- ===== 下带：流更新 ⑩–⑫ ===== -->
-  <text x="20" y="448" font-size="11" fill="#5a6272">流更新</text>
-  <rect x="230" y="420" width="230" height="50" rx="6" fill="#fff" stroke="#2456c4"/>
-  <text x="345" y="442" text-anchor="middle" fill="#1a1f2e">⑩ 混合 X′[k] = Σ comb[k][j]·X[j]</text>
-  <text x="345" y="460" text-anchor="middle" font-size="10" fill="#5a6272">（4×4 凸组合，行和 = 1）</text>
-  <rect x="510" y="420" width="170" height="50" rx="6" fill="#fff" stroke="#2f9e63"/>
-  <text x="595" y="442" text-anchor="middle" fill="#1a1f2e">⑪ 写回 post[k]·F(y)</text>
-  <text x="595" y="460" text-anchor="middle" font-size="10" fill="#5a6272">（广播到每条流）</text>
-  <rect x="720" y="420" width="140" height="50" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="790" y="442" text-anchor="middle" fill="#1a1f2e">⑫ 相加 → Xₗ₊₁</text>
-  <text x="790" y="460" text-anchor="middle" font-size="10" fill="#5a6272">[4×d] 新流矩阵</text>
+  <text x="20" y="449" font-size="11" fill="#64748b">流更新</text>
+  <rect x="230" y="420" width="230" height="50" rx="6" fill="#fff" stroke="#3b82f6"/>
+  <text x="345" y="442" text-anchor="middle" fill="#1e293b">⑩ 混合 X′[k] = Σ comb[k][j]·X[j]</text>
+  <text x="345" y="460" text-anchor="middle" font-size="10" fill="#64748b">（4×4 凸组合，行和 = 1）</text>
+  <rect x="510" y="420" width="170" height="50" rx="6" fill="#fff" stroke="#22c55e"/>
+  <text x="595" y="442" text-anchor="middle" fill="#1e293b">⑪ 写回 post[k]·F(y)</text>
+  <text x="595" y="460" text-anchor="middle" font-size="10" fill="#64748b">（广播到每条流）</text>
+  <rect x="710" y="420" width="130" height="50" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="775" y="442" text-anchor="middle" fill="#1e40af">⑫ 相加 → Xₗ₊₁</text>
+  <text x="775" y="460" text-anchor="middle" font-size="10" fill="#1e40af">[4×d] 新流矩阵</text>
 
-  <line x1="620" y1="252" x2="620" y2="418" stroke="#2f9e63" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <text x="612" y="392" text-anchor="end" font-size="10" fill="#2e7351">Hpost [4]</text>
-  <line x1="700" y1="360" x2="660" y2="418" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <text x="714" y="392" text-anchor="start" font-size="10" fill="#5a6272">F(y) [d]</text>
-  <polyline points="926,226 944,226 944,490 355,490 355,472" fill="none" stroke="#2456c4" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <text x="640" y="505" text-anchor="middle" font-size="10" fill="#2456c4">Hres [4×4]（双随机）</text>
+  <line x1="575" y1="257" x2="575" y2="409" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrow3-green)"/>
+  <text x="565" y="392" text-anchor="end" font-size="10" fill="#166534">Hpost [4]</text>
+  <line x1="685" y1="365" x2="620" y2="409" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <text x="697" y="392" text-anchor="start" font-size="10" fill="#64748b">F(y) [d]</text>
+  <path d="M873,226 C876,226 880,228 880,232 L880,487 C880,492 876,495 871,495 L374,495 C369,495 365,492 365,488 L365,481" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow3-blue)"/>
+  <text x="620" y="509" text-anchor="middle" font-size="10" fill="#1e40af">Hres [4×4]（双随机）</text>
 
-  <line x1="462" y1="445" x2="508" y2="445" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <text x="484" y="437" text-anchor="middle" font-size="10" fill="#5a6272">X′ [4×d]</text>
-  <line x1="682" y1="445" x2="718" y2="445" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <line x1="862" y1="445" x2="938" y2="445" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m3a)"/>
-  <text x="899" y="437" text-anchor="middle" font-size="10" fill="#5a6272">Xₗ₊₁</text>
+  <line x1="465" y1="445" x2="499" y2="445" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <text x="485" y="410" text-anchor="middle" font-size="10" fill="#64748b">X′ [4×d]</text>
+  <line x1="685" y1="445" x2="699" y2="445" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <line x1="845" y1="445" x2="869" y2="445" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <text x="855" y="412" text-anchor="middle" font-size="10" fill="#64748b">Xₗ₊₁</text>
 
-  <text x="20" y="528" font-size="10" fill="#5a6272">注：block 内 attention 与 FFN 各执行一遍 ①–⑫；α、b 为可学习门控与偏置（hc_scale / hc_base）。</text>
-  <text x="20" y="550" font-size="10" fill="#5a6272">n=4 时系数 4+4+16=24 个；Sinkhorn 20 轮 = 首轮行 softmax + 19 轮行/列归一化。</text>
+  <text x="20" y="528" font-size="10" fill="#64748b">注：block 内 attention 与 FFN 各执行一遍 ①–⑫；α、b 为可学习门控与偏置（hc_scale / hc_base）。</text>
+  <text x="20" y="550" font-size="10" fill="#64748b">n=4 时系数 4+4+16=24 个；Sinkhorn 20 轮 = 首轮行 softmax + 19 轮行/列归一化。</text>
 </svg>
 <p class="cap"><b>图 3</b>｜hc_pre / hc_post 全步骤数据流（对应 <code>kernel.py</code> 的 <code>hc_split_sinkhorn_kernel</code> 与 <code>model.py</code> 的 <code>Block.hc_pre / hc_post</code>）。上带系数生成：流矩阵展平（①）→ 整体 RMS 统计（②）→ matmul φ 得 24 维（③）→ 后置除以 RMS（④，§4.3.1 等价重排）；24 维按序拆成 pre / post / comb 三段，各分支先施加 α·(·)+b，再分别经 σ+ε（读出权重）、2σ（写回权重）、Sinkhorn×20（双随机混合矩阵）变换（⑤–⑦）。中带层计算：原始流按 pre 加权和读出层输入（⑧），经 RMSNorm 与层 F 得 d 维输出（⑨）。下带流更新：comb 对 4 条流做凸组合混合（⑩）、post 把层输出广播写回（⑪）、相加得新一代流矩阵（⑫）进入下一子层。</p>
 </div>
@@ -589,24 +633,25 @@ window.MathJax = {
 <p>输入混合不再依赖本层刚算出的系数，「每个 tile 的 \(X_l\) 可同时用于输入混合与系数预测」，三步融合成单个 Mega-mHC kernel（含输入 pre-norm 与 FP8 转换，部署于 DeepGEMM）。错开一层带来一步的系数时延，<b>实测性能损失可忽略</b>；训练侧保留原多 kernel 实现（错位只改变各层应用哪份系数），部署侧才启用单 kernel。配置不变：扩展率 4、Sinkhorn 20 迭代；<b>45T token 多模态训练全程无不稳定</b>。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 170" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <line x1="300" y1="24" x2="300" y2="140" stroke="#e3e7ee"/>
-  <line x1="470" y1="24" x2="470" y2="140" stroke="#e3e7ee"/>
-  <line x1="640" y1="24" x2="640" y2="140" stroke="#e3e7ee"/>
-  <text x="160" y="50" text-anchor="end" fill="#1a1f2e">V4 多 pass（3 kernel）</text>
-  <rect x="170" y="34" width="600" height="22" rx="4" fill="#c9d2e0"/>
-  <text x="760" y="50" text-anchor="end" fill="#1a1f2e">(4n+4)d = 20d</text>
-  <text x="160" y="90" text-anchor="end" fill="#1a1f2e">两 pass（折叠）</text>
-  <rect x="170" y="74" width="420" height="22" rx="4" fill="#8fb3e8"/>
-  <text x="580" y="90" text-anchor="end" fill="#1a1f2e">(3n+2)d = 14d</text>
-  <text x="160" y="130" text-anchor="end" fill="#1a1f2e">Single-Pass（Mega-mHC）</text>
-  <rect x="170" y="114" width="300" height="22" rx="4" fill="#2456c4"/>
+<svg viewBox="0 0 860 180" xmlns="http://www.w3.org/2000/svg" font-size="12" role="img" aria-label="mHC 激活显存流量演进">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <line x1="300" y1="24" x2="300" y2="140" stroke="#e2e8f0"/>
+  <line x1="470" y1="24" x2="470" y2="140" stroke="#e2e8f0"/>
+  <line x1="640" y1="24" x2="640" y2="140" stroke="#e2e8f0"/>
+  <text x="160" y="50" text-anchor="end" fill="#1e293b">V4 多 pass（3 kernel）</text>
+  <rect x="170" y="34" width="600" height="22" rx="4" fill="#cbd5e1"/>
+  <text x="760" y="50" text-anchor="end" fill="#1e293b">(4n+4)d = 20d</text>
+  <text x="160" y="90" text-anchor="end" fill="#1e293b">两 pass（折叠）</text>
+  <rect x="170" y="74" width="420" height="22" rx="4" fill="#93c5fd"/>
+  <text x="580" y="90" text-anchor="end" fill="#1e293b">(3n+2)d = 14d</text>
+  <text x="160" y="130" text-anchor="end" fill="#1e293b">Single-Pass（Mega-mHC）</text>
+  <rect x="170" y="114" width="300" height="22" rx="4" fill="#3b82f6"/>
   <text x="460" y="130" text-anchor="end" fill="#fff">下界 (2n+2)d = 10d</text>
-  <text x="170" y="158" text-anchor="middle" font-size="11" fill="#5a6272">0</text>
-  <text x="300" y="158" text-anchor="middle" font-size="11" fill="#5a6272">5d</text>
-  <text x="470" y="158" text-anchor="middle" font-size="11" fill="#5a6272">10d</text>
-  <text x="640" y="158" text-anchor="middle" font-size="11" fill="#5a6272">15d</text>
-  <text x="810" y="158" text-anchor="middle" font-size="11" fill="#5a6272">20d</text>
+  <text x="170" y="158" text-anchor="middle" font-size="10" fill="#64748b">0</text>
+  <text x="300" y="158" text-anchor="middle" font-size="10" fill="#64748b">5d</text>
+  <text x="470" y="158" text-anchor="middle" font-size="10" fill="#64748b">10d</text>
+  <text x="640" y="158" text-anchor="middle" font-size="10" fill="#64748b">15d</text>
+  <text x="810" y="158" text-anchor="middle" font-size="10" fill="#64748b">20d</text>
 </svg>
 <p class="cap"><b>图 4</b>｜mHC 激活显存流量演进（n=4，V4.1 论文 §2.4.1 口径）。Single-Pass 用「系数错开一层」消除 kernel 间数据依赖，使单融合 kernel 达到理论下界、流量较 V4 实现减半。</p>
 </div>

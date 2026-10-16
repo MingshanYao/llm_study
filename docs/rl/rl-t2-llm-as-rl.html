@@ -181,58 +181,60 @@ window.MathJax = {
 <p>和 SFT 的 loss 对比一眼见底：<b>SFT 是「−log π(标准答案)」（照着抄），RL 是「−R × log π(自己的回答)」（自己写、按分记账）</b>。训练数据从「人给的答案」换成了「模型采的答案」，监督信号从「答案本身」换成了「一个标量分」。</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 260" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 850 278" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="m2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
     </marker>
   </defs>
-  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">一条 rollout 的时间线：整条链共享末尾一个奖励（回答甲「很好」）</text>
+  <!-- title: content spans x 22..828, center 425 -->
+  <text x="425" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">一条 rollout 的时间线：整条链共享末尾一个奖励（回答甲「很好」）</text>
 
-  <!-- prompt -->
-  <rect x="50" y="70" width="130" height="56" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="115" y="93" font-size="12" text-anchor="middle" fill="#1a1f2e">prompt</text>
-  <text x="115" y="113" font-size="10" text-anchor="middle" fill="#5a6272">「今天天气」</text>
+  <!-- prompt (x=22..152, y=64..120) -->
+  <rect x="22" y="64" width="130" height="56" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="87" y="87" font-size="12" text-anchor="middle" fill="#1e293b">prompt</text>
+  <text x="87" y="105" font-size="10" text-anchor="middle" fill="#64748b">「今天天气」</text>
 
-  <line x1="180" y1="98" x2="212" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <line x1="157" y1="92" x2="171" y2="92" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- token 1 -->
-  <rect x="220" y="70" width="90" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="265" y="93" font-size="12" text-anchor="middle" fill="#1a1f2e">「很」</text>
-  <text x="265" y="113" font-size="10" text-anchor="middle" fill="#2456c4">π = 0.6</text>
+  <!-- token 1 (x=182..272) -->
+  <rect x="182" y="64" width="90" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="227" y="87" font-size="12" text-anchor="middle" fill="#1e293b">「很」</text>
+  <text x="227" y="105" font-size="10" text-anchor="middle" fill="#1e40af">π = 0.6</text>
 
-  <line x1="310" y1="98" x2="342" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <line x1="277" y1="92" x2="289" y2="92" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- token 2 -->
-  <rect x="350" y="70" width="90" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="395" y="93" font-size="12" text-anchor="middle" fill="#1a1f2e">「好」</text>
-  <text x="395" y="113" font-size="10" text-anchor="middle" fill="#2456c4">π = 0.5</text>
+  <!-- token 2 (x=300..390) -->
+  <rect x="300" y="64" width="90" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="345" y="87" font-size="12" text-anchor="middle" fill="#1e293b">「好」</text>
+  <text x="345" y="105" font-size="10" text-anchor="middle" fill="#1e40af">π = 0.5</text>
 
-  <line x1="440" y1="98" x2="472" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <line x1="395" y1="92" x2="407" y2="92" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- token 3 -->
-  <rect x="480" y="70" width="90" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="525" y="93" font-size="12" text-anchor="middle" fill="#1a1f2e">&lt;eos&gt;</text>
-  <text x="525" y="113" font-size="10" text-anchor="middle" fill="#2456c4">π = 0.5</text>
+  <!-- token 3 (x=418..508) -->
+  <rect x="418" y="64" width="90" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="463" y="87" font-size="12" text-anchor="middle" fill="#1e293b">&lt;eos&gt;</text>
+  <text x="463" y="105" font-size="10" text-anchor="middle" fill="#1e40af">π = 0.5</text>
 
-  <line x1="570" y1="98" x2="692" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <line x1="513" y1="92" x2="627" y2="92" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <!-- reward -->
-  <rect x="700" y="70" width="190" height="56" rx="8" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
-  <text x="795" y="93" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">打分 R = +1</text>
-  <text x="795" y="113" font-size="10" text-anchor="middle" fill="#5a6272">verifier / RM / 人</text>
+  <!-- reward (x=638..828) -->
+  <rect x="638" y="64" width="190" height="56" rx="8" fill="#d1fae5" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="733" y="87" font-size="12" font-weight="bold" text-anchor="middle" fill="#166534">打分 R = +1</text>
+  <text x="733" y="105" font-size="10" text-anchor="middle" fill="#64748b">verifier / RM / 人</text>
 
   <!-- per-token logprob row -->
-  <text x="265" y="150" font-size="10.5" text-anchor="middle" fill="#5a6272">log π = −0.511</text>
-  <text x="395" y="150" font-size="10.5" text-anchor="middle" fill="#5a6272">log π = −0.693</text>
-  <text x="525" y="150" font-size="10.5" text-anchor="middle" fill="#5a6272">log π = −0.693</text>
+  <text x="227" y="142" font-size="10" text-anchor="middle" fill="#64748b">log π = −0.511</text>
+  <text x="345" y="142" font-size="10" text-anchor="middle" fill="#64748b">log π = −0.693</text>
+  <text x="463" y="142" font-size="10" text-anchor="middle" fill="#64748b">log π = −0.693</text>
 
-  <!-- shared bracket -->
-  <polyline points="265,162 265,180 795,180 795,134" fill="none" stroke="#2f9e63" stroke-width="1.4"/>
-  <text x="530" y="200" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">总 log π = −1.897（三个数相加），整条链共享 R = +1：每个 log π 都被 R 加权</text>
+  <!-- shared bracket (smooth corners, spans token1 center to reward center) -->
+  <path d="M227,156 L 227,166 Q 227,174 235,174 L 725,174 Q 733,174 733,166 L 733,128" fill="none" stroke="#22c55e" stroke-width="1.4"/>
+  <text x="480" y="198" font-size="11" text-anchor="middle" fill="#166534" font-weight="bold">总 log π = −1.897（三个数相加），整条链共享 R = +1：每个 log π 都被 R 加权</text>
 
-  <text x="40" y="234" font-size="11" fill="#5a6272">对照：回答乙「不热」每步概率 0.2 / 0.3 / 0.5，总 log π = −3.506。若它被打 0 分，整条链被压低。</text>
-  <text x="40" y="252" font-size="11" fill="#5a6272">真实场景一条回答几百个 token、词表十几万选一，但结构与比例一模一样。</text>
+  <text x="22" y="232" font-size="11" fill="#64748b">对照：回答乙「不热」每步概率 0.2 / 0.3 / 0.5，总 log π = −3.506。若它被打 0 分，整条链被压低。</text>
+  <text x="22" y="250" font-size="11" fill="#64748b">真实场景一条回答几百个 token、词表十几万选一，但结构与比例一模一样。</text>
 </svg>
 </div>
 <p class="cap"><b>图 2-1</b>｜LLM 的 RL 最小闭环。蓝色 token 盒是「动作」，绿色盒是「奖励」；每个 token 的 log 概率是求梯度的对象，奖励是它的权重。</p>

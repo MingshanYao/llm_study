@@ -147,44 +147,46 @@ window.MathJax = {
 <p>存储时拆成三段：<b>符号</b>（正负号，1 位）、<b>指数</b>（管「能表示多大的数」，即范围）、<b>尾数</b>（管「有效数字有多少位」，即精度）。给定总位数，指数和尾数就是一对跷跷板：<b>指数多分几位 → 范围大但精度糙；尾数多分几位 → 精度高但范围窄</b>。</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 380" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
-  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">常见数值格式：总位数怎么分（一格 = 1 bit）</text>
-  <text x="40" y="52" font-size="10.5" fill="#5a6272">橙 = 符号位，蓝 = 指数位（管范围），绿 = 尾数位（管精度）</text>
+<svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <!-- title: content spans x 40..864, center 452 -->
+  <text x="452" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">常见数值格式：总位数怎么分（一格 = 1 bit）</text>
+  <text x="40" y="54" font-size="10" fill="#64748b">橙 = 符号位，蓝 = 指数位（管范围），绿 = 尾数位（管精度）</text>
 
-  <!-- FP32 -->
-  <text x="180" y="95" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">FP32</text>
-  <rect x="190" y="76" width="22" height="28" fill="#fbe3cc" stroke="#c9d2e0"/>
-  <rect x="212" y="76" width="176" height="28" fill="#eef3fc" stroke="#c9d2e0"/>
-  <rect x="388" y="76" width="506" height="28" fill="#d9f0e2" stroke="#c9d2e0"/>
-  <text x="190" y="122" font-size="10" fill="#5a6272">符号 1 · 指数 8 · 尾数 23 —— 约 7 位十进制有效数字，范围 ±3.4×10³⁸</text>
+  <!-- FP32: bars start x=160, 22px per bit -->
+  <text x="150" y="96" font-size="12" font-weight="bold" text-anchor="end" fill="#1e293b">FP32</text>
+  <rect x="160" y="78" width="22" height="28" fill="#fef3c7" stroke="#f59e0b"/>
+  <rect x="182" y="78" width="176" height="28" fill="#dbeafe" stroke="#3b82f6"/>
+  <rect x="358" y="78" width="506" height="28" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="160" y="122" font-size="10" fill="#64748b">符号 1 · 指数 8 · 尾数 23 —— 约 7 位十进制有效数字，范围 ±3.4×10³⁸</text>
 
   <!-- FP16 -->
-  <text x="180" y="151" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">FP16</text>
-  <rect x="190" y="132" width="22" height="28" fill="#fbe3cc" stroke="#c9d2e0"/>
-  <rect x="212" y="132" width="110" height="28" fill="#eef3fc" stroke="#c9d2e0"/>
-  <rect x="322" y="132" width="220" height="28" fill="#d9f0e2" stroke="#c9d2e0"/>
-  <text x="190" y="178" font-size="10" fill="#5a6272">符号 1 · 指数 5 · 尾数 10 —— 约 3 位有效数字，最大只到 65504</text>
+  <text x="150" y="150" font-size="12" font-weight="bold" text-anchor="end" fill="#1e293b">FP16</text>
+  <rect x="160" y="132" width="22" height="28" fill="#fef3c7" stroke="#f59e0b"/>
+  <rect x="182" y="132" width="110" height="28" fill="#dbeafe" stroke="#3b82f6"/>
+  <rect x="292" y="132" width="220" height="28" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="160" y="176" font-size="10" fill="#64748b">符号 1 · 指数 5 · 尾数 10 —— 约 3 位有效数字，最大只到 65504</text>
 
   <!-- BF16 -->
-  <text x="180" y="207" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">BF16</text>
-  <rect x="190" y="188" width="22" height="28" fill="#fbe3cc" stroke="#c9d2e0"/>
-  <rect x="212" y="188" width="176" height="28" fill="#eef3fc" stroke="#c9d2e0"/>
-  <rect x="388" y="188" width="154" height="28" fill="#d9f0e2" stroke="#c9d2e0"/>
-  <text x="190" y="234" font-size="10" fill="#5a6272">符号 1 · 指数 8 · 尾数 7 —— 砍尾数换范围：范围与 FP32 相同，精度更糙</text>
+  <text x="150" y="204" font-size="12" font-weight="bold" text-anchor="end" fill="#1e293b">BF16</text>
+  <rect x="160" y="186" width="22" height="28" fill="#fef3c7" stroke="#f59e0b"/>
+  <rect x="182" y="186" width="176" height="28" fill="#dbeafe" stroke="#3b82f6"/>
+  <rect x="358" y="186" width="154" height="28" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="160" y="230" font-size="10" fill="#64748b">符号 1 · 指数 8 · 尾数 7 —— 砍尾数换范围：范围与 FP32 相同，精度更糙</text>
 
   <!-- FP8 -->
-  <text x="180" y="263" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">FP8</text>
-  <rect x="190" y="244" width="22" height="28" fill="#fbe3cc" stroke="#c9d2e0"/>
-  <rect x="212" y="244" width="88" height="28" fill="#eef3fc" stroke="#c9d2e0"/>
-  <rect x="300" y="244" width="66" height="28" fill="#d9f0e2" stroke="#c9d2e0"/>
-  <text x="190" y="290" font-size="10" fill="#5a6272">E4M3 变体：符号 1 · 指数 4 · 尾数 3，最大 ±448 —— 8 位也能当浮点数</text>
+  <text x="150" y="258" font-size="12" font-weight="bold" text-anchor="end" fill="#1e293b">FP8</text>
+  <rect x="160" y="240" width="22" height="28" fill="#fef3c7" stroke="#f59e0b"/>
+  <rect x="182" y="240" width="88" height="28" fill="#dbeafe" stroke="#3b82f6"/>
+  <rect x="270" y="240" width="66" height="28" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="160" y="284" font-size="10" fill="#64748b">E4M3 变体：符号 1 · 指数 4 · 尾数 3，最大 ±448 —— 8 位也能当浮点数</text>
 
   <!-- INT8 -->
-  <text x="180" y="319" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">INT8</text>
-  <rect x="190" y="300" width="176" height="28" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="190" y="346" font-size="10" fill="#5a6272">8 位普通整数：−128 ~ +127。没有指数和尾数之分，格子均匀、范围很小</text>
+  <text x="150" y="312" font-size="12" font-weight="bold" text-anchor="end" fill="#1e293b">INT8</text>
+  <rect x="160" y="294" width="176" height="28" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="160" y="338" font-size="10" fill="#64748b">8 位普通整数：−128 ~ +127。没有指数和尾数之分，格子均匀、范围很小</text>
 
-  <text x="40" y="371" font-size="11" fill="#1a1f2e">规律：指数管「能表示多大范围」，尾数管「数得有多精确」——两者分抢总位数，此消彼长。</text>
+  <text x="40" y="358" font-size="11" fill="#1e293b">规律：指数管「能表示多大范围」，尾数管「数得有多精确」——两者分抢总位数，此消彼长。</text>
 </svg>
 </div>
 <p class="cap"><b>图 0-1</b>｜五种常见格式的位分配。FP16 和 BF16 位数相同但分配相反：FP16 精度高、容易溢出；BF16 范围大、精度糙——训练偏爱 BF16，正是不怕糙、只怕溢出。</p>
@@ -219,26 +221,28 @@ window.MathJax = {
 <p>顺带说清一个贯穿全系列的小账：存储时只存<b>格子编号</b>（INT4，每数 4 位）和<b>一组很小的缩放系数</b>（scale，告诉每个格子代表多大），计算时再展开。所以「INT4 模型」并不是「数只有 4 位精度」，而是「数的<b>存储</b>是 4 位，用时临时还原成 16 位再算」——这个「还原后怎么算」的门道，正是第 2、5 讲的主线。</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 260" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
-  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">同一个 7B 模型，不同位宽下的权重体积</text>
+<svg viewBox="0 0 900 300" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <!-- title: content spans x 23..836, center 430 -->
+  <text x="430" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">同一个 7B 模型，不同位宽下的权重体积</text>
 
-  <text x="90" y="82" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">FP32</text>
-  <rect x="100" y="64" width="700" height="26" fill="#163a86"/>
-  <text x="808" y="82" font-size="11" font-weight="bold" fill="#1a1f2e">28 GB</text>
+  <text x="90" y="87" font-size="12" font-weight="bold" text-anchor="end" fill="#1e293b">FP32</text>
+  <rect x="100" y="70" width="700" height="26" fill="#1e40af"/>
+  <text x="808" y="87" font-size="11" font-weight="bold" fill="#1e293b">28 GB</text>
 
-  <text x="90" y="126" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">FP16 / BF16</text>
-  <rect x="100" y="108" width="350" height="26" fill="#2456c4"/>
-  <text x="458" y="126" font-size="11" font-weight="bold" fill="#1a1f2e">14 GB</text>
+  <text x="90" y="139" font-size="12" font-weight="bold" text-anchor="end" fill="#1e293b">FP16 / BF16</text>
+  <rect x="100" y="122" width="350" height="26" fill="#3b82f6"/>
+  <text x="458" y="139" font-size="11" font-weight="bold" fill="#1e293b">14 GB</text>
 
-  <text x="90" y="170" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">INT8</text>
-  <rect x="100" y="152" width="175" height="26" fill="#6f9be0"/>
-  <text x="283" y="170" font-size="11" font-weight="bold" fill="#1a1f2e">7 GB</text>
+  <text x="90" y="191" font-size="12" font-weight="bold" text-anchor="end" fill="#1e293b">INT8</text>
+  <rect x="100" y="174" width="175" height="26" fill="#60a5fa"/>
+  <text x="283" y="191" font-size="11" font-weight="bold" fill="#1e293b">7 GB</text>
 
-  <text x="90" y="214" font-size="12" font-weight="bold" text-anchor="end" fill="#1a1f2e">INT4</text>
-  <rect x="100" y="196" width="88" height="26" fill="#b9d0f2"/>
-  <text x="196" y="214" font-size="11" font-weight="bold" fill="#1a1f2e">3.5 GB</text>
+  <text x="90" y="243" font-size="12" font-weight="bold" text-anchor="end" fill="#1e293b">INT4</text>
+  <rect x="100" y="226" width="88" height="26" fill="#bfdbfe"/>
+  <text x="196" y="243" font-size="11" font-weight="bold" fill="#1e293b">3.5 GB</text>
 
-  <text x="100" y="248" font-size="11" fill="#5a6272">位宽每降一半，体积减半：INT4 下 3.5 GB，一张 8 GB 显存的卡就能把 7B 模型装进 GPU。</text>
+  <text x="100" y="276" font-size="11" fill="#64748b">位宽每降一半，体积减半：INT4 下 3.5 GB，一张 8 GB 显存的卡就能把 7B 模型装进 GPU。</text>
 </svg>
 </div>
 <p class="cap"><b>图 0-2</b>｜位宽与体积的关系是纯算术：体积 = 参数量 × 每参数位数 ÷ 8。量化社区常说的 Q4 / Q8，指的就是 4 位 / 8 位这一栏。</p>

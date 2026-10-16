@@ -111,25 +111,26 @@ window.MathJax = {
 <p>先认识三个词。<b>HBM</b>（High Bandwidth Memory）是焊在 GPU 上的"显存"，可以理解为<b>你办公桌上伸手可及的桌面</b>：东西放桌上，拿起来极快，但桌面就那么大，而且每寸桌面都很贵。<b>主机内存（host DRAM）</b>是服务器机箱里的普通内存条，相当于<b>你身后的书架</b>：容量大得多、便宜得多，但取一本书要走两步，慢一个数量级。<b>SSD</b>（固态硬盘）相当于<b>地下仓库</b>：容量巨大、按 TB 算钱非常便宜，但每次取货要"下楼"，慢两个数量级以上。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 320" xmlns="http://www.w3.org/2000/svg" font-size="13" font-family="PingFang SC, sans-serif" id="fig-storage-pyramid">
-  <text x="430" y="26" text-anchor="middle" font-size="15" font-weight="700" fill="#1a1f2e">存储层级金字塔：越往上越快越贵，越往下越大越便宜</text>
-  <polygon points="330,60 530,60 500,120 360,120" fill="#2456c4"/>
-  <text x="430" y="85" text-anchor="middle" fill="#fff" font-weight="700">HBM（GPU 显存）</text>
-  <text x="430" y="106" text-anchor="middle" fill="#dce6f8">容量最小 · 带宽最高</text>
-  <text x="560" y="85" fill="#5a6272">容量：单卡几十~上百 GB 级</text>
-  <text x="560" y="106" fill="#5a6272">带宽：TB/s 级（最高）</text>
-  <polygon points="290,140 570,140 530,205 330,205" fill="#4d7fd6"/>
-  <text x="430" y="167" text-anchor="middle" fill="#fff" font-weight="700">主机内存（host DRAM）</text>
-  <text x="430" y="189" text-anchor="middle" fill="#eaf0fb">容量中等 · 带宽中等</text>
-  <text x="600" y="167" fill="#5a6272">容量：单机 TB 级</text>
-  <text x="600" y="189" fill="#5a6272">带宽：约百 GB/s 级</text>
-  <polygon points="240,225 620,225 560,295 300,295" fill="#93b3e8"/>
-  <text x="430" y="252" text-anchor="middle" fill="#1a1f2e" font-weight="700">SSD（固态硬盘）</text>
-  <text x="430" y="274" text-anchor="middle" fill="#1a1f2e">容量巨大 · 带宽最低</text>
-  <text x="640" y="252" fill="#5a6272">容量：数十 TB 级</text>
-  <text x="640" y="274" fill="#5a6272">带宽：GB/s 级（最低）</text>
-  <line x1="240" y1="308" x2="620" y2="308" stroke="#c9d2e0" stroke-dasharray="5 4"/>
-  <text x="430" y="318" text-anchor="middle" fill="#5a6272" font-size="12">图中容量/带宽数量级为业界常见示意值（论文未给出具体硬件参数），仅用于建立直觉</text>
+<svg viewBox="0 0 780 358" xmlns="http://www.w3.org/2000/svg" id="fig-storage-pyramid">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="390" y="32" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e293b">存储层级金字塔：越往上越快越贵，越往下越大越便宜</text>
+  <polygon points="182,64 422,64 392,126 212,126" fill="#3b82f6"/>
+  <text x="302" y="85" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">HBM（GPU 显存）</text>
+  <text x="302" y="103" text-anchor="middle" fill="#dbeafe" font-size="10">容量最小 · 带宽最高</text>
+  <text x="542" y="88" font-size="12" fill="#64748b">容量：单卡几十~上百 GB 级</text>
+  <text x="542" y="106" font-size="12" fill="#64748b">带宽：TB/s 级（最高）</text>
+  <polygon points="137,146 467,146 427,211 177,211" fill="#60a5fa"/>
+  <text x="302" y="167" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">主机内存（host DRAM）</text>
+  <text x="302" y="185" text-anchor="middle" fill="#dbeafe" font-size="10">容量中等 · 带宽中等</text>
+  <text x="542" y="170" font-size="12" fill="#64748b">容量：单机 TB 级</text>
+  <text x="542" y="188" font-size="12" fill="#64748b">带宽：约百 GB/s 级</text>
+  <polygon points="92,231 512,231 452,301 152,301" fill="#93c5fd"/>
+  <text x="302" y="252" text-anchor="middle" fill="#1e293b" font-size="12" font-weight="bold">SSD（固态硬盘）</text>
+  <text x="302" y="270" text-anchor="middle" fill="#1e293b" font-size="10">容量巨大 · 带宽最低</text>
+  <text x="542" y="255" font-size="12" fill="#64748b">容量：数十 TB 级</text>
+  <text x="542" y="273" font-size="12" fill="#64748b">带宽：GB/s 级（最低）</text>
+  <line x1="92" y1="313" x2="512" y2="313" stroke="#cbd5e1" stroke-dasharray="5,4"/>
+  <text x="390" y="336" text-anchor="middle" fill="#64748b" font-size="11">图中容量/带宽数量级为业界常见示意值（论文未给出具体硬件参数），仅用于建立直觉</text>
 </svg>
 </div>
 <p class="cap"><b>图 1</b>｜存储层级金字塔（辅助示意，非论文原图）。数量级为业界常识性示意，本讲所有论文数字均另以表格标明出处。</p>
@@ -146,26 +147,31 @@ window.MathJax = {
 </ul>
 
 <div class="fig">
-<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg" font-size="13" font-family="PingFang SC, sans-serif" id="fig-global-vs-persistent">
-  <text x="430" y="26" text-anchor="middle" font-size="15" font-weight="700" fill="#1a1f2e">全局 KV（运行时·常驻 HBM）vs 持久 KV（跨请求·常驻 SSD/主存）</text>
-  <rect x="40" y="60" width="360" height="46" rx="8" fill="#2456c4"/>
-  <text x="220" y="89" text-anchor="middle" fill="#fff" font-weight="700">HBM（显存）— 贵而快</text>
-  <rect x="40" y="126" width="360" height="110" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="220" y="152" text-anchor="middle" fill="#1a1f2e" font-weight="700">全局 KV cache：890 B/token</text>
-  <text x="220" y="176" text-anchor="middle" fill="#5a6272">请求被服务期间必须常驻</text>
-  <text x="220" y="198" text-anchor="middle" fill="#5a6272">决定并发数（同一块卡能装几个请求）</text>
-  <text x="220" y="220" text-anchor="middle" fill="#5a6272">约束来源：HBM 容量（§1）</text>
-  <rect x="460" y="60" width="360" height="46" rx="8" fill="#6b7a95"/>
-  <text x="640" y="89" text-anchor="middle" fill="#fff" font-weight="700">SSD / 主机内存 — 便宜而慢</text>
-  <rect x="460" y="126" width="360" height="110" rx="8" fill="#f4f6f9" stroke="#6b7a95"/>
-  <text x="640" y="152" text-anchor="middle" fill="#1a1f2e" font-weight="700">持久 KV cache（前缀复用）</text>
-  <text x="640" y="176" text-anchor="middle" fill="#5a6272">跨请求、跨轮次长期保存</text>
-  <text x="640" y="198" text-anchor="middle" fill="#5a6272">决定多轮 agent 场景的存储账单</text>
-  <text x="640" y="220" text-anchor="middle" fill="#5a6272">约束来源：SSD 与主机内存容量（§1）</text>
-  <path d="M 400 170 C 420 170 440 170 460 170" stroke="#9a7b1c" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-gp)"/>
-  <defs><marker id="arr-gp" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#9a7b1c"/></marker></defs>
-  <text x="430" y="258" text-anchor="middle" fill="#9a7b1c">V4：持久缓存里同时存全局 KV 和 SWA KV；V4.1：持久缓存只存全局 KV</text>
-  <text x="430" y="280" text-anchor="middle" fill="#9a7b1c">（SWA KV 挪进 10% 主存池，TTL 几分钟 —— 见 §3.2.1）</text>
+<svg viewBox="0 0 860 306" xmlns="http://www.w3.org/2000/svg" id="fig-global-vs-persistent">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+  <text x="430" y="32" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e293b">全局 KV（运行时·常驻 HBM）vs 持久 KV（跨请求·常驻 SSD/主存）</text>
+  <rect x="40" y="56" width="360" height="40" rx="8" fill="#3b82f6"/>
+  <text x="220" y="80" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">HBM（显存）— 贵而快</text>
+  <rect x="40" y="116" width="360" height="110" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="220" y="142" text-anchor="middle" fill="#1e40af" font-size="12" font-weight="bold">全局 KV cache：890 B/token</text>
+  <text x="220" y="166" text-anchor="middle" fill="#64748b" font-size="10">请求被服务期间必须常驻</text>
+  <text x="220" y="186" text-anchor="middle" fill="#64748b" font-size="10">决定并发数（同一块卡能装几个请求）</text>
+  <text x="220" y="206" text-anchor="middle" fill="#64748b" font-size="10">约束来源：HBM 容量（§1）</text>
+  <rect x="460" y="56" width="360" height="40" rx="8" fill="#64748b"/>
+  <text x="640" y="80" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">SSD / 主机内存 — 便宜而慢</text>
+  <rect x="460" y="116" width="360" height="110" rx="8" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="640" y="142" text-anchor="middle" fill="#1e293b" font-size="12" font-weight="bold">持久 KV cache（前缀复用）</text>
+  <text x="640" y="166" text-anchor="middle" fill="#64748b" font-size="10">跨请求、跨轮次长期保存</text>
+  <text x="640" y="186" text-anchor="middle" fill="#64748b" font-size="10">决定多轮 agent 场景的存储账单</text>
+  <text x="640" y="206" text-anchor="middle" fill="#64748b" font-size="10">约束来源：SSD 与主机内存容量（§1）</text>
+  <path d="M405,171 L449,171" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6,4" fill="none" marker-end="url(#arrow2)"/>
+  <text x="430" y="258" text-anchor="middle" fill="#b45309" font-size="12">V4：持久缓存里同时存全局 KV 和 SWA KV；V4.1：持久缓存只存全局 KV</text>
+  <text x="430" y="280" text-anchor="middle" fill="#b45309" font-size="12">（SWA KV 挪进 10% 主存池，TTL 几分钟 —— 见 §3.2.1）</text>
 </svg>
 </div>
 <p class="cap"><b>图 2</b>｜两个概念的定义对照。依据论文 §1：「global KV … dominates the runtime KV footprint, which is constrained by HBM capacity」「persistent KV caches … constrained by SSD and host memory capacity」。</p>
@@ -251,25 +257,30 @@ window.MathJax = {
 <p>把"<b>一致性与生命周期怎么管</b>"单独拎出来回答，因为这是分布式缓存最容易翻车的地方。V4.1 的生命周期规则是"按数据的真实寿命分层"：SWA KV 的 TTL 只有几分钟、过期即回收复用；全局 KV 在持久缓存中保证至少 72 小时，淘汰仍用 LRU。一致性规则是"近似数据不得回流权威数据源"：重放只是临时重建一份<b>用完即弃</b>的 SWA 状态，<b>绝不写回</b>持久缓存；缓存里的全局 KV 只能由"未缓存后缀的正常计算"追加，重放段永远不碰它。这样无论命中点在哪，持久缓存里的全局 KV 始终只有一份权威版本，不会因多次近似重放被逐步污染（§3.2.1、§3.2.2）。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 340" xmlns="http://www.w3.org/2000/svg" font-size="13" font-family="PingFang SC, sans-serif" id="fig-persistent-compare">
-  <text x="430" y="26" text-anchor="middle" font-size="15" font-weight="700" fill="#1a1f2e">持久 KV cache 的构成：V4 vs V4.1（1/2 × 1/4 = 1/8）</text>
-  <text x="60" y="66" font-weight="700" fill="#1a1f2e">V4 持久缓存</text>
-  <rect x="60" y="80" width="380" height="44" fill="#2456c4"/>
-  <text x="250" y="107" text-anchor="middle" fill="#fff" font-weight="700">全局 KV（占约一半）</text>
-  <rect x="440" y="80" width="360" height="44" fill="#c9d2e0"/>
-  <text x="620" y="107" text-anchor="middle" fill="#1a1f2e" font-weight="700">SWA KV（占近一半）</text>
-  <text x="812" y="107" text-anchor="end" fill="#5a6272" font-size="12">LRU，72h+ 驻留</text>
-  <path d="M 620 132 L 620 158" stroke="#9a7b1c" stroke-width="2" marker-end="url(#arr-pc)" fill="none"/>
-  <text x="632" y="150" fill="#9a7b1c" font-size="12">整体移出 → 10% 主存短租池（TTL 分钟级）</text>
-  <text x="60" y="182" font-weight="700" fill="#1a1f2e">V4.1 持久缓存</text>
-  <rect x="60" y="196" width="95" height="44" fill="#2456c4"/>
-  <text x="107" y="223" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">全局 KV</text>
-  <text x="176" y="223" fill="#5a6272" font-size="12">= 1/2（不再存 SWA）× 1/4（全局 KV 经 CSA2+FP4 再压缩）= 1/8</text>
-  <rect x="60" y="262" width="380" height="40" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="250" y="287" text-anchor="middle" fill="#1a1f2e">CSA2 跨层复用 + FP4 主 KV（§2.3 / §2.4.4）→ 全局 KV 压到 V4 的 1/4</text>
-  <rect x="460" y="262" width="340" height="40" fill="#fff8e8" stroke="#e6c96a"/>
-  <text x="630" y="287" text-anchor="middle" fill="#1a1f2e">SWA KV → 每机 10% host DRAM 分布式池，TTL 几分钟</text>
-  <defs><marker id="arr-pc" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#9a7b1c"/></marker></defs>
+<svg viewBox="0 0 890 330" xmlns="http://www.w3.org/2000/svg" id="fig-persistent-compare">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow3" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+  <text x="445" y="32" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e293b">持久 KV cache 的构成：V4 vs V4.1（1/2 × 1/4 = 1/8）</text>
+  <text x="60" y="64" font-size="12" font-weight="bold" fill="#1e293b">V4 持久缓存</text>
+  <text x="830" y="64" text-anchor="end" font-size="12" fill="#64748b">LRU，72h+ 驻留</text>
+  <rect x="60" y="74" width="380" height="44" fill="#3b82f6"/>
+  <text x="250" y="101" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">全局 KV（占约一半）</text>
+  <rect x="440" y="74" width="360" height="44" fill="#cbd5e1"/>
+  <text x="620" y="101" text-anchor="middle" fill="#1e293b" font-size="12" font-weight="bold">SWA KV（占近一半）</text>
+  <path d="M620,123 L620,168" stroke="#f59e0b" stroke-width="1.5" fill="none" marker-end="url(#arrow3)"/>
+  <text x="632" y="150" font-size="10" fill="#b45309">整体移出 → 10% 主存短租池（TTL 分钟级）</text>
+  <text x="60" y="186" font-size="12" font-weight="bold" fill="#1e293b">V4.1 持久缓存</text>
+  <rect x="60" y="196" width="95" height="44" fill="#3b82f6"/>
+  <text x="107" y="223" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">全局 KV</text>
+  <text x="176" y="223" font-size="11" fill="#64748b">= 1/2（不再存 SWA）× 1/4（全局 KV 经 CSA2+FP4 再压缩）= 1/8</text>
+  <rect x="60" y="266" width="390" height="40" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="255" y="291" text-anchor="middle" fill="#1e40af" font-size="11">CSA2 跨层复用 + FP4 主 KV（§2.3 / §2.4.4）→ 全局 KV 压到 V4 的 1/4</text>
+  <rect x="480" y="266" width="350" height="40" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="655" y="291" text-anchor="middle" fill="#b45309" font-size="11">SWA KV → 每机 10% host DRAM 分布式池，TTL 几分钟</text>
 </svg>
 </div>
 <p class="cap"><b>图 3</b>｜持久缓存构成对比，对应论文 §3.2.1：「the persistent KV cache no longer stores SWA KV, which almost halves its size, and the global KV retained in it is further compressed to 1/4 of V4's footprint」；SWA KV 占近一半、72 小时驻留、10% 主存池同出于该节。条宽为示意，非严格比例。</p>
@@ -307,31 +318,36 @@ window.MathJax = {
 </ol>
 
 <div class="fig">
-<svg viewBox="0 0 860 360" xmlns="http://www.w3.org/2000/svg" font-size="13" font-family="PingFang SC, sans-serif" id="fig-bounded-replay">
-  <text x="430" y="26" text-anchor="middle" font-size="15" font-weight="700" fill="#1a1f2e">Encoder SWA Bounded Replay：只重放最近 n_win=128 个 token</text>
-  <rect x="40" y="56" width="470" height="52" rx="8" fill="#f4f6f9" stroke="#6b7a95"/>
-  <text x="275" y="78" text-anchor="middle" fill="#1a1f2e" font-weight="700">缓存前缀（可长达几十万 token）</text>
-  <text x="275" y="98" text-anchor="middle" fill="#5a6272">全局 KV 命中持久缓存 → 直接复用，不重算不覆写</text>
-  <rect x="510" y="56" width="140" height="52" rx="8" fill="#fff8e8" stroke="#e6c96a"/>
-  <text x="580" y="78" text-anchor="middle" fill="#1a1f2e" font-weight="700">重放段：n_win=128</text>
-  <text x="580" y="98" text-anchor="middle" fill="#9a7b1c">只重生成 SWA KV</text>
-  <rect x="650" y="56" width="170" height="52" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="735" y="78" text-anchor="middle" fill="#1a1f2e" font-weight="700">未缓存后缀</text>
-  <text x="735" y="98" text-anchor="middle" fill="#2456c4">生成全局 KV + SWA KV</text>
-  <path d="M 510 130 L 650 130" stroke="#9a7b1c" stroke-width="2" marker-end="url(#arr-br)" fill="none"/>
-  <text x="580" y="148" text-anchor="middle" fill="#9a7b1c" font-size="12">重放段 + 后缀一起过一遍模型</text>
-  <rect x="40" y="170" width="780" height="86" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="430" y="196" text-anchor="middle" fill="#1a1f2e" font-weight="700">SWA 视野截断（§3.2.2）：重放起点 s，位置 i 的 query 只注意 [ max(s, i−W+1), i ]</text>
-  <line x1="80" y1="228" x2="700" y2="228" stroke="#93b3e8" stroke-width="3"/>
-  <text x="80" y="248" fill="#5a6272" font-size="12">更早的 SWA 上下文：缺席（近似来源）</text>
-  <rect x="300" y="218" width="180" height="20" fill="#fff8e8" stroke="#e6c96a"/>
-  <text x="390" y="233" text-anchor="middle" fill="#9a7b1c" font-size="12">重放段 128 token：可见</text>
-  <rect x="480" y="218" width="220" height="20" fill="#dbe6f7" stroke="#2456c4"/>
-  <text x="590" y="233" text-anchor="middle" fill="#1a1f2e" font-size="12">后缀：正常窗口 [i−W+1, i]</text>
-  <rect x="40" y="274" width="780" height="70" rx="8" fill="#f4f6f9" stroke="#6b7a95"/>
-  <text x="430" y="300" text-anchor="middle" fill="#1a1f2e" font-weight="700">重算量对比：精确重建 L×n_win = 40×128 = 5120 token 前向 vs Bounded Replay 仅 128 token（1/40）</text>
-  <text x="430" y="328" text-anchor="middle" fill="#5a6272" font-size="12">L=40、n_win=128 来自 §4.2.1 模型配置；5120 与 1/40 为按论文公式推得的算术（见"事实边界"）</text>
-  <defs><marker id="arr-br" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#9a7b1c"/></marker></defs>
+<svg viewBox="0 0 860 370" xmlns="http://www.w3.org/2000/svg" id="fig-bounded-replay">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow4" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+  <text x="430" y="32" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e293b">Encoder SWA Bounded Replay：只重放最近 n_win=128 个 token</text>
+  <rect x="40" y="56" width="470" height="52" rx="8" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="275" y="77" text-anchor="middle" fill="#1e293b" font-size="12" font-weight="bold">缓存前缀（可长达几十万 token）</text>
+  <text x="275" y="95" text-anchor="middle" fill="#64748b" font-size="10">全局 KV 命中持久缓存 → 直接复用，不重算不覆写</text>
+  <rect x="510" y="56" width="140" height="52" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="580" y="77" text-anchor="middle" fill="#b45309" font-size="12" font-weight="bold">重放段：n_win=128</text>
+  <text x="580" y="95" text-anchor="middle" fill="#b45309" font-size="10">只重生成 SWA KV</text>
+  <rect x="650" y="56" width="170" height="52" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="735" y="77" text-anchor="middle" fill="#1e40af" font-size="12" font-weight="bold">未缓存后缀</text>
+  <text x="735" y="95" text-anchor="middle" fill="#1e40af" font-size="10">生成全局 KV + SWA KV</text>
+  <path d="M665,113 L665,159" stroke="#f59e0b" stroke-width="1.5" fill="none" marker-end="url(#arrow4)"/>
+  <text x="677" y="140" font-size="11" fill="#b45309">重放段 + 后缀一起过一遍模型</text>
+  <rect x="40" y="170" width="780" height="86" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="430" y="194" text-anchor="middle" fill="#1e40af" font-size="12" font-weight="bold">SWA 视野截断（§3.2.2）：重放起点 s，位置 i 的 query 只注意 [ max(s, i−W+1), i ]</text>
+  <line x1="80" y1="228" x2="700" y2="228" stroke="#94a3b8" stroke-width="3"/>
+  <text x="80" y="248" fill="#64748b" font-size="11">更早的 SWA 上下文：缺席（近似来源）</text>
+  <rect x="300" y="218" width="180" height="20" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="390" y="231" text-anchor="middle" fill="#b45309" font-size="10">重放段 128 token：可见</text>
+  <rect x="480" y="218" width="220" height="20" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="590" y="231" text-anchor="middle" fill="#1e40af" font-size="10">后缀：正常窗口 [i−W+1, i]</text>
+  <rect x="40" y="284" width="780" height="64" rx="8" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="430" y="309" text-anchor="middle" fill="#1e293b" font-size="12" font-weight="bold">重算量对比：精确重建 L×n_win = 40×128 = 5120 token 前向 vs Bounded Replay 仅 128 token（1/40）</text>
+  <text x="430" y="331" text-anchor="middle" fill="#64748b" font-size="10">L=40、n_win=128 来自 §4.2.1 模型配置；5120 与 1/40 为按论文公式推得的算术（见"事实边界"）</text>
 </svg>
 </div>
 <p class="cap"><b>图 4</b>｜Encoder SWA Bounded Replay 机制图，对应论文 §3.2.2 第 1–2 段与截断公式。重放段与后缀的宽度为示意，不代表真实 token 比例。</p>

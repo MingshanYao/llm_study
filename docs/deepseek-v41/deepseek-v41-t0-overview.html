@@ -192,52 +192,60 @@ window.MathJax = {
 <p>论文把长上下文部署的负担归纳为三个互相叠加的瓶颈（摘要与 §1）：</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 330" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="t0m1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+<svg viewBox="0 0 860 350" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
   <!-- 顶部：负载 -->
-  <rect x="230" y="14" width="400" height="46" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
-  <text x="430" y="34" text-anchor="middle" fill="#1a1f2e" font-weight="bold">长程 Agent 工作负载（input-heavy）</text>
-  <text x="430" y="52" text-anchor="middle" fill="#5a6272">频繁工具调用 · 上下文持续增长 · 多轮会话</text>
+  <rect x="230" y="20" width="400" height="50" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="430" y="40" text-anchor="middle" fill="#1e40af" font-weight="bold" font-size="12">长程 Agent 工作负载（input-heavy）</text>
+  <text x="430" y="58" text-anchor="middle" fill="#64748b" font-size="10">频繁工具调用 · 上下文持续增长 · 多轮会话</text>
   <!-- 三条箭头 -->
-  <line x1="330" y1="60" x2="140" y2="108" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m1)"/>
-  <line x1="430" y1="60" x2="430" y2="108" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m1)"/>
-  <line x1="530" y1="60" x2="720" y2="108" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m1)"/>
+  <line x1="330" y1="75" x2="150" y2="104" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <line x1="430" y1="75" x2="430" y2="101" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <line x1="530" y1="75" x2="710" y2="104" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow)"/>
   <!-- 三个瓶颈 -->
-  <rect x="24" y="112" width="230" height="92" rx="10" fill="#fff" stroke="#c9d2e0"/>
-  <rect x="24" y="112" width="230" height="26" rx="10" fill="#dbe6f8"/>
-  <text x="139" y="130" text-anchor="middle" fill="#2456c4" font-weight="bold">瓶颈一：Compute 算力</text>
-  <text x="139" y="156" text-anchor="middle" fill="#2a3040">prefill 计算贵</text>
-  <text x="139" y="174" text-anchor="middle" fill="#5a6272">长 prompt 逐层算注意力，</text>
-  <text x="139" y="191" text-anchor="middle" fill="#5a6272">cache 未命中就得重算一遍</text>
-  <rect x="315" y="112" width="230" height="92" rx="10" fill="#fff" stroke="#c9d2e0"/>
-  <rect x="315" y="112" width="230" height="26" rx="10" fill="#dbe6f8"/>
-  <text x="430" y="130" text-anchor="middle" fill="#2456c4" font-weight="bold">瓶颈二：Storage 存储</text>
-  <text x="430" y="156" text-anchor="middle" fill="#2a3040">KV cache 挤占 HBM 与 SSD 容量</text>
-  <text x="430" y="174" text-anchor="middle" fill="#5a6272">全局 KV 必须常驻 HBM，</text>
-  <text x="430" y="191" text-anchor="middle" fill="#5a6272">持久 KV 长期占用 SSD / 主机内存</text>
-  <rect x="606" y="112" width="230" height="92" rx="10" fill="#fff" stroke="#c9d2e0"/>
-  <rect x="606" y="112" width="230" height="26" rx="10" fill="#dbe6f8"/>
-  <text x="721" y="130" text-anchor="middle" fill="#2456c4" font-weight="bold">瓶颈三：Bandwidth 带宽</text>
-  <text x="721" y="156" text-anchor="middle" fill="#2a3040">缓存的搬迁与读取受 I/O 限制</text>
-  <text x="721" y="174" text-anchor="middle" fill="#5a6272">cache 在 HBM/SSD 之间迁移、加载，</text>
-  <text x="721" y="191" text-anchor="middle" fill="#5a6272">I/O 与互连带宽限制吞吐</text>
+  <rect x="24" y="112" width="230" height="92" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="24" y="112" width="230" height="26" rx="10" fill="#dbeafe"/>
+  <text x="139" y="129" text-anchor="middle" fill="#1e40af" font-weight="bold" font-size="12">瓶颈一：Compute 算力</text>
+  <text x="139" y="156" text-anchor="middle" fill="#1e293b" font-size="12">prefill 计算贵</text>
+  <text x="139" y="174" text-anchor="middle" fill="#64748b" font-size="10">长 prompt 逐层算注意力，</text>
+  <text x="139" y="189" text-anchor="middle" fill="#64748b" font-size="10">cache 未命中就得重算一遍</text>
+  <rect x="315" y="112" width="230" height="92" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="315" y="112" width="230" height="26" rx="10" fill="#dbeafe"/>
+  <text x="430" y="129" text-anchor="middle" fill="#1e40af" font-weight="bold" font-size="12">瓶颈二：Storage 存储</text>
+  <text x="430" y="156" text-anchor="middle" fill="#1e293b" font-size="12">KV cache 挤占 HBM 与 SSD 容量</text>
+  <text x="430" y="174" text-anchor="middle" fill="#64748b" font-size="10">全局 KV 必须常驻 HBM，</text>
+  <text x="430" y="189" text-anchor="middle" fill="#64748b" font-size="10">持久 KV 长期占用 SSD / 主机内存</text>
+  <rect x="606" y="112" width="230" height="92" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="606" y="112" width="230" height="26" rx="10" fill="#dbeafe"/>
+  <text x="721" y="129" text-anchor="middle" fill="#1e40af" font-weight="bold" font-size="12">瓶颈三：Bandwidth 带宽</text>
+  <text x="721" y="156" text-anchor="middle" fill="#1e293b" font-size="12">缓存的搬迁与读取受 I/O 限制</text>
+  <text x="721" y="174" text-anchor="middle" fill="#64748b" font-size="10">cache 在 HBM/SSD 之间迁移、加载，</text>
+  <text x="721" y="189" text-anchor="middle" fill="#64748b" font-size="10">I/O 与互连带宽限制吞吐</text>
   <!-- 底部：对策 -->
-  <rect x="24" y="248" width="230" height="62" rx="10" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="139" y="272" text-anchor="middle" fill="#1a1f2e" font-weight="bold">CED 架构（第 1 讲）</text>
-  <text x="139" y="294" text-anchor="middle" fill="#5a6272">prefill 计算量 ≈ 减半</text>
-  <rect x="315" y="248" width="230" height="62" rx="10" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="430" y="266" text-anchor="middle" fill="#1a1f2e" font-weight="bold">CSA2 + FP4 KV（第 2、3 讲）</text>
-  <text x="430" y="286" text-anchor="middle" fill="#5a6272">全局 KV → 890 B/token</text>
-  <text x="430" y="303" text-anchor="middle" fill="#5a6272">≈ V4-Flash 的 1/4</text>
-  <rect x="606" y="248" width="230" height="62" rx="10" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="721" y="266" text-anchor="middle" fill="#1a1f2e" font-weight="bold">SWA Bounded Replay（第 4 讲）</text>
-  <text x="721" y="286" text-anchor="middle" fill="#5a6272">持久 KV ≈ V4-Flash 的 1/8，</text>
-  <text x="721" y="303" text-anchor="middle" fill="#5a6272">SWA KV 不再写入 SSD</text>
+  <rect x="24" y="248" width="230" height="62" rx="10" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="139" y="270" text-anchor="middle" fill="#1e40af" font-weight="bold" font-size="12">CED 架构（第 1 讲）</text>
+  <text x="139" y="290" text-anchor="middle" fill="#64748b" font-size="10">prefill 计算量 ≈ 减半</text>
+  <rect x="315" y="248" width="230" height="62" rx="10" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="430" y="268" text-anchor="middle" fill="#1e40af" font-weight="bold" font-size="12">CSA2 + FP4 KV（第 2、3 讲）</text>
+  <text x="430" y="286" text-anchor="middle" fill="#64748b" font-size="10">全局 KV → 890 B/token</text>
+  <text x="430" y="302" text-anchor="middle" fill="#64748b" font-size="10">≈ V4-Flash 的 1/4</text>
+  <rect x="606" y="248" width="230" height="62" rx="10" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="721" y="268" text-anchor="middle" fill="#1e40af" font-weight="bold" font-size="12">SWA Bounded Replay（第 4 讲）</text>
+  <text x="721" y="286" text-anchor="middle" fill="#64748b" font-size="10">持久 KV ≈ V4-Flash 的 1/8，</text>
+  <text x="721" y="302" text-anchor="middle" fill="#64748b" font-size="10">SWA KV 不再写入 SSD</text>
   <!-- 对策箭头 -->
-  <line x1="139" y1="204" x2="139" y2="248" stroke="#2456c4" stroke-width="1.4" marker-end="url(#t0m1)"/>
-  <line x1="430" y1="204" x2="430" y2="248" stroke="#2456c4" stroke-width="1.4" marker-end="url(#t0m1)"/>
-  <line x1="721" y1="204" x2="721" y2="248" stroke="#2456c4" stroke-width="1.4" marker-end="url(#t0m1)"/>
-  <text x="430" y="326" text-anchor="middle" fill="#5a6272" font-size="11">对应论文摘要与 §1 的 compute / storage / bandwidth 三重瓶颈框架，及三条主线对策</text>
+  <line x1="139" y1="209" x2="139" y2="237" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="430" y1="209" x2="430" y2="237" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="721" y1="209" x2="721" y2="237" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <text x="430" y="326" text-anchor="middle" fill="#64748b" font-size="11">对应论文摘要与 §1 的 compute / storage / bandwidth 三重瓶颈框架，及三条主线对策</text>
 </svg>
 <p class="cap"><b>图 1</b>｜三重瓶颈与 V4.1-Flash 的三条对策（对应论文摘要、§1 Introduction）。</p>
 </div>
@@ -278,27 +286,28 @@ window.MathJax = {
 <p class="cap"><b>表 2</b>｜核心成绩单。FLOPs = 浮点运算次数；BPB = bits-per-byte，越低越好；held-out 评测指模型没见过的内部评测集。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+<svg viewBox="3 0 860 266" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <!-- 坐标轴 -->
-  <line x1="150" y1="24" x2="150" y2="196" stroke="#c9d2e0" stroke-width="1.2"/>
-  <text x="30" y="20" font-size="11" fill="#5a6272">每 token 全局 KV 体积（对数尺度示意）</text>
+  <line x1="150" y1="36" x2="150" y2="204" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="30" y="32" font-size="11" fill="#64748b">每 token 全局 KV 体积（对数尺度示意）</text>
   <!-- V1 bar -->
-  <text x="142" y="52" text-anchor="end" fill="#2a3040" font-weight="bold">DeepSeek-V1</text>
-  <rect x="150" y="36" width="686" height="26" rx="5" fill="#f2b8b8" opacity="0.9"/>
-  <text x="726" y="54" text-anchor="middle" fill="#8a2b2b" font-weight="bold">≈ 389 KB / token（推断）· 基准 437×</text>
+  <text x="142" y="62" text-anchor="end" fill="#1e293b" font-weight="bold" font-size="12">DeepSeek-V1</text>
+  <rect x="150" y="44" width="686" height="26" rx="5" fill="#f9a8d4"/>
+  <text x="700" y="62" text-anchor="middle" fill="#9d174d" font-weight="bold" font-size="12">≈ 389 KB / token（推断）· 基准 437×</text>
   <!-- V4-Flash bar -->
-  <text x="142" y="106" text-anchor="end" fill="#2a3040" font-weight="bold">V4-Flash</text>
-  <rect x="150" y="90" width="272" height="26" rx="5" fill="#f2d3a8" opacity="0.9"/>
-  <text x="432" y="108" text-anchor="middle" fill="#8a5a1b" font-weight="bold">≈ 3.5 KB / token（推断）· 约 4×</text>
+  <text x="142" y="115" text-anchor="end" fill="#1e293b" font-weight="bold" font-size="12">V4-Flash</text>
+  <rect x="150" y="98" width="272" height="26" rx="5" fill="#fdba74"/>
+  <text x="434" y="115" fill="#b45309" font-weight="bold" font-size="12">≈ 3.5 KB / token（推断）· 约 4×</text>
   <!-- V4.1-Flash bar -->
-  <text x="142" y="160" text-anchor="end" fill="#2a3040" font-weight="bold">V4.1-Flash</text>
-  <rect x="150" y="144" width="72" height="26" rx="5" fill="#a8c8f2" opacity="0.95"/>
-  <text x="232" y="162" fill="#163a86" font-weight="bold">890 B / token（论文值）</text>
-  <!-- 注释箭头 -->
-  <text x="560" y="150" fill="#2456c4" font-size="11">较 V4-Flash ↓ 约 4 倍</text>
-  <text x="560" y="96" fill="#2456c4" font-size="11">较 V1 ↓ 约 437 倍</text>
-  <text x="150" y="216" fill="#5a6272" font-size="11">条宽按 log2 体积示意，非严格线性。Figure 1(b) 只给出 V4.1-Flash 的绝对值 890 B/token 与两个倍数；</text>
-  <text x="150" y="233" fill="#5a6272" font-size="11">V1 与 V4-Flash 的绝对值为按倍数反推的估算（890×437、890×4），标注为推断。</text>
+  <text x="142" y="169" text-anchor="end" fill="#1e293b" font-weight="bold" font-size="12">V4.1-Flash</text>
+  <rect x="150" y="152" width="72" height="26" rx="5" fill="#3b82f6"/>
+  <text x="232" y="169" fill="#1e40af" font-weight="bold" font-size="12">890 B / token（论文值）</text>
+  <!-- 注释 -->
+  <text x="560" y="90" fill="#1e40af" font-size="11">较 V1 ↓ 约 437 倍</text>
+  <text x="560" y="144" fill="#1e40af" font-size="11">较 V4-Flash ↓ 约 4 倍</text>
+  <text x="150" y="224" fill="#64748b" font-size="11">条宽按 log2 体积示意，非严格线性。Figure 1(b) 只给出 V4.1-Flash 的绝对值 890 B/token 与两个倍数；</text>
+  <text x="150" y="241" fill="#64748b" font-size="11">V1 与 V4-Flash 的绝对值为按倍数反推的估算（890×437、890×4），标注为推断。</text>
 </svg>
 <p class="cap"><b>图 2</b>｜全局 KV cache 每 token 体积的代际对比（对应论文 Figure 1(b)）。三代模型从约 389 KB/token 压到 890 B/token——一本 100 万 token 的书，全局笔记从「一屋子打印纸」缩成「一叠便签」。</p>
 </div>
@@ -333,55 +342,64 @@ window.MathJax = {
 <p>V4.1-Flash 的 KV 压缩不是单个技巧，而是一套「架构 + 缓存精度 + 部署策略」的联合优化（§1）。论文的视角很清晰：<b>DeepSeek-V4 可以看作「SWA 局部处理主干 + 压缩的全局上下文」</b>，所以 V4.1 的思路是<b>简化全局分支、基本保留局部注意力设计</b>。下面按六讲的顺序把全家桶每个部件用一两段话讲清「是什么、解决什么」。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 400" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="t0m2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+<svg viewBox="0 0 860 385" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow2-orange" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
   <!-- 输入 -->
-  <rect x="16" y="60" width="120" height="44" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="76" y="78" text-anchor="middle" fill="#1a1f2e">图片</text>
-  <text x="76" y="95" text-anchor="middle" fill="#5a6272">DeepSeek-ViT</text>
-  <rect x="16" y="150" width="120" height="44" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="76" y="168" text-anchor="middle" fill="#1a1f2e">文本</text>
-  <text x="76" y="185" text-anchor="middle" fill="#5a6272">文本 Embedding</text>
+  <rect x="47" y="25" width="120" height="44" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="107" y="43" text-anchor="middle" fill="#1e293b" font-size="12">图片</text>
+  <text x="107" y="60" text-anchor="middle" fill="#64748b" font-size="10">DeepSeek-ViT</text>
+  <rect x="47" y="115" width="120" height="44" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="107" y="133" text-anchor="middle" fill="#1e293b" font-size="12">文本</text>
+  <text x="107" y="150" text-anchor="middle" fill="#64748b" font-size="10">文本 Embedding</text>
   <!-- 编码器 -->
-  <rect x="196" y="60" width="190" height="220" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
-  <text x="291" y="84" text-anchor="middle" fill="#1a1f2e" font-weight="bold">因果编码器（20 层）</text>
-  <text x="291" y="106" text-anchor="middle" fill="#5a6272">前 2 层：纯 SWA</text>
-  <text x="291" y="124" text-anchor="middle" fill="#5a6272">后 18 层：CSA2，m=2</text>
-  <text x="291" y="141" text-anchor="middle" fill="#5a6272">3 组 × 6 层：1 Full + 5 Reuse</text>
-  <text x="291" y="172" text-anchor="middle" fill="#2a3040">prefill 激活 8B</text>
-  <text x="291" y="192" text-anchor="middle" fill="#5a6272">MoE：1 共享 + 384 路由，激活 6</text>
-  <text x="291" y="230" text-anchor="middle" fill="#2456c4" font-weight="bold">Engram 模块挂载在第 1 层</text>
-  <text x="291" y="250" text-anchor="middle" fill="#5a6272">（第 14 层为另一模块）</text>
+  <rect x="227" y="25" width="190" height="220" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="322" y="49" text-anchor="middle" fill="#1e40af" font-weight="bold" font-size="12">因果编码器（20 层）</text>
+  <text x="322" y="71" text-anchor="middle" fill="#64748b" font-size="10">前 2 层：纯 SWA</text>
+  <text x="322" y="89" text-anchor="middle" fill="#64748b" font-size="10">后 18 层：CSA2，m=2</text>
+  <text x="322" y="106" text-anchor="middle" fill="#64748b" font-size="10">3 组 × 6 层：1 Full + 5 Reuse</text>
+  <text x="322" y="137" text-anchor="middle" fill="#1e293b" font-size="12">prefill 激活 8B</text>
+  <text x="322" y="157" text-anchor="middle" fill="#64748b" font-size="10">MoE：1 共享 + 384 路由，激活 6</text>
+  <text x="322" y="195" text-anchor="middle" fill="#1e40af" font-weight="bold" font-size="12">Engram 模块挂载在第 1 层</text>
+  <text x="322" y="215" text-anchor="middle" fill="#64748b" font-size="10">（第 14 层为另一模块）</text>
   <!-- 中间产物 -->
-  <rect x="420" y="128" width="128" height="60" rx="8" fill="#fff" stroke="#c9d2e0"/>
-  <text x="484" y="150" text-anchor="middle" fill="#1a1f2e">编码器末层隐状态</text>
-  <text x="484" y="168" text-anchor="middle" fill="#5a6272">Enc. Hidden States</text>
+  <rect x="451" y="93" width="128" height="60" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="515" y="115" text-anchor="middle" fill="#1e293b" font-size="12">编码器末层隐状态</text>
+  <text x="515" y="133" text-anchor="middle" fill="#64748b" font-size="10">Enc. Hidden States</text>
   <!-- 解码器 -->
-  <rect x="582" y="60" width="200" height="220" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
-  <text x="682" y="84" text-anchor="middle" fill="#1a1f2e" font-weight="bold">解码器（20 层）</text>
-  <text x="682" y="106" text-anchor="middle" fill="#5a6272">全部 CSA2，m=1（不压缩）</text>
-  <text x="682" y="124" text-anchor="middle" fill="#5a6272">5 组 × 4 层：1 Full/Reindex + 3 Reuse</text>
-  <text x="682" y="148" text-anchor="middle" fill="#2a3040">decode 激活 16B</text>
-  <text x="682" y="172" text-anchor="middle" fill="#2456c4" font-weight="bold">层级稀疏索引器（第 2 讲）</text>
-  <text x="682" y="190" text-anchor="middle" fill="#5a6272">16384 候选池 · top-512</text>
-  <text x="682" y="216" text-anchor="middle" fill="#2a3040">主 KV 以 FP4 存储（第 3 讲）</text>
-  <text x="682" y="236" text-anchor="middle" fill="#5a6272">SWA KV 保持 FP8</text>
-  <text x="682" y="262" text-anchor="middle" fill="#2a3040">DSpark 投机解码（第 3 讲）</text>
+  <rect x="613" y="25" width="200" height="220" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="713" y="49" text-anchor="middle" fill="#1e40af" font-weight="bold" font-size="12">解码器（20 层）</text>
+  <text x="713" y="69" text-anchor="middle" fill="#64748b" font-size="10">全部 CSA2，m=1（不压缩）</text>
+  <text x="713" y="83" text-anchor="middle" fill="#64748b" font-size="10">5 组 × 4 层：</text>
+  <text x="713" y="97" text-anchor="middle" fill="#64748b" font-size="10">1 Full/Reindex + 3 Reuse</text>
+  <text x="713" y="117" text-anchor="middle" fill="#1e293b" font-size="12">decode 激活 16B</text>
+  <text x="713" y="141" text-anchor="middle" fill="#1e40af" font-weight="bold" font-size="12">层级稀疏索引器（第 2 讲）</text>
+  <text x="713" y="159" text-anchor="middle" fill="#64748b" font-size="10">16384 候选池 · top-512</text>
+  <text x="713" y="185" text-anchor="middle" fill="#1e293b" font-size="12">主 KV 以 FP4 存储（第 3 讲）</text>
+  <text x="713" y="205" text-anchor="middle" fill="#64748b" font-size="10">SWA KV 保持 FP8</text>
+  <text x="713" y="231" text-anchor="middle" fill="#1e293b" font-size="12">DSpark 投机解码（第 3 讲）</text>
   <!-- 全局副作用模块 -->
-  <rect x="196" y="318" width="300" height="52" rx="8" fill="#fff8e8" stroke="#e6c96a"/>
-  <text x="346" y="339" text-anchor="middle" fill="#1a1f2e" font-weight="bold">Single-Pass mHC（第 3 讲）</text>
-  <text x="346" y="358" text-anchor="middle" fill="#5a6272">多残差流混合 · Mega-mHC 内核砍半激活访存</text>
-  <rect x="530" y="318" width="252" height="52" rx="8" fill="#fff8e8" stroke="#e6c96a"/>
-  <text x="656" y="339" text-anchor="middle" fill="#1a1f2e" font-weight="bold">SWA Bounded Replay（第 4 讲）</text>
-  <text x="656" y="358" text-anchor="middle" fill="#5a6272">只重放最近 n_win=128 token</text>
+  <rect x="227" y="283" width="300" height="52" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="377" y="304" text-anchor="middle" fill="#b45309" font-weight="bold" font-size="12">Single-Pass mHC（第 3 讲）</text>
+  <text x="377" y="323" text-anchor="middle" fill="#64748b" font-size="10">多残差流混合 · Mega-mHC 内核砍半激活访存</text>
+  <rect x="561" y="283" width="252" height="52" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="687" y="304" text-anchor="middle" fill="#b45309" font-weight="bold" font-size="12">SWA Bounded Replay（第 4 讲）</text>
+  <text x="687" y="323" text-anchor="middle" fill="#64748b" font-size="10">只重放最近 n_win=128 token</text>
   <!-- 箭头 -->
-  <line x1="136" y1="82" x2="196" y2="100" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m2)"/>
-  <line x1="136" y1="172" x2="196" y2="164" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m2)"/>
-  <line x1="386" y1="158" x2="420" y2="158" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m2)"/>
-  <line x1="548" y1="158" x2="582" y2="158" stroke="#5a6272" stroke-width="1.4" marker-end="url(#t0m2)"/>
-  <polyline points="291,280 291,318" fill="none" stroke="#b8912a" stroke-width="1.4" marker-end="url(#t0m2)"/>
-  <polyline points="682,280 682,318" fill="none" stroke="#b8912a" stroke-width="1.4" marker-end="url(#t0m2)"/>
-  <text x="430" y="394" text-anchor="middle" fill="#5a6272" font-size="11">整体架构简化自论文 Figure 3（CED 架构 + CSA2 + 各扩展模块的位置）</text>
+  <path d="M172,47 L216,62" fill="none" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
+  <path d="M172,137 L216,130" fill="none" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
+  <path d="M422,123 L440,123" fill="none" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
+  <path d="M584,123 L602,123" fill="none" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
+  <path d="M322,250 L322,272" fill="none" stroke="#f59e0b" stroke-width="1.4" marker-end="url(#arrow2-orange)"/>
+  <path d="M713,250 L713,272" fill="none" stroke="#f59e0b" stroke-width="1.4" marker-end="url(#arrow2-orange)"/>
+  <text x="430" y="359" text-anchor="middle" fill="#64748b" font-size="11">整体架构简化自论文 Figure 3（CED 架构 + CSA2 + 各扩展模块的位置）</text>
 </svg>
 <p class="cap"><b>图 3</b>｜V4.1-Flash 全家桶位置图（简化自论文 Figure 3，§2.1）。左半是因果编码器（prefill 便宜），右半是解码器（decode 激活 16B）；黄色框是横跨全局的机制。CSA2 的三种模式、Engram/DSpark/FP4 细节分别在对应讲次展开。</p>
 </div>
@@ -439,62 +457,68 @@ window.MathJax = {
 <h2 id="s6">6. 七讲路线图</h2>
 
 <div class="fig">
-<svg viewBox="0 0 860 210" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="t0m3" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2456c4"/></marker></defs>
+<svg viewBox="0 0 894 176" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow3-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
   <!-- T0 -->
-  <rect x="14" y="66" width="104" height="72" rx="10" fill="#2456c4"/>
-  <text x="66" y="94" text-anchor="middle" fill="#fff" font-weight="bold">第 0 讲</text>
-  <text x="66" y="114" text-anchor="middle" fill="#dbe6f8" font-size="11">总览（本篇）</text>
+  <rect x="22" y="22" width="100" height="78" rx="10" fill="#3b82f6"/>
+  <text x="72" y="54" text-anchor="middle" fill="#fff" font-weight="bold" font-size="12">第 0 讲</text>
+  <text x="72" y="72" text-anchor="middle" fill="#dbeafe" font-size="11">总览（本篇）</text>
   <!-- T1 -->
-  <rect x="136" y="66" width="104" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="188" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 1 讲</text>
-  <text x="188" y="108" text-anchor="middle" fill="#5a6272" font-size="11">CED 架构</text>
-  <text x="188" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§2.1–2.2</text>
+  <rect x="147" y="22" width="100" height="78" rx="10" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="197" y="48" text-anchor="middle" fill="#1e293b" font-weight="bold" font-size="12">第 1 讲</text>
+  <text x="197" y="65" text-anchor="middle" fill="#64748b" font-size="11">CED 架构</text>
+  <text x="197" y="82" text-anchor="middle" fill="#94a3b8" font-size="10">§2.1–2.2</text>
   <!-- T2 -->
-  <rect x="258" y="66" width="104" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="310" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 2 讲</text>
-  <text x="310" y="108" text-anchor="middle" fill="#5a6272" font-size="11">CSA2 注意力</text>
-  <text x="310" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§2.3 + §3.1.2</text>
+  <rect x="272" y="22" width="100" height="78" rx="10" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="322" y="48" text-anchor="middle" fill="#1e293b" font-weight="bold" font-size="12">第 2 讲</text>
+  <text x="322" y="65" text-anchor="middle" fill="#64748b" font-size="11">CSA2 注意力</text>
+  <text x="322" y="82" text-anchor="middle" fill="#94a3b8" font-size="10">§2.3 + §3.1.2</text>
   <!-- T3 -->
-  <rect x="380" y="66" width="104" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="432" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 3 讲</text>
-  <text x="432" y="108" text-anchor="middle" fill="#5a6272" font-size="11">架构扩展 ×4</text>
-  <text x="432" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§2.4–2.5</text>
+  <rect x="397" y="22" width="100" height="78" rx="10" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="447" y="48" text-anchor="middle" fill="#1e293b" font-weight="bold" font-size="12">第 3 讲</text>
+  <text x="447" y="65" text-anchor="middle" fill="#64748b" font-size="11">架构扩展 ×4</text>
+  <text x="447" y="82" text-anchor="middle" fill="#94a3b8" font-size="10">§2.4–2.5</text>
   <!-- T4 -->
-  <rect x="502" y="66" width="104" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="554" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 4 讲</text>
-  <text x="554" y="108" text-anchor="middle" fill="#5a6272" font-size="11">基础设施</text>
-  <text x="554" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§3（含 Bounded Replay）</text>
+  <rect x="522" y="22" width="100" height="78" rx="10" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="572" y="44" text-anchor="middle" fill="#1e293b" font-weight="bold" font-size="12">第 4 讲</text>
+  <text x="572" y="60" text-anchor="middle" fill="#64748b" font-size="11">基础设施</text>
+  <text x="572" y="75" text-anchor="middle" fill="#94a3b8" font-size="10">§3（含 Bounded</text>
+  <text x="572" y="90" text-anchor="middle" fill="#94a3b8" font-size="10">Replay）</text>
   <!-- T5 -->
-  <rect x="624" y="66" width="104" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="676" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 5 讲</text>
-  <text x="676" y="108" text-anchor="middle" fill="#5a6272" font-size="11">预训练</text>
-  <text x="676" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§4</text>
+  <rect x="647" y="22" width="100" height="78" rx="10" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="697" y="48" text-anchor="middle" fill="#1e293b" font-weight="bold" font-size="12">第 5 讲</text>
+  <text x="697" y="65" text-anchor="middle" fill="#64748b" font-size="11">预训练</text>
+  <text x="697" y="82" text-anchor="middle" fill="#94a3b8" font-size="10">§4</text>
   <!-- T6 -->
-  <rect x="746" y="66" width="100" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="796" y="90" text-anchor="middle" fill="#1a1f2e" font-weight="bold">第 6 讲</text>
-  <text x="796" y="108" text-anchor="middle" fill="#5a6272" font-size="11">后训练</text>
-  <text x="796" y="125" text-anchor="middle" fill="#5a6272" font-size="10">§5 + 附录 C</text>
+  <rect x="772" y="22" width="100" height="78" rx="10" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="822" y="48" text-anchor="middle" fill="#1e293b" font-weight="bold" font-size="12">第 6 讲</text>
+  <text x="822" y="65" text-anchor="middle" fill="#64748b" font-size="11">后训练</text>
+  <text x="822" y="82" text-anchor="middle" fill="#94a3b8" font-size="10">§5 + 附录 C</text>
   <!-- 箭头 -->
-  <g stroke="#2456c4" stroke-width="1.5">
-    <line x1="118" y1="102" x2="136" y2="102" marker-end="url(#t0m3)"/>
-    <line x1="240" y1="102" x2="258" y2="102" marker-end="url(#t0m3)"/>
-    <line x1="362" y1="102" x2="380" y2="102" marker-end="url(#t0m3)"/>
-    <line x1="484" y1="102" x2="502" y2="102" marker-end="url(#t0m3)"/>
-    <line x1="606" y1="102" x2="624" y2="102" marker-end="url(#t0m3)"/>
-    <line x1="728" y1="102" x2="746" y2="102" marker-end="url(#t0m3)"/>
+  <g stroke="#3b82f6" stroke-width="1.5">
+    <line x1="127" y1="61" x2="136" y2="61" marker-end="url(#arrow3-blue)"/>
+    <line x1="252" y1="61" x2="261" y2="61" marker-end="url(#arrow3-blue)"/>
+    <line x1="377" y1="61" x2="386" y2="61" marker-end="url(#arrow3-blue)"/>
+    <line x1="502" y1="61" x2="511" y2="61" marker-end="url(#arrow3-blue)"/>
+    <line x1="627" y1="61" x2="636" y2="61" marker-end="url(#arrow3-blue)"/>
+    <line x1="752" y1="61" x2="761" y2="61" marker-end="url(#arrow3-blue)"/>
   </g>
   <!-- 主题带 -->
-  <rect x="14" y="168" width="344" height="30" rx="6" fill="#dbe6f8"/>
-  <text x="186" y="188" text-anchor="middle" fill="#163a86" font-size="11">主线 A：把「读入」变便宜（compute）</text>
-  <rect x="380" y="168" width="344" height="30" rx="6" fill="#dbe6f8"/>
-  <text x="552" y="188" text-anchor="middle" fill="#163a86" font-size="11">主线 B：把「笔记」变小、变便宜（storage/bandwidth）</text>
-  <line x1="188" y1="138" x2="186" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
-  <line x1="310" y1="138" x2="310" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
-  <line x1="432" y1="138" x2="432" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
-  <line x1="554" y1="138" x2="554" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
-  <line x1="676" y1="138" x2="676" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
-  <line x1="796" y1="138" x2="796" y2="168" stroke="#8ea6d8" stroke-width="1.2"/>
+  <rect x="22" y="124" width="344" height="30" rx="6" fill="#dbeafe"/>
+  <text x="194" y="143" text-anchor="middle" fill="#1e40af" font-size="11">主线 A：把「读入」变便宜（compute）</text>
+  <rect x="400" y="124" width="344" height="30" rx="6" fill="#dbeafe"/>
+  <text x="572" y="143" text-anchor="middle" fill="#1e40af" font-size="11">主线 B：把「笔记」变小、变便宜（storage/bandwidth）</text>
+  <line x1="197" y1="100" x2="197" y2="124" stroke="#94a3b8" stroke-width="1.2"/>
+  <line x1="322" y1="100" x2="322" y2="124" stroke="#94a3b8" stroke-width="1.2"/>
+  <line x1="447" y1="100" x2="447" y2="124" stroke="#94a3b8" stroke-width="1.2"/>
+  <line x1="572" y1="100" x2="572" y2="124" stroke="#94a3b8" stroke-width="1.2"/>
+  <line x1="697" y1="100" x2="697" y2="124" stroke="#94a3b8" stroke-width="1.2"/>
+  <line x1="822" y1="100" x2="822" y2="124" stroke="#94a3b8" stroke-width="1.2"/>
 </svg>
 <p class="cap"><b>图 4</b>｜七讲地图。第 0–1 讲对应主线 A（算力），第 2–4 讲对应主线 B（存储与带宽），第 5–6 讲是数据侧的两讲。全部链接见页首与页尾的系列导航。</p>
 </div>

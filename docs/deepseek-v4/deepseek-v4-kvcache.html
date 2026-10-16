@@ -125,54 +125,55 @@ window.MathJax = {
 </ul>
 
 <div class="fig">
-<svg viewBox="0 0 860 272" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <text x="10" y="24" font-size="10.5" fill="#5a6272">层类型 → 该层缓存的条目构成（字节以 Flash 配置为例；存储混合精度：512 维 = 448 FP8 + 64 RoPE BF16 ≈ 576 B/条）</text>
+<svg viewBox="0 0 880 288" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="20" y="32" font-size="10" fill="#64748b">层类型 → 该层缓存的条目构成（字节以 Flash 配置为例；存储混合精度：512 维 = 448 FP8 + 64 RoPE BF16 ≈ 576 B/条）</text>
   <!-- 卡片 1：CSA 层 -->
-  <rect x="10" y="36" width="272" height="222" rx="10" fill="#fff" stroke="#2456c4" stroke-width="1.5"/>
-  <rect x="10" y="36" width="272" height="34" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
-  <rect x="10" y="46" width="272" height="24" fill="#eef3fc"/>
-  <text x="146" y="58" text-anchor="middle" font-weight="bold" fill="#1a1f2e">CSA 层 · Flash 21 / Pro 30</text>
-  <rect x="22" y="78" width="248" height="52" rx="6" fill="#fbfbfd" stroke="#c9d2e0"/>
-  <text x="30" y="96" font-weight="bold" fill="#1a1f2e">① Indexer KV（压缩）</text>
-  <text x="30" y="111" font-size="10" fill="#5a6272">(n/4)×128 维 · 全 FP8 存（推断）</text>
-  <text x="30" y="124" font-size="10" fill="#2456c4">摊销 ≈ 32 B/token</text>
-  <rect x="22" y="138" width="248" height="52" rx="6" fill="#fbfbfd" stroke="#c9d2e0"/>
-  <text x="30" y="156" font-weight="bold" fill="#1a1f2e">② Main KV（压缩）</text>
-  <text x="30" y="171" font-size="10" fill="#5a6272">(n/4)×512 维 · 576 B/条</text>
-  <text x="30" y="184" font-size="10" fill="#2456c4">摊销 144 B/token</text>
-  <rect x="22" y="198" width="248" height="52" rx="6" fill="#fbfbfd" stroke="#c9d2e0"/>
-  <text x="30" y="216" font-weight="bold" fill="#1a1f2e">③ SWA 窗 KV（不压缩）</text>
-  <text x="30" y="231" font-size="10" fill="#5a6272">最近 n_win=128 token × 512 维</text>
-  <text x="30" y="244" font-size="10" fill="#2f9e63">固定大小，O(1)</text>
+  <rect x="20" y="44" width="272" height="222" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+  <rect x="20" y="44" width="272" height="34" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <rect x="20" y="54" width="272" height="24" fill="#dbeafe"/>
+  <text x="156" y="66" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">CSA 层 · Flash 21 / Pro 30</text>
+  <rect x="32" y="86" width="248" height="52" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="40" y="104" font-size="12" font-weight="bold" fill="#1e293b">① Indexer KV（压缩）</text>
+  <text x="40" y="119" font-size="10" fill="#64748b">(n/4)×128 维 · 全 FP8 存（推断）</text>
+  <text x="40" y="132" font-size="10" fill="#1e40af">摊销 ≈ 32 B/token</text>
+  <rect x="32" y="146" width="248" height="52" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="40" y="164" font-size="12" font-weight="bold" fill="#1e293b">② Main KV（压缩）</text>
+  <text x="40" y="179" font-size="10" fill="#64748b">(n/4)×512 维 · 576 B/条</text>
+  <text x="40" y="192" font-size="10" fill="#1e40af">摊销 144 B/token</text>
+  <rect x="32" y="206" width="248" height="52" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="40" y="224" font-size="12" font-weight="bold" fill="#1e293b">③ SWA 窗 KV（不压缩）</text>
+  <text x="40" y="239" font-size="10" fill="#64748b">最近 n_win=128 token × 512 维</text>
+  <text x="40" y="252" font-size="10" fill="#166534">固定大小，O(1)</text>
   <!-- 卡片 2：HCA 层 -->
-  <rect x="294" y="36" width="272" height="222" rx="10" fill="#fff" stroke="#e8862a" stroke-width="1.5"/>
-  <rect x="294" y="36" width="272" height="34" rx="10" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.5"/>
-  <rect x="294" y="46" width="272" height="24" fill="#fbe3cc"/>
-  <text x="430" y="58" text-anchor="middle" font-weight="bold" fill="#1a1f2e">HCA 层 · Flash 20 / Pro 31</text>
-  <rect x="306" y="78" width="248" height="52" rx="6" fill="#fbfbfd" stroke="#c9d2e0"/>
-  <text x="314" y="96" font-weight="bold" fill="#1a1f2e">① HCA KV（重压缩）</text>
-  <text x="314" y="111" font-size="10" fill="#5a6272">(n/128)×512 维 · 576 B/条</text>
-  <text x="314" y="124" font-size="10" fill="#b05e10">摊销 4.5 B/token</text>
-  <rect x="306" y="138" width="248" height="52" rx="6" fill="#fbfbfd" stroke="#c9d2e0"/>
-  <text x="314" y="156" font-weight="bold" fill="#1a1f2e">② SWA 窗 KV</text>
-  <text x="314" y="171" font-size="10" fill="#5a6272">同 CSA 层的窗口分支</text>
-  <text x="314" y="184" font-size="10" fill="#2f9e63">固定大小，O(1)</text>
-  <text x="306" y="216" font-size="10.5" fill="#5a6272">无 Indexer、无稀疏选择：</text>
-  <text x="306" y="232" font-size="10.5" fill="#5a6272">全部压缩 entry 稠密参与注意力，</text>
-  <text x="306" y="248" font-size="10.5" fill="#5a6272">用极端压缩率换显存与带宽。</text>
+  <rect x="304" y="44" width="272" height="222" rx="10" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/>
+  <rect x="304" y="44" width="272" height="34" rx="10" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <rect x="304" y="54" width="272" height="24" fill="#fef3c7"/>
+  <text x="440" y="66" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">HCA 层 · Flash 20 / Pro 31</text>
+  <rect x="316" y="86" width="248" height="52" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="324" y="104" font-size="12" font-weight="bold" fill="#1e293b">① HCA KV（重压缩）</text>
+  <text x="324" y="119" font-size="10" fill="#64748b">(n/128)×512 维 · 576 B/条</text>
+  <text x="324" y="132" font-size="10" fill="#b45309">摊销 4.5 B/token</text>
+  <rect x="316" y="146" width="248" height="52" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="324" y="164" font-size="12" font-weight="bold" fill="#1e293b">② SWA 窗 KV</text>
+  <text x="324" y="179" font-size="10" fill="#64748b">同 CSA 层的窗口分支</text>
+  <text x="324" y="192" font-size="10" fill="#166534">固定大小，O(1)</text>
+  <text x="316" y="224" font-size="10" fill="#64748b">无 Indexer、无稀疏选择：</text>
+  <text x="316" y="240" font-size="10" fill="#64748b">全部压缩 entry 稠密参与注意力，</text>
+  <text x="316" y="256" font-size="10" fill="#64748b">用极端压缩率换显存与带宽。</text>
   <!-- 卡片 3：纯 SWA 层 -->
-  <rect x="578" y="36" width="272" height="222" rx="10" fill="#fff" stroke="#2f9e63" stroke-width="1.5"/>
-  <rect x="578" y="36" width="272" height="34" rx="10" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.5"/>
-  <rect x="578" y="46" width="272" height="24" fill="#d9f0e2"/>
-  <text x="714" y="58" text-anchor="middle" font-weight="bold" fill="#1a1f2e">纯 SWA 层 · 仅 Flash 前 2 层</text>
-  <rect x="590" y="78" width="248" height="52" rx="6" fill="#fbfbfd" stroke="#c9d2e0"/>
-  <text x="598" y="96" font-weight="bold" fill="#1a1f2e">① SWA KV</text>
-  <text x="598" y="111" font-size="10" fill="#5a6272">128 token × 512 维</text>
-  <text x="598" y="124" font-size="10" fill="#2f9e63">滑窗淘汰，固定 O(1)</text>
-  <text x="590" y="160" font-size="10.5" fill="#5a6272">Pro 的前 2 层用 HCA 而非纯 SWA，</text>
-  <text x="590" y="176" font-size="10.5" fill="#5a6272">因此 Pro 没有这一类层；</text>
-  <text x="590" y="192" font-size="10.5" fill="#5a6272">该层条目只进 State Cache，</text>
-  <text x="590" y="208" font-size="10.5" fill="#5a6272">不进下节的分页 KV Cache。</text>
+  <rect x="588" y="44" width="272" height="222" rx="10" fill="#ffffff" stroke="#22c55e" stroke-width="1.5"/>
+  <rect x="588" y="44" width="272" height="34" rx="10" fill="#d1fae5" stroke="#22c55e" stroke-width="1.5"/>
+  <rect x="588" y="54" width="272" height="24" fill="#d1fae5"/>
+  <text x="724" y="66" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">纯 SWA 层 · 仅 Flash 前 2 层</text>
+  <rect x="600" y="86" width="248" height="52" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="608" y="104" font-size="12" font-weight="bold" fill="#1e293b">① SWA KV</text>
+  <text x="608" y="119" font-size="10" fill="#64748b">128 token × 512 维</text>
+  <text x="608" y="132" font-size="10" fill="#166534">滑窗淘汰，固定 O(1)</text>
+  <text x="600" y="168" font-size="10" fill="#64748b">Pro 的前 2 层用 HCA 而非纯 SWA，</text>
+  <text x="600" y="184" font-size="10" fill="#64748b">因此 Pro 没有这一类层；</text>
+  <text x="600" y="200" font-size="10" fill="#64748b">该层条目只进 State Cache，</text>
+  <text x="600" y="216" font-size="10" fill="#64748b">不进下节的分页 KV Cache。</text>
 </svg>
 <p class="cap"><b>图 1</b>｜五类 KV 条目按层类型分组。压缩条目（Indexer / Main / HCA）随序列增长线性累积、进 KV Cache；SWA 窗与未压缩尾部大小有上界、进 State Cache。Indexer 条目是 CSA 独有的额外维度（\(c_I=128\)，与主注意力的 512 维不同）。逐条目字节为按混合精度口径的推算，见 §6。</p>
 </div>
@@ -204,72 +205,73 @@ window.MathJax = {
 <p>论文 Figure 6 给出的布局可以概括成一句话：<b>前缀类的压缩条目走经典分页，位置类的易变态走状态池</b>。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 430" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="m2a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+<svg viewBox="0 0 890 414" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs><marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/></marker></defs>
   <!-- 左面板：State Cache -->
-  <rect x="8" y="40" width="388" height="368" rx="10" fill="#fff" stroke="#c9d2e0"/>
-  <text x="202" y="64" text-anchor="middle" font-size="13" font-weight="bold" fill="#1a1f2e">State Cache —— 每请求 1 块 · 固定大小</text>
-  <text x="202" y="82" text-anchor="middle" font-size="10" fill="#5a6272">SWA 窗口 + 未压缩尾部，当 SSM 状态管理</text>
-  <rect x="24" y="94" width="228" height="298" rx="8" fill="#fbfbfd" stroke="#8ea6d8"/>
-  <text x="138" y="112" text-anchor="middle" font-size="11" font-weight="bold" fill="#2f9e63">SWA 段（最近 n_win=128 token）</text>
-  <rect x="36" y="120" width="204" height="20" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="138" y="134" text-anchor="middle" font-size="10" fill="#1a1f2e">Layer-0 SWA KV</text>
-  <rect x="36" y="144" width="204" height="20" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="138" y="158" text-anchor="middle" font-size="10" fill="#1a1f2e">Layer-1 SWA KV</text>
-  <text x="138" y="182" text-anchor="middle" font-size="11" fill="#5a6272">……</text>
-  <rect x="36" y="192" width="204" height="20" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="138" y="206" text-anchor="middle" font-size="10" fill="#1a1f2e">Layer-n SWA KV</text>
-  <text x="138" y="236" text-anchor="middle" font-size="11" font-weight="bold" fill="#5a6272">未压缩尾部段（等待压缩）</text>
-  <rect x="36" y="244" width="204" height="24" rx="4" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="138" y="260" text-anchor="middle" font-size="10" fill="#1a1f2e">Layer-2 CSA 尾部 &lt; m=4 token</text>
-  <rect x="36" y="276" width="204" height="24" rx="4" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="138" y="292" text-anchor="middle" font-size="10" fill="#1a1f2e">Layer-3 HCA 尾部 &lt; m'=128 token</text>
-  <text x="138" y="322" text-anchor="middle" font-size="11" fill="#5a6272">……</text>
-  <rect x="36" y="340" width="204" height="24" rx="4" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="138" y="356" text-anchor="middle" font-size="10" fill="#1a1f2e">Layer-(n-1) HCA 尾部</text>
-  <text x="266" y="120" font-size="10" fill="#5a6272">预分配固定池，</text>
-  <text x="266" y="136" font-size="10" fill="#5a6272">动态分配给序列</text>
-  <text x="266" y="200" font-size="10" fill="#5a6272">大小与上下文</text>
-  <text x="266" y="216" font-size="10" fill="#5a6272">长度无关：</text>
-  <text x="266" y="232" font-size="10" fill="#5a6272">窗口与尾部</text>
-  <text x="266" y="248" font-size="10" fill="#5a6272">都有上界</text>
-  <text x="266" y="308" font-size="10" fill="#5a6272">≈ 4.6 MB/请求</text>
-  <text x="266" y="324" font-size="10" fill="#5a6272">（Flash，推断）</text>
+  <rect x="23" y="24" width="388" height="368" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="217" y="48" text-anchor="middle" font-size="13" font-weight="bold" fill="#1e293b">State Cache —— 每请求 1 块 · 固定大小</text>
+  <text x="217" y="66" text-anchor="middle" font-size="10" fill="#64748b">SWA 窗口 + 未压缩尾部，当 SSM 状态管理</text>
+  <rect x="39" y="78" width="228" height="298" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="153" y="96" text-anchor="middle" font-size="11" font-weight="bold" fill="#166534">SWA 段（最近 n_win=128 token）</text>
+  <rect x="51" y="104" width="204" height="20" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="153" y="118" text-anchor="middle" font-size="10" fill="#1e293b">Layer-0 SWA KV</text>
+  <rect x="51" y="128" width="204" height="20" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="153" y="142" text-anchor="middle" font-size="10" fill="#1e293b">Layer-1 SWA KV</text>
+  <text x="153" y="166" text-anchor="middle" font-size="11" fill="#64748b">……</text>
+  <rect x="51" y="176" width="204" height="20" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="153" y="190" text-anchor="middle" font-size="10" fill="#1e293b">Layer-n SWA KV</text>
+  <text x="153" y="220" text-anchor="middle" font-size="11" font-weight="bold" fill="#64748b">未压缩尾部段（等待压缩）</text>
+  <rect x="51" y="228" width="204" height="24" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="153" y="244" text-anchor="middle" font-size="10" fill="#1e293b">Layer-2 CSA 尾部 &lt; m=4 token</text>
+  <rect x="51" y="260" width="204" height="24" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="153" y="276" text-anchor="middle" font-size="10" fill="#1e293b">Layer-3 HCA 尾部 &lt; m'=128 token</text>
+  <text x="153" y="306" text-anchor="middle" font-size="11" fill="#64748b">……</text>
+  <rect x="51" y="324" width="204" height="24" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="153" y="340" text-anchor="middle" font-size="10" fill="#1e293b">Layer-(n-1) HCA 尾部</text>
+  <text x="281" y="104" font-size="10" fill="#64748b">预分配固定池，</text>
+  <text x="281" y="120" font-size="10" fill="#64748b">动态分配给序列</text>
+  <text x="281" y="184" font-size="10" fill="#64748b">大小与上下文</text>
+  <text x="281" y="200" font-size="10" fill="#64748b">长度无关：</text>
+  <text x="281" y="216" font-size="10" fill="#64748b">窗口与尾部</text>
+  <text x="281" y="232" font-size="10" fill="#64748b">都有上界</text>
+  <text x="281" y="292" font-size="10" fill="#64748b">≈ 4.6 MB/请求</text>
+  <text x="281" y="308" font-size="10" fill="#64748b">（Flash，推断）</text>
   <!-- 右面板：KV Cache -->
-  <rect x="412" y="40" width="440" height="368" rx="10" fill="#fff" stroke="#c9d2e0"/>
-  <text x="632" y="64" text-anchor="middle" font-size="13" font-weight="bold" fill="#1a1f2e">KV Cache —— 每请求 N 块 · 经典分页</text>
-  <text x="632" y="82" text-anchor="middle" font-size="10" fill="#5a6272">只装压缩条目：CSA Indexer / CSA Main / HCA</text>
-  <rect x="428" y="94" width="176" height="150" rx="8" fill="#fbfbfd" stroke="#8ea6d8"/>
-  <text x="516" y="110" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1f2e">Block 0</text>
-  <rect x="440" y="118" width="152" height="32" rx="4" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="516" y="131" text-anchor="middle" font-size="10" fill="#1a1f2e">CSA Indexer KV</text>
-  <text x="516" y="144" text-anchor="middle" font-size="10" fill="#5a6272">k1 = 32 条</text>
-  <rect x="440" y="156" width="152" height="32" rx="4" fill="#dbe6f8" stroke="#2456c4"/>
-  <text x="516" y="169" text-anchor="middle" font-size="10" fill="#1a1f2e">CSA Main KV</text>
-  <text x="516" y="182" text-anchor="middle" font-size="10" fill="#5a6272">k1 = 32 条</text>
-  <rect x="440" y="194" width="152" height="32" rx="4" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="516" y="207" text-anchor="middle" font-size="10" fill="#1a1f2e">HCA KV</text>
-  <text x="516" y="220" text-anchor="middle" font-size="10" fill="#5a6272">k2 = 1 条</text>
-  <rect x="620" y="94" width="176" height="150" rx="8" fill="#fbfbfd" stroke="#8ea6d8"/>
-  <text x="708" y="110" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1f2e">Block 1</text>
-  <rect x="632" y="118" width="152" height="32" rx="4" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="708" y="131" text-anchor="middle" font-size="10" fill="#1a1f2e">CSA Indexer KV</text>
-  <text x="708" y="144" text-anchor="middle" font-size="10" fill="#5a6272">k1 = 32 条</text>
-  <rect x="632" y="156" width="152" height="32" rx="4" fill="#dbe6f8" stroke="#2456c4"/>
-  <text x="708" y="169" text-anchor="middle" font-size="10" fill="#1a1f2e">CSA Main KV</text>
-  <text x="708" y="182" text-anchor="middle" font-size="10" fill="#5a6272">k1 = 32 条</text>
-  <rect x="632" y="194" width="152" height="32" rx="4" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="708" y="207" text-anchor="middle" font-size="10" fill="#1a1f2e">HCA KV</text>
-  <text x="708" y="220" text-anchor="middle" font-size="10" fill="#5a6272">k2 = 1 条</text>
-  <text x="820" y="174" text-anchor="middle" font-size="12" fill="#5a6272">…</text>
-  <text x="428" y="280" font-size="11" font-weight="bold" fill="#1a1f2e">每块覆盖 lcm(m, m') = lcm(4, 128) = 128 个原始 token</text>
-  <text x="428" y="300" font-size="10" fill="#5a6272">k1 = 128/4 = 32 条 CSA（Indexer+Main 各 32），k2 = 128/128 = 1 条 HCA</text>
-  <text x="428" y="320" font-size="10" fill="#5a6272">层-块对应：layer-2（CSA）读两段蓝色，layer-3（HCA）读橙色段</text>
-  <text x="428" y="340" font-size="10" fill="#5a6272">块长可取 lcm 的任意倍数：256 token → k1=64, k2=2</text>
-  <text x="428" y="360" font-size="10" fill="#5a6272">同一 token 区间的条目同块分段共存，天然支持共享前缀的块级复用</text>
+  <rect x="427" y="24" width="440" height="368" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="647" y="48" text-anchor="middle" font-size="13" font-weight="bold" fill="#1e293b">KV Cache —— 每请求 N 块 · 经典分页</text>
+  <text x="647" y="66" text-anchor="middle" font-size="10" fill="#64748b">只装压缩条目：CSA Indexer / CSA Main / HCA</text>
+  <rect x="443" y="78" width="176" height="150" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="531" y="94" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e293b">Block 0</text>
+  <rect x="455" y="102" width="152" height="32" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="531" y="115" text-anchor="middle" font-size="10" fill="#1e293b">CSA Indexer KV</text>
+  <text x="531" y="128" text-anchor="middle" font-size="10" fill="#64748b">k1 = 32 条</text>
+  <rect x="455" y="140" width="152" height="32" rx="4" fill="#bfdbfe" stroke="#3b82f6"/>
+  <text x="531" y="153" text-anchor="middle" font-size="10" fill="#1e293b">CSA Main KV</text>
+  <text x="531" y="166" text-anchor="middle" font-size="10" fill="#64748b">k1 = 32 条</text>
+  <rect x="455" y="178" width="152" height="32" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="531" y="191" text-anchor="middle" font-size="10" fill="#1e293b">HCA KV</text>
+  <text x="531" y="204" text-anchor="middle" font-size="10" fill="#64748b">k2 = 1 条</text>
+  <rect x="635" y="78" width="176" height="150" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="723" y="94" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e293b">Block 1</text>
+  <rect x="647" y="102" width="152" height="32" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="723" y="115" text-anchor="middle" font-size="10" fill="#1e293b">CSA Indexer KV</text>
+  <text x="723" y="128" text-anchor="middle" font-size="10" fill="#64748b">k1 = 32 条</text>
+  <rect x="647" y="140" width="152" height="32" rx="4" fill="#bfdbfe" stroke="#3b82f6"/>
+  <text x="723" y="153" text-anchor="middle" font-size="10" fill="#1e293b">CSA Main KV</text>
+  <text x="723" y="166" text-anchor="middle" font-size="10" fill="#64748b">k1 = 32 条</text>
+  <rect x="647" y="178" width="152" height="32" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="723" y="191" text-anchor="middle" font-size="10" fill="#1e293b">HCA KV</text>
+  <text x="723" y="204" text-anchor="middle" font-size="10" fill="#64748b">k2 = 1 条</text>
+  <text x="835" y="158" text-anchor="middle" font-size="12" fill="#64748b">…</text>
+  <text x="443" y="264" font-size="11" font-weight="bold" fill="#1e293b">每块覆盖 lcm(m, m') = lcm(4, 128) = 128 个原始 token</text>
+  <text x="443" y="284" font-size="10" fill="#64748b">k1 = 128/4 = 32 条 CSA（Indexer+Main 各 32），k2 = 128/128 = 1 条 HCA</text>
+  <text x="443" y="304" font-size="10" fill="#64748b">层-块对应：layer-2（CSA）读两段蓝色，layer-3（HCA）读橙色段</text>
+  <text x="443" y="324" font-size="10" fill="#64748b">块长可取 lcm 的任意倍数：256 token → k1=64, k2=2</text>
+  <text x="443" y="344" font-size="10" fill="#64748b">同一 token 区间的条目同块分段共存，天然支持共享前缀的块级复用</text>
   <!-- 尾部压缩入库箭头 -->
-  <polyline points="252,288 404,288 404,134 428,134" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2a)"/>
-  <text x="330" y="280" text-anchor="middle" font-size="10" fill="#5a6272">攒满压缩窗口后入库</text>
+  <path d="M272,272 L 403,272 Q 411,272 411,264 L 411,126 Q 411,118 419,118 L 432,118" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <text x="341" y="260" text-anchor="middle" font-size="10" fill="#64748b">攒满压缩窗口后入库</text>
 </svg>
 <p class="cap"><b>图 2</b>｜DeepSeek-V4 的 KV cache 总布局（依论文 Figure 6 重绘）。左：State Cache，每请求固定一块，装 SWA 窗（各层）与未压缩尾部（各压缩层）；右：KV Cache，经典分页，每块内 CSA Indexer / CSA Main / HCA 三种段按同一 token 区间对齐共存。尾部攒满压缩窗口即压缩成 entry、写入 KV Cache（灰箭头）。</p>
 </div>
@@ -279,28 +281,29 @@ window.MathJax = {
 <p>每请求分配多个块，<b>每块覆盖 \(\mathrm{lcm}(m, m')\) 个原始 token</b>。选 lcm 是为了让两类压缩层的窗口边界在这个区间上<b>同时对齐</b>：区间内恰好产出 \(k_1=\mathrm{lcm}(m,m')/m\) 条 CSA 条目和 \(k_2=\mathrm{lcm}(m,m')/m'\) 条 HCA 条目。Flash 配置下 \(\mathrm{lcm}(4,128)=128\)，即每块 128 个原始 token → 32 条 CSA Indexer + 32 条 CSA Main + 1 条 HCA：</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <text x="200" y="28" font-size="10.5" fill="#5a6272">原始 token 区间（一个块）</text>
-  <rect x="200" y="36" width="608" height="28" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="504" y="54" text-anchor="middle" font-weight="bold" fill="#1a1f2e">128 个原始 token —— lcm(m, m') = lcm(4, 128) = 128</text>
-  <text x="192" y="102" text-anchor="end" font-size="11" font-weight="bold" fill="#1a1f2e">Indexer 段</text>
-  <text x="192" y="115" text-anchor="end" font-size="10" fill="#5a6272">32 × 128 B ≈ 4 KB（推断）</text>
-  <g stroke="#2456c4" fill="#eef3fc">
-    <rect x="200" y="92" width="19" height="26"/><rect x="219" y="92" width="19" height="26"/><rect x="238" y="92" width="19" height="26"/><rect x="257" y="92" width="19" height="26"/><rect x="276" y="92" width="19" height="26"/><rect x="295" y="92" width="19" height="26"/><rect x="314" y="92" width="19" height="26"/><rect x="333" y="92" width="19" height="26"/><rect x="352" y="92" width="19" height="26"/><rect x="371" y="92" width="19" height="26"/><rect x="390" y="92" width="19" height="26"/><rect x="409" y="92" width="19" height="26"/><rect x="428" y="92" width="19" height="26"/><rect x="447" y="92" width="19" height="26"/><rect x="466" y="92" width="19" height="26"/><rect x="485" y="92" width="19" height="26"/><rect x="504" y="92" width="19" height="26"/><rect x="523" y="92" width="19" height="26"/><rect x="542" y="92" width="19" height="26"/><rect x="561" y="92" width="19" height="26"/><rect x="580" y="92" width="19" height="26"/><rect x="599" y="92" width="19" height="26"/><rect x="618" y="92" width="19" height="26"/><rect x="637" y="92" width="19" height="26"/><rect x="656" y="92" width="19" height="26"/><rect x="675" y="92" width="19" height="26"/><rect x="694" y="92" width="19" height="26"/><rect x="713" y="92" width="19" height="26"/><rect x="732" y="92" width="19" height="26"/><rect x="751" y="92" width="19" height="26"/><rect x="770" y="92" width="19" height="26"/><rect x="789" y="92" width="19" height="26"/>
+<svg viewBox="0 0 880 306" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="220" y="30" font-size="10" fill="#64748b">原始 token 区间（一个块）</text>
+  <rect x="220" y="38" width="608" height="28" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="524" y="56" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">128 个原始 token —— lcm(m, m') = lcm(4, 128) = 128</text>
+  <text x="214" y="96" text-anchor="end" font-size="11" font-weight="bold" fill="#1e293b">Indexer 段</text>
+  <text x="214" y="111" text-anchor="end" font-size="10" fill="#64748b">32 × 128 B ≈ 4 KB（推断）</text>
+  <g stroke="#3b82f6" fill="#dbeafe">
+    <rect x="220" y="88" width="19" height="26"/><rect x="239" y="88" width="19" height="26"/><rect x="258" y="88" width="19" height="26"/><rect x="277" y="88" width="19" height="26"/><rect x="296" y="88" width="19" height="26"/><rect x="315" y="88" width="19" height="26"/><rect x="334" y="88" width="19" height="26"/><rect x="353" y="88" width="19" height="26"/><rect x="372" y="88" width="19" height="26"/><rect x="391" y="88" width="19" height="26"/><rect x="410" y="88" width="19" height="26"/><rect x="429" y="88" width="19" height="26"/><rect x="448" y="88" width="19" height="26"/><rect x="467" y="88" width="19" height="26"/><rect x="486" y="88" width="19" height="26"/><rect x="505" y="88" width="19" height="26"/><rect x="524" y="88" width="19" height="26"/><rect x="543" y="88" width="19" height="26"/><rect x="562" y="88" width="19" height="26"/><rect x="581" y="88" width="19" height="26"/><rect x="600" y="88" width="19" height="26"/><rect x="619" y="88" width="19" height="26"/><rect x="638" y="88" width="19" height="26"/><rect x="657" y="88" width="19" height="26"/><rect x="676" y="88" width="19" height="26"/><rect x="695" y="88" width="19" height="26"/><rect x="714" y="88" width="19" height="26"/><rect x="733" y="88" width="19" height="26"/><rect x="752" y="88" width="19" height="26"/><rect x="771" y="88" width="19" height="26"/><rect x="790" y="88" width="19" height="26"/><rect x="809" y="88" width="19" height="26"/>
   </g>
-  <text x="192" y="142" text-anchor="end" font-size="11" font-weight="bold" fill="#1a1f2e">Main 段</text>
-  <text x="192" y="155" text-anchor="end" font-size="10" fill="#5a6272">32 × 576 B = 18 KB</text>
-  <g stroke="#2456c4" fill="#dbe6f8">
-    <rect x="200" y="132" width="19" height="26"/><rect x="219" y="132" width="19" height="26"/><rect x="238" y="132" width="19" height="26"/><rect x="257" y="132" width="19" height="26"/><rect x="276" y="132" width="19" height="26"/><rect x="295" y="132" width="19" height="26"/><rect x="314" y="132" width="19" height="26"/><rect x="333" y="132" width="19" height="26"/><rect x="352" y="132" width="19" height="26"/><rect x="371" y="132" width="19" height="26"/><rect x="390" y="132" width="19" height="26"/><rect x="409" y="132" width="19" height="26"/><rect x="428" y="132" width="19" height="26"/><rect x="447" y="132" width="19" height="26"/><rect x="466" y="132" width="19" height="26"/><rect x="485" y="132" width="19" height="26"/><rect x="504" y="132" width="19" height="26"/><rect x="523" y="132" width="19" height="26"/><rect x="542" y="132" width="19" height="26"/><rect x="561" y="132" width="19" height="26"/><rect x="580" y="132" width="19" height="26"/><rect x="599" y="132" width="19" height="26"/><rect x="618" y="132" width="19" height="26"/><rect x="637" y="132" width="19" height="26"/><rect x="656" y="132" width="19" height="26"/><rect x="675" y="132" width="19" height="26"/><rect x="694" y="132" width="19" height="26"/><rect x="713" y="132" width="19" height="26"/><rect x="732" y="132" width="19" height="26"/><rect x="751" y="132" width="19" height="26"/><rect x="770" y="132" width="19" height="26"/><rect x="789" y="132" width="19" height="26"/>
+  <text x="214" y="138" text-anchor="end" font-size="11" font-weight="bold" fill="#1e293b">Main 段</text>
+  <text x="214" y="153" text-anchor="end" font-size="10" fill="#64748b">32 × 576 B = 18 KB</text>
+  <g stroke="#3b82f6" fill="#bfdbfe">
+    <rect x="220" y="130" width="19" height="26"/><rect x="239" y="130" width="19" height="26"/><rect x="258" y="130" width="19" height="26"/><rect x="277" y="130" width="19" height="26"/><rect x="296" y="130" width="19" height="26"/><rect x="315" y="130" width="19" height="26"/><rect x="334" y="130" width="19" height="26"/><rect x="353" y="130" width="19" height="26"/><rect x="372" y="130" width="19" height="26"/><rect x="391" y="130" width="19" height="26"/><rect x="410" y="130" width="19" height="26"/><rect x="429" y="130" width="19" height="26"/><rect x="448" y="130" width="19" height="26"/><rect x="467" y="130" width="19" height="26"/><rect x="486" y="130" width="19" height="26"/><rect x="505" y="130" width="19" height="26"/><rect x="524" y="130" width="19" height="26"/><rect x="543" y="130" width="19" height="26"/><rect x="562" y="130" width="19" height="26"/><rect x="581" y="130" width="19" height="26"/><rect x="600" y="130" width="19" height="26"/><rect x="619" y="130" width="19" height="26"/><rect x="638" y="130" width="19" height="26"/><rect x="657" y="130" width="19" height="26"/><rect x="676" y="130" width="19" height="26"/><rect x="695" y="130" width="19" height="26"/><rect x="714" y="130" width="19" height="26"/><rect x="733" y="130" width="19" height="26"/><rect x="752" y="130" width="19" height="26"/><rect x="771" y="130" width="19" height="26"/><rect x="790" y="130" width="19" height="26"/><rect x="809" y="130" width="19" height="26"/>
   </g>
-  <text x="192" y="182" text-anchor="end" font-size="11" font-weight="bold" fill="#1a1f2e">HCA 段</text>
-  <text x="192" y="195" text-anchor="end" font-size="10" fill="#5a6272">1 × 576 B</text>
-  <rect x="200" y="172" width="608" height="26" fill="none" stroke="#c9d2e0" stroke-dasharray="5 4"/>
-  <rect x="200" y="172" width="19" height="26" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="400" y="189" font-size="10" fill="#5a6272">整个 token 区间只压出 1 条 HCA entry（m' = 128）</text>
-  <rect x="8" y="224" width="852" height="60" rx="8" fill="#fbfbfd" stroke="#c9d2e0"/>
-  <text x="20" y="246" font-size="11" fill="#1a1f2e">三段同属一个块：layer-2（CSA）读 Indexer+Main 段，layer-3（HCA）读 HCA 段——同一 token 区间</text>
-  <text x="20" y="268" font-size="11" fill="#1a1f2e">CSA 层每块新增 ≈ 22.5 KB，HCA 层每块新增 0.6 KB；块长取 lcm 的任意倍数（如 256 → k1=64, k2=2）</text>
+  <text x="214" y="180" text-anchor="end" font-size="11" font-weight="bold" fill="#1e293b">HCA 段</text>
+  <text x="214" y="195" text-anchor="end" font-size="10" fill="#64748b">1 × 576 B</text>
+  <rect x="220" y="172" width="608" height="26" fill="none" stroke="#cbd5e1" stroke-dasharray="6,4"/>
+  <rect x="220" y="172" width="19" height="26" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="410" y="189" font-size="10" fill="#64748b">整个 token 区间只压出 1 条 HCA entry（m' = 128）</text>
+  <rect x="24" y="222" width="832" height="60" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="36" y="245" font-size="11" fill="#1e293b">三段同属一个块：layer-2（CSA）读 Indexer+Main 段，layer-3（HCA）读 HCA 段——同一 token 区间</text>
+  <text x="36" y="267" font-size="11" fill="#1e293b">CSA 层每块新增 ≈ 22.5 KB，HCA 层每块新增 0.6 KB；块长取 lcm 的任意倍数（如 256 → k1=64, k2=2）</text>
 </svg>
 <p class="cap"><b>图 3</b>｜Flash 配置下一个 KV Cache 块的内部构成。每 4 个原始 token 压出 1 条 Indexer entry（128 维）与 1 条 Main entry（512 维），128 个 token 才压出 1 条 HCA entry——所以块内 HCA 段近乎全空。字节按 §6 的混合精度口径推算。</p>
 </div>
@@ -336,34 +339,35 @@ window.MathJax = {
 <p>所谓「题库」，就是<b>全部历史块的卡片按块序排成的数组</b>（每个 CSA 层一套），住在 KV Cache 块的 Indexer 段（图 3 第一行），全 FP8 存储约 128 B/条。它能被缓存的根本原因只有一个：<b>卡片只依赖「那 4 个 token」的隐状态，算完永不改变</b>——是标准的不可变前缀数据。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 140" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="m4a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
-  <text x="8" y="56" font-size="12" font-weight="bold" fill="#2456c4">① 写入</text>
-  <text x="8" y="76" font-size="10" fill="#5a6272">每 4 个 token</text>
-  <text x="8" y="90" font-size="10" fill="#5a6272">压出两份产出</text>
-  <g font-size="10" fill="#1a1f2e">
-    <rect x="150" y="60" width="26" height="26" fill="#fff" stroke="#8ea6d8"/><text x="163" y="77" text-anchor="middle">t0</text>
-    <rect x="176" y="60" width="26" height="26" fill="#fff" stroke="#8ea6d8"/><text x="189" y="77" text-anchor="middle">t1</text>
-    <rect x="202" y="60" width="26" height="26" fill="#fff" stroke="#8ea6d8"/><text x="215" y="77" text-anchor="middle">t2</text>
-    <rect x="228" y="60" width="26" height="26" fill="#fff" stroke="#8ea6d8"/><text x="241" y="77" text-anchor="middle">t3</text>
+<svg viewBox="0 0 880 150" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs><marker id="arrow4" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/></marker></defs>
+  <text x="24" y="60" font-size="12" font-weight="bold" fill="#1e40af">① 写入</text>
+  <text x="24" y="78" font-size="10" fill="#64748b">每 4 个 token</text>
+  <text x="24" y="92" font-size="10" fill="#64748b">压出两份产出</text>
+  <g font-size="10" fill="#1e293b">
+    <rect x="166" y="51" width="26" height="28" fill="#ffffff" stroke="#94a3b8"/><text x="179" y="69" text-anchor="middle">t0</text>
+    <rect x="192" y="51" width="26" height="28" fill="#ffffff" stroke="#94a3b8"/><text x="205" y="69" text-anchor="middle">t1</text>
+    <rect x="218" y="51" width="26" height="28" fill="#ffffff" stroke="#94a3b8"/><text x="231" y="69" text-anchor="middle">t2</text>
+    <rect x="244" y="51" width="26" height="28" fill="#ffffff" stroke="#94a3b8"/><text x="257" y="69" text-anchor="middle">t3</text>
   </g>
-  <line x1="254" y1="73" x2="290" y2="73" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m4a)"/>
-  <rect x="290" y="44" width="170" height="54" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="375" y="64" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1f2e">同一个压缩机制</text>
-  <text x="375" y="82" text-anchor="middle" font-size="10" fill="#5a6272">两套投影 · 4:1 门控池化</text>
-  <line x1="460" y1="49" x2="510" y2="49" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m4a)"/>
-  <line x1="460" y1="93" x2="510" y2="93" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m4a)"/>
-  <rect x="510" y="34" width="140" height="30" rx="6" fill="#dbe6f8" stroke="#2456c4"/>
-  <text x="580" y="53" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1f2e">正文 entry（512 维）</text>
-  <rect x="510" y="78" width="140" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="580" y="97" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1f2e">卡片 K^I（128 维）</text>
-  <line x1="650" y1="49" x2="690" y2="49" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m4a)"/>
-  <line x1="650" y1="93" x2="690" y2="93" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m4a)"/>
-  <rect x="690" y="34" width="150" height="30" rx="6" fill="#fbfbfd" stroke="#c9d2e0"/>
-  <text x="765" y="53" text-anchor="middle" font-size="11" fill="#1a1f2e">进块内 Main 段</text>
-  <rect x="690" y="78" width="150" height="30" rx="6" fill="#fbfbfd" stroke="#c9d2e0"/>
-  <text x="765" y="97" text-anchor="middle" font-size="11" fill="#1a1f2e">进块内 Indexer 段</text>
-  <text x="150" y="126" font-size="10" fill="#5a6272">每 4 个 token 攒满才压一次；不足 4 个的尾部先留在 State Cache</text>
+  <path d="M275,65 L 295,65" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <rect x="306" y="35" width="170" height="60" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="391" y="60" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e293b">同一个压缩机制</text>
+  <text x="391" y="80" text-anchor="middle" font-size="10" fill="#64748b">两套投影 · 4:1 门控池化</text>
+  <path d="M481,41 L 515,41" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <path d="M481,89 L 515,89" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <rect x="526" y="24" width="140" height="34" rx="6" fill="#bfdbfe" stroke="#3b82f6"/>
+  <text x="596" y="45" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e293b">正文 entry（512 维）</text>
+  <rect x="526" y="72" width="140" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="596" y="93" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e293b">卡片 K^I（128 维）</text>
+  <path d="M671,41 L 695,41" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <path d="M671,89 L 695,89" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <rect x="706" y="24" width="150" height="34" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="781" y="45" text-anchor="middle" font-size="11" fill="#1e293b">进块内 Main 段</text>
+  <rect x="706" y="72" width="150" height="34" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="781" y="93" text-anchor="middle" font-size="11" fill="#1e293b">进块内 Indexer 段</text>
+  <text x="166" y="124" font-size="10" fill="#64748b">每 4 个 token 攒满才压一次；不足 4 个的尾部先留在 State Cache</text>
 </svg>
 <p class="cap"><b>图 4</b>｜一次压缩，两份产出。每 4 个 token 攒满一个压缩窗口，同一套门控池化机制配两套投影：压出 512 维「正文」（进 Main 段，等被选中）与 128 维「目录卡片」（进 Indexer 段，供打分）。二者同块序号、同生同灭。</p>
 </div>
@@ -383,75 +387,76 @@ window.MathJax = {
 <div class="formula">\[ I_{t,s} \;=\; \sum_{h=1}^{64} w^I_{t,h}\cdot \mathrm{ReLU}\!\left(q^I_{t,h}\cdot K^{\mathrm{I}}_{\mathrm{Comp},s}\right) \]</div>
 
 <div class="fig">
-<svg viewBox="0 0 860 540" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="m5a" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+<svg viewBox="0 0 884 440" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs><marker id="arrow5" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/></marker></defs>
   <!-- 步骤②：打分 -->
-  <text x="8" y="174" font-size="12" font-weight="bold" fill="#2456c4">② 打分</text>
-  <text x="8" y="194" font-size="10" fill="#5a6272">新 query 扫一遍</text>
-  <text x="8" y="208" font-size="10" fill="#5a6272">全部卡片</text>
-  <rect x="150" y="170" width="140" height="52" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="220" y="190" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1f2e">新 token 的 query 头</text>
-  <text x="220" y="208" text-anchor="middle" font-size="10" fill="#5a6272">64 头 × 128 维</text>
-  <rect x="330" y="154" width="140" height="108" rx="8" fill="#fbfbfd" stroke="#2456c4"/>
-  <text x="400" y="168" text-anchor="middle" font-size="11" font-weight="bold" fill="#2456c4">Indexer 段（目录柜）</text>
-  <rect x="336" y="176" width="128" height="20" rx="4" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="400" y="190" text-anchor="middle" font-size="10" fill="#1a1f2e">卡片 s3 · 128 维</text>
-  <rect x="336" y="202" width="128" height="20" rx="4" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="400" y="216" text-anchor="middle" font-size="10" fill="#1a1f2e">卡片 s2</text>
-  <rect x="336" y="228" width="128" height="20" rx="4" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="400" y="242" text-anchor="middle" font-size="10" fill="#1a1f2e">卡片 s1</text>
-  <text x="400" y="258" text-anchor="middle" font-size="10" fill="#5a6272">……（共 n/4 张）</text>
-  <polyline points="290,182 310,182 310,144 500,144 500,178 510,178" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m5a)"/>
-  <line x1="470" y1="210" x2="510" y2="210" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m5a)"/>
-  <rect x="510" y="170" width="180" height="52" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="600" y="190" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1f2e">打分器（式 16）</text>
-  <text x="600" y="208" text-anchor="middle" font-size="10" fill="#5a6272">I(t,s) = Σ w·ReLU(q·K)</text>
-  <line x1="690" y1="196" x2="726" y2="196" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m5a)"/>
-  <rect x="726" y="170" width="126" height="54" rx="8" fill="none" stroke="#c9d2e0" stroke-dasharray="5 4"/>
-  <text x="789" y="184" text-anchor="middle" font-size="10" fill="#5a6272">分数（临时）</text>
-  <rect x="732" y="192" width="78" height="7" fill="#dbe6f8" stroke="#2456c4"/>
-  <rect x="732" y="203" width="44" height="7" fill="#dbe6f8" stroke="#2456c4"/>
-  <rect x="732" y="214" width="60" height="7" fill="#dbe6f8" stroke="#2456c4"/>
+  <text x="20" y="52" font-size="12" font-weight="bold" fill="#1e40af">② 打分</text>
+  <text x="20" y="72" font-size="10" fill="#64748b">新 query 扫一遍</text>
+  <text x="20" y="86" font-size="10" fill="#64748b">全部卡片</text>
+  <rect x="162" y="48" width="140" height="52" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="232" y="68" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e293b">新 token 的 query 头</text>
+  <text x="232" y="86" text-anchor="middle" font-size="10" fill="#64748b">64 头 × 128 维</text>
+  <rect x="342" y="40" width="140" height="108" rx="8" fill="#f8fafc" stroke="#3b82f6"/>
+  <text x="412" y="54" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e40af">Indexer 段（目录柜）</text>
+  <rect x="348" y="62" width="128" height="20" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="412" y="76" text-anchor="middle" font-size="10" fill="#1e293b">卡片 s3 · 128 维</text>
+  <rect x="348" y="88" width="128" height="20" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="412" y="102" text-anchor="middle" font-size="10" fill="#1e293b">卡片 s2</text>
+  <rect x="348" y="114" width="128" height="20" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="412" y="128" text-anchor="middle" font-size="10" fill="#1e293b">卡片 s1</text>
+  <text x="412" y="144" text-anchor="middle" font-size="10" fill="#64748b">……（共 n/4 张）</text>
+  <path d="M307,60 L 315,60 Q 323,60 323,52 L 323,28 Q 323,20 331,20 L 532,20 Q 540,20 540,28 L 540,37" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <path d="M487,88 L 511,88" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <rect x="522" y="48" width="180" height="52" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="612" y="68" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e293b">打分器（式 16）</text>
+  <text x="612" y="86" text-anchor="middle" font-size="10" fill="#64748b">I(t,s) = Σ w·ReLU(q·K)</text>
+  <path d="M707,74 L 727,74" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <rect x="738" y="48" width="126" height="54" rx="8" fill="none" stroke="#cbd5e1" stroke-dasharray="6,4"/>
+  <text x="801" y="64" text-anchor="middle" font-size="10" fill="#64748b">分数（临时）</text>
+  <rect x="744" y="70" width="78" height="7" fill="#bfdbfe" stroke="#3b82f6"/>
+  <rect x="744" y="81" width="44" height="7" fill="#bfdbfe" stroke="#3b82f6"/>
+  <rect x="744" y="92" width="60" height="7" fill="#bfdbfe" stroke="#3b82f6"/>
   <!-- 步骤③：选择 -->
-  <text x="8" y="302" font-size="12" font-weight="bold" fill="#2456c4">③ 选择</text>
-  <text x="8" y="322" font-size="10" fill="#5a6272">top-k=512</text>
-  <text x="8" y="336" font-size="10" fill="#5a6272">按索引取正文</text>
-  <rect x="150" y="296" width="140" height="52" rx="8" fill="none" stroke="#c9d2e0" stroke-dasharray="5 4"/>
-  <text x="220" y="290" text-anchor="middle" font-size="10" fill="#5a6272">分数（上一步的）</text>
-  <rect x="158" y="306" width="64" height="7" fill="#dbe6f8" stroke="#2456c4"/>
-  <rect x="158" y="319" width="38" height="7" fill="#dbe6f8" stroke="#2456c4"/>
-  <rect x="158" y="332" width="70" height="7" fill="#dbe6f8" stroke="#2456c4"/>
-  <line x1="290" y1="322" x2="330" y2="322" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m5a)"/>
-  <rect x="330" y="296" width="140" height="52" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="400" y="316" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1f2e">top-k 选择</text>
-  <text x="400" y="332" text-anchor="middle" font-size="10" fill="#5a6272">取分最高的 512 条</text>
-  <line x1="470" y1="322" x2="510" y2="322" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m5a)"/>
-  <text x="490" y="362" text-anchor="middle" font-size="10" fill="#5a6272">索引列表（临时）</text>
-  <rect x="510" y="296" width="140" height="52" rx="8" fill="#fbfbfd" stroke="#2456c4"/>
-  <text x="580" y="316" text-anchor="middle" font-size="11" font-weight="bold" fill="#2456c4">Main 段（书架）</text>
-  <text x="580" y="332" text-anchor="middle" font-size="10" fill="#5a6272">按索引取 512 条正文</text>
-  <text x="150" y="380" font-size="10" fill="#5a6272">正文与卡片出自同一次压缩：目录选得准，取到的正文才相关</text>
+  <text x="20" y="180" font-size="12" font-weight="bold" fill="#1e40af">③ 选择</text>
+  <text x="20" y="200" font-size="10" fill="#64748b">top-k=512</text>
+  <text x="20" y="214" font-size="10" fill="#64748b">按索引取正文</text>
+  <rect x="162" y="174" width="140" height="52" rx="8" fill="none" stroke="#cbd5e1" stroke-dasharray="6,4"/>
+  <text x="232" y="166" text-anchor="middle" font-size="10" fill="#64748b">分数（上一步的）</text>
+  <rect x="170" y="184" width="64" height="7" fill="#bfdbfe" stroke="#3b82f6"/>
+  <rect x="170" y="197" width="38" height="7" fill="#bfdbfe" stroke="#3b82f6"/>
+  <rect x="170" y="210" width="70" height="7" fill="#bfdbfe" stroke="#3b82f6"/>
+  <path d="M307,200 L 331,200" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <rect x="342" y="174" width="140" height="52" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="412" y="194" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e293b">top-k 选择</text>
+  <text x="412" y="210" text-anchor="middle" font-size="10" fill="#64748b">取分最高的 512 条</text>
+  <path d="M487,200 L 511,200" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <text x="502" y="240" text-anchor="middle" font-size="10" fill="#64748b">索引列表（临时）</text>
+  <rect x="522" y="174" width="140" height="52" rx="8" fill="#f8fafc" stroke="#3b82f6"/>
+  <text x="592" y="194" text-anchor="middle" font-size="11" font-weight="bold" fill="#1e40af">Main 段（书架）</text>
+  <text x="592" y="210" text-anchor="middle" font-size="10" fill="#64748b">按索引取 512 条正文</text>
+  <text x="162" y="258" font-size="10" fill="#64748b">正文与卡片出自同一次压缩：目录选得准，取到的正文才相关</text>
   <!-- 步骤④：消费 -->
-  <text x="8" y="430" font-size="12" font-weight="bold" fill="#2456c4">④ 消费</text>
-  <text x="8" y="450" font-size="10" fill="#5a6272">正文进核心注意力</text>
-  <text x="8" y="464" font-size="10" fill="#5a6272">临时量即弃</text>
-  <rect x="150" y="424" width="140" height="32" rx="6" fill="#fbfbfd" stroke="#c9d2e0"/>
-  <text x="220" y="444" text-anchor="middle" font-size="10" fill="#1a1f2e">选中的 512 条正文</text>
-  <rect x="150" y="462" width="140" height="32" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="220" y="482" text-anchor="middle" font-size="10" fill="#1a1f2e">SWA 窗（未压缩）</text>
-  <line x1="290" y1="440" x2="330" y2="440" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m5a)"/>
-  <line x1="290" y1="478" x2="330" y2="478" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m5a)"/>
-  <rect x="330" y="424" width="190" height="70" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="425" y="450" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1f2e">核心注意力</text>
-  <text x="425" y="470" text-anchor="middle" font-size="10" fill="#5a6272">MQA：entry 即 K=V</text>
-  <text x="425" y="486" text-anchor="middle" font-size="10" fill="#5a6272">+ attn sink</text>
-  <line x1="520" y1="450" x2="560" y2="450" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m5a)"/>
-  <rect x="560" y="424" width="280" height="52" rx="8" fill="none" stroke="#c9d2e0" stroke-dasharray="5 4"/>
-  <text x="700" y="444" text-anchor="middle" font-size="10" fill="#5a6272">当步即弃（临时量）</text>
-  <text x="700" y="462" text-anchor="middle" font-size="10" fill="#5a6272">query · 分数 · top-k 索引</text>
-  <rect x="560" y="482" width="280" height="32" rx="6" fill="#fbfbfd" stroke="#c9d2e0"/>
-  <text x="700" y="502" text-anchor="middle" font-size="10" fill="#1a1f2e">长期保留：卡片 + 正文（随前缀有效）</text>
-  <text x="150" y="520" font-size="10" fill="#5a6272">输出交给下一层；卡片与正文留在 cache，等下一个 token 再来翻</text>
+  <text x="20" y="308" font-size="12" font-weight="bold" fill="#1e40af">④ 消费</text>
+  <text x="20" y="328" font-size="10" fill="#64748b">正文进核心注意力</text>
+  <text x="20" y="342" font-size="10" fill="#64748b">临时量即弃</text>
+  <rect x="162" y="302" width="140" height="32" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="232" y="322" text-anchor="middle" font-size="10" fill="#1e293b">选中的 512 条正文</text>
+  <rect x="162" y="340" width="140" height="32" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="232" y="360" text-anchor="middle" font-size="10" fill="#166534">SWA 窗（未压缩）</text>
+  <path d="M307,318 L 331,318" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <path d="M307,356 L 331,356" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <rect x="342" y="302" width="190" height="70" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="437" y="326" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">核心注意力</text>
+  <text x="437" y="346" text-anchor="middle" font-size="10" fill="#64748b">MQA：entry 即 K=V</text>
+  <text x="437" y="362" text-anchor="middle" font-size="10" fill="#64748b">+ attn sink</text>
+  <path d="M537,318 L 561,318" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <rect x="572" y="302" width="280" height="48" rx="8" fill="none" stroke="#cbd5e1" stroke-dasharray="6,4"/>
+  <text x="712" y="320" text-anchor="middle" font-size="10" fill="#64748b">当步即弃（临时量）</text>
+  <text x="712" y="338" text-anchor="middle" font-size="10" fill="#64748b">query · 分数 · top-k 索引</text>
+  <rect x="572" y="378" width="280" height="32" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="712" y="398" text-anchor="middle" font-size="10" fill="#1e293b">长期保留：卡片 + 正文（随前缀有效）</text>
+  <text x="162" y="414" font-size="10" fill="#64748b">输出交给下一层；卡片与正文留在 cache，等下一个 token 再来翻</text>
 </svg>
 <p class="cap"><b>图 5</b>｜解码一步中 Indexer Cache 的完整旅程（layer-2，Flash 配置）。①写入：块攒满 4 token 时压缩出卡片 + 正文（见图 4）；②打分：新 token 的 64 个 query 头对每张卡片各得一个标量分，n/4 张卡片扫一遍；③选择：top-k=512 产生索引列表，按索引去书架取正文；④消费：正文 + SWA 窗进核心注意力。query、分数、索引当步即弃；卡片与正文留在 cache。每个 CSA 层都有独立的一套书架与目录，每步各翻一遍。</p>
 </div>
@@ -504,48 +509,49 @@ window.MathJax = {
 <p><b>SWA 条目：三选一。</b>SWA 条目未压缩、且每层都有，全量体量约为压缩条目的 <b>8 倍</b>（论文口径），成为盘上存储的主要矛盾。论文给出三种可按部署场景选型的策略：</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 380" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <rect x="8" y="14" width="12" height="12" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="26" y="24" font-size="10" fill="#5a6272">存盘的 SWA KV</text>
-  <rect x="130" y="14" width="12" height="12" fill="none" stroke="#c9d2e0" stroke-dasharray="3 2"/>
-  <text x="148" y="24" font-size="10" fill="#5a6272">不存</text>
-  <text x="210" y="24" font-size="10" fill="#5a6272">CSA/HCA 压缩条目：三种策略均全量存盘，差异只在 SWA 怎么存</text>
+<svg viewBox="0 0 810 400" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <rect x="24" y="22" width="12" height="12" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="42" y="32" font-size="10" fill="#64748b">存盘的 SWA KV</text>
+  <rect x="146" y="22" width="12" height="12" fill="none" stroke="#cbd5e1" stroke-dasharray="3,2"/>
+  <text x="164" y="32" font-size="10" fill="#64748b">不存</text>
+  <text x="226" y="32" font-size="10" fill="#64748b">CSA/HCA 压缩条目：三种策略均全量存盘，差异只在 SWA 怎么存</text>
   <!-- 策略 1：Full -->
-  <text x="8" y="62" font-weight="bold" fill="#1a1f2e">① Full SWA Caching</text>
-  <text x="8" y="80" font-size="10" fill="#5a6272">全 token · 全层存 SWA KV</text>
-  <text x="8" y="96" font-size="10" fill="#5a6272">体量 ≈ 压缩条目的 8 倍</text>
-  <rect x="192" y="72" width="368" height="44" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="376" y="98" text-anchor="middle" font-size="11" fill="#1a1f2e">全部 SWA KV 存盘（所有层 × 所有 token）</text>
-  <text x="192" y="134" font-size="10" fill="#5a6272">prefix token →</text>
-  <text x="572" y="80" font-size="11" font-weight="bold" fill="#1a1f2e">命中后：只读每层最近 n_win</text>
-  <text x="572" y="100" font-size="11" fill="#1a1f2e">重算 0 —— 计算零冗余</text>
-  <text x="572" y="120" font-size="10" fill="#5a6272">代价：写密集、读利用率低，</text>
-  <text x="572" y="136" font-size="10" fill="#5a6272">对 SSD 访存模式不友好</text>
+  <text x="24" y="70" font-size="12" font-weight="bold" fill="#1e293b">① Full SWA Caching</text>
+  <text x="24" y="88" font-size="10" fill="#64748b">全 token · 全层存 SWA KV</text>
+  <text x="24" y="104" font-size="10" fill="#64748b">体量 ≈ 压缩条目的 8 倍</text>
+  <rect x="208" y="80" width="368" height="44" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="392" y="106" text-anchor="middle" font-size="11" fill="#1e293b">全部 SWA KV 存盘（所有层 × 所有 token）</text>
+  <text x="208" y="142" font-size="10" fill="#64748b">prefix token →</text>
+  <text x="588" y="88" font-size="11" font-weight="bold" fill="#1e293b">命中后：只读每层最近 n_win</text>
+  <text x="588" y="108" font-size="11" fill="#1e293b">重算 0 —— 计算零冗余</text>
+  <text x="588" y="128" font-size="10" fill="#64748b">代价：写密集、读利用率低，</text>
+  <text x="588" y="144" font-size="10" fill="#64748b">对 SSD 访存模式不友好</text>
   <!-- 策略 2：Periodic -->
-  <text x="8" y="172" font-weight="bold" fill="#1a1f2e">② Periodic Checkpointing</text>
-  <text x="8" y="190" font-size="10" fill="#5a6272">每 p token 存一份</text>
-  <text x="8" y="206" font-size="10" fill="#5a6272">最近 n_win 的 checkpoint</text>
-  <rect x="192" y="182" width="368" height="44" rx="6" fill="#fbfbfd" stroke="#c9d2e0" stroke-dasharray="5 4"/>
-  <rect x="200" y="190" width="48" height="28" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <rect x="296" y="190" width="48" height="28" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <rect x="392" y="190" width="48" height="28" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <rect x="488" y="190" width="48" height="28" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="192" y="244" font-size="10" fill="#5a6272">绿组 = 每 p token 存最近 n_win；最后一组之后的尾部（&lt; p）命中后重算</text>
-  <text x="572" y="190" font-size="11" font-weight="bold" fill="#1a1f2e">命中后：读最近 checkpoint</text>
-  <text x="572" y="210" font-size="11" fill="#1a1f2e">重算 ≤ p 个 token</text>
-  <text x="572" y="230" font-size="10" fill="#5a6272">p 是旋钮：调节</text>
-  <text x="572" y="246" font-size="10" fill="#5a6272">存储空间 ↔ 计算冗余</text>
+  <text x="24" y="180" font-size="12" font-weight="bold" fill="#1e293b">② Periodic Checkpointing</text>
+  <text x="24" y="198" font-size="10" fill="#64748b">每 p token 存一份</text>
+  <text x="24" y="214" font-size="10" fill="#64748b">最近 n_win 的 checkpoint</text>
+  <rect x="208" y="190" width="368" height="44" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="6,4"/>
+  <rect x="216" y="198" width="48" height="28" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <rect x="312" y="198" width="48" height="28" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <rect x="408" y="198" width="48" height="28" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <rect x="504" y="198" width="48" height="28" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="208" y="252" font-size="10" fill="#64748b">绿组 = 每 p token 存最近 n_win；最后一组之后的尾部（&lt; p）命中后重算</text>
+  <text x="588" y="198" font-size="11" font-weight="bold" fill="#1e293b">命中后：读最近 checkpoint</text>
+  <text x="588" y="218" font-size="11" fill="#1e293b">重算 ≤ p 个 token</text>
+  <text x="588" y="238" font-size="10" fill="#64748b">p 是旋钮：调节</text>
+  <text x="588" y="254" font-size="10" fill="#64748b">存储空间 ↔ 计算冗余</text>
   <!-- 策略 3：Zero -->
-  <text x="8" y="282" font-weight="bold" fill="#1a1f2e">③ Zero SWA Caching</text>
-  <text x="8" y="300" font-size="10" fill="#5a6272">不存任何 SWA KV，</text>
-  <text x="8" y="316" font-size="10" fill="#5a6272">盘上只剩压缩条目</text>
-  <rect x="192" y="292" width="368" height="44" rx="6" fill="none" stroke="#c9d2e0" stroke-dasharray="5 4"/>
-  <text x="376" y="318" text-anchor="middle" font-size="11" fill="#5a6272">零 SWA 存储</text>
-  <text x="572" y="300" font-size="11" font-weight="bold" fill="#1a1f2e">命中后：重算最后 n_win·L token</text>
-  <text x="572" y="320" font-size="11" fill="#1a1f2e">Flash ≈ 5,504 · Pro ≈ 7,808</text>
-  <text x="572" y="340" font-size="10" fill="#5a6272">重算所需的 CSA/HCA 压缩条目</text>
-  <text x="572" y="356" font-size="10" fill="#5a6272">已在盘上，直接复用</text>
-  <text x="8" y="368" font-size="10" fill="#5a6272">按部署场景选型：盘空间充裕选 ①，追求最小存储选 ③，中间态选 ②（调 p）。</text>
+  <text x="24" y="290" font-size="12" font-weight="bold" fill="#1e293b">③ Zero SWA Caching</text>
+  <text x="24" y="308" font-size="10" fill="#64748b">不存任何 SWA KV，</text>
+  <text x="24" y="324" font-size="10" fill="#64748b">盘上只剩压缩条目</text>
+  <rect x="208" y="300" width="368" height="44" rx="6" fill="none" stroke="#cbd5e1" stroke-dasharray="6,4"/>
+  <text x="392" y="326" text-anchor="middle" font-size="11" fill="#64748b">零 SWA 存储</text>
+  <text x="588" y="308" font-size="11" font-weight="bold" fill="#1e293b">命中后：重算最后 n_win·L token</text>
+  <text x="588" y="328" font-size="11" fill="#1e293b">Flash ≈ 5,504 · Pro ≈ 7,808</text>
+  <text x="588" y="348" font-size="10" fill="#64748b">重算所需的 CSA/HCA 压缩条目</text>
+  <text x="588" y="364" font-size="10" fill="#64748b">已在盘上，直接复用</text>
+  <text x="24" y="376" font-size="10" fill="#64748b">按部署场景选型：盘空间充裕选 ①，追求最小存储选 ③，中间态选 ②（调 p）。</text>
 </svg>
 <p class="cap"><b>图 6</b>｜盘上 SWA KV 的三种存法。三者共享同一份盘上 CSA/HCA 压缩条目，区别只在 SWA 的存储量与命中后的重算量。①零重算但写放大严重（每次命中只读得动「每层最后 n_win」那一小截）；②用周期 checkpoint 换取可调折中；③零存储，代价是重算最后 \(n_{\mathrm{win}}\cdot L\) 个 token。</p>
 </div>

@@ -133,63 +133,65 @@ window.MathJax = {
 </ol>
 
 <div class="fig">
-<svg viewBox="0 0 940 360" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 850 396" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="m4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
     </marker>
   </defs>
-  <text x="40" y="34" font-size="13" font-weight="bold" fill="#1a1f2e">同一份偏好数据，两条消费路线：经典 RLHF（上）vs DPO（下）</text>
+  <!-- title: content spans x 22..828, center 425 -->
+  <text x="425" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">同一份偏好数据，两条消费路线：经典 RLHF（上）vs DPO（下）</text>
 
-  <!-- ===== top row: RLHF ===== -->
-  <text x="50" y="64" font-size="12" font-weight="bold" fill="#e8862a">路线一：RLHF（训练 RM + PPO）</text>
+  <!-- ===== top row: RLHF (boxes x=22/300/578, y=78..182) ===== -->
+  <text x="22" y="64" font-size="12" font-weight="bold" fill="#b45309">路线一：RLHF（训练 RM + PPO）</text>
 
-  <rect x="50" y="80" width="250" height="104" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="175" y="106" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">① 人类偏好标注</text>
-  <text x="64" y="132" font-size="10.5" fill="#2a3040">人对两个回答选更好的</text>
-  <text x="64" y="152" font-size="10.5" fill="#2a3040">产出几万~几十万三元组</text>
-  <text x="64" y="172" font-size="10" fill="#5a6272">(prompt, chosen, rejected)</text>
+  <rect x="22" y="78" width="250" height="104" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="147" y="104" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">① 人类偏好标注</text>
+  <text x="36" y="128" font-size="10" fill="#1e293b">人对两个回答选更好的</text>
+  <text x="36" y="146" font-size="10" fill="#1e293b">产出几万~几十万三元组</text>
+  <text x="36" y="168" font-size="10" fill="#64748b">(prompt, chosen, rejected)</text>
 
-  <line x1="300" y1="132" x2="338" y2="132" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m4a)"/>
+  <line x1="277" y1="130" x2="289" y2="130" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <rect x="345" y="80" width="250" height="104" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="470" y="106" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">② 训练 Reward Model</text>
-  <text x="359" y="132" font-size="10.5" fill="#2a3040">Bradley-Terry 损失（第 3 节）</text>
-  <text x="359" y="152" font-size="10.5" fill="#2a3040">产出：模仿人类口味的打分器</text>
-  <text x="359" y="172" font-size="10" fill="#5a6272">冻结后当 PPO 的奖励函数</text>
+  <rect x="300" y="78" width="250" height="104" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="425" y="104" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">② 训练 Reward Model</text>
+  <text x="314" y="128" font-size="10" fill="#1e293b">Bradley-Terry 损失（第 3 节）</text>
+  <text x="314" y="146" font-size="10" fill="#1e293b">产出：模仿人类口味的打分器</text>
+  <text x="314" y="168" font-size="10" fill="#64748b">冻结后当 PPO 的奖励函数</text>
 
-  <line x1="595" y1="132" x2="633" y2="132" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m4a)"/>
+  <line x1="555" y1="130" x2="567" y2="130" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <rect x="640" y="80" width="250" height="104" rx="10" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.6"/>
-  <text x="765" y="106" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">③ PPO 强化学习</text>
-  <text x="654" y="132" font-size="10.5" fill="#2a3040">4 模型架构 + rollout 循环</text>
-  <text x="654" y="152" font-size="10.5" fill="#2a3040">RM 打分当奖励，KL 缰绳</text>
-  <text x="654" y="172" font-size="10" fill="#5a6272">产出：对齐模型（贵、难、可超越数据）</text>
+  <rect x="578" y="78" width="250" height="104" rx="10" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="703" y="104" font-size="12" font-weight="bold" text-anchor="middle" fill="#b45309">③ PPO 强化学习</text>
+  <text x="592" y="128" font-size="10" fill="#1e293b">4 模型架构 + rollout 循环</text>
+  <text x="592" y="146" font-size="10" fill="#1e293b">RM 打分当奖励，KL 缰绳</text>
+  <text x="592" y="168" font-size="10" fill="#64748b">产出：对齐模型（贵、难、可超越数据）</text>
 
-  <!-- link line -->
-  <line x1="175" y1="184" x2="175" y2="238" stroke="#5a6272" stroke-width="1.2" stroke-dasharray="4,3"/>
-  <text x="187" y="218" font-size="10.5" fill="#5a6272">同一份数据，两条路线</text>
+  <!-- link line: same data feeds both routes -->
+  <line x1="147" y1="187" x2="147" y2="236" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="6,4"/>
+  <text x="159" y="216" font-size="10" fill="#64748b">同一份数据，两条路线</text>
 
-  <!-- ===== bottom row: DPO ===== -->
-  <text x="50" y="252" font-size="12" font-weight="bold" fill="#2456c4">路线二：DPO（直接微调）</text>
+  <!-- ===== bottom row: DPO (y=268..344) ===== -->
+  <text x="22" y="254" font-size="12" font-weight="bold" fill="#1e40af">路线二：DPO（直接微调）</text>
 
-  <rect x="50" y="266" width="250" height="76" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="175" y="294" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">① 同一份偏好数据</text>
-  <text x="64" y="318" font-size="10.5" fill="#2a3040">不需要打分，也不改数据格式</text>
+  <rect x="22" y="268" width="250" height="76" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="147" y="301" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">① 同一份偏好数据</text>
+  <text x="36" y="319" font-size="10" fill="#1e293b">不需要打分，也不改数据格式</text>
 
-  <line x1="300" y1="304" x2="338" y2="304" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m4a)"/>
+  <line x1="277" y1="306" x2="289" y2="306" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <rect x="345" y="266" width="250" height="76" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
-  <text x="470" y="294" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">② DPO 损失直接微调</text>
-  <text x="359" y="318" font-size="10.5" fill="#2a3040">无 rollout、无 RM、无 critic</text>
+  <rect x="300" y="268" width="250" height="76" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="425" y="301" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e40af">② DPO 损失直接微调</text>
+  <text x="314" y="319" font-size="10" fill="#1e293b">无 rollout、无 RM、无 critic</text>
 
-  <line x1="595" y1="304" x2="633" y2="304" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m4a)"/>
+  <line x1="555" y1="306" x2="567" y2="306" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <rect x="640" y="266" width="250" height="76" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="765" y="294" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">③ 产出：对齐模型</text>
-  <text x="654" y="318" font-size="10.5" fill="#2a3040">只有 π 和 π_ref 两个模型在场</text>
+  <rect x="578" y="268" width="250" height="76" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="703" y="301" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">③ 产出：对齐模型</text>
+  <text x="592" y="319" font-size="10" fill="#1e293b">只有 π 和 π_ref 两个模型在场</text>
 
-  <text x="40" y="352" font-size="11" fill="#5a6272">两条路线的起点和终点相同；差别在中间：RLHF 把偏好「蒸馏成打分器」再跑 RL，DPO 把偏好「直接烘焙进策略」（第 5 节推导）。</text>
+  <text x="22" y="368" font-size="11" fill="#64748b">两条路线的起点和终点相同；差别在中间：RLHF 把偏好「蒸馏成打分器」再跑 RL，DPO 把偏好「直接烘焙进策略」（第 5 节推导）。</text>
 </svg>
 </div>
 <p class="cap"><b>图 4-1</b>｜RLHF 与 DPO 的流程对比。DPO 之所以 2023 年一出现就爆红：训练管线从「四模型 + 高频推理」缩成「两模型 + 普通监督训练」，单卡也能跑。</p>

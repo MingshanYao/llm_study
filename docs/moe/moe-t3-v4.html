@@ -161,34 +161,36 @@ s_{i,t} = \sqrt{\mathrm{Softplus}(x_t^\top e_i)} = \sqrt{\log(1 + e^{z_i})}
 <h3>2.2 三条性质与动机</h3>
 
 <div class="fig">
-<svg viewBox="0 0 940 170" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 875 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="门控亲和度函数的三代演化">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="t3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
     </marker>
   </defs>
-  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">门控亲和度函数的三代演化</text>
 
-  <rect x="40" y="52" width="260" height="84" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="170" y="78" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">Softmax（V1–V2）</text>
-  <text x="170" y="102" font-size="10.5" text-anchor="middle" fill="#5a6272">全局耦合 · 指数放大差距</text>
-  <text x="170" y="122" font-size="10.5" text-anchor="middle" fill="#5a6272">一家爆雷，全行业被压</text>
+  <text x="437" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">门控亲和度函数的三代演化</text>
 
-  <line x1="304" y1="94" x2="334" y2="94" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3a)"/>
+  <rect x="27" y="52" width="255" height="90" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="154" y="84" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">Softmax（V1–V2）</text>
+  <text x="154" y="102" font-size="10" text-anchor="middle" fill="#64748b">全局耦合 · 指数放大差距</text>
+  <text x="154" y="118" font-size="10" text-anchor="middle" fill="#64748b">一家爆雷，全行业被压</text>
 
-  <rect x="340" y="52" width="260" height="84" rx="10" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="470" y="78" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">Sigmoid＋行归一化（V3–V3.2）</text>
-  <text x="470" y="102" font-size="10.5" text-anchor="middle" fill="#5a6272">独立打分 · 但封顶饱和</text>
-  <text x="470" y="122" font-size="10.5" text-anchor="middle" fill="#5a6272">大分数区分度丧失，需局部归一化</text>
+  <path d="M287,97 L299,97" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <line x1="604" y1="94" x2="634" y2="94" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3a)"/>
+  <rect x="310" y="52" width="255" height="90" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="437" y="84" font-size="12" font-weight="bold" text-anchor="middle" fill="#b45309">Sigmoid＋行归一化（V3–V3.2）</text>
+  <text x="437" y="102" font-size="10" text-anchor="middle" fill="#64748b">独立打分 · 但封顶饱和</text>
+  <text x="437" y="118" font-size="10" text-anchor="middle" fill="#64748b">大分数区分度丧失，需局部归一化</text>
 
-  <rect x="640" y="52" width="260" height="84" rx="10" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
-  <text x="770" y="78" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">√Softplus（V4–V4.1）</text>
-  <text x="770" y="102" font-size="10.5" text-anchor="middle" fill="#2a3040">独立 · 无上界 · 零点光滑</text>
-  <text x="770" y="122" font-size="10.5" text-anchor="middle" fill="#2a3040">增长放缓的「温和放大」</text>
+  <path d="M570,97 L582,97" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
 
-  <text x="40" y="158" font-size="11" fill="#5a6272">V3→V4 换函数的动机论文均未详述；性质与数值行为为本讲分析（推断已标注）。「独立 + 局部归一化」的两段式结构三代未变。</text>
+  <rect x="593" y="52" width="255" height="90" rx="8" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="720" y="84" font-size="12" font-weight="bold" text-anchor="middle" fill="#166534">√Softplus（V4–V4.1）</text>
+  <text x="720" y="102" font-size="10" text-anchor="middle" fill="#64748b">独立 · 无上界 · 零点光滑</text>
+  <text x="720" y="118" font-size="10" text-anchor="middle" fill="#64748b">增长放缓的「温和放大」</text>
+
+  <text x="27" y="178" font-size="10" fill="#64748b">V3→V4 换函数的动机论文均未详述；性质与数值行为为本讲分析（推断已标注）。「独立 + 局部归一化」的两段式结构三代未变。</text>
 </svg>
 </div>
 <p class="cap"><b>图 3-1</b>｜三代亲和度。形状对比见第 0 讲图 0-2，耦合对比见第 2 讲图 2-4。</p>
@@ -251,62 +253,64 @@ C/B \le 2d = 6144\ \text{FLOPs/Byte}
 <p>道理上「通信可以盖住」，工程上要靠调度。先看不做调度的惨状：</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 330" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 900 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="波级流水示意">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="t3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
     </marker>
-    <marker id="t3c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    <marker id="arrow2-green" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#22c55e"/>
     </marker>
   </defs>
-  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">从「等齐再算」到「来一波算一波」</text>
 
-  <text x="40" y="58" font-size="12" font-weight="bold" fill="#1a1f2e">（a）逐层同步：通信与计算完全串行</text>
-  <rect x="60" y="70" width="80" height="26" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="100" y="88" font-size="11" text-anchor="middle" fill="#1a1f2e">Dispatch</text>
-  <rect x="140" y="70" width="110" height="26" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="195" y="88" font-size="11" text-anchor="middle" fill="#1a1f2e">Linear-1</text>
-  <rect x="250" y="70" width="50" height="26" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="275" y="88" font-size="11" text-anchor="middle" fill="#1a1f2e">Act</text>
-  <rect x="300" y="70" width="110" height="26" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="355" y="88" font-size="11" text-anchor="middle" fill="#1a1f2e">Linear-2</text>
-  <rect x="410" y="70" width="90" height="26" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="455" y="88" font-size="11" text-anchor="middle" fill="#1a1f2e">Combine</text>
-  <text x="60" y="120" font-size="11" fill="#5a6272">Dispatch / Combine 期间 GPU 计算完全空闲 → 整层耗时 = 通信 + 计算，两头都白等</text>
+  <text x="451" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">从「等齐再算」到「来一波算一波」</text>
 
-  <text x="40" y="168" font-size="12" font-weight="bold" fill="#1a1f2e">（b）MegaMoE 波级流水：专家分波（wave），稳态下三件事并发</text>
+  <text x="30" y="62" font-size="12" font-weight="bold" fill="#1e293b">（a）逐层同步：通信与计算完全串行</text>
+  <rect x="75" y="74" width="80" height="34" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="115" y="95" font-size="11" text-anchor="middle" fill="#b45309">Dispatch</text>
+  <rect x="155" y="74" width="110" height="34" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="210" y="95" font-size="11" text-anchor="middle" fill="#1e40af">Linear-1</text>
+  <rect x="265" y="74" width="50" height="34" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="290" y="95" font-size="11" text-anchor="middle" fill="#166534">Act</text>
+  <rect x="315" y="74" width="110" height="34" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="370" y="95" font-size="11" text-anchor="middle" fill="#1e40af">Linear-2</text>
+  <rect x="425" y="74" width="90" height="34" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="470" y="95" font-size="11" text-anchor="middle" fill="#b45309">Combine</text>
+  <text x="30" y="130" font-size="10" fill="#64748b">Dispatch / Combine 期间 GPU 计算完全空闲 → 整层耗时 = 通信 + 计算，两头都白等</text>
 
-  <text x="40" y="206" font-size="11" fill="#5a6272">通信 all-to-all</text>
-  <rect x="240" y="192" width="70" height="26" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="275" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">W1</text>
-  <rect x="310" y="192" width="70" height="26" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="345" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">W2</text>
-  <rect x="380" y="192" width="70" height="26" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="415" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">W3</text>
-  <rect x="450" y="192" width="60" height="26" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="480" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">回传</text>
-  <rect x="570" y="192" width="60" height="26" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="600" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">回传</text>
-  <rect x="690" y="192" width="60" height="26" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="720" y="210" font-size="11" text-anchor="middle" fill="#1a1f2e">回传</text>
+  <text x="30" y="162" font-size="12" font-weight="bold" fill="#1e293b">（b）MegaMoE 波级流水：专家分波（wave），稳态下三件事并发</text>
 
-  <text x="40" y="252" font-size="11" fill="#5a6272">计算 L1·Act·L2</text>
-  <rect x="310" y="238" width="140" height="26" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="380" y="256" font-size="11" text-anchor="middle" fill="#1a1f2e">W1 计算</text>
-  <rect x="450" y="238" width="140" height="26" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="520" y="256" font-size="11" text-anchor="middle" fill="#1a1f2e">W2 计算</text>
-  <rect x="590" y="238" width="140" height="26" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="660" y="256" font-size="11" text-anchor="middle" fill="#1a1f2e">W3 计算</text>
+  <text x="30" y="195" font-size="10" fill="#64748b">通信 all-to-all</text>
+  <rect x="255" y="174" width="70" height="34" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="290" y="195" font-size="11" text-anchor="middle" fill="#b45309">W1</text>
+  <rect x="325" y="174" width="70" height="34" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="360" y="195" font-size="11" text-anchor="middle" fill="#b45309">W2</text>
+  <rect x="395" y="174" width="70" height="34" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="430" y="195" font-size="11" text-anchor="middle" fill="#b45309">W3</text>
+  <rect x="465" y="174" width="60" height="34" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="495" y="195" font-size="11" text-anchor="middle" fill="#b45309">回传</text>
+  <rect x="585" y="174" width="60" height="34" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="615" y="195" font-size="11" text-anchor="middle" fill="#b45309">回传</text>
+  <rect x="705" y="174" width="60" height="34" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="735" y="195" font-size="11" text-anchor="middle" fill="#b45309">回传</text>
 
-  <line x1="275" y1="218" x2="345" y2="234" stroke="#2f9e63" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#t3c)"/>
-  <line x1="345" y1="218" x2="485" y2="234" stroke="#2f9e63" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#t3c)"/>
-  <line x1="415" y1="218" x2="625" y2="234" stroke="#2f9e63" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#t3c)"/>
+  <text x="30" y="251" font-size="10" fill="#64748b">计算 L1·Act·L2</text>
+  <rect x="325" y="230" width="140" height="34" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="395" y="251" font-size="11" text-anchor="middle" fill="#1e40af">W1 计算</text>
+  <rect x="465" y="230" width="140" height="34" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="535" y="251" font-size="11" text-anchor="middle" fill="#1e40af">W2 计算</text>
+  <rect x="605" y="230" width="140" height="34" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="675" y="251" font-size="11" text-anchor="middle" fill="#1e40af">W3 计算</text>
 
-  <line x1="60" y1="286" x2="870" y2="286" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3b)"/>
-  <text x="878" y="290" font-size="11" fill="#5a6272">时间</text>
+  <path d="M290,213 L370,219" fill="none" stroke="#22c55e" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow2-green)"/>
+  <path d="M360,213 L500,219" fill="none" stroke="#22c55e" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow2-green)"/>
+  <path d="M430,213 L640,219" fill="none" stroke="#22c55e" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow2-green)"/>
 
-  <text x="40" y="316" font-size="11" fill="#5a6272">W1/W2/W3 = 384 个专家切出的三个波。稳态下并发三件事：算当前波、传下一波、回传已完成波。</text>
+  <path d="M30,286 L845,286" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <text x="853" y="290" font-size="10" fill="#64748b">时间</text>
+
+  <text x="30" y="318" font-size="10" fill="#64748b">W1/W2/W3 = 384 个专家切出的三个波。稳态下并发三件事：算当前波、传下一波、回传已完成波。</text>
 </svg>
 </div>
 <p class="cap"><b>图 3-2</b>｜波级流水示意（对应 V4 论文图 5 的思想）：<b>把 384 个专家切成若干「波」</b>，每波的 Dispatch 一完成就立刻开算，不等其他波。稳态下「计算、传输、回传」三条流水并发，整层耗时被压缩到接近纯计算时间。实测：通用推理加速 1.50–1.73×，RL rollout（生成量极大、通信占比高的场景）最高 1.96×。</p>
@@ -322,51 +326,52 @@ C/B \le 2d = 6144\ \text{FLOPs/Byte}
 <p>计算机存小数用「科学计数法的二进制版」：一个浮点数 = <b>符号位 × 尾数位 × 指数位</b>。FP32 给 8 位指数 + 23 位尾数（约 7 位十进制精度）；FP16/BF16 各给 5/8 位指数；<b>FP4（E2M1 格式）总共只有 4 个比特：1 符号 + 2 指数 + 1 尾数</b>，能表示的值一共 15 个：</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 260" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 900 265" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FP4 E2M1 全部可表示值数轴">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="t3d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    <marker id="arrow3" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
     </marker>
   </defs>
-  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">FP4（E2M1）的全部可表示值：0, ±0.5, ±1, ±1.5, ±2, ±3, ±4, ±6</text>
+  <text x="451" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">FP4（E2M1）的全部可表示值：0, ±0.5, ±1, ±1.5, ±2, ±3, ±4, ±6</text>
 
-  <text x="40" y="100" font-size="11" fill="#5a6272">1 位符号 + 2 位指数 + 1 位尾数 → 全部 15 个值（另有 1 个 NaN 编码），最大值 fp4_max = 6.0</text>
+  <text x="40" y="95" font-size="10" fill="#64748b">1 位符号 + 2 位指数 + 1 位尾数 → 全部 15 个值（另有 1 个 NaN 编码），最大值 fp4_max = 6.0</text>
 
-  <!-- axis: x = 470 + v*60 -->
-  <line x1="60" y1="150" x2="880" y2="150" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3d)"/>
-  <text x="886" y="154" font-size="11" fill="#5a6272">值</text>
+  <!-- axis: x = 450 + v*60 -->
+  <path d="M46,150 L839,150" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <text x="851" y="154" font-size="10" fill="#64748b">值</text>
 
-  <line x1="110" y1="144" x2="110" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="110" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-6</text>
-  <line x1="230" y1="144" x2="230" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="230" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-4</text>
-  <line x1="290" y1="144" x2="290" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="290" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-3</text>
-  <line x1="350" y1="144" x2="350" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="350" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-2</text>
-  <line x1="410" y1="144" x2="410" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="410" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-1</text>
-  <line x1="440" y1="144" x2="440" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="440" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">-0.5</text>
-  <line x1="470" y1="144" x2="470" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="470" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">0</text>
-  <line x1="500" y1="144" x2="500" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="500" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">0.5</text>
-  <line x1="530" y1="144" x2="530" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="530" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">1</text>
-  <line x1="560" y1="144" x2="560" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="560" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">1.5</text>
-  <line x1="590" y1="144" x2="590" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="590" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">2</text>
-  <line x1="650" y1="144" x2="650" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="650" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">3</text>
-  <line x1="710" y1="144" x2="710" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="710" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">4</text>
-  <line x1="830" y1="144" x2="830" y2="156" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="830" y="174" font-size="11" text-anchor="middle" fill="#1a1f2e">6</text>
+  <line x1="90" y1="144" x2="90" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="90" y="176" font-size="10" text-anchor="middle" fill="#1e293b">-6</text>
+  <line x1="210" y1="144" x2="210" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="210" y="176" font-size="10" text-anchor="middle" fill="#1e293b">-4</text>
+  <line x1="270" y1="144" x2="270" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="270" y="176" font-size="10" text-anchor="middle" fill="#1e293b">-3</text>
+  <line x1="330" y1="144" x2="330" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="330" y="176" font-size="10" text-anchor="middle" fill="#1e293b">-2</text>
+  <line x1="390" y1="144" x2="390" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="390" y="176" font-size="10" text-anchor="middle" fill="#1e293b">-1</text>
+  <line x1="420" y1="144" x2="420" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="420" y="176" font-size="10" text-anchor="middle" fill="#1e293b">-0.5</text>
+  <line x1="450" y1="144" x2="450" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="450" y="176" font-size="10" text-anchor="middle" fill="#1e293b">0</text>
+  <line x1="480" y1="144" x2="480" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="480" y="176" font-size="10" text-anchor="middle" fill="#1e293b">0.5</text>
+  <line x1="510" y1="144" x2="510" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="510" y="176" font-size="10" text-anchor="middle" fill="#1e293b">1</text>
+  <line x1="540" y1="144" x2="540" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="540" y="176" font-size="10" text-anchor="middle" fill="#1e293b">1.5</text>
+  <line x1="570" y1="144" x2="570" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="570" y="176" font-size="10" text-anchor="middle" fill="#1e293b">2</text>
+  <line x1="630" y1="144" x2="630" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="630" y="176" font-size="10" text-anchor="middle" fill="#1e293b">3</text>
+  <line x1="690" y1="144" x2="690" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="690" y="176" font-size="10" text-anchor="middle" fill="#1e293b">4</text>
+  <line x1="810" y1="144" x2="810" y2="156" stroke="#64748b" stroke-width="1"/>
+  <text x="810" y="176" font-size="10" text-anchor="middle" fill="#1e293b">6</text>
 
-  <text x="40" y="212" font-size="11" fill="#5a6272">读法：数值分布「近密远疏」——0 附近步长 0.5，4 到 6 一步跳 2。小权重存得准，大权重存得糙。</text>
-  <text x="40" y="234" font-size="11" fill="#5a6272">量化 = 把真实权重四舍五入到最近的可表示值；每 1×32 个权重共享一个缩放因子（MXFP4），适配实际权重的量级。</text>
+  <text x="40" y="218" font-size="10" fill="#64748b">读法：数值分布「近密远疏」——0 附近步长 0.5，4 到 6 一步跳 2。小权重存得准，大权重存得糙。</text>
+  <text x="40" y="240" font-size="10" fill="#64748b">量化 = 把真实权重四舍五入到最近的可表示值；每 1×32 个权重共享一个缩放因子（MXFP4），适配实际权重的量级。</text>
 </svg>
 </div>
 <p class="cap"><b>图 3-3</b>｜E2M1 的表示能力。单个数糙成这样，怎么敢拿去存 1.55T 参数？两个答案：分组缩放（把值域先挪到合适的量级再取整）＋ 量化感知训练。</p>
@@ -390,47 +395,48 @@ C/B \le 2d = 6144\ \text{FLOPs/Byte}
 <p>V3 把前 3 层留成稠密 FFN；V4 改成「前 3 层也用 MoE，但路由不学习」——<b>Hash 路由</b>：按 token ID 查一张预计算好的固定映射表 <code>tid2eid</code>（形状 [词表 129280 × 6]），直接给出 6 个目标专家号。论文原话：「Hash routing determines the target experts of each token according to a predefined hash function with regard to the input token ID」（p.7）。</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 700 282" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="两种路由并存">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="t3e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    <marker id="arrow4" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
     </marker>
-    <marker id="t3f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    <marker id="arrow4-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
     </marker>
   </defs>
-  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">两种路由并存：58 层学习路由 vs 前 3 层 Hash 查表</text>
+  <text x="350" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">两种路由并存：58 层学习路由 vs 前 3 层 Hash 查表</text>
 
-  <text x="40" y="62" font-size="11.5" font-weight="bold" fill="#2456c4">后 58 层：学习路由（含 bias 门控）</text>
-  <rect x="60" y="76" width="120" height="44" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="120" y="94" font-size="11" text-anchor="middle" fill="#1a1f2e">token 隐状态 x</text>
-  <text x="120" y="112" font-size="10" text-anchor="middle" fill="#5a6272">语义向量</text>
-  <line x1="180" y1="98" x2="216" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3e)"/>
-  <rect x="220" y="76" width="130" height="44" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="285" y="94" font-size="11" text-anchor="middle" fill="#1a1f2e">门控打分（学习）</text>
-  <text x="285" y="112" font-size="10" text-anchor="middle" fill="#5a6272">Wg·x → 384 分</text>
-  <line x1="350" y1="98" x2="386" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3e)"/>
-  <rect x="390" y="76" width="120" height="44" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="450" y="94" font-size="11" text-anchor="middle" fill="#1a1f2e">＋bias 比较</text>
-  <text x="450" y="112" font-size="10" text-anchor="middle" fill="#5a6272">s + b → top-6</text>
-  <line x1="510" y1="98" x2="546" y2="98" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3e)"/>
-  <rect x="550" y="76" width="110" height="44" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="605" y="102" font-size="11" text-anchor="middle" fill="#1a1f2e">6 个专家</text>
+  <text x="35" y="64" font-size="11" font-weight="bold" fill="#1e40af">后 58 层：学习路由（含 bias 门控）</text>
+  <rect x="35" y="76" width="130" height="46" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="100" y="94" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">token 隐状态 x</text>
+  <text x="100" y="109" font-size="10" text-anchor="middle" fill="#64748b">语义向量</text>
+  <path d="M170,99 L184,99" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <rect x="195" y="76" width="150" height="46" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="270" y="94" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e40af">门控打分（学习）</text>
+  <text x="270" y="109" font-size="10" text-anchor="middle" fill="#64748b">Wg·x → 384 分</text>
+  <path d="M350,99 L364,99" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <rect x="375" y="76" width="140" height="46" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="445" y="94" font-size="12" font-weight="bold" text-anchor="middle" fill="#b45309">＋bias 比较</text>
+  <text x="445" y="109" font-size="10" text-anchor="middle" fill="#64748b">s + b → top-6</text>
+  <path d="M520,99 L534,99" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <rect x="545" y="76" width="120" height="46" rx="8" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="605" y="103" font-size="12" font-weight="bold" text-anchor="middle" fill="#166534">6 个专家</text>
 
-  <text x="40" y="182" font-size="11.5" font-weight="bold" fill="#163a86">前 3 层：Hash 路由（固定映射，无 bias）</text>
-  <rect x="60" y="196" width="120" height="44" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="120" y="214" font-size="11" text-anchor="middle" fill="#1a1f2e">token ID</text>
-  <text x="120" y="232" font-size="10" text-anchor="middle" fill="#5a6272">词表序号（离散）</text>
-  <line x1="180" y1="218" x2="216" y2="218" stroke="#2456c4" stroke-width="1.5" marker-end="url(#t3f)"/>
-  <rect x="220" y="196" width="190" height="44" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="315" y="214" font-size="11" text-anchor="middle" fill="#1a1f2e">tid2eid 查表（预计算）</text>
-  <text x="315" y="232" font-size="10" text-anchor="middle" fill="#5a6272">整型查找表 [129280 × 6]</text>
-  <line x1="410" y1="218" x2="446" y2="218" stroke="#2456c4" stroke-width="1.5" marker-end="url(#t3f)"/>
-  <rect x="450" y="196" width="130" height="44" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="515" y="218" font-size="11" text-anchor="middle" fill="#1a1f2e">6 个专家号</text>
-  <text x="515" y="236" font-size="10" text-anchor="middle" fill="#2f9e63">固定 · 无 bias · 无 topk</text>
+  <text x="35" y="172" font-size="11" font-weight="bold" fill="#1e40af">前 3 层：Hash 路由（固定映射，无 bias）</text>
+  <rect x="35" y="184" width="130" height="46" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="100" y="202" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">token ID</text>
+  <text x="100" y="217" font-size="10" text-anchor="middle" fill="#64748b">词表序号（离散）</text>
+  <path d="M170,207 L184,207" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow4-blue)"/>
+  <rect x="195" y="184" width="210" height="46" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="300" y="202" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e40af">tid2eid 查表（预计算）</text>
+  <text x="300" y="217" font-size="10" text-anchor="middle" fill="#64748b">整型查找表 [129280 × 6]</text>
+  <path d="M410,207 L424,207" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow4-blue)"/>
+  <rect x="435" y="184" width="150" height="46" rx="8" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="510" y="202" font-size="12" font-weight="bold" text-anchor="middle" fill="#166534">6 个专家号</text>
+  <text x="510" y="217" font-size="10" text-anchor="middle" fill="#166534">固定 · 无 bias · 无 topk</text>
 
-  <text x="40" y="282" font-size="11" fill="#5a6272">关键细节：Hash 层的「加权」仍用门控学出的分数——「去哪儿」交给哈希，「用多少」仍归模型（代码 model.py:576–583，第 4 讲逐行看）。</text>
+  <text x="35" y="258" font-size="10" fill="#64748b">关键细节：Hash 层的「加权」仍用门控学出的分数——「去哪儿」交给哈希，「用多少」仍归模型（代码 model.py:576–583，第 4 讲逐行看）。</text>
 </svg>
 </div>
 <p class="cap"><b>图 3-4</b>｜两条路由流水线。查表是 <code>requires_grad=False</code> 的整型张量、随 checkpoint 分发，哈希函数本身不在开源推理代码里。</p>
@@ -467,55 +473,56 @@ C/B \le 2d = 6144\ \text{FLOPs/Byte}
 <p>V4.1-Flash 保持 1 共享 + 384 路由（中间维 2304）的 DeepSeekMoE 结构，唯一的 MoE 级变更是<b>多模态辅助损失免费均衡</b>。问题：图像 token 与文本 token 的路由偏好天然不同（图像像素块需要的加工与「法律条文」毫无交集），如果混在一个 bias 体系里均衡，<b>两模态各自的失衡会互相掩盖</b>——图像侧挤爆的专家，可能恰好是文本侧冷清的，全局统计看起来岁月静好，模态内早已旱涝两重天。</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 320" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 900 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="V4.1 双模态 bias 分开选择">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="t3g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    <marker id="arrow5" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
     </marker>
-    <marker id="t3h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    <marker id="arrow5-green" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#22c55e"/>
     </marker>
   </defs>
-  <text x="40" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">V4.1：同一个门控打分，两套 bias 分开选择，同一池专家服务</text>
+  <text x="450" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">V4.1：同一个门控打分，两套 bias 分开选择，同一池专家服务</text>
 
-  <rect x="40" y="70" width="130" height="44" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="105" y="96" font-size="11.5" text-anchor="middle" fill="#1a1f2e">文本 token</text>
-  <rect x="40" y="190" width="130" height="44" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="105" y="216" font-size="11.5" text-anchor="middle" fill="#1a1f2e">图像 token</text>
+  <rect x="30" y="64" width="110" height="40" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="85" y="88" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">文本 token</text>
+  <rect x="30" y="180" width="110" height="40" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="85" y="204" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">图像 token</text>
 
-  <polyline points="170,92 200,92 200,138 216,138" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3g)"/>
-  <polyline points="170,212 200,212 200,162 216,162" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3g)"/>
+  <path d="M145,84 C 167,84 169,140 189,140" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <path d="M145,204 C 167,204 169,156 189,156" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
 
-  <rect x="220" y="124" width="130" height="52" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="285" y="146" font-size="11.5" text-anchor="middle" fill="#1a1f2e">同一门控打分 s</text>
-  <text x="285" y="166" font-size="10" text-anchor="middle" fill="#5a6272">不管什么模态，分一套</text>
+  <rect x="200" y="122" width="130" height="52" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="265" y="142" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e40af">同一门控打分 s</text>
+  <text x="265" y="158" font-size="10" text-anchor="middle" fill="#64748b">不管什么模态，分一套</text>
 
-  <polyline points="350,138 370,138 370,92 406,92" fill="none" stroke="#e8862a" stroke-width="1.5"/>
-  <polyline points="350,162 370,162 370,212 406,212" fill="none" stroke="#e8862a" stroke-width="1.5"/>
+  <path d="M335,142 C 372,142 378,86 405,86" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+  <path d="M335,158 C 372,158 378,210 405,210" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
 
-  <rect x="410" y="70" width="150" height="44" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="485" y="90" font-size="11.5" text-anchor="middle" fill="#1a1f2e">＋ bias（文本套）</text>
-  <text x="485" y="108" font-size="10" text-anchor="middle" fill="#b4551d">按文本负载独立更新</text>
-  <rect x="410" y="190" width="150" height="44" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="485" y="210" font-size="11.5" text-anchor="middle" fill="#1a1f2e">＋ bias（图像套）</text>
-  <text x="485" y="228" font-size="10" text-anchor="middle" fill="#b4551d">按图像负载独立更新</text>
+  <rect x="410" y="64" width="140" height="44" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="480" y="82" font-size="12" font-weight="bold" text-anchor="middle" fill="#b45309">＋ bias（文本套）</text>
+  <text x="480" y="97" font-size="10" text-anchor="middle" fill="#b45309">按文本负载独立更新</text>
+  <rect x="410" y="188" width="140" height="44" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="480" y="206" font-size="12" font-weight="bold" text-anchor="middle" fill="#b45309">＋ bias（图像套）</text>
+  <text x="480" y="221" font-size="10" text-anchor="middle" fill="#b45309">按图像负载独立更新</text>
 
-  <polyline points="560,92 590,92 590,138 606,138" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3g)"/>
-  <polyline points="560,212 590,212 590,162 606,162" fill="none" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3g)"/>
+  <path d="M555,86 C 580,86 584,140 604,140" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <path d="M555,210 C 580,210 584,158 604,158" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
 
-  <rect x="610" y="124" width="110" height="52" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="665" y="146" font-size="11.5" text-anchor="middle" fill="#1a1f2e">top-6 选择</text>
-  <text x="665" y="166" font-size="10" text-anchor="middle" fill="#5a6272">各自用各自的 bias</text>
+  <rect x="615" y="122" width="100" height="52" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="665" y="142" font-size="12" font-weight="bold" text-anchor="middle" fill="#b45309">top-6 选择</text>
+  <text x="665" y="158" font-size="10" text-anchor="middle" fill="#64748b">各自用各自的 bias</text>
 
-  <line x1="720" y1="150" x2="752" y2="150" stroke="#5a6272" stroke-width="1.5" marker-end="url(#t3g)"/>
-  <rect x="756" y="116" width="150" height="68" rx="8" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
-  <text x="831" y="142" font-size="11.5" text-anchor="middle" fill="#1a1f2e">384 路由专家</text>
-  <text x="831" y="162" font-size="10" text-anchor="middle" fill="#2f9e63">＋共享专家（同一池）</text>
+  <path d="M720,148 L729,148" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow5)"/>
+  <rect x="740" y="116" width="130" height="64" rx="8" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="805" y="139" font-size="12" font-weight="bold" text-anchor="middle" fill="#166534">384 路由专家</text>
+  <text x="805" y="155" font-size="10" text-anchor="middle" fill="#64748b">＋共享专家（同一池）</text>
 
-  <polyline points="285,176 285,262 790,262 790,188" fill="none" stroke="#2f9e63" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#t3h)"/>
-  <text x="470" y="284" font-size="11" fill="#2f9e63">原始分数 s 绕过两套 bias，直接用于加权——「辅助损失免费」原则原样保留（绿虚线）</text>
+  <path d="M265,179 C 265,235 268,265 320,265 L 755,265 C 800,265 810,240 810,191" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow5-green)"/>
+  <text x="540" y="289" font-size="10" fill="#166534" text-anchor="middle">原始分数 s 绕过两套 bias，直接用于加权——「辅助损失免费」原则原样保留（绿虚线）</text>
 
-  <text x="40" y="308" font-size="11" fill="#5a6272">两套 bias 按各自模态的专家负载独立 ±γ；文本/图像各自「雨露均沾」，互不掩盖。</text>
+  <text x="30" y="315" font-size="10" fill="#64748b">两套 bias 按各自模态的专家负载独立 ±γ；文本/图像各自「雨露均沾」，互不掩盖。</text>
 </svg>
 </div>
 <p class="cap"><b>图 3-5</b>｜V4.1 双模态 bias。门控、专家池、加权规则全部共用，<b>只有「选择时的加成」按模态分家</b>——最小改动解决「混着均衡掩盖模态内失衡」的问题。</p>

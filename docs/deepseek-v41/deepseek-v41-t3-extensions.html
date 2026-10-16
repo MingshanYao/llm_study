@@ -151,49 +151,57 @@ window.MathJax = {
 <p>论文还提到一个中间方案：由于 \(\mathsf{H}\) 的归一化权重可以离线折叠进投影权重、RMS 除法放在投影之后，残差更新和系数预测可以<b>共享一次对残差的遍历</b>（每算出一小块 \(X_l\) 就立刻累计投影输出与平方和），只剩输入混合因为 \(A_l\) 未就绪而必须第二遍读 \(X_l\)——即两趟实现，\((3n+2)d\)。但两趟仍比下界多一次 \(X_l\) 的读。</p>
 
 <div class="fig">
-<svg viewBox="0 0 880 420" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="mh1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
-  <text x="10" y="24" font-size="14" font-weight="bold" fill="#1a1f2e">(a) V4 多趟实现：3 个 kernel 串行，X_l 被读两次</text>
-  <rect x="10" y="52" width="78" height="56" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="49" y="76" text-anchor="middle" fill="#1a1f2e" font-weight="bold">X_l</text>
-  <text x="49" y="94" text-anchor="middle" fill="#5a6272">n×d 流</text>
-  <rect x="118" y="46" width="176" height="68" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="206" y="68" text-anchor="middle" fill="#1a1f2e" font-weight="bold">kernel ① 残差更新</text>
-  <text x="206" y="86" text-anchor="middle" fill="#5a6272">B(l-1)·X(l-1) + C(l-1)·Y(l-1)</text>
-  <text x="206" y="104" text-anchor="middle" fill="#5a6272">读 (n+1)d　式(3)</text>
-  <rect x="324" y="46" width="196" height="68" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="422" y="68" text-anchor="middle" fill="#1a1f2e" font-weight="bold">kernel ② 系数预测</text>
-  <text x="422" y="86" text-anchor="middle" fill="#5a6272">(A_l, B_l, C_l) = H(X_l)</text>
-  <text x="422" y="104" text-anchor="middle" fill="#5a6272">读 nd（需对 d 全归约）式(4)</text>
-  <rect x="550" y="46" width="200" height="68" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="650" y="68" text-anchor="middle" fill="#1a1f2e" font-weight="bold">kernel ③ 输入混合</text>
-  <text x="650" y="86" text-anchor="middle" fill="#5a6272">X̂_l = A_l · X_l</text>
-  <text x="650" y="104" text-anchor="middle" fill="#5a6272">第二次读 X_l　式(5)</text>
-  <rect x="782" y="52" width="88" height="56" rx="6" fill="#fff" stroke="#c9d2e0"/>
-  <text x="826" y="76" text-anchor="middle" fill="#1a1f2e">层函数 F_l</text>
-  <text x="826" y="94" text-anchor="middle" fill="#5a6272">Attn/MoE</text>
-  <line x1="88" y1="80" x2="114" y2="80" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
-  <line x1="294" y1="80" x2="320" y2="80" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
-  <line x1="520" y1="80" x2="546" y2="80" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
-  <line x1="750" y1="80" x2="778" y2="80" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
-  <text x="422" y="134" text-anchor="middle" font-size="12" fill="#c0392b" font-weight="bold">串行依赖：③ 必须等 ② 算出 A_l → 同一份 X_l 读两遍，总流量 (4n+4)d = 2× 下界</text>
+<svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+  </defs>
 
-  <text x="10" y="196" font-size="14" font-weight="bold" fill="#1a1f2e">(b) Single-Pass mHC + Mega-mHC：单 kernel，X_l 只读一次、残差只写一次</text>
-  <rect x="10" y="256" width="78" height="56" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="49" y="280" text-anchor="middle" fill="#1a1f2e" font-weight="bold">X_l</text>
-  <text x="49" y="298" text-anchor="middle" fill="#5a6272">n×d 流</text>
-  <rect x="118" y="216" width="632" height="136" rx="10" fill="#f2f7ee" stroke="#2f9e63" stroke-width="2"/>
-  <text x="434" y="240" text-anchor="middle" fill="#1d5c38" font-weight="bold">Mega-mHC 单 kernel（沿隐藏维分 tile 逐块处理）</text>
-  <text x="140" y="268" fill="#2a3040">每块 tile 同时干两件事，互不等待：</text>
-  <text x="140" y="292" fill="#2a3040">① 输入混合 = A(l-1)·X_l —— 用「上一个 block」留下的系数，无需等本块归约完成</text>
-  <text x="140" y="316" fill="#2a3040">② 累计归约量 → 为「下一个 block」预测 (A_l, B_l, C_l)</text>
-  <text x="140" y="340" fill="#5a6272">另含输入 pre-norm 与 FP8 转换；残差 X 流只读一次、写一次</text>
-  <rect x="782" y="256" width="88" height="56" rx="6" fill="#fff" stroke="#c9d2e0"/>
-  <text x="826" y="280" text-anchor="middle" fill="#1a1f2e">层函数 F_l</text>
-  <text x="826" y="298" text-anchor="middle" fill="#5a6272">Attn/MoE</text>
-  <line x1="88" y1="284" x2="114" y2="284" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
-  <line x1="750" y1="284" x2="778" y2="284" stroke="#5a6272" stroke-width="1.4" marker-end="url(#mh1)"/>
-  <text x="434" y="386" text-anchor="middle" font-size="12" fill="#1d7a4a" font-weight="bold">总流量 (2n+2)d = 理想下界，激活访存流量减半（相对原实现）</text>
+  <!-- (a) multi-pass: 3 kernels serial -->
+  <text x="20" y="30" font-size="13" font-weight="bold" fill="#1e293b">(a) V4 多趟实现：3 个 kernel 串行，X_l 被读两次</text>
+  <rect x="20" y="50" width="76" height="76" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="58" y="84" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">X_l</text>
+  <text x="58" y="102" font-size="10" text-anchor="middle" fill="#64748b">n×d 流</text>
+  <rect x="122" y="50" width="190" height="76" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="217" y="74" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">kernel ① 残差更新</text>
+  <text x="217" y="92" font-size="10" text-anchor="middle" fill="#64748b">B(l-1)·X(l-1) + C(l-1)·Y(l-1)</text>
+  <text x="217" y="108" font-size="10" text-anchor="middle" fill="#64748b">读 (n+1)d　式(3)</text>
+  <rect x="338" y="50" width="200" height="76" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="438" y="74" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">kernel ② 系数预测</text>
+  <text x="438" y="92" font-size="10" text-anchor="middle" fill="#64748b">(A_l, B_l, C_l) = H(X_l)</text>
+  <text x="438" y="108" font-size="10" text-anchor="middle" fill="#64748b">读 nd（需对 d 全归约）式(4)</text>
+  <rect x="564" y="50" width="200" height="76" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="664" y="74" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">kernel ③ 输入混合</text>
+  <text x="664" y="92" font-size="10" text-anchor="middle" fill="#64748b">X̂_l = A_l · X_l</text>
+  <text x="664" y="108" font-size="10" text-anchor="middle" fill="#64748b">第二次读 X_l　式(5)</text>
+  <rect x="790" y="50" width="86" height="76" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="833" y="84" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">层函数 F_l</text>
+  <text x="833" y="102" font-size="10" text-anchor="middle" fill="#64748b">Attn/MoE</text>
+  <line x1="101" y1="88" x2="111" y2="88" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="317" y1="88" x2="327" y2="88" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="543" y1="88" x2="553" y2="88" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="769" y1="88" x2="779" y2="88" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="448" y="150" font-size="12" font-weight="bold" text-anchor="middle" fill="#ef4444">串行依赖：③ 必须等 ② 算出 A_l → 同一份 X_l 读两遍，总流量 (4n+4)d = 2× 下界</text>
+
+  <!-- (b) single-pass: Mega-mHC -->
+  <text x="20" y="186" font-size="13" font-weight="bold" fill="#1e293b">(b) Single-Pass mHC + Mega-mHC：单 kernel，X_l 只读一次、残差只写一次</text>
+  <rect x="20" y="237" width="76" height="76" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="58" y="271" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">X_l</text>
+  <text x="58" y="289" font-size="10" text-anchor="middle" fill="#64748b">n×d 流</text>
+  <rect x="122" y="210" width="642" height="130" rx="10" fill="#d1fae5" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="443" y="234" font-size="12" font-weight="bold" text-anchor="middle" fill="#166534">Mega-mHC 单 kernel（沿隐藏维分 tile 逐块处理）</text>
+  <text x="140" y="260" font-size="11" fill="#1e293b">每块 tile 同时干两件事，互不等待：</text>
+  <text x="140" y="282" font-size="11" fill="#1e293b">① 输入混合 = A(l-1)·X_l —— 用「上一个 block」留下的系数，无需等本块归约完成</text>
+  <text x="140" y="304" font-size="11" fill="#1e293b">② 累计归约量 → 为「下一个 block」预测 (A_l, B_l, C_l)</text>
+  <text x="140" y="326" font-size="11" fill="#64748b">另含输入 pre-norm 与 FP8 转换；残差 X 流只读一次、写一次</text>
+  <rect x="790" y="237" width="86" height="76" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="833" y="271" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">层函数 F_l</text>
+  <text x="833" y="289" font-size="10" text-anchor="middle" fill="#64748b">Attn/MoE</text>
+  <line x1="101" y1="275" x2="111" y2="275" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="769" y1="275" x2="779" y2="275" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="448" y="372" font-size="12" font-weight="bold" text-anchor="middle" fill="#166534">总流量 (2n+2)d = 理想下界，激活访存流量减半（相对原实现）</text>
 </svg>
 <p class="cap"><b>图 1</b>｜多趟 vs Single-Pass（依据论文 §2.4.1 式 (3)–(6) 及其访存分析）。关键差别只有一处：输入混合用的系数从「本 block 现算的 \(A_l\)」换成「上一 block 留下的 \(A_{l-1}\)」，串行依赖随之消失，三个 kernel 融成一个。</p>
 </div>
@@ -236,40 +244,49 @@ window.MathJax = {
 <p>V4.1-Flash 对 Engram 的集成方式是「沿用原设计 + 两处修改」：保留<b>分词器压缩（tokenizer compression）、多头哈希（multi-head hashing）、上下文感知门控（context-aware gating）、多分支整合（multi-branch integration）</b>四大件；第一处修改是<b>去掉短因果卷积</b>（原文：其性能收益不值推理栈里的额外复杂度）；第二处是<b>嵌入表改用「动量更新 + Sinkhorn 平衡」优化</b>（见 §2.4，下文 2.3）。</p>
 
 <div class="fig">
-<svg viewBox="0 0 880 310" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="eg1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
-  <rect x="8" y="96" width="122" height="72" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="69" y="122" text-anchor="middle" fill="#1a1f2e" font-weight="bold">输入 token 序列</text>
-  <text x="69" y="142" text-anchor="middle" fill="#5a6272">查表地址只由它决定</text>
-  <rect x="156" y="96" width="128" height="72" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="220" y="122" text-anchor="middle" fill="#1a1f2e" font-weight="bold">N-gram 提取</text>
-  <text x="220" y="142" text-anchor="middle" fill="#5a6272">阶数 {2, 3, 4}</text>
-  <text x="220" y="158" text-anchor="middle" fill="#5a6272">（相邻 2/3/4 个 token）</text>
-  <rect x="310" y="96" width="128" height="72" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="374" y="122" text-anchor="middle" fill="#1a1f2e" font-weight="bold">多头哈希</text>
-  <text x="374" y="142" text-anchor="middle" fill="#5a6272">每阶 8 个头</text>
-  <text x="374" y="158" text-anchor="middle" fill="#5a6272">各自独立定位</text>
-  <rect x="464" y="90" width="158" height="84" rx="8" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.6"/>
-  <text x="543" y="114" text-anchor="middle" fill="#1a1f2e" font-weight="bold">embedding 表</text>
-  <text x="543" y="134" text-anchor="middle" fill="#5a6272">每头 ≈16M 条目</text>
-  <text x="543" y="152" text-anchor="middle" fill="#5a6272">容量取不同素数</text>
-  <text x="543" y="168" text-anchor="middle" fill="#b05e10">表与 K/V 投影均 FP8</text>
-  <rect x="648" y="96" width="130" height="72" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="713" y="120" text-anchor="middle" fill="#1a1f2e" font-weight="bold">门控 + 多分支整合</text>
-  <text x="713" y="140" text-anchor="middle" fill="#5a6272">context-aware gating</text>
-  <text x="713" y="156" text-anchor="middle" fill="#5a6272">按上文决定取多少</text>
-  <rect x="736" y="216" width="136" height="60" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="804" y="240" text-anchor="middle" fill="#1a1f2e" font-weight="bold">注入主干</text>
-  <text x="804" y="260" text-anchor="middle" fill="#5a6272">第 1、14 层（0 起始）</text>
-  <line x1="130" y1="132" x2="152" y2="132" stroke="#5a6272" stroke-width="1.4" marker-end="url(#eg1)"/>
-  <line x1="284" y1="132" x2="306" y2="132" stroke="#5a6272" stroke-width="1.4" marker-end="url(#eg1)"/>
-  <line x1="438" y1="132" x2="460" y2="132" stroke="#5a6272" stroke-width="1.4" marker-end="url(#eg1)"/>
-  <line x1="622" y1="132" x2="644" y2="132" stroke="#5a6272" stroke-width="1.4" marker-end="url(#eg1)"/>
-  <polyline points="713,168 713,246 732,246" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#eg1)"/>
-  <text x="80" y="216" font-size="12" fill="#2456c4" font-weight="bold">两个模块，各 98B 参数（合计 196B）</text>
-  <text x="80" y="238" font-size="12" fill="#5a6272">每阶 embedding 总维数 2048；每模块按「engram 并行」行切分到专用进程组</text>
-  <text x="80" y="260" font-size="12" fill="#5a6272">推理：确定性寻址 → 后台 RDMA 从主机内存预取；模块 1 的预取与第一个 Transformer block 计算重叠</text>
-  <text x="80" y="286" font-size="12" fill="#5a6272">模块放在第 1、14 层是为了在训练流水线各阶段之间平衡显存占用（论文原文）</text>
+<svg viewBox="0 0 900 252" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect x="20" y="28" width="136" height="88" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="88" y="66" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">输入 token 序列</text>
+  <text x="88" y="86" font-size="10" text-anchor="middle" fill="#64748b">查表地址只由它决定</text>
+  <rect x="184" y="28" width="140" height="88" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="254" y="58" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">N-gram 提取</text>
+  <text x="254" y="78" font-size="10" text-anchor="middle" fill="#64748b">阶数 {2, 3, 4}</text>
+  <text x="254" y="96" font-size="10" text-anchor="middle" fill="#64748b">（相邻 2/3/4 个 token）</text>
+  <rect x="352" y="28" width="118" height="88" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="411" y="58" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">多头哈希</text>
+  <text x="411" y="78" font-size="10" text-anchor="middle" fill="#64748b">每阶 8 个头</text>
+  <text x="411" y="96" font-size="10" text-anchor="middle" fill="#64748b">各自独立定位</text>
+  <rect x="498" y="28" width="168" height="88" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="582" y="52" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">embedding 表</text>
+  <text x="582" y="72" font-size="10" text-anchor="middle" fill="#64748b">每头 ≈16M 条目</text>
+  <text x="582" y="88" font-size="10" text-anchor="middle" fill="#64748b">容量取不同素数</text>
+  <text x="582" y="104" font-size="10" text-anchor="middle" fill="#1e293b">表与 K/V 投影均 FP8</text>
+  <rect x="694" y="28" width="186" height="88" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="787" y="58" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">门控 + 多分支整合</text>
+  <text x="787" y="78" font-size="10" text-anchor="middle" fill="#64748b">context-aware gating</text>
+  <text x="787" y="96" font-size="10" text-anchor="middle" fill="#64748b">按上文决定取多少</text>
+
+  <line x1="161" y1="72" x2="173" y2="72" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <line x1="329" y1="72" x2="341" y2="72" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <line x1="475" y1="72" x2="487" y2="72" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <line x1="671" y1="72" x2="683" y2="72" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+
+  <path d="M787,121 L787,159" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <rect x="709" y="170" width="156" height="60" rx="8" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="787" y="194" font-size="12" font-weight="bold" text-anchor="middle" fill="#166534">注入主干</text>
+  <text x="787" y="214" font-size="10" text-anchor="middle" fill="#64748b">第 1、14 层（0 起始）</text>
+
+  <text x="20" y="158" font-size="12" font-weight="bold" fill="#1e40af">两个模块，各 98B 参数（合计 196B）</text>
+  <text x="20" y="180" font-size="11" fill="#64748b">每阶 embedding 总维数 2048；每模块按「engram 并行」行切分到专用进程组</text>
+  <text x="20" y="202" font-size="11" fill="#64748b">推理：确定性寻址 → 后台 RDMA 从主机内存预取；模块 1 的预取与第一个 Transformer block 计算重叠</text>
+  <text x="20" y="224" font-size="11" fill="#64748b">模块放在第 1、14 层是为了在训练流水线各阶段之间平衡显存占用（论文原文）</text>
 </svg>
 <p class="cap"><b>图 2</b>｜Engram 查表数据流（依据论文 §2.4.2 与 §3.1.3）。「多头哈希」可类比给每个 N-gram 发 8 张不同编号的门禁卡，各卡指向一张独立的表——8 张表同时命中同一记忆的概率远高于单表，降低哈希碰撞风险；门控则像「按需调亮度」，由上下文决定这段查到的记忆以多大比例混入主干。</p>
 </div>
@@ -331,37 +348,44 @@ window.MathJax = {
 </ol>
 
 <div class="fig">
-<svg viewBox="0 0 880 350" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="ds1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
-  <rect x="10" y="30" width="180" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="100" y="56" text-anchor="middle" fill="#1a1f2e" font-weight="bold">草稿员 drafter</text>
-  <text x="100" y="76" text-anchor="middle" fill="#5a6272">3 个 Transformer block</text>
-  <text x="100" y="92" text-anchor="middle" fill="#5a6272">滑窗 128 token</text>
-  <line x1="190" y1="62" x2="232" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#ds1)"/>
-  <text x="211" y="52" text-anchor="middle" fill="#5a6272">单次前向</text>
-  <rect x="236" y="16" width="240" height="44" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="356" y="35" text-anchor="middle" fill="#1a1f2e">base logits × 5 个草稿位置（并行）</text>
-  <text x="356" y="52" text-anchor="middle" fill="#5a6272">Markov 头建模草稿 token 间依赖</text>
-  <rect x="236" y="66" width="240" height="40" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="356" y="84" text-anchor="middle" fill="#1a1f2e">confidence 头：逐位置条件接受概率</text>
-  <text x="356" y="100" text-anchor="middle" fill="#5a6272">→ 估计前缀存活概率</text>
-  <line x1="476" y1="38" x2="536" y2="58" stroke="#5a6272" stroke-width="1.4" marker-end="url(#ds1)"/>
-  <line x1="476" y1="86" x2="536" y2="66" stroke="#5a6272" stroke-width="1.4" marker-end="url(#ds1)"/>
-  <rect x="540" y="30" width="190" height="64" rx="8" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.6"/>
-  <text x="635" y="54" text-anchor="middle" fill="#1a1f2e" font-weight="bold">调度器（逐请求）</text>
-  <text x="635" y="74" text-anchor="middle" fill="#5a6272">存活概率 × 实测吞吐曲线</text>
-  <text x="635" y="90" text-anchor="middle" fill="#5a6272">→ 动态选验证长度</text>
-  <line x1="730" y1="62" x2="772" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#ds1)"/>
-  <rect x="776" y="30" width="96" height="64" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="824" y="56" text-anchor="middle" fill="#1a1f2e" font-weight="bold">目标模型</text>
-  <text x="824" y="76" text-anchor="middle" fill="#5a6272">一次前向批改</text>
-  <text x="440" y="140" font-size="12" fill="#5a6272">调度目标：在当前系统负载下最大化「期望系统级 token 吞吐」</text>
-  <rect x="10" y="170" width="862" height="150" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="26" y="196" font-size="13" font-weight="bold" fill="#1a1f2e">与 V3 MTP 的训练安排差异（论文 §2.4.3 / §2.1）</text>
-  <text x="26" y="222" fill="#2a3040">· MTP：与主干一起、贯穿整个预训练联合训练。</text>
-  <text x="26" y="248" fill="#2a3040">· DSpark：预训练结束后的<b>专门阶段</b>单独训练——只训 DSpark，主干冻结；</text>
-  <text x="26" y="274" fill="#2a3040">· 后训练（post-training）期间：DSpark 与主干一起继续训练，但 DSpark 目标的梯度<b>不回传进主干</b>；</text>
-  <text x="26" y="300" fill="#2a3040">· 动机：让 DSpark 始终对齐持续进化的策略模型，从而同时加速在线服务与 RL/OPD 的 rollout 生成。</text>
+<svg viewBox="0 0 900 352" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow3" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect x="20" y="34" width="170" height="80" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="105" y="64" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">草稿员 drafter</text>
+  <text x="105" y="84" font-size="10" text-anchor="middle" fill="#64748b">3 个 Transformer block</text>
+  <text x="105" y="100" font-size="10" text-anchor="middle" fill="#64748b">滑窗 128 token</text>
+  <line x1="195" y1="49" x2="229" y2="49" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <text x="212" y="40" font-size="10" text-anchor="middle" fill="#64748b">单次前向</text>
+  <rect x="240" y="26" width="250" height="46" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="365" y="45" font-size="11" text-anchor="middle" fill="#1e293b">base logits × 5 个草稿位置（并行）</text>
+  <text x="365" y="62" font-size="10" text-anchor="middle" fill="#64748b">Markov 头建模草稿 token 间依赖</text>
+  <rect x="240" y="94" width="250" height="46" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="365" y="113" font-size="11" text-anchor="middle" fill="#1e293b">confidence 头：逐位置条件接受概率</text>
+  <text x="365" y="130" font-size="10" text-anchor="middle" fill="#64748b">→ 估计前缀存活概率</text>
+  <line x1="495" y1="49" x2="529" y2="62" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <line x1="495" y1="117" x2="529" y2="90" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <rect x="540" y="36" width="200" height="80" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="640" y="62" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">调度器（逐请求）</text>
+  <text x="640" y="82" font-size="10" text-anchor="middle" fill="#64748b">存活概率 × 实测吞吐曲线</text>
+  <text x="640" y="98" font-size="10" text-anchor="middle" fill="#64748b">→ 动态选验证长度</text>
+  <line x1="745" y1="76" x2="777" y2="76" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <rect x="788" y="44" width="92" height="64" rx="8" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="834" y="70" font-size="12" font-weight="bold" text-anchor="middle" fill="#166534">目标模型</text>
+  <text x="834" y="90" font-size="10" text-anchor="middle" fill="#64748b">一次前向批改</text>
+
+  <text x="450" y="162" font-size="11" text-anchor="middle" fill="#64748b">调度目标：在当前系统负载下最大化「期望系统级 token 吞吐」</text>
+  <rect x="20" y="180" width="860" height="150" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="36" y="206" font-size="13" font-weight="bold" fill="#1e293b">与 V3 MTP 的训练安排差异（论文 §2.4.3 / §2.1）</text>
+  <text x="36" y="232" font-size="11" fill="#1e293b">· MTP：与主干一起、贯穿整个预训练联合训练。</text>
+  <text x="36" y="258" font-size="11" fill="#1e293b">· DSpark：预训练结束后的<tspan font-weight="bold">专门阶段</tspan>单独训练——只训 DSpark，主干冻结；</text>
+  <text x="36" y="284" font-size="11" fill="#1e293b">· 后训练（post-training）期间：DSpark 与主干一起继续训练，但 DSpark 目标的梯度<tspan font-weight="bold">不回传进主干</tspan>；</text>
+  <text x="36" y="310" font-size="11" fill="#1e293b">· 动机：让 DSpark 始终对齐持续进化的策略模型，从而同时加速在线服务与 RL/OPD 的 rollout 生成。</text>
 </svg>
 <p class="cap"><b>图 3</b>｜DSpark 工作流与训练安排（依据论文 §2.4.3）。图中未标注任何加速倍数——V4.1 论文未给出 DSpark 的具体加速数字（原论文 arXiv:2607.05147 才有），本讲不编造。</p>
 </div>
@@ -408,37 +432,45 @@ window.MathJax = {
 </ul>
 
 <div class="fig">
-<svg viewBox="0 0 880 330" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="fq1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
-  <rect x="10" y="52" width="130" height="60" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="75" y="76" text-anchor="middle" fill="#1a1f2e" font-weight="bold">KV latent</text>
-  <text x="75" y="96" text-anchor="middle" fill="#5a6272">512 通道</text>
-  <rect x="170" y="52" width="140" height="60" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="240" y="76" text-anchor="middle" fill="#1a1f2e">RMSNorm</text>
-  <text x="240" y="96" text-anchor="middle" fill="#5a6272">权重最大幅值 ≈ 1</text>
-  <rect x="340" y="52" width="120" height="60" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="400" y="76" text-anchor="middle" fill="#1a1f2e">RoPE</text>
-  <text x="400" y="96" text-anchor="middle" fill="#5a6272">保持 ℓ2 范数</text>
-  <rect x="490" y="40" width="200" height="84" rx="8" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.6"/>
-  <text x="590" y="62" text-anchor="middle" fill="#1a1f2e" font-weight="bold">FP4 量化（RoPE 后）</text>
-  <text x="590" y="82" text-anchor="middle" fill="#5a6272">元素：E2M1（±6 封顶）</text>
-  <text x="590" y="100" text-anchor="middle" fill="#5a6272">scale：每 16 通道一个 E4M3</text>
-  <text x="590" y="116" text-anchor="middle" fill="#b05e10">无二级全局 scale</text>
-  <rect x="720" y="52" width="150" height="60" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="795" y="76" text-anchor="middle" fill="#1a1f2e" font-weight="bold">FP4 主 KV cache</text>
-  <text x="795" y="96" text-anchor="middle" fill="#5a6272">HBM / SSD 各省约一半</text>
-  <line x1="140" y1="82" x2="166" y2="82" stroke="#5a6272" stroke-width="1.4" marker-end="url(#fq1)"/>
-  <line x1="310" y1="82" x2="336" y2="82" stroke="#5a6272" stroke-width="1.4" marker-end="url(#fq1)"/>
-  <line x1="460" y1="82" x2="486" y2="82" stroke="#5a6272" stroke-width="1.4" marker-end="url(#fq1)"/>
-  <line x1="690" y1="82" x2="716" y2="82" stroke="#5a6272" stroke-width="1.4" marker-end="url(#fq1)"/>
-  <polyline points="795,112 795,150 400,150 400,176" fill="none" stroke="#5a6272" stroke-width="1.4" marker-end="url(#fq1)"/>
-  <rect x="320" y="180" width="160" height="52" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="400" y="202" text-anchor="middle" fill="#1a1f2e">读出时反量化</text>
-  <text x="400" y="220" text-anchor="middle" fill="#5a6272">再进注意力计算</text>
-  <text x="500" y="202" fill="#5a6272">→ 不需要硬件原生 FP4 矩阵乘，跨平台兼容</text>
-  <rect x="10" y="252" width="862" height="66" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="26" y="274" font-size="13" font-weight="bold" fill="#1a1f2e">量级安全余量（论文 §2.4.4）</text>
-  <text x="26" y="300" fill="#2a3040">格式上限 448×6 = 2688　≫　范数上界 √512 ≈ 22.6　＞　训练实测最大幅值 ≈ 10　→　省掉全局 scale 无可测精度损失</text>
+<svg viewBox="0 0 900 338" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow4" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect x="20" y="38" width="130" height="64" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="85" y="64" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">KV latent</text>
+  <text x="85" y="84" font-size="10" text-anchor="middle" fill="#64748b">512 通道</text>
+  <line x1="155" y1="70" x2="165" y2="70" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <rect x="176" y="38" width="140" height="64" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="246" y="64" font-size="12" text-anchor="middle" fill="#1e293b">RMSNorm</text>
+  <text x="246" y="84" font-size="10" text-anchor="middle" fill="#64748b">权重最大幅值 ≈ 1</text>
+  <line x1="321" y1="70" x2="331" y2="70" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <rect x="342" y="38" width="110" height="64" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="397" y="64" font-size="12" text-anchor="middle" fill="#1e293b">RoPE</text>
+  <text x="397" y="84" font-size="10" text-anchor="middle" fill="#64748b">保持 ℓ2 范数</text>
+  <line x1="457" y1="70" x2="467" y2="70" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <rect x="478" y="28" width="200" height="84" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="578" y="52" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">FP4 量化（RoPE 后）</text>
+  <text x="578" y="72" font-size="10" text-anchor="middle" fill="#64748b">元素：E2M1（±6 封顶）</text>
+  <text x="578" y="88" font-size="10" text-anchor="middle" fill="#64748b">scale：每 16 通道一个 E4M3</text>
+  <text x="578" y="104" font-size="10" text-anchor="middle" fill="#1e293b">无二级全局 scale</text>
+  <line x1="683" y1="70" x2="713" y2="70" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <rect x="724" y="38" width="156" height="64" rx="8" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="802" y="64" font-size="12" font-weight="bold" text-anchor="middle" fill="#166534">FP4 主 KV cache</text>
+  <text x="802" y="84" font-size="10" text-anchor="middle" fill="#64748b">HBM / SSD 各省约一半</text>
+
+  <path d="M802,107 L802,132 Q802,148 786,148 L416,148 Q400,148 400,159" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <rect x="320" y="170" width="160" height="52" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="400" y="192" font-size="12" text-anchor="middle" fill="#1e293b">读出时反量化</text>
+  <text x="400" y="210" font-size="10" text-anchor="middle" fill="#64748b">再进注意力计算</text>
+  <text x="500" y="200" font-size="11" fill="#64748b">→ 不需要硬件原生 FP4 矩阵乘，跨平台兼容</text>
+
+  <rect x="20" y="250" width="860" height="66" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="36" y="276" font-size="13" font-weight="bold" fill="#1e293b">量级安全余量（论文 §2.4.4）</text>
+  <text x="36" y="302" font-size="12" fill="#1e293b">格式上限 448×6 = 2688　≫　范数上界 √512 ≈ 22.6　＞　训练实测最大幅值 ≈ 10　→　省掉全局 scale 无可测精度损失</text>
 </svg>
 <p class="cap"><b>图 4</b>｜FP4 主 KV cache 的量化流水线与量级论证（依据论文 §2.4.4）。QAT 在 post-training 引入，让模型在训练中就「习惯」量化误差。</p>
 </div>
@@ -448,17 +480,18 @@ window.MathJax = {
 <p>V4 的主 KV cache 为 FP8；V4.1 改为 FP4 后，「<b>存储占用几乎减半（nearly halves the storage footprint），HBM 与卸载到 SSD 时皆然</b>」。这与第 2 讲的全局 KV 总账对上：CSA2 跨层共享（架构）× FP4（精度）两层相乘，V4.1-Flash 的全局 KV 占用降到 <b>890 字节/token</b>，约为 V4-Flash 的 1/4（论文 §6）。</p>
 
 <div class="fig">
-<svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="fb1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
-  <text x="10" y="26" font-size="13" font-weight="bold" fill="#1a1f2e">全局 KV cache 占用（常驻 HBM，字节/token）</text>
-  <text x="10" y="64" fill="#2a3040">V4-Flash（FP8 主 KV，无跨层共享）</text>
-  <rect x="360" y="48" width="440" height="24" rx="4" fill="#dbe6f8" stroke="#2456c4"/>
-  <text x="812" y="65" fill="#2456c4" font-weight="bold">≈3560（推算：890×4）</text>
-  <text x="10" y="112" fill="#2a3040">V4.1-Flash（CSA2 跨层共享 + FP4）</text>
-  <rect x="360" y="96" width="110" height="24" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="478" y="113" fill="#1d7a4a" font-weight="bold">890（论文 §6）</text>
-  <line x1="10" y1="150" x2="870" y2="150" stroke="#e3e7ee" stroke-width="1"/>
-  <text x="10" y="176" fill="#5a6272">注：V4-Flash 的 3560 B/token 由论文「约 1/4」反推，论文未直接给出该数；890 B/token 为论文原文（§6）。</text>
+<svg viewBox="0 0 900 210" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+
+  <text x="20" y="36" font-size="13" font-weight="bold" fill="#1e293b">全局 KV cache 占用（常驻 HBM，字节/token）</text>
+  <text x="20" y="76" font-size="11" fill="#1e293b">V4-Flash（FP8 主 KV，无跨层共享）</text>
+  <rect x="360" y="60" width="440" height="24" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="794" y="76" font-size="11" font-weight="bold" text-anchor="end" fill="#1e40af">≈3560（推算：890×4）</text>
+  <text x="20" y="122" font-size="11" fill="#1e293b">V4.1-Flash（CSA2 跨层共享 + FP4）</text>
+  <rect x="360" y="106" width="110" height="24" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="478" y="122" font-size="11" font-weight="bold" fill="#166534">890（论文 §6）</text>
+  <line x1="20" y1="156" x2="880" y2="156" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="20" y="182" font-size="11" fill="#64748b">注：V4-Flash 的 3560 B/token 由论文「约 1/4」反推，论文未直接给出该数；890 B/token 为论文原文（§6）。</text>
 </svg>
 <p class="cap"><b>图 5</b>｜全局 KV 每 token 占用对比。这 1/4 是「架构（CSA2）× 精度（FP4）」两个乘法因子的合计效果；本讲只负责其中的 FP4 因子（主 KV 存储相对 FP8 几乎减半），跨层共享归第 2 讲。</p>
 </div>

@@ -199,52 +199,60 @@ window.MathJax = {
 <p>V4.1-Flash 是原生多模态模型：能同时吃图像和文本。§2.1.1 描述的接入方式并不神秘，就是「把图变成一串特殊 token 塞进文本流」：</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 320" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="m1" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
+<svg viewBox="-8 0 746 314" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
   <!-- 图像支路 -->
-  <rect x="14" y="30" width="128" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="78" y="55" text-anchor="middle">输入图像</text>
-  <text x="78" y="75" text-anchor="middle" font-size="11" fill="#5a6272">最高约 1344×1344</text>
-  <rect x="176" y="30" width="150" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="251" y="50" text-anchor="middle" font-weight="bold">DeepSeek-ViT</text>
-  <text x="251" y="68" text-anchor="middle" font-size="11" fill="#5a6272">32 层 · 2D-RoPE</text>
-  <text x="251" y="84" text-anchor="middle" font-size="11" fill="#5a6272">输出空间网格视觉特征</text>
-  <rect x="360" y="30" width="150" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="435" y="50" text-anchor="middle" font-weight="bold">3×3 pixel-unshuffle</text>
-  <text x="435" y="68" text-anchor="middle" font-size="11" fill="#5a6272">空间重排进通道维</text>
-  <text x="435" y="84" text-anchor="middle" font-size="11" fill="#5a6272">视觉 token 数 ↓9 倍</text>
-  <rect x="544" y="30" width="140" height="64" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="614" y="50" text-anchor="middle" font-weight="bold">MLP projector</text>
-  <text x="614" y="68" text-anchor="middle" font-size="11" fill="#5a6272">2 层 · 隐藏维 5120</text>
-  <text x="614" y="84" text-anchor="middle" font-size="11" fill="#5a6272">映射到语言骨干维度</text>
-  <line x1="142" y1="62" x2="176" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1)"/>
-  <line x1="326" y1="62" x2="360" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1)"/>
-  <line x1="510" y1="62" x2="544" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1)"/>
+  <rect x="14" y="24" width="128" height="64" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="78" y="50" text-anchor="middle" fill="#1e293b" font-size="12">输入图像</text>
+  <text x="78" y="68" text-anchor="middle" font-size="10" fill="#64748b">最高约 1344×1344</text>
+  <rect x="176" y="24" width="150" height="64" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="251" y="44" text-anchor="middle" font-weight="bold" font-size="12" fill="#1e40af">DeepSeek-ViT</text>
+  <text x="251" y="62" text-anchor="middle" font-size="10" fill="#64748b">32 层 · 2D-RoPE</text>
+  <text x="251" y="78" text-anchor="middle" font-size="10" fill="#64748b">输出空间网格视觉特征</text>
+  <rect x="360" y="24" width="150" height="64" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="435" y="44" text-anchor="middle" font-weight="bold" font-size="12" fill="#1e40af">3×3 pixel-unshuffle</text>
+  <text x="435" y="62" text-anchor="middle" font-size="10" fill="#64748b">空间重排进通道维</text>
+  <text x="435" y="78" text-anchor="middle" font-size="10" fill="#64748b">视觉 token 数 ↓9 倍</text>
+  <rect x="544" y="24" width="140" height="64" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="614" y="44" text-anchor="middle" font-weight="bold" font-size="12" fill="#1e40af">MLP projector</text>
+  <text x="614" y="62" text-anchor="middle" font-size="10" fill="#64748b">2 层 · 隐藏维 5120</text>
+  <text x="614" y="78" text-anchor="middle" font-size="10" fill="#64748b">映射到语言骨干维度</text>
+  <line x1="147" y1="56" x2="165" y2="56" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <line x1="331" y1="56" x2="349" y2="56" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <line x1="515" y1="56" x2="533" y2="56" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow)"/>
   <!-- 汇合 -->
-  <polyline points="684,62 716,62 716,150" fill="none" stroke="#2456c4" stroke-width="1.6" marker-end="url(#m1)"/>
+  <path d="M689,56 C 689,86 716,91 716,118 C 716,140 700,148 677,148" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
   <!-- 文本支路 -->
-  <rect x="14" y="130" width="128" height="48" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <text x="78" y="150" text-anchor="middle">输入文本</text>
-  <text x="78" y="167" text-anchor="middle" font-size="11" fill="#5a6272">Text Embedding</text>
-  <line x1="142" y1="154" x2="196" y2="154" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1)"/>
+  <rect x="14" y="124" width="128" height="48" rx="8" fill="#ffffff" stroke="#3b82f6"/>
+  <text x="78" y="144" text-anchor="middle" font-size="12" fill="#1e293b">输入文本</text>
+  <text x="78" y="161" text-anchor="middle" font-size="10" fill="#64748b">Text Embedding</text>
+  <line x1="147" y1="148" x2="185" y2="148" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow)"/>
   <!-- 嵌入序列 -->
-  <rect x="196" y="128" width="470" height="52" rx="8" fill="#fff" stroke="#8ea6d8"/>
-  <g font-size="11" text-anchor="middle" fill="#1a1f2e">
-    <rect x="216" y="142" width="44" height="24" rx="4" fill="#f6f8fa" stroke="#c9d2e0"/><text x="238" y="158">文本</text>
-    <rect x="264" y="142" width="44" height="24" rx="4" fill="#f6f8fa" stroke="#c9d2e0"/><text x="286" y="158">文本</text>
-    <rect x="312" y="142" width="60" height="24" rx="4" fill="#dbe6f8" stroke="#2456c4"/><text x="342" y="158" fill="#2456c4">视觉</text>
-    <rect x="376" y="142" width="60" height="24" rx="4" fill="#dbe6f8" stroke="#2456c4"/><text x="406" y="158" fill="#2456c4">视觉</text>
-    <rect x="440" y="142" width="44" height="24" rx="4" fill="#f6f8fa" stroke="#c9d2e0"/><text x="462" y="158">文本</text>
-    <rect x="488" y="142" width="44" height="24" rx="4" fill="#f6f8fa" stroke="#c9d2e0"/><text x="510" y="158">文本</text>
-    <rect x="536" y="142" width="60" height="24" rx="4" fill="#dbe6f8" stroke="#2456c4"/><text x="566" y="158" fill="#2456c4">视觉</text>
+  <rect x="196" y="122" width="470" height="52" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <g font-size="11" text-anchor="middle" fill="#1e293b">
+    <rect x="216" y="136" width="44" height="24" rx="4" fill="#f8fafc" stroke="#cbd5e1"/><text x="238" y="152">文本</text>
+    <rect x="264" y="136" width="44" height="24" rx="4" fill="#f8fafc" stroke="#cbd5e1"/><text x="286" y="152">文本</text>
+    <rect x="312" y="136" width="60" height="24" rx="4" fill="#dbeafe" stroke="#3b82f6"/><text x="342" y="152" fill="#1e40af">视觉</text>
+    <rect x="376" y="136" width="60" height="24" rx="4" fill="#dbeafe" stroke="#3b82f6"/><text x="406" y="152" fill="#1e40af">视觉</text>
+    <rect x="440" y="136" width="44" height="24" rx="4" fill="#f8fafc" stroke="#cbd5e1"/><text x="462" y="152">文本</text>
+    <rect x="488" y="136" width="44" height="24" rx="4" fill="#f8fafc" stroke="#cbd5e1"/><text x="510" y="152">文本</text>
+    <rect x="536" y="136" width="60" height="24" rx="4" fill="#dbeafe" stroke="#3b82f6"/><text x="566" y="152" fill="#1e40af">视觉</text>
   </g>
-  <text x="431" y="200" text-anchor="middle" font-size="11" fill="#5a6272">视觉嵌入插入输入序列中对应的 image-token 位置，与文本嵌入一起送入语言骨干</text>
+  <text x="431" y="190" text-anchor="middle" font-size="11" fill="#64748b">视觉嵌入插入输入序列中对应的 image-token 位置，与文本嵌入一起送入语言骨干</text>
   <!-- 骨干 -->
-  <line x1="431" y1="206" x2="431" y2="232" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m1)"/>
-  <rect x="150" y="232" width="562" height="66" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
-  <text x="431" y="256" text-anchor="middle" font-weight="bold">语言骨干：40 层因果 Transformer（CED）</text>
-  <text x="431" y="276" text-anchor="middle" font-size="11" fill="#5a6272">20 层因果编码器（前 2 层纯 SWA，后 18 层 CSA2 m=2）→ 20 层解码器（CSA2 m=1）</text>
-  <text x="431" y="292" text-anchor="middle" font-size="11" fill="#5a6272">每层 MoE：1 共享专家 + 384 路由专家，激活 6 个</text>
+  <line x1="431" y1="202" x2="431" y2="215" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <rect x="150" y="226" width="562" height="66" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="431" y="246" text-anchor="middle" font-weight="bold" font-size="12" fill="#1e40af">语言骨干：40 层因果 Transformer（CED）</text>
+  <text x="431" y="266" text-anchor="middle" font-size="11" fill="#64748b">20 层因果编码器（前 2 层纯 SWA，后 18 层 CSA2 m=2）→ 20 层解码器（CSA2 m=1）</text>
+  <text x="431" y="282" text-anchor="middle" font-size="11" fill="#64748b">每层 MoE：1 共享专家 + 384 路由专家，激活 6 个</text>
 </svg>
 <p class="cap"><b>图 1</b>｜多模态接入路径（对应论文 §2.1 与 §2.1.1，及 Figure 3 的多模态部分）。视觉支路产出的视觉嵌入被插到输入序列中「图像占位 token」的位置，之后图文一视同仁地穿过 40 层语言骨干。</p>
 </div>
@@ -284,74 +292,83 @@ window.MathJax = {
 <h3>4.4 双路径对比：prefill 走短路，decode 走全路</h3>
 
 <div class="fig">
-<svg viewBox="0 0 860 470" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
+<svg viewBox="0 0 860 500" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="m2" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker>
-    <marker id="m2b" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2456c4"/></marker>
-    <marker id="m2r" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#c0392b"/></marker>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow2-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="arrow2-red" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#ef4444"/>
+    </marker>
   </defs>
   <!-- 左：prefill 路径 -->
-  <text x="210" y="26" text-anchor="middle" font-size="13" fill="#2456c4" font-weight="bold">Prefill（读入 100k token 的提示词）</text>
-  <rect x="40" y="40" width="120" height="44" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="100" y="59" text-anchor="middle">输入 N 个 token</text>
-  <text x="100" y="75" text-anchor="middle" font-size="10.5" fill="#5a6272">（如 100k 提示词）</text>
-  <line x1="160" y1="62" x2="196" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2)"/>
+  <text x="210" y="30" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="bold">Prefill（读入 100k token 的提示词）</text>
+  <rect x="40" y="44" width="120" height="44" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="100" y="62" text-anchor="middle" font-size="12" fill="#1e293b">输入 N 个 token</text>
+  <text x="100" y="78" text-anchor="middle" font-size="10" fill="#64748b">（如 100k 提示词）</text>
+  <line x1="165" y1="66" x2="185" y2="66" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
   <!-- 编码器堆 -->
-  <rect x="60" y="96" width="300" height="96" rx="10" fill="#dbe6f8" stroke="#2456c4" stroke-width="1.8"/>
-  <text x="210" y="118" text-anchor="middle" font-weight="bold" fill="#163a86">因果编码器：第 1–20 层（完整计算）</text>
-  <g font-size="10.5" fill="#163a86" text-anchor="middle">
-    <text x="210" y="138">每层：全局注意力 + SWA + MoE 全跑</text>
-    <text x="210" y="156">前 2 层纯 SWA · 后 18 层 CSA2（m=2）</text>
-    <text x="210" y="176">激活参数 ≈ 8B/token</text>
+  <rect x="60" y="113" width="300" height="96" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="210" y="135" text-anchor="middle" font-weight="bold" font-size="12" fill="#1e40af">因果编码器：第 1–20 层（完整计算）</text>
+  <g font-size="10" fill="#1e40af" text-anchor="middle">
+    <text x="210" y="155">每层：全局注意力 + SWA + MoE 全跑</text>
+    <text x="210" y="173">前 2 层纯 SWA · 后 18 层 CSA2（m=2）</text>
+    <text x="210" y="191">激活参数 ≈ 8B/token</text>
   </g>
-  <line x1="160" y1="84" x2="160" y2="96" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2)"/>
-  <text x="378" y="150" font-size="13" fill="#163a86" font-weight="bold">H</text>
-  <text x="378" y="165" font-size="10.5" fill="#5a6272">L/2</text>
-  <text x="210" y="216" text-anchor="middle" font-size="11" fill="#5a6272">编码器末层隐状态（浓缩理解）</text>
+  <line x1="100" y1="93" x2="100" y2="102" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
+  <text x="378" y="162" font-size="12" fill="#1e40af" font-weight="bold">H</text>
+  <text x="378" y="177" font-size="10" fill="#64748b">L/2</text>
   <!-- 投影箭头 -->
-  <line x1="210" y1="192" x2="210" y2="240" stroke="#2456c4" stroke-width="1.8" marker-end="url(#m2b)"/>
-  <text x="222" y="222" font-size="10.5" fill="#2456c4">式(1)：C^l = H_L/2 · W_KV^l（一次性投影）</text>
+  <line x1="210" y1="214" x2="210" y2="255" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <text x="222" y="226" font-size="10" fill="#64748b">编码器末层隐状态（浓缩理解）</text>
+  <text x="222" y="244" font-size="10" fill="#1e40af">式(1)：C^l = H_L/2 · W_KV^l（一次性投影）</text>
   <!-- 解码器堆（prefill 灰化） -->
-  <rect x="60" y="240" width="300" height="110" rx="10" fill="#f2f4f8" stroke="#c9d2e0" stroke-dasharray="6 4"/>
-  <text x="210" y="262" text-anchor="middle" font-weight="bold" fill="#5a6272">解码器：第 21–40 层</text>
-  <g font-size="10.5" fill="#8a93a5" text-anchor="middle">
-    <text x="210" y="282">全局注意力 / MoE：逐 token 计算 ✂ 跳过</text>
-    <text x="210" y="300">全局 KV：由 H_L/2 投影直接得到（灰区不跑 token）</text>
-    <text x="210" y="322" fill="#5a6272">SWA：仍逐层计算，但只需对最后 n_win=128</text>
-    <text x="210" y="338" fill="#5a6272">个 token 做 Decoder SWA Bounded Replay（§3.2.2）</text>
+  <rect x="60" y="266" width="300" height="110" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="6 4"/>
+  <text x="210" y="288" text-anchor="middle" font-weight="bold" font-size="12" fill="#64748b">解码器：第 21–40 层</text>
+  <g font-size="10" fill="#94a3b8" text-anchor="middle">
+    <text x="210" y="308">全局注意力 / MoE：逐 token 计算 ✂ 跳过</text>
+    <text x="210" y="326">全局 KV：由 H_L/2 投影直接得到（灰区不跑 token）</text>
   </g>
-  <text x="210" y="372" text-anchor="middle" font-size="11" fill="#2456c4" font-weight="bold">prefill 激活参数 ≈ 8B/token · 复杂度 ≈ O(N·L/2)</text>
+  <g font-size="10" fill="#64748b" text-anchor="middle">
+    <text x="210" y="348">SWA：仍逐层计算，但只需对最后 n_win=128</text>
+    <text x="210" y="364">个 token 做 Decoder SWA Bounded Replay（§3.2.2）</text>
+  </g>
+  <text x="210" y="396" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="bold">prefill 激活参数 ≈ 8B/token · 复杂度 ≈ O(N·L/2)</text>
 
   <!-- 右：decode 路径 -->
-  <text x="650" y="26" text-anchor="middle" font-size="13" fill="#c0392b" font-weight="bold">Decode（逐个生成输出 token）</text>
-  <rect x="500" y="40" width="120" height="44" rx="8" fill="#fff" stroke="#c0392b"/>
-  <text x="560" y="59" text-anchor="middle">新生成的 token</text>
-  <text x="560" y="75" text-anchor="middle" font-size="10.5" fill="#5a6272">（一次一个）</text>
-  <line x1="620" y1="62" x2="656" y2="62" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2)"/>
-  <rect x="500" y="96" width="300" height="96" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.8"/>
-  <text x="650" y="118" text-anchor="middle" font-weight="bold" fill="#163a86">因果编码器</text>
-  <g font-size="10.5" fill="#163a86" text-anchor="middle">
-    <text x="650" y="138">单个 token 快速过一遍</text>
-    <text x="650" y="156">产出它自己的 H_L/2</text>
-    <text x="650" y="176">（缓存命中时甚至可跳过）</text>
+  <text x="650" y="30" text-anchor="middle" font-size="12" fill="#9d174d" font-weight="bold">Decode（逐个生成输出 token）</text>
+  <rect x="500" y="44" width="120" height="44" rx="8" fill="#fce7f3" stroke="#ec4899"/>
+  <text x="560" y="62" text-anchor="middle" font-size="12" fill="#9d174d">新生成的 token</text>
+  <text x="560" y="78" text-anchor="middle" font-size="10" fill="#64748b">（一次一个）</text>
+  <line x1="625" y1="66" x2="645" y2="66" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
+  <rect x="500" y="113" width="300" height="96" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="650" y="135" text-anchor="middle" font-weight="bold" font-size="12" fill="#1e40af">因果编码器</text>
+  <g font-size="10" fill="#1e40af" text-anchor="middle">
+    <text x="650" y="155">单个 token 快速过一遍</text>
+    <text x="650" y="173">产出它自己的 H_L/2</text>
+    <text x="650" y="191">（缓存命中时甚至可跳过）</text>
   </g>
-  <line x1="620" y1="84" x2="620" y2="96" stroke="#5a6272" stroke-width="1.4" marker-end="url(#m2)"/>
-  <line x1="650" y1="192" x2="650" y2="240" stroke="#c0392b" stroke-width="1.8" marker-end="url(#m2r)"/>
-  <text x="662" y="222" font-size="10.5" fill="#c0392b">H_L/2 投影出该层全局 KV</text>
-  <rect x="500" y="240" width="300" height="110" rx="10" fill="#fdece8" stroke="#c0392b" stroke-width="1.8"/>
-  <text x="650" y="262" text-anchor="middle" font-weight="bold" fill="#c0392b">解码器：第 21–40 层（完整计算）</text>
-  <g font-size="10.5" fill="#c0392b" text-anchor="middle">
-    <text x="650" y="282">每层：全局注意力（读缓存 KV）+ SWA + MoE 全跑</text>
-    <text x="650" y="300">激活参数 ≈ 16B/token（比 prefill 多一倍）</text>
-    <text x="650" y="322">只对 1 个 token 做 → 代价可承受</text>
-    <text x="650" y="338">全局 KV 继续投影写回缓存，供后续 token 用</text>
+  <line x1="560" y1="93" x2="560" y2="102" stroke="#64748b" stroke-width="1.4" marker-end="url(#arrow2)"/>
+  <line x1="650" y1="214" x2="650" y2="255" stroke="#ec4899" stroke-width="1.5" marker-end="url(#arrow2-red)"/>
+  <text x="662" y="226" font-size="10" fill="#9d174d">H_L/2 投影出该层全局 KV</text>
+  <rect x="500" y="266" width="300" height="110" rx="10" fill="#fce7f3" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="650" y="288" text-anchor="middle" font-weight="bold" font-size="12" fill="#9d174d">解码器：第 21–40 层（完整计算）</text>
+  <g font-size="10" fill="#9d174d" text-anchor="middle">
+    <text x="650" y="308">每层：全局注意力（读缓存 KV）+ SWA + MoE 全跑</text>
+    <text x="650" y="326">激活参数 ≈ 16B/token（比 prefill 多一倍）</text>
+    <text x="650" y="348">只对 1 个 token 做 → 代价可承受</text>
+    <text x="650" y="364">全局 KV 继续投影写回缓存，供后续 token 用</text>
   </g>
-  <text x="650" y="372" text-anchor="middle" font-size="11" fill="#c0392b" font-weight="bold">decode 激活参数 ≈ 16B/token</text>
+  <text x="650" y="396" text-anchor="middle" font-size="11" fill="#9d174d" font-weight="bold">decode 激活参数 ≈ 16B/token</text>
 
   <!-- 底部总括 -->
-  <rect x="40" y="396" width="780" height="56" rx="10" fill="#f4f7fd" stroke="#8ea6d8"/>
-  <text x="430" y="418" text-anchor="middle" font-size="11.5" fill="#1a1f2e">同一个模型，两条路径不对称：长输入只走下半层 + 投影（便宜），短输出走全部 40 层（贵但量小）。</text>
-  <text x="430" y="438" text-anchor="middle" font-size="11.5" fill="#1a1f2e">序列长度 N ≫ n_win 时，prefill 复杂度从 O(N·L) 降到 O(N·L/2 + n_win·L/2) ≈ O(N·L/2)（论文 §2.2）。</text>
+  <rect x="30" y="422" width="800" height="56" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="430" y="444" text-anchor="middle" font-size="11" fill="#1e293b">同一个模型，两条路径不对称：长输入只走下半层 + 投影（便宜），短输出走全部 40 层（贵但量小）。</text>
+  <text x="430" y="464" text-anchor="middle" font-size="11" fill="#1e293b">序列长度 N ≫ n_win 时，prefill 复杂度从 O(N·L) 降到 O(N·L/2 + n_win·L/2) ≈ O(N·L/2)（论文 §2.2）。</text>
 </svg>
 <p class="cap"><b>图 2</b>｜CED 的 prefill 路径 vs decode 路径（对应论文 §2.2 式 1 与 §3.2.2）。prefill 时解码器的全局注意力与 MoE 不逐 token 执行，全局 KV 由编码器末态一次性投影；decode 时每生成一个 token 走完整 40 层，全局 KV 也由当前 \(H^{L/2}\) 投影而来并写入缓存。</p>
 </div>
@@ -381,24 +398,24 @@ window.MathJax = {
 <p class="cap"><b>表 3</b>｜费用直觉账（推断核算：乘法基于论文的 8B/16B 数字与 "nearly halves prefill computation" 的定性结论；n_win×L/2=2560 token 的重放开销在此规模下占比不足 0.03%，忽略）。输入越长，节省比例越趋近 50%。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 240" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <defs><marker id="m3" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#5a6272"/></marker></defs>
-  <text x="430" y="24" text-anchor="middle" font-weight="bold">同样 100k 输入 + 1k 输出：两套激活量对比（推断核算，见表 3）</text>
+<svg viewBox="8 0 774 258" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="395" y="34" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e293b">同样 100k 输入 + 1k 输出：两套激活量对比（推断核算，见表 3）</text>
   <!-- 常规方案 -->
-  <text x="30" y="64" font-size="12" fill="#1a1f2e">常规 decoder-only</text>
-  <rect x="200" y="46" width="560" height="30" rx="6" fill="#c0392b" opacity="0.85"/>
-  <text x="470" y="66" text-anchor="middle" fill="#fff" font-size="12">prefill 100k × 16B = 1600 单位</text>
-  <rect x="200" y="82" width="10" height="20" rx="3" fill="#e8a09a"/>
-  <text x="218" y="97" font-size="11" fill="#5a6272">decode 1k × 16B = 16 单位（几乎看不见）</text>
+  <text x="30" y="77" font-size="12" fill="#1e293b">常规 decoder-only</text>
+  <rect x="200" y="58" width="560" height="30" rx="6" fill="#ec4899"/>
+  <text x="480" y="77" text-anchor="middle" fill="#fff" font-size="12">prefill 100k × 16B = 1600 单位</text>
+  <rect x="200" y="94" width="10" height="20" rx="3" fill="#f9a8d4"/>
+  <text x="218" y="109" font-size="11" fill="#64748b">decode 1k × 16B = 16 单位（几乎看不见）</text>
   <!-- CED -->
-  <text x="30" y="158" font-size="12" fill="#1a1f2e">CED</text>
-  <rect x="200" y="140" width="280" height="30" rx="6" fill="#2456c4" opacity="0.85"/>
-  <text x="340" y="160" text-anchor="middle" fill="#fff" font-size="12">prefill 100k × 8B = 800 单位</text>
-  <rect x="200" y="176" width="10" height="20" rx="3" fill="#e8a09a"/>
-  <text x="218" y="191" font-size="11" fill="#5a6272">decode 1k × 16B = 16 单位（不变）</text>
-  <line x1="480" y1="140" x2="480" y2="196" stroke="#2456c4" stroke-dasharray="4 3"/>
-  <text x="492" y="188" font-size="11.5" fill="#2456c4" font-weight="bold">总量 ≈ 一半</text>
-  <text x="30" y="226" font-size="11" fill="#5a6272">agent 请求的激活量几乎全由 prefill 决定——把 prefill 砍半，就等于把整笔账砍半。</text>
+  <text x="30" y="171" font-size="12" fill="#1e293b">CED</text>
+  <rect x="200" y="152" width="280" height="30" rx="6" fill="#3b82f6"/>
+  <text x="340" y="171" text-anchor="middle" fill="#fff" font-size="12">prefill 100k × 8B = 800 单位</text>
+  <rect x="200" y="188" width="10" height="20" rx="3" fill="#f9a8d4"/>
+  <text x="218" y="203" font-size="11" fill="#64748b">decode 1k × 16B = 16 单位（不变）</text>
+  <line x1="480" y1="152" x2="480" y2="208" stroke="#3b82f6" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="492" y="200" font-size="11" fill="#1e40af" font-weight="bold">总量 ≈ 一半</text>
+  <text x="30" y="232" font-size="11" fill="#64748b">agent 请求的激活量几乎全由 prefill 决定——把 prefill 砍半，就等于把整笔账砍半。</text>
 </svg>
 <p class="cap"><b>图 3</b>｜输入重度负载下的激活量对比条形图（数值为表 3 的推断核算；"CED 省 ~一半 prefill 计算" 的定性结论出自论文摘要与 §2.2）。decode 那一格在两种方案下完全相同，因为 decode 阶段每 token 都要走完整 40 层。</p>
 </div>
@@ -457,20 +474,22 @@ window.MathJax = {
 </ul>
 
 <div class="fig">
-<svg viewBox="0 0 860 230" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="PingFang SC, sans-serif">
-  <text x="430" y="24" text-anchor="middle" font-weight="bold">每 token 全局 KV cache 字节数（摘要与 Figure 1(b) 口径；对数直觉按比例绘制）</text>
+<svg viewBox="3 0 700 283" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="353" y="34" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e293b">每 token 全局 KV cache 字节数（摘要与 Figure 1(b) 口径；对数直觉按比例绘制）</text>
+  <!-- 参考线（画在条形之下） -->
+  <line x1="90" y1="54" x2="90" y2="216" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3 3"/>
   <!-- V1: 890*437 ≈ 388,930 -->
-  <rect x="60" y="46" width="300" height="30" rx="6" fill="#b8c4da"/>
-  <text x="370" y="66" font-size="11.5" fill="#5a6272">DeepSeek-V1 ≈ 388,900 B/token（由 437 倍关系反推）</text>
+  <rect x="60" y="60" width="300" height="34" rx="6" fill="#bfdbfe"/>
+  <text x="370" y="81" font-size="11" fill="#64748b">DeepSeek-V1 ≈ 388,900 B/token（由 437 倍关系反推）</text>
   <!-- V4-Flash: 890*4 = 3560 -->
-  <rect x="60" y="92" width="60" height="30" rx="6" fill="#7f96c4"/>
-  <text x="130" y="112" font-size="11.5" fill="#5a6272">DeepSeek-V4-Flash ≈ 3,560 B/token（由 1/4 关系反推）</text>
+  <rect x="60" y="118" width="60" height="34" rx="6" fill="#93c5fd"/>
+  <text x="130" y="139" font-size="11" fill="#64748b">DeepSeek-V4-Flash ≈ 3,560 B/token（由 1/4 关系反推）</text>
   <!-- V4.1 -->
-  <rect x="60" y="138" width="30" height="30" rx="6" fill="#2456c4"/>
-  <text x="100" y="158" font-size="12" fill="#2456c4" font-weight="bold">DeepSeek-V4.1-Flash = 890 B/token（论文原值）</text>
-  <line x1="90" y1="40" x2="90" y2="180" stroke="#c9d2e0" stroke-dasharray="3 3"/>
-  <text x="60" y="200" font-size="11" fill="#5a6272">注：V1 与 V4-Flash 的绝对值为论文所述倍数关系的推断换算；条长为示意（非线性精确对数刻度）。</text>
-  <text x="60" y="220" font-size="11" fill="#5a6272">贡献分解（摘要/§1）：CED 属于计算分工，890 B 主要由 CSA2（层维复用）+ FP4 KV（精度维）达成。</text>
+  <rect x="60" y="176" width="30" height="34" rx="6" fill="#3b82f6"/>
+  <text x="100" y="197" font-size="12" fill="#1e40af" font-weight="bold">DeepSeek-V4.1-Flash = 890 B/token（论文原值）</text>
+  <text x="60" y="240" font-size="11" fill="#64748b">注：V1 与 V4-Flash 的绝对值为论文所述倍数关系的推断换算；条长为示意（非线性精确对数刻度）。</text>
+  <text x="60" y="258" font-size="11" fill="#64748b">贡献分解（摘要/§1）：CED 属于计算分工，890 B 主要由 CSA2（层维复用）+ FP4 KV（精度维）达成。</text>
 </svg>
 <p class="cap"><b>图 4</b>｜三代 DeepSeek 模型全局 KV cache 每字节对比（数据点：890 B/token、约 1/4、约 1/437 均出自论文摘要与 Figure 1(b) caption；两个基线绝对值由倍数反推，属推断换算）。</p>
 </div>

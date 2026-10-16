@@ -123,81 +123,80 @@ L=\frac{T_{\text{draft}}+T_{\text{verify}}}{\tau}
 <h2 id="sec2">二、一张图看懂 DSpark 的解码循环</h2>
 
 <div class="fig">
-<svg viewBox="0 0 860 470" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="13">
+<svg viewBox="0 0 860 470" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
     </marker>
-    <marker id="arrg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#b0631e"/>
+    <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#f59e0b"/>
     </marker>
   </defs>
 
   <!-- Stage 0: target step -->
-  <rect x="20" y="30" width="170" height="64" rx="10" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="105" y="56" text-anchor="middle" font-weight="bold" fill="#1a1f2e">① Target 前向一步</text>
-  <text x="105" y="76" text-anchor="middle" fill="#5a6272">prompt "ABC" → 生成 D</text>
+  <rect x="20" y="30" width="170" height="64" rx="10" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="105" y="57" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e40af">① Target 前向一步</text>
+  <text x="105" y="77" text-anchor="middle" font-size="10" fill="#1e40af">prompt "ABC" → 生成 D</text>
 
-  <line x1="190" y1="62" x2="250" y2="62" stroke="#2456c4" stroke-width="2" marker-end="url(#arr)"/>
-  <text x="220" y="52" text-anchor="middle" fill="#5a6272" font-size="11">anchor</text>
+  <path d="M195,62 L242,62" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <text x="218" y="52" text-anchor="middle" font-size="10" fill="#64748b">anchor</text>
 
   <!-- Stage 1: parallel backbone -->
-  <rect x="253" y="20" width="270" height="150" rx="10" fill="#fff" stroke="#2456c4"/>
-  <text x="388" y="42" text-anchor="middle" font-weight="bold" fill="#2456c4">② 并行主干（重，一次前向）</text>
-  <rect x="273" y="56" width="60" height="30" rx="6" fill="#2456c4"/>
-  <text x="303" y="76" text-anchor="middle" fill="#fff" font-weight="bold">D</text>
-  <rect x="343" y="56" width="46" height="30" rx="6" fill="#c9d4ee"/>
-  <text x="366" y="76" text-anchor="middle">[m]</text>
-  <rect x="397" y="56" width="46" height="30" rx="6" fill="#c9d4ee"/>
-  <text x="420" y="76" text-anchor="middle">[m]</text>
-  <rect x="451" y="56" width="46" height="30" rx="6" fill="#c9d4ee"/>
-  <text x="474" y="76" text-anchor="middle">[m]</text>
-  <text x="273" y="112" fill="#5a6272" font-size="12">anchor + γ−1 个 mask 输入</text>
-  <text x="273" y="130" fill="#5a6272" font-size="12">块内双向注意力 + target KV 注入</text>
-  <text x="273" y="148" fill="#5a6272" font-size="12">输出基础 logits U₁…Uγ 与隐藏态 h₁…hγ</text>
+  <rect x="253" y="20" width="270" height="150" rx="10" fill="#ffffff" stroke="#3b82f6"/>
+  <text x="388" y="42" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e40af">② 并行主干（重，一次前向）</text>
+  <rect x="273" y="56" width="60" height="36" rx="6" fill="#3b82f6"/>
+  <text x="303" y="78" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">D</text>
+  <rect x="343" y="56" width="46" height="36" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="366" y="78" text-anchor="middle" font-size="12" fill="#1e40af">[m]</text>
+  <rect x="397" y="56" width="46" height="36" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="420" y="78" text-anchor="middle" font-size="12" fill="#1e40af">[m]</text>
+  <rect x="451" y="56" width="46" height="36" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="474" y="78" text-anchor="middle" font-size="12" fill="#1e40af">[m]</text>
+  <text x="273" y="112" font-size="10" fill="#64748b">anchor + γ−1 个 mask 输入</text>
+  <text x="273" y="127" font-size="10" fill="#64748b">块内双向注意力 + target KV 注入</text>
+  <text x="273" y="142" font-size="10" fill="#64748b">输出基础 logits U₁…Uγ 与隐藏态 h₁…hγ</text>
 
-  <line x1="523" y1="95" x2="583" y2="95" stroke="#2456c4" stroke-width="2" marker-end="url(#arr)"/>
+  <path d="M528,95 L575,95" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
 
   <!-- Stage 2: sequential head -->
-  <rect x="586" y="20" width="254" height="150" rx="10" fill="#fff" stroke="#2456c4"/>
-  <text x="713" y="42" text-anchor="middle" font-weight="bold" fill="#2456c4">③ 串行头（轻，逐位采样）</text>
-  <text x="713" y="66" text-anchor="middle" fill="#5a6272" font-size="12">Markov/RNN 头逐位加转移偏置 B</text>
-  <text x="713" y="86" text-anchor="middle" fill="#5a6272" font-size="12">pₖ ∝ exp(Uₖ + Bₖ(x₀, x&lt;k))</text>
-  <rect x="626" y="104" width="40" height="28" rx="6" fill="#2456c4"/>
-  <text x="646" y="123" text-anchor="middle" fill="#fff" font-weight="bold">E</text>
-  <rect x="674" y="104" width="40" height="28" rx="6" fill="#2456c4"/>
-  <text x="694" y="123" text-anchor="middle" fill="#fff" font-weight="bold">F</text>
-  <rect x="722" y="104" width="40" height="28" rx="6" fill="#2456c4"/>
-  <text x="742" y="123" text-anchor="middle" fill="#fff" font-weight="bold">G</text>
-  <rect x="770" y="104" width="40" height="28" rx="6" fill="#2456c4"/>
-  <text x="790" y="123" text-anchor="middle" fill="#fff" font-weight="bold">H</text>
-  <text x="713" y="152" text-anchor="middle" fill="#5a6272" font-size="12">同时输出置信分 c₁…c₄</text>
+  <rect x="586" y="20" width="254" height="150" rx="10" fill="#ffffff" stroke="#3b82f6"/>
+  <text x="713" y="42" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e40af">③ 串行头（轻，逐位采样）</text>
+  <text x="713" y="62" text-anchor="middle" font-size="10" fill="#64748b">Markov/RNN 头逐位加转移偏置 B</text>
+  <text x="713" y="78" text-anchor="middle" font-size="10" fill="#64748b">pₖ ∝ exp(Uₖ + Bₖ(x₀, x&lt;k))</text>
+  <rect x="626" y="100" width="40" height="36" rx="6" fill="#3b82f6"/>
+  <text x="646" y="122" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">E</text>
+  <rect x="674" y="100" width="40" height="36" rx="6" fill="#3b82f6"/>
+  <text x="694" y="122" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">F</text>
+  <rect x="722" y="100" width="40" height="36" rx="6" fill="#3b82f6"/>
+  <text x="742" y="122" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">G</text>
+  <rect x="770" y="100" width="40" height="36" rx="6" fill="#3b82f6"/>
+  <text x="790" y="122" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">H</text>
+  <text x="713" y="158" text-anchor="middle" font-size="10" fill="#64748b">同时输出置信分 c₁…c₄</text>
 
-  <line x1="713" y1="170" x2="713" y2="205" stroke="#2456c4" stroke-width="2" marker-end="url(#arr)"/>
+  <path d="M713,175 L713,197" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
 
   <!-- Stage 3: scheduler -->
-  <rect x="496" y="208" width="344" height="86" rx="10" fill="#fff8e8" stroke="#b0631e"/>
-  <text x="668" y="232" text-anchor="middle" font-weight="bold" fill="#b0631e">④ 硬件感知前缀调度器</text>
-  <text x="668" y="254" text-anchor="middle" fill="#5a6272" font-size="12">存活概率 a_j = Π c_i，按 a 全局排序贪心加入</text>
-  <text x="668" y="272" text-anchor="middle" fill="#5a6272" font-size="12">最大化 Θ = τ · SPS(B)；本例保留 E F G，丢弃 H</text>
-  <rect x="576" y="276" width="26" height="0" fill="none"/>
-  <text x="546" y="288" fill="#b0631e" font-size="12" text-anchor="middle">H ✗（低置信被剪）</text>
+  <rect x="496" y="208" width="344" height="86" rx="10" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="668" y="232" text-anchor="middle" font-size="12" font-weight="bold" fill="#b45309">④ 硬件感知前缀调度器</text>
+  <text x="668" y="252" text-anchor="middle" font-size="10" fill="#64748b">存活概率 a_j = Π c_i，按 a 全局排序贪心加入</text>
+  <text x="668" y="268" text-anchor="middle" font-size="10" fill="#64748b">最大化 Θ = τ · SPS(B)；本例保留 E F G，丢弃 H</text>
+  <text x="546" y="288" text-anchor="middle" font-size="10" fill="#b45309">H ✗（低置信被剪）</text>
 
-  <line x1="496" y1="251" x2="436" y2="251" stroke="#b0631e" stroke-width="2" marker-end="url(#arrg)"/>
+  <path d="M491,251 L444,251" fill="none" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
 
   <!-- Stage 4: verify -->
-  <rect x="150" y="208" width="283" height="86" rx="10" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="291" y="232" text-anchor="middle" font-weight="bold" fill="#2456c4">⑤ Target 并行验证（一次前向）</text>
-  <text x="291" y="254" text-anchor="middle" fill="#5a6272" font-size="12">拒绝采样：E ✓，F ✓，G ✗ → 丢弃 G 及之后</text>
-  <text x="291" y="272" text-anchor="middle" fill="#5a6272" font-size="12">target 重采样修正 token G*，本轮共前进 3 个</text>
+  <rect x="150" y="208" width="283" height="86" rx="10" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="291" y="232" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e40af">⑤ Target 并行验证（一次前向）</text>
+  <text x="291" y="252" text-anchor="middle" font-size="10" fill="#64748b">拒绝采样：E ✓，F ✓，G ✗ → 丢弃 G 及之后</text>
+  <text x="291" y="268" text-anchor="middle" font-size="10" fill="#64748b">target 重采样修正 token G*，本轮共前进 3 个</text>
 
-  <path d="M 291 294 C 291 350 291 360 291 385" stroke="#2456c4" stroke-width="2" fill="none" marker-end="url(#arr)"/>
-  <path d="M 105 94 C 105 340 180 370 240 395" stroke="#2456c4" stroke-width="0" fill="none"/>
+  <path d="M291,299 L291,381" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
 
   <!-- Cycle summary -->
-  <rect x="90" y="392" width="680" height="56" rx="10" fill="#f4f7fd" stroke="#e3e7ee"/>
-  <text x="430" y="415" text-anchor="middle" fill="#1a1f2e" font-weight="bold">循环回到 ①：E、F、G* 成为下一轮已确认上下文，D 作为上一轮的 anchor 参与 draft</text>
-  <text x="430" y="436" text-anchor="middle" fill="#5a6272" font-size="12">整轮只有 2 次 target 前向（① 生成 anchor + ⑤ 验证），却推进 3 个 token；H 未被验证，节省了批容量</text>
+  <rect x="90" y="392" width="680" height="56" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="430" y="415" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">循环回到 ①：E、F、G* 成为下一轮已确认上下文，D 作为上一轮的 anchor 参与 draft</text>
+  <text x="430" y="436" text-anchor="middle" font-size="10" fill="#64748b">整轮只有 2 次 target 前向（① 生成 anchor + ⑤ 验证），却推进 3 个 token；H 未被验证，节省了批容量</text>
 </svg>
 </div>
 <p class="cap"><b>图 1</b>：DSpark 的一个完整解码循环（对应论文 Figure 1 的叙述）。并行主干与串行头共同产生草案 token 与置信分，调度器按置信分与引擎吞吐画像截断前缀，target 只验证被调度的前缀。早期拒绝使后续 token 全部作废——这正是首个位置接受率最重要的原因。</p>
@@ -207,50 +206,51 @@ L=\frac{T_{\text{draft}}+T_{\text{verify}}}{\tau}
 <h3>3.1 半自回归生成（Semi-Autoregressive Generation）</h3>
 
 <div class="fig">
-<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5">
+<svg viewBox="0 0 860 324" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    <marker id="arrow2-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
     </marker>
   </defs>
   <!-- Row 1: autoregressive -->
-  <text x="16" y="34" font-weight="bold" fill="#1a1f2e">自回归 drafter（Eagle3 / MTP）</text>
-  <text x="16" y="52" fill="#5a6272" font-size="11.5">每步条件于已采样 token，质量高但 T_draft ∝ γ，只能配浅网络</text>
+  <text x="28" y="32" font-size="12" font-weight="bold" fill="#1e293b">自回归 drafter（Eagle3 / MTP）</text>
+  <text x="28" y="50" font-size="10" fill="#64748b">每步条件于已采样 token，质量高但 T_draft ∝ γ，只能配浅网络</text>
   <g>
-    <rect x="16" y="64" width="50" height="30" rx="6" fill="#2456c4"/><text x="41" y="84" text-anchor="middle" fill="#fff">x₀</text>
-    <line x1="66" y1="79" x2="118" y2="79" stroke="#2456c4" stroke-width="1.8" marker-end="url(#arr2)"/>
-    <rect x="120" y="64" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="145" y="84" text-anchor="middle">x₁</text>
-    <line x1="170" y1="79" x2="222" y2="79" stroke="#2456c4" stroke-width="1.8" marker-end="url(#arr2)"/>
-    <rect x="224" y="64" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="249" y="84" text-anchor="middle">x₂</text>
-    <line x1="274" y1="79" x2="326" y2="79" stroke="#2456c4" stroke-width="1.8" marker-end="url(#arr2)"/>
-    <rect x="328" y="64" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="353" y="84" text-anchor="middle">x₃</text>
-    <line x1="378" y1="79" x2="430" y2="79" stroke="#2456c4" stroke-width="1.8" marker-end="url(#arr2)"/>
-    <rect x="432" y="64" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="457" y="84" text-anchor="middle">…</text>
-    <text x="510" y="84" fill="#5a6272">γ 次串行前向；位置 1 能力受限于浅网络</text>
+    <path d="M83,81 L121,81" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+    <path d="M187,81 L225,81" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+    <path d="M291,81 L329,81" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+    <path d="M395,81 L433,81" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+    <rect x="28" y="64" width="50" height="34" rx="6" fill="#3b82f6"/><text x="53" y="85" text-anchor="middle" font-size="11" fill="#ffffff">x₀</text>
+    <rect x="132" y="64" width="50" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/><text x="157" y="85" text-anchor="middle" font-size="11" fill="#1e40af">x₁</text>
+    <rect x="236" y="64" width="50" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/><text x="261" y="85" text-anchor="middle" font-size="11" fill="#1e40af">x₂</text>
+    <rect x="340" y="64" width="50" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/><text x="365" y="85" text-anchor="middle" font-size="11" fill="#1e40af">x₃</text>
+    <rect x="444" y="64" width="50" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/><text x="469" y="85" text-anchor="middle" font-size="11" fill="#1e40af">…</text>
+    <text x="522" y="85" font-size="10" fill="#64748b">γ 次串行前向；位置 1 能力受限于浅网络</text>
   </g>
   <!-- Row 2: parallel -->
-  <text x="16" y="134" font-weight="bold" fill="#1a1f2e">并行 drafter（Medusa / DFlash）</text>
-  <text x="16" y="152" fill="#5a6272" font-size="11.5">一次前向出全部位置，T_draft 与 γ 无关，可配深网络，但位置间独立 → 多模态碰撞</text>
+  <text x="28" y="134" font-size="12" font-weight="bold" fill="#1e293b">并行 drafter（Medusa / DFlash）</text>
+  <text x="28" y="152" font-size="10" fill="#64748b">一次前向出全部位置，T_draft 与 γ 无关，可配深网络，但位置间独立 → 多模态碰撞</text>
   <g>
-    <rect x="16" y="164" width="50" height="30" rx="6" fill="#2456c4"/><text x="41" y="184" text-anchor="middle" fill="#fff">x₀+[m]</text>
-    <rect x="120" y="164" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="145" y="184" text-anchor="middle">x₁</text>
-    <rect x="224" y="164" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="249" y="184" text-anchor="middle">x₂</text>
-    <rect x="328" y="164" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="353" y="184" text-anchor="middle">x₃</text>
-    <rect x="432" y="164" width="50" height="30" rx="6" fill="#eef3fc" stroke="#2456c4"/><text x="457" y="184" text-anchor="middle">…</text>
-    <line x1="91" y1="179" x2="530" y2="179" stroke="#2456c4" stroke-width="1.2" stroke-dasharray="4 3"/>
-    <text x="548" y="184" fill="#5a6272">单次并行前向；位置 1 强（深网络），后缀衰减快</text>
+    <path d="M83,185 L542,185" fill="none" stroke="#3b82f6" stroke-width="1.2" stroke-dasharray="4,3"/>
+    <rect x="28" y="168" width="50" height="34" rx="6" fill="#3b82f6"/><text x="53" y="189" text-anchor="middle" font-size="11" fill="#ffffff">x₀+[m]</text>
+    <rect x="132" y="168" width="50" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/><text x="157" y="189" text-anchor="middle" font-size="11" fill="#1e40af">x₁</text>
+    <rect x="236" y="168" width="50" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/><text x="261" y="189" text-anchor="middle" font-size="11" fill="#1e40af">x₂</text>
+    <rect x="340" y="168" width="50" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/><text x="365" y="189" text-anchor="middle" font-size="11" fill="#1e40af">x₃</text>
+    <rect x="444" y="168" width="50" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/><text x="469" y="189" text-anchor="middle" font-size="11" fill="#1e40af">…</text>
+    <text x="560" y="189" font-size="10" fill="#64748b">单次并行前向；位置 1 强（深网络），后缀衰减快</text>
   </g>
   <!-- Row 3: DSpark -->
-  <text x="16" y="234" font-weight="bold" fill="#b0631e">DSpark 半自回归（本文）</text>
-  <text x="16" y="252" fill="#5a6272" font-size="11.5">重并行主干出基础 logits，轻串行头（Markov/RNN）逐位加转移偏置，兼顾两端</text>
+  <text x="28" y="238" font-size="12" font-weight="bold" fill="#b45309">DSpark 半自回归（本文）</text>
+  <text x="28" y="254" font-size="10" fill="#64748b">重并行主干出基础 logits，轻串行头（Markov/RNN）逐位加转移偏置，兼顾两端</text>
   <g>
-    <rect x="16" y="262" width="150" height="30" rx="6" fill="#2456c4"/>
-    <text x="91" y="282" text-anchor="middle" fill="#fff">并行主干（深，1 次前向）</text>
-    <rect x="230" y="262" width="90" height="30" rx="6" fill="#fff8e8" stroke="#b0631e"/>
-    <text x="275" y="282" text-anchor="middle" fill="#b0631e">串行头（轻）</text>
-    <line x1="168" y1="277" x2="228" y2="277" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
-    <rect x="330" y="262" width="490" height="30" rx="6" fill="#fff" stroke="#e3e7ee"/>
-    <text x="575" y="282" text-anchor="middle" fill="#5a6272">位置 1 继承并行深网络的高容量；位置 2…γ 由串行头条件于已采样前缀，抑制后缀衰减</text>
+    <path d="M183,287 L231,287" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+    <rect x="28" y="270" width="150" height="34" rx="6" fill="#3b82f6"/>
+    <text x="103" y="291" text-anchor="middle" font-size="11" fill="#ffffff">并行主干（深，1 次前向）</text>
+    <rect x="242" y="270" width="90" height="34" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+    <text x="287" y="291" text-anchor="middle" font-size="11" fill="#b45309">串行头（轻）</text>
+    <rect x="342" y="270" width="490" height="34" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="587" y="291" text-anchor="middle" font-size="10" fill="#64748b">位置 1 继承并行深网络的高容量；位置 2…γ 由串行头条件于已采样前缀，抑制后缀衰减</text>
   </g>
 </svg>
 </div>
@@ -355,31 +355,27 @@ B=\sum_{r=1}^{R}(1+\ell_{r}),\qquad
 \]</div>
 <p>引擎吞吐 \(\mathrm{SPS}(B)\)（steps per second，每秒前向步数）在引擎初始化时对 batch size 画像一次、存成轻量成本表。调度器最大化期望系统吞吐 \(\Theta=\tau\cdot\mathrm{SPS}(B)\)（论文 Algorithm 1）：</p>
 <div class="fig">
-<svg viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5">
-  <defs>
-    <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
-    </marker>
-  </defs>
-  <rect x="20" y="18" width="380" height="212" rx="10" fill="#fff" stroke="#e3e7ee"/>
-  <text x="210" y="44" text-anchor="middle" font-weight="bold" fill="#2456c4">贪心准入路径（Algorithm 1）</text>
-  <text x="34" y="70" fill="#2a3040">1. 每请求算前缀存活概率 a_r,j = Π c_r,i</text>
-  <text x="34" y="94" fill="#2a3040">2. 候选集 E = {(r,j) | a_r,j &gt; 0}，按 a 降序排序</text>
-  <text x="34" y="118" fill="#2a3040">3. 依序逐个加入：ℓ_r ← j，B ← B+1，τ* ← τ* + a_r,j</text>
-  <text x="34" y="142" fill="#2a3040">4. 查成本表算 Θ = τ* · SPS(B)</text>
-  <text x="34" y="166" fill="#b0631e" font-weight="bold">5. 若 Θ ≤ Θ_best → break（early-stopping）</text>
-  <text x="34" y="196" fill="#5a6272" font-size="11.5">单调性：a_r,j 随 j 非增，故按 a 全局排序天然满足</text>
-  <text x="34" y="214" fill="#5a6272" font-size="11.5">块内前缀依赖；Θ(B) 固定时贪心即最优分配</text>
+<svg viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <rect x="20" y="18" width="380" height="212" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="210" y="44" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e40af">贪心准入路径（Algorithm 1）</text>
+  <text x="34" y="70" font-size="11" fill="#1e293b">1. 每请求算前缀存活概率 a_r,j = Π c_r,i</text>
+  <text x="34" y="94" font-size="11" fill="#1e293b">2. 候选集 E = {(r,j) | a_r,j &gt; 0}，按 a 降序排序</text>
+  <text x="34" y="118" font-size="11" fill="#1e293b">3. 依序逐个加入：ℓ_r ← j，B ← B+1，τ* ← τ* + a_r,j</text>
+  <text x="34" y="142" font-size="11" fill="#1e293b">4. 查成本表算 Θ = τ* · SPS(B)</text>
+  <text x="34" y="166" font-size="11" font-weight="bold" fill="#b45309">5. 若 Θ ≤ Θ_best → break（early-stopping）</text>
+  <text x="34" y="196" font-size="10" fill="#64748b">单调性：a_r,j 随 j 非增，故按 a 全局排序天然满足</text>
+  <text x="34" y="214" font-size="10" fill="#64748b">块内前缀依赖；Θ(B) 固定时贪心即最优分配</text>
 
-  <rect x="430" y="18" width="410" height="212" rx="10" fill="#fff" stroke="#e3e7ee"/>
-  <text x="635" y="44" text-anchor="middle" font-weight="bold" fill="#2456c4">为什么必须 early-stop？（非预期性）</text>
-  <text x="444" y="70" fill="#2a3040">无损投机解码要求准入决策不依赖未来 token：</text>
-  <text x="444" y="94" fill="#2a3040">置信头特征含 W₁[x_r,k−1]，算 a_r,k+1 需要先采样</text>
-  <text x="444" y="114" fill="#2a3040">出 x_r,k；若回溯全局搜索，x_r,k 的取值会泄漏进</text>
-  <text x="444" y="134" fill="#2a3040">第 k 步的截断决策 → 选择偏置，破坏目标分布恢复。</text>
-  <text x="444" y="162" fill="#2a3040">解法：Θ 一下降就 break，截断只依赖已处理前缀。</text>
-  <text x="444" y="186" fill="#5a6272" font-size="11.5">注：该逐步 early-stop 求得全局最优 ⟺ Θ 关于 B 单峰，</text>
-  <text x="444" y="204" fill="#5a6272" font-size="11.5">隐含假设 SPS(B) 曲线平滑；锯齿曲线的处理见 §5.2。</text>
+  <rect x="430" y="18" width="410" height="212" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="635" y="44" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e40af">为什么必须 early-stop？（非预期性）</text>
+  <text x="444" y="70" font-size="11" fill="#1e293b">无损投机解码要求准入决策不依赖未来 token：</text>
+  <text x="444" y="94" font-size="11" fill="#1e293b">置信头特征含 W₁[x_r,k−1]，算 a_r,k+1 需要先采样</text>
+  <text x="444" y="114" font-size="11" fill="#1e293b">出 x_r,k；若回溯全局搜索，x_r,k 的取值会泄漏进</text>
+  <text x="444" y="134" font-size="11" fill="#1e293b">第 k 步的截断决策 → 选择偏置，破坏目标分布恢复。</text>
+  <text x="444" y="162" font-size="11" fill="#1e293b">解法：Θ 一下降就 break，截断只依赖已处理前缀。</text>
+  <text x="444" y="186" font-size="10" fill="#64748b">注：该逐步 early-stop 求得全局最优 ⟺ Θ 关于 B 单峰，</text>
+  <text x="444" y="204" font-size="10" fill="#64748b">隐含假设 SPS(B) 曲线平滑；锯齿曲线的处理见 §5.2。</text>
 </svg>
 </div>
 <p class="cap"><b>图 3</b>：硬件感知前缀调度器（对应论文 §3.2.2 与附录 A）。左侧是贪心准入流程；右侧解释 early-stopping 为何是无损性的必要条件。</p>
@@ -573,51 +569,53 @@ model = dict(
 <p>评测设置：Qwen3-4B/8B/14B 与 Gemma4-12B 四个 target；Eagle3（1 层，TTT=7）与 DFlash（5 层，block 7）为基线，所有 drafter 在同一框架、同一数据（Open-PerfectBlend 130 万条，只用 prompt、target 自采样回答）重训 10 epoch；温度 1.0，链式起草，关闭置信调度以隔离草案质量（论文 §4.1–4.2）。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 320" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5">
-  <!-- chart area -->
-  <g>
-    <!-- y gridlines: tau 2.0..6.0, x: chart 90..810, y: 270(tau=2)..40(tau=6) -->
-    <line x1="90" y1="270" x2="810" y2="270" stroke="#e3e7ee"/><text x="80" y="274" text-anchor="end" fill="#5a6272">2.0</text>
-    <line x1="90" y1="227.5" x2="810" y2="227.5" stroke="#eef1f6"/><text x="80" y="231" text-anchor="end" fill="#5a6272">3.0</text>
-    <line x1="90" y1="185" x2="810" y2="185" stroke="#eef1f6"/><text x="80" y="189" text-anchor="end" fill="#5a6272">4.0</text>
-    <line x1="90" y1="142.5" x2="810" y2="142.5" stroke="#eef1f6"/><text x="80" y="146" text-anchor="end" fill="#5a6272">5.0</text>
-    <line x1="90" y1="100" x2="810" y2="100" stroke="#eef1f6"/><text x="80" y="104" text-anchor="end" fill="#5a6272">6.0</text>
-    <line x1="90" y1="40" x2="90" y2="270" stroke="#c9d0da"/>
-    <line x1="90" y1="270" x2="810" y2="270" stroke="#c9d0da"/>
-
-    <!-- Group Math: x centers 190; bar width 38, gap 4 -->
-    <!-- Eagle3 4.56 -> h=(4.56-2)*47.5=121.65 -> y=148.35 ; DFlash 4.80 -> 133 -> y=137 ; DSpark 5.57 -> 169.7 -> y=100.3 -->
-    <rect x="133" y="148.3" width="38" height="121.7" fill="#9fb6e0"/>
-    <rect x="175" y="137" width="38" height="133" fill="#2456c4"/>
-    <rect x="217" y="100.3" width="38" height="169.7" fill="#b0631e"/>
-    <text x="152" y="142" text-anchor="middle" fill="#5a6272">4.56</text>
-    <text x="194" y="131" text-anchor="middle" fill="#5a6272">4.80</text>
-    <text x="236" y="94" text-anchor="middle" font-weight="bold" fill="#b0631e">5.57</text>
-    <text x="194" y="292" text-anchor="middle" font-weight="bold">Math</text>
-
-    <!-- Group Code: center 450; Eagle3 3.87 -> 88.8 -> y=181.2 ; DFlash 4.44 -> 115.9 -> y=154.1 ; DSpark 5.12 -> 148.2 -> y=121.8 -->
-    <rect x="393" y="181.2" width="38" height="88.8" fill="#9fb6e0"/>
-    <rect x="435" y="154.1" width="38" height="115.9" fill="#2456c4"/>
-    <rect x="477" y="121.8" width="38" height="148.2" fill="#b0631e"/>
-    <text x="412" y="175" text-anchor="middle" fill="#5a6272">3.87</text>
-    <text x="454" y="148" text-anchor="middle" fill="#5a6272">4.44</text>
-    <text x="496" y="116" text-anchor="middle" font-weight="bold" fill="#b0631e">5.12</text>
-    <text x="454" y="292" text-anchor="middle" font-weight="bold">Code</text>
-
-    <!-- Group Chat: center 710; Eagle3 2.40 -> 19 -> y=251 ; DFlash 2.95 -> 45.2 -> y=224.8 ; DSpark 3.49 -> 70.8 -> y=199.2 -->
-    <rect x="653" y="251" width="38" height="19" fill="#9fb6e0"/>
-    <rect x="695" y="224.8" width="38" height="45.2" fill="#2456c4"/>
-    <rect x="737" y="199.2" width="38" height="70.8" fill="#b0631e"/>
-    <text x="672" y="245" text-anchor="middle" fill="#5a6272">2.40</text>
-    <text x="714" y="219" text-anchor="middle" fill="#5a6272">2.95</text>
-    <text x="756" y="193" text-anchor="middle" font-weight="bold" fill="#b0631e">3.49</text>
-    <text x="714" y="292" text-anchor="middle" font-weight="bold">Chat</text>
-  </g>
+<svg viewBox="0 0 860 355" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <!-- legend -->
-  <rect x="90" y="8" width="14" height="14" fill="#9fb6e0"/><text x="110" y="19" fill="#2a3040">Eagle3（自回归）</text>
-  <rect x="240" y="8" width="14" height="14" fill="#2456c4"/><text x="260" y="19" fill="#2a3040">DFlash（并行）</text>
-  <rect x="390" y="8" width="14" height="14" fill="#b0631e"/><text x="410" y="19" fill="#2a3040">DSpark（半自回归）</text>
-  <text x="810" y="312" text-anchor="end" fill="#5a6272" font-size="11.5">纵轴：每轮接受长度 τ（含 bonus token），Qwen3-4B，九个基准按域平均（由论文 Table 1 计算）</text>
+  <rect x="90" y="20" width="14" height="14" fill="#bfdbfe"/><text x="110" y="31" font-size="10" fill="#1e293b">Eagle3（自回归）</text>
+  <rect x="240" y="20" width="14" height="14" fill="#3b82f6"/><text x="260" y="31" font-size="10" fill="#1e293b">DFlash（并行）</text>
+  <rect x="390" y="20" width="14" height="14" fill="#f59e0b"/><text x="410" y="31" font-size="10" fill="#1e293b">DSpark（半自回归）</text>
+  <!-- chart area: x 90..810, y 120(tau=6)..290(tau=2) -->
+  <line x1="90" y1="247.5" x2="810" y2="247.5" stroke="#e2e8f0"/>
+  <text x="80" y="251.5" text-anchor="end" font-size="10" fill="#64748b">3.0</text>
+  <line x1="90" y1="205" x2="810" y2="205" stroke="#e2e8f0"/>
+  <text x="80" y="209" text-anchor="end" font-size="10" fill="#64748b">4.0</text>
+  <line x1="90" y1="162.5" x2="810" y2="162.5" stroke="#e2e8f0"/>
+  <text x="80" y="166.5" text-anchor="end" font-size="10" fill="#64748b">5.0</text>
+  <line x1="90" y1="120" x2="810" y2="120" stroke="#e2e8f0"/>
+  <text x="80" y="124" text-anchor="end" font-size="10" fill="#64748b">6.0</text>
+  <line x1="90" y1="120" x2="90" y2="290" stroke="#cbd5e1"/>
+  <line x1="90" y1="290" x2="810" y2="290" stroke="#cbd5e1"/>
+  <text x="80" y="294" text-anchor="end" font-size="10" fill="#64748b">2.0</text>
+
+  <!-- Group Math: center 194; bar width 38 -->
+  <rect x="133" y="168.3" width="38" height="121.7" fill="#bfdbfe"/>
+  <rect x="175" y="157" width="38" height="133" fill="#3b82f6"/>
+  <rect x="217" y="120.3" width="38" height="169.7" fill="#f59e0b"/>
+  <text x="152" y="162" text-anchor="middle" font-size="10" fill="#64748b">4.56</text>
+  <text x="194" y="151" text-anchor="middle" font-size="10" fill="#64748b">4.80</text>
+  <text x="236" y="114" text-anchor="middle" font-size="10" font-weight="bold" fill="#b45309">5.57</text>
+  <text x="194" y="312" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">Math</text>
+
+  <!-- Group Code: center 454 -->
+  <rect x="393" y="201.2" width="38" height="88.8" fill="#bfdbfe"/>
+  <rect x="435" y="174.1" width="38" height="115.9" fill="#3b82f6"/>
+  <rect x="477" y="141.8" width="38" height="148.2" fill="#f59e0b"/>
+  <text x="412" y="195" text-anchor="middle" font-size="10" fill="#64748b">3.87</text>
+  <text x="454" y="168" text-anchor="middle" font-size="10" fill="#64748b">4.44</text>
+  <text x="496" y="136" text-anchor="middle" font-size="10" font-weight="bold" fill="#b45309">5.12</text>
+  <text x="454" y="312" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">Code</text>
+
+  <!-- Group Chat: center 714 -->
+  <rect x="653" y="271" width="38" height="19" fill="#bfdbfe"/>
+  <rect x="695" y="244.8" width="38" height="45.2" fill="#3b82f6"/>
+  <rect x="737" y="219.2" width="38" height="70.8" fill="#f59e0b"/>
+  <text x="672" y="265" text-anchor="middle" font-size="10" fill="#64748b">2.40</text>
+  <text x="714" y="239" text-anchor="middle" font-size="10" fill="#64748b">2.95</text>
+  <text x="756" y="213" text-anchor="middle" font-size="10" font-weight="bold" fill="#b45309">3.49</text>
+  <text x="714" y="312" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e293b">Chat</text>
+
+  <text x="810" y="332" text-anchor="end" font-size="10" fill="#64748b">纵轴：每轮接受长度 τ（含 bonus token），Qwen3-4B，九个基准按域平均（由论文 Table 1 计算）</text>
 </svg>
 </div>
 <p class="cap"><b>图 4</b>：离线主结果的域级平均（数据来自论文 Table 1，Qwen3-4B；Math=5.57/Code=5.12/Chat=3.49 的 DSpark 数值与论文 §4.2 正文引用一致）。DSpark 在三个模型规模上对 Eagle3 的 macro 平均提升分别为 30.9%/26.7%/30.0%，对 DFlash 为 16.3%/18.4%/18.3%；Gemma4-12B 上优势同样成立。</p>

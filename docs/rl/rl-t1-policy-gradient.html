@@ -257,55 +257,57 @@ z = z + lr * r * (onehot - pi)        # REINFORCE 一步更新
 print(np.exp(z) / np.exp(z).sum())    # [0.440, 0.382, 0.178]</code></pre>
 
 <div class="fig">
-<svg viewBox="0 0 940 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 900 288" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="m1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
     </marker>
-    <marker id="m1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
     </marker>
   </defs>
-  <text x="40" y="32" font-size="13" font-weight="bold" fill="#1a1f2e">REINFORCE 循环：本讲全部内容的一张图</text>
+  <!-- title: content spans x 20..880, center 450 -->
+  <text x="450" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">REINFORCE 循环：本讲全部内容的一张图</text>
 
-  <!-- A: policy -->
-  <rect x="60" y="64" width="220" height="74" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
-  <text x="170" y="94" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">策略 π = softmax(z)</text>
-  <text x="170" y="116" font-size="10" text-anchor="middle" fill="#5a6272">例：z = [1.0, 0.5, 0.0]</text>
+  <!-- A: policy (x=20..240, y=64..136) -->
+  <rect x="20" y="64" width="220" height="72" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="130" y="95" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e40af">策略 π = softmax(z)</text>
+  <text x="130" y="113" font-size="10" text-anchor="middle" fill="#64748b">例：z = [1.0, 0.5, 0.0]</text>
 
-  <!-- B: sample -->
-  <rect x="660" y="64" width="220" height="74" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="770" y="94" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">按概率采样一个动作</text>
-  <text x="770" y="116" font-size="10" text-anchor="middle" fill="#5a6272">例：抽中 A2（数字式）</text>
+  <!-- B: sample (x=660..880) -->
+  <rect x="660" y="64" width="220" height="72" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="770" y="95" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">按概率采样一个动作</text>
+  <text x="770" y="113" font-size="10" text-anchor="middle" fill="#64748b">例：抽中 A2（数字式）</text>
 
-  <!-- C: reward -->
-  <rect x="660" y="190" width="220" height="74" rx="10" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
-  <text x="770" y="220" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">环境打分 r</text>
-  <text x="770" y="242" font-size="10" text-anchor="middle" fill="#5a6272">例：用户点了 → r = +3</text>
+  <!-- C: reward (y=190..262) -->
+  <rect x="660" y="190" width="220" height="72" rx="10" fill="#d1fae5" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="770" y="221" font-size="12" font-weight="bold" text-anchor="middle" fill="#166534">环境打分 r</text>
+  <text x="770" y="239" font-size="10" text-anchor="middle" fill="#64748b">例：用户点了 → r = +3</text>
 
   <!-- D: update -->
-  <rect x="60" y="190" width="220" height="74" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
-  <text x="170" y="220" font-size="12.5" font-weight="bold" text-anchor="middle" fill="#1a1f2e">更新分数 z</text>
-  <text x="170" y="242" font-size="10" text-anchor="middle" fill="#5a6272">z += lr · r · (e_a − π)</text>
+  <rect x="20" y="190" width="220" height="72" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="130" y="221" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e293b">更新分数 z</text>
+  <text x="130" y="239" font-size="10" text-anchor="middle" fill="#64748b">z += lr · r · (e_a − π)</text>
 
   <!-- A -> B -->
-  <line x1="280" y1="101" x2="653" y2="101" stroke="#2456c4" stroke-width="1.6" marker-end="url(#m1b)"/>
-  <text x="470" y="91" font-size="10.5" text-anchor="middle" fill="#2456c4">概率大的动作更容易被抽中</text>
+  <line x1="245" y1="100" x2="649" y2="100" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <text x="447" y="86" font-size="10" text-anchor="middle" fill="#1e40af">概率大的动作更容易被抽中</text>
 
   <!-- B -> C -->
-  <line x1="770" y1="138" x2="770" y2="183" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
-  <text x="786" y="165" font-size="10.5" fill="#5a6272">发出标题</text>
+  <line x1="770" y1="141" x2="770" y2="179" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="786" y="165" font-size="10" fill="#64748b">发出标题</text>
 
   <!-- C -> D -->
-  <line x1="660" y1="227" x2="287" y2="227" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
-  <text x="470" y="217" font-size="10.5" text-anchor="middle" fill="#5a6272">r 越大，推得越狠；r 为负就反着推</text>
+  <line x1="655" y1="226" x2="251" y2="226" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="453" y="212" font-size="10" text-anchor="middle" fill="#64748b">r 越大，推得越狠；r 为负就反着推</text>
 
   <!-- D -> A -->
-  <line x1="170" y1="190" x2="170" y2="145" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
-  <text x="154" y="172" font-size="10.5" text-anchor="end" fill="#5a6272">概率随之改变</text>
+  <line x1="130" y1="185" x2="130" y2="147" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="115" y="170" font-size="10" text-anchor="end" fill="#64748b">概率随之改变</text>
 
-  <text x="470" y="180" font-size="11" text-anchor="middle" fill="#1a1f2e">LLM 版对照：动作 = 一整条回答，打分 = reward / verifier</text>
-  <text x="470" y="202" font-size="10" text-anchor="middle" fill="#5a6272">（第 2 讲展开）</text>
+  <text x="450" y="172" font-size="11" text-anchor="middle" fill="#1e293b">LLM 版对照：动作 = 一整条回答，打分 = reward / verifier</text>
+  <text x="450" y="194" font-size="10" text-anchor="middle" fill="#64748b">（第 2 讲展开）</text>
 </svg>
 </div>
 <p class="cap"><b>图 1-1</b>｜REINFORCE 闭环。与第 0 讲图 0-2 逐环对应——只是把「模型」具体化成了「softmax 概率」、把「更新」具体化成了一条能手算的公式。</p>
@@ -344,62 +346,65 @@ print(np.exp(z) / np.exp(z).sum())    # [0.440, 0.382, 0.178]</code></pre>
 <p>很多真实场景里打分<b>没有负数</b>（点击 1~10 分、验证通过 1 分、失败 0 分）。不减 baseline 时，<b>每个被抽中的动作都在被「加强」，只是力度不同</b>——所有加强互相抵消，净信号小、噪声大。减掉平均分后，信号立刻有了方向：</p>
 
 <div class="fig">
-<svg viewBox="0 0 940 330" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
-  <text x="40" y="34" font-size="13" font-weight="bold" fill="#1a1f2e">减 baseline 前 vs 后：信号从「单向推」变成「有推有拉」（4 次采样，得分 1, 5, 1, 5，平均 3）</text>
+<svg viewBox="0 0 805 364" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <!-- title: content spans x 22..782, center 402 -->
+  <text x="402" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">减 baseline 前 vs 后：信号从「单向推」变成「有推有拉」</text>
+  <text x="402" y="54" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">（4 次采样，得分 1, 5, 1, 5，平均 3）</text>
 
-  <!-- ===== left panel: b=0 ===== -->
-  <text x="80" y="60" font-size="12" font-weight="bold" fill="#1a1f2e">不减 baseline（b = 0）</text>
-  <text x="80" y="78" font-size="10" fill="#5a6272">每次采样都在「加强」，幅度 1:5 悬殊</text>
+  <!-- ===== left panel: b=0 (line x 22..372, y=216) ===== -->
+  <text x="22" y="84" font-size="12" font-weight="bold" fill="#1e293b">不减 baseline（b = 0）</text>
+  <text x="22" y="102" font-size="10" fill="#64748b">每次采样都在「加强」，幅度 1:5 悬殊</text>
 
   <!-- zero line -->
-  <line x1="70" y1="190" x2="430" y2="190" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="438" y="194" font-size="10" fill="#5a6272">0</text>
+  <line x1="22" y1="216" x2="372" y2="216" stroke="#64748b" stroke-width="1.2"/>
+  <text x="380" y="220" font-size="10" fill="#64748b">0</text>
 
   <!-- bars: scale 18px per unit -->
-  <rect x="90" y="172" width="50" height="18" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="115" y="164" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+1</text>
+  <rect x="42" y="198" width="50" height="18" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="67" y="190" font-size="11" text-anchor="middle" fill="#166534" font-weight="bold">+1</text>
 
-  <rect x="180" y="100" width="50" height="90" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="205" y="92" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+5</text>
+  <rect x="132" y="126" width="50" height="90" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="157" y="118" font-size="11" text-anchor="middle" fill="#166534" font-weight="bold">+5</text>
 
-  <rect x="270" y="172" width="50" height="18" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="295" y="164" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+1</text>
+  <rect x="222" y="198" width="50" height="18" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="247" y="190" font-size="11" text-anchor="middle" fill="#166534" font-weight="bold">+1</text>
 
-  <rect x="360" y="100" width="50" height="90" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="385" y="92" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+5</text>
+  <rect x="312" y="126" width="50" height="90" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="337" y="118" font-size="11" text-anchor="middle" fill="#166534" font-weight="bold">+5</text>
 
-  <!-- ===== right panel: b=3 ===== -->
-  <text x="510" y="60" font-size="12" font-weight="bold" fill="#1a1f2e">减 baseline（b = 平均分 3）</text>
-  <text x="510" y="78" font-size="10" fill="#5a6272">好于平均的加强，差于平均的削弱</text>
+  <!-- ===== right panel: b=3 (line x 418..768) ===== -->
+  <text x="418" y="84" font-size="12" font-weight="bold" fill="#1e293b">减 baseline（b = 平均分 3）</text>
+  <text x="418" y="102" font-size="10" fill="#64748b">好于平均的加强，差于平均的削弱</text>
 
-  <line x1="500" y1="190" x2="880" y2="190" stroke="#5a6272" stroke-width="1.2"/>
-  <text x="888" y="194" font-size="10" fill="#5a6272">0</text>
+  <line x1="418" y1="216" x2="768" y2="216" stroke="#64748b" stroke-width="1.2"/>
+  <text x="776" y="220" font-size="10" fill="#64748b">0</text>
 
   <!-- bars: scale 18px per unit; +2 up, -2 down -->
-  <rect x="520" y="190" width="50" height="36" rx="4" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="545" y="240" font-size="11" text-anchor="middle" fill="#e8862a" font-weight="bold">−2</text>
+  <rect x="438" y="216" width="50" height="36" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="463" y="266" font-size="11" text-anchor="middle" fill="#b45309" font-weight="bold">−2</text>
 
-  <rect x="610" y="154" width="50" height="36" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="635" y="146" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+2</text>
+  <rect x="528" y="180" width="50" height="36" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="553" y="172" font-size="11" text-anchor="middle" fill="#166534" font-weight="bold">+2</text>
 
-  <rect x="700" y="190" width="50" height="36" rx="4" fill="#fbe3cc" stroke="#e8862a"/>
-  <text x="725" y="240" font-size="11" text-anchor="middle" fill="#e8862a" font-weight="bold">−2</text>
+  <rect x="618" y="216" width="50" height="36" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="673" y="266" font-size="11" text-anchor="middle" fill="#b45309" font-weight="bold">−2</text>
 
-  <rect x="790" y="154" width="50" height="36" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
-  <text x="815" y="146" font-size="11" text-anchor="middle" fill="#2f9e63" font-weight="bold">+2</text>
+  <rect x="708" y="180" width="50" height="36" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="733" y="172" font-size="11" text-anchor="middle" fill="#166534" font-weight="bold">+2</text>
 
   <!-- sample labels (shared row) -->
-  <text x="115" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样1</text>
-  <text x="205" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样2</text>
-  <text x="295" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样3</text>
-  <text x="385" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样4</text>
-  <text x="545" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样1</text>
-  <text x="635" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样2</text>
-  <text x="725" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样3</text>
-  <text x="815" y="258" font-size="10" text-anchor="middle" fill="#5a6272">采样4</text>
+  <text x="67" y="284" font-size="10" text-anchor="middle" fill="#64748b">采样1</text>
+  <text x="157" y="284" font-size="10" text-anchor="middle" fill="#64748b">采样2</text>
+  <text x="247" y="284" font-size="10" text-anchor="middle" fill="#64748b">采样3</text>
+  <text x="337" y="284" font-size="10" text-anchor="middle" fill="#64748b">采样4</text>
+  <text x="463" y="284" font-size="10" text-anchor="middle" fill="#64748b">采样1</text>
+  <text x="553" y="284" font-size="10" text-anchor="middle" fill="#64748b">采样2</text>
+  <text x="673" y="284" font-size="10" text-anchor="middle" fill="#64748b">采样3</text>
+  <text x="733" y="284" font-size="10" text-anchor="middle" fill="#64748b">采样4</text>
 
-  <text x="40" y="290" font-size="11" fill="#5a6272">左图：得分 1 和 5 都是正数，四个动作全被往上推，只是 1 分的推力小、5 分的推力大——净信号被大量相互抵消的「加强」稀释。</text>
-  <text x="40" y="310" font-size="11" fill="#5a6272">右图：减掉平均分 3 之后，低于平均的变成负信号（削弱），高于平均的保持正信号（加强），方向干净、幅度对称、抖动更小。</text>
+  <text x="22" y="316" font-size="11" fill="#64748b">左图：得分 1 和 5 都是正数，四个动作全被往上推，只是 1 分的推力小、5 分的推力大——净信号被大量相互抵消的「加强」稀释。</text>
+  <text x="22" y="336" font-size="11" fill="#64748b">右图：减掉平均分 3 之后，低于平均的变成负信号（削弱），高于平均的保持正信号（加强），方向干净、幅度对称、抖动更小。</text>
 </svg>
 </div>
 <p class="cap"><b>图 1-2</b>｜baseline 的真正价值：把「绝对得分」变成「相对平均的优势」。右图橙条方向向下——差于平均的动作不再被温和加强，而是被明确削弱。「减掉平均后的得分」就叫优势（advantage，\(A = r - b\)）：它回答的不是「这次得分多少」，而是「这次比平均水平好多少」。</p>

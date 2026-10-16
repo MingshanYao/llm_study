@@ -183,70 +183,74 @@ L^{\mathrm{CLIP}}(\theta) = \mathbb{E}\Big[\min\big(\rho A,\ \mathrm{clip}(\rho,
 </div>
 
 <div class="fig">
-<svg viewBox="0 0 940 380" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+<svg viewBox="0 0 900 400" width="900" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="m3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
     </marker>
   </defs>
-  <text x="40" y="34" font-size="13" font-weight="bold" fill="#1a1f2e">clip 后的目标函数 L 与概率比 ρ 的关系（ε = 0.2）</text>
 
-  <!-- ================= left panel: A>0 ================= -->
-  <text x="100" y="64" font-size="12" font-weight="bold" fill="#1a1f2e">A &gt; 0（好动作）：涨到 1+ε 就停</text>
+  <!-- title: content spans x 40..875, center 457 -->
+  <text x="457" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">clip 后的目标函数 L 与概率比 ρ 的关系（ε = 0.2）</text>
 
-  <!-- axes -->
-  <line x1="100" y1="220" x2="400" y2="220" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
-  <line x1="100" y1="220" x2="100" y2="80" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
-  <text x="408" y="224" font-size="10" fill="#5a6272">ρ</text>
-  <text x="88" y="76" font-size="10" fill="#5a6272">L</text>
+  <!-- ============ left panel: A>0 ============ -->
+  <text x="120" y="80" font-size="12" font-weight="bold" fill="#1e293b">A &gt; 0（好动作）：涨到 1+ε 就停</text>
 
-  <!-- x ticks: ρ=0.8 -> x=175, 1.0 -> 225, 1.2 -> 275 -->
-  <line x1="175" y1="220" x2="175" y2="226" stroke="#5a6272" stroke-width="1"/>
-  <text x="175" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1−ε</text>
-  <line x1="225" y1="220" x2="225" y2="226" stroke="#5a6272" stroke-width="1"/>
-  <text x="225" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1.0</text>
-  <line x1="275" y1="220" x2="275" y2="226" stroke="#5a6272" stroke-width="1"/>
-  <text x="275" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1+ε</text>
-  <line x1="275" y1="124" x2="275" y2="220" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="3,3"/>
+  <!-- axes: origin (120,240) -->
+  <line x1="120" y1="240" x2="420" y2="240" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="120" y1="240" x2="120" y2="100" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="438" y="244" font-size="10" fill="#64748b">ρ</text>
+  <text x="98" y="96" font-size="10" fill="#64748b" text-anchor="middle">L</text>
 
-  <!-- unclipped rho*A dashed: (100,180) -> (375,92) -->
-  <line x1="100" y1="180" x2="375" y2="92" stroke="#5a6272" stroke-width="1.2" stroke-dasharray="6,3"/>
-  <!-- clipped curve: (100,180) -> (175,156) -> (275,124) -> (375,124) -->
-  <polyline points="100,180 175,156 275,124 375,124" fill="none" stroke="#2456c4" stroke-width="2.2"/>
+  <!-- ticks: 1−ε -> 195, 1.0 -> 245, 1+ε -> 295 -->
+  <line x1="195" y1="240" x2="195" y2="246" stroke="#64748b" stroke-width="1"/>
+  <text x="195" y="266" font-size="10" text-anchor="middle" fill="#64748b">1−ε</text>
+  <line x1="245" y1="240" x2="245" y2="246" stroke="#64748b" stroke-width="1"/>
+  <text x="245" y="266" font-size="10" text-anchor="middle" fill="#64748b">1.0</text>
+  <line x1="295" y1="240" x2="295" y2="246" stroke="#64748b" stroke-width="1"/>
+  <text x="295" y="266" font-size="10" text-anchor="middle" fill="#64748b">1+ε</text>
+  <line x1="295" y1="148" x2="295" y2="240" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4,4"/>
 
-  <!-- annotations -->
-  <text x="300" y="112" font-size="10.5" fill="#2456c4">变平：梯度 ≈ 0，推不动了</text>
-  <text x="292" y="86" font-size="10.5" fill="#5a6272">虚线 = 不裁剪 ρA（会冲上天）</text>
-
-  <!-- ================= right panel: A<0 ================= -->
-  <text x="520" y="64" font-size="12" font-weight="bold" fill="#1a1f2e">A &lt; 0（坏动作）：压到 1−ε 就停，但涨了绝不手软</text>
-
-  <!-- axes -->
-  <line x1="520" y1="220" x2="830" y2="220" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
-  <line x1="520" y1="220" x2="520" y2="150" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m3a)"/>
-  <text x="838" y="224" font-size="10" fill="#5a6272">ρ</text>
-
-  <!-- x ticks: 0.8 -> 595, 1.0 -> 645, 1.2 -> 695 -->
-  <line x1="595" y1="220" x2="595" y2="226" stroke="#5a6272" stroke-width="1"/>
-  <text x="595" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1−ε</text>
-  <line x1="645" y1="220" x2="645" y2="226" stroke="#5a6272" stroke-width="1"/>
-  <text x="645" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1.0</text>
-  <line x1="695" y1="220" x2="695" y2="226" stroke="#5a6272" stroke-width="1"/>
-  <text x="695" y="240" font-size="10" text-anchor="middle" fill="#5a6272">1+ε</text>
-  <line x1="595" y1="284" x2="595" y2="220" stroke="#c9d2e0" stroke-width="1" stroke-dasharray="3,3"/>
-
-  <!-- unclipped dashed: (520,260) -> (795,348) -->
-  <line x1="520" y1="260" x2="795" y2="348" stroke="#5a6272" stroke-width="1.2" stroke-dasharray="6,3"/>
-  <!-- clipped curve: flat (520,284)-(595,284), then fall (595,284) -> (695,316) -> (795,348) -->
-  <polyline points="520,284 595,284 795,348" fill="none" stroke="#2456c4" stroke-width="2.2"/>
+  <!-- unclipped ρA dashed -->
+  <line x1="120" y1="204" x2="395" y2="116" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <!-- clipped objective -->
+  <polyline points="120,204 295,148 395,148" fill="none" stroke="#3b82f6" stroke-width="2.5"/>
 
   <!-- annotations -->
-  <text x="608" y="272" font-size="10.5" fill="#2456c4">变平：不再继续压</text>
-  <text x="640" y="336" font-size="10.5" fill="#2456c4">坏动作概率反升：惩罚照常（未截断）</text>
+  <text x="305" y="166" font-size="10" fill="#1e40af">变平：梯度 ≈ 0，推不动了</text>
+  <text x="300" y="98" font-size="10" fill="#64748b">虚线 = 不裁剪 ρA（会冲上天）</text>
 
-  <text x="40" y="292" font-size="11" fill="#5a6272">读图：蓝线是实际优化的目标。截断区（平段）梯度为零——更新自动刹车；虚线是「不裁剪会发生的事」。</text>
-  <text x="40" y="312" font-size="11" fill="#5a6272">左图：好动作的概率比涨过 1+ε，目标不再升高。右图：坏动作的概率比跌破 1−ε，目标不再降低；但若它不降反升（右段），</text>
-  <text x="40" y="330" font-size="11" fill="#5a6272">惩罚沿虚线继续加码。min 的悲观主义：两条支线里永远取对优化者更不利的那条。</text>
+  <!-- ============ right panel: A<0 ============ -->
+  <text x="560" y="80" font-size="12" font-weight="bold" fill="#1e293b">A &lt; 0（坏动作）：压到 1−ε 就停，但涨了绝不手软</text>
+
+  <!-- axes: origin (560,240) -->
+  <line x1="560" y1="240" x2="850" y2="240" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="560" y1="240" x2="560" y2="160" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="868" y="244" font-size="10" fill="#64748b">ρ</text>
+
+  <!-- ticks: 1−ε -> 635, 1.0 -> 685, 1+ε -> 735 -->
+  <line x1="635" y1="240" x2="635" y2="246" stroke="#64748b" stroke-width="1"/>
+  <text x="635" y="266" font-size="10" text-anchor="middle" fill="#64748b">1−ε</text>
+  <line x1="685" y1="240" x2="685" y2="246" stroke="#64748b" stroke-width="1"/>
+  <text x="685" y="266" font-size="10" text-anchor="middle" fill="#64748b">1.0</text>
+  <line x1="735" y1="240" x2="735" y2="246" stroke="#64748b" stroke-width="1"/>
+  <text x="735" y="266" font-size="10" text-anchor="middle" fill="#64748b">1+ε</text>
+  <line x1="635" y1="240" x2="635" y2="304" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4,4"/>
+
+  <!-- unclipped ρA dashed -->
+  <line x1="560" y1="280" x2="835" y2="368" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <!-- clipped objective -->
+  <polyline points="560,304 635,304 835,368" fill="none" stroke="#3b82f6" stroke-width="2.5"/>
+
+  <!-- annotations -->
+  <text x="645" y="294" font-size="10" fill="#1e40af">变平：不再继续压</text>
+  <text x="570" y="370" font-size="10" fill="#1e40af">坏动作概率反升：惩罚照常（未截断）</text>
+
+  <!-- reading guide -->
+  <text x="40" y="302" font-size="11" fill="#64748b">读图：蓝线是实际优化的目标。截断区（平段）梯度为零——更新自动刹车；虚线是「不裁剪会发生的事」。</text>
+  <text x="40" y="320" font-size="11" fill="#64748b">左图：好动作的概率比涨过 1+ε，目标不再升高。右图：坏动作的概率比跌破 1−ε，目标不再降低；但若它不降反升（右段），</text>
+  <text x="40" y="338" font-size="11" fill="#64748b">惩罚沿虚线继续加码。min 的悲观主义：两条支线里永远取对优化者更不利的那条。</text>
 </svg>
 </div>
 <p class="cap"><b>图 3-1</b>｜PPO 论文 Figure 1 的手绘版。横轴是新旧策略的概率比 \(\rho\)，纵轴是目标值。蓝色实线的「平段」就是保险丝起作用的位置。</p>

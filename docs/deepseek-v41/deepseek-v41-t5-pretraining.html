@@ -132,46 +132,50 @@ window.MathJax = {
 <p>DeepSeek-V4.1-Flash 这次预训练的一个特殊之处：它是<b>原生多模态</b>的——文本、图像（以及与图像交错的文字）从预训练阶段就一起喂进同一个主干模型，而不是先训一个纯文本模型、再"外挂"一个视觉模块（论文 §4.3.2 明确称之为 native multimodal training）。多模态语料怎么来、怎么清洗、怎么配比，是下一节的主角。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 370" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, sans-serif" font-size="13">
+<svg viewBox="0 0 860 352" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="ar1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-      <path d="M0,0 L8,4 L0,8 z" fill="#5a6272"/>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
     </marker>
   </defs>
-  <text x="30" y="20" font-size="12" fill="#5a6272">支线：视觉编码器单独训练（§4.2.2 Vision Encoder Training）</text>
-  <rect x="30" y="30" width="180" height="58" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="120" y="53" text-anchor="middle">① 对比预训练</text>
-  <text x="120" y="72" text-anchor="middle" font-size="12">47B 图文对 · 224×224</text>
-  <line x1="210" y1="59" x2="248" y2="59" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
-  <rect x="250" y="30" width="200" height="58" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="350" y="53" text-anchor="middle">② 自回归微调</text>
-  <text x="350" y="72" text-anchor="middle" font-size="12">接 4B MoE LLM · 236B token</text>
-  <line x1="450" y1="59" x2="488" y2="59" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
-  <rect x="490" y="30" width="170" height="58" rx="8" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="575" y="53" text-anchor="middle">③ 丢弃 LLM</text>
-  <text x="575" y="72" text-anchor="middle" font-size="12">只保留优化后的 ViT</text>
-  <path d="M 575 88 L 575 150 L 720 150" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#ar1)"/>
-  <text x="700" y="20" font-size="12" fill="#5a6272">主线：语言主干预训练（§4.1–§4.2）</text>
-  <rect x="30" y="150" width="150" height="64" rx="8" fill="#fff" stroke="#e3e7ee"/>
-  <text x="105" y="176" text-anchor="middle">文本语料清洗</text>
-  <text x="105" y="196" text-anchor="middle" font-size="12">过滤隐式重复等</text>
-  <line x1="180" y1="182" x2="208" y2="182" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
-  <rect x="210" y="150" width="180" height="64" rx="8" fill="#fff" stroke="#e3e7ee"/>
-  <text x="300" y="176" text-anchor="middle">多模态语料清洗</text>
-  <text x="300" y="196" text-anchor="middle" font-size="12">图文对 / 交错 / 领域数据</text>
-  <line x1="390" y1="182" x2="418" y2="182" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
-  <rect x="420" y="150" width="170" height="64" rx="8" fill="#fff" stroke="#e3e7ee"/>
-  <text x="505" y="176" text-anchor="middle">合并去重</text>
-  <text x="505" y="196" text-anchor="middle" font-size="12">文本 : 多模态 = 7 : 1</text>
-  <line x1="590" y1="182" x2="618" y2="182" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
-  <rect x="620" y="150" width="210" height="64" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
-  <text x="725" y="172" text-anchor="middle">主干预训练</text>
-  <text x="725" y="191" text-anchor="middle" font-size="12">45T token · 64K 起步</text>
-  <text x="725" y="207" text-anchor="middle" font-size="12">34T 处扩到 1M 上下文</text>
-  <line x1="725" y1="214" x2="725" y2="268" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar1)"/>
-  <rect x="620" y="270" width="210" height="56" rx="8" fill="#f4f7fd" stroke="#2456c4" stroke-width="1.5"/>
-  <text x="725" y="293" text-anchor="middle">DeepSeek-V4.1-Flash-Base</text>
-  <text x="725" y="312" text-anchor="middle" font-size="12">552B 主干 → §4.3 评测</text>
+  <text x="40" y="28" font-size="11" fill="#64748b">支线：视觉编码器单独训练（§4.2.2 Vision Encoder Training）</text>
+  <rect x="40" y="38" width="180" height="58" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="130" y="62" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="bold">① 对比预训练</text>
+  <text x="130" y="80" text-anchor="middle" font-size="10" fill="#64748b">47B 图文对 · 224×224</text>
+  <path d="M225,67 L239,67" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <rect x="250" y="38" width="200" height="58" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="350" y="62" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="bold">② 自回归微调</text>
+  <text x="350" y="80" text-anchor="middle" font-size="10" fill="#64748b">接 4B MoE LLM · 236B token</text>
+  <path d="M455,67 L469,67" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <rect x="480" y="38" width="170" height="58" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="565" y="62" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="bold">③ 丢弃 LLM</text>
+  <text x="565" y="80" text-anchor="middle" font-size="10" fill="#64748b">只保留优化后的 ViT</text>
+  <path d="M565,101 C565,130 720,116 720,141" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <text x="820" y="28" text-anchor="end" font-size="11" fill="#64748b">主线：语言主干预训练（§4.1–§4.2）</text>
+  <rect x="40" y="154" width="150" height="64" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="115" y="181" text-anchor="middle" font-size="12" fill="#1e293b">文本语料清洗</text>
+  <text x="115" y="199" text-anchor="middle" font-size="10" fill="#64748b">过滤隐式重复等</text>
+  <path d="M195,186 L209,186" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <rect x="220" y="154" width="180" height="64" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="310" y="181" text-anchor="middle" font-size="12" fill="#1e293b">多模态语料清洗</text>
+  <text x="310" y="199" text-anchor="middle" font-size="10" fill="#64748b">图文对 / 交错 / 领域数据</text>
+  <path d="M405,186 L419,186" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <rect x="430" y="154" width="160" height="64" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="510" y="181" text-anchor="middle" font-size="12" fill="#1e293b">合并去重</text>
+  <text x="510" y="199" text-anchor="middle" font-size="10" fill="#64748b">文本 : 多模态 = 7 : 1</text>
+  <path d="M595,186 L609,186" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <rect x="620" y="152" width="200" height="72" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="720" y="175" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="bold">主干预训练</text>
+  <text x="720" y="193" text-anchor="middle" font-size="10" fill="#64748b">45T token · 64K 起步</text>
+  <text x="720" y="211" text-anchor="middle" font-size="10" fill="#64748b">34T 处扩到 1M 上下文</text>
+  <path d="M720,229 L720,263" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <rect x="620" y="274" width="200" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="720" y="297" text-anchor="middle" font-size="12" fill="#1e40af" font-weight="bold">DeepSeek-V4.1-Flash-Base</text>
+  <text x="720" y="315" text-anchor="middle" font-size="10" fill="#64748b">552B 主干 → §4.3 评测</text>
 </svg>
 <p class="cap"><b>图 1</b>：预训练全景（对应论文 §4 全章）。上方支线是视觉编码器 DeepSeek-ViT 的两阶段单独训练，产物注入下方主线；主线是"文本 + 多模态语料 → 7:1 合并 → 45T token 预训练 → 基座模型"。细节分别在本文第 2、3、4 节展开。</p>
 </div>
@@ -212,34 +216,38 @@ window.MathJax = {
 </ul>
 
 <div class="fig">
-<svg viewBox="0 0 860 330" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, sans-serif" font-size="13">
+<svg viewBox="0 0 860 390" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="ar2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-      <path d="M0,0 L8,4 L0,8 z" fill="#5a6272"/>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow2-orange" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#f59e0b"/>
     </marker>
   </defs>
-  <text x="30" y="18" font-size="12" fill="#5a6272">成本递增：越往下越贵，但处理的文档越少</text>
-  <rect x="90" y="28" width="560" height="34" rx="6" fill="#eef3fc" stroke="#2456c4"/>
-  <text x="370" y="50" text-anchor="middle">网页 / PDF 原始文档（从 Common Crawl 重新引导爬虫）</text>
-  <line x1="370" y1="62" x2="370" y2="76" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar2)"/>
-  <rect x="130" y="78" width="480" height="34" rx="6" fill="#e7eefb" stroke="#2456c4"/>
-  <text x="370" y="100" text-anchor="middle">启发式 + 统计过滤 · 去重 · 质量模型 → 选出高价值文档</text>
-  <line x1="370" y1="112" x2="370" y2="126" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar2)"/>
-  <rect x="165" y="128" width="410" height="34" rx="6" fill="#dde8f8" stroke="#2456c4"/>
-  <text x="370" y="150" text-anchor="middle">拼装成图文交错序列</text>
-  <line x1="370" y1="162" x2="370" y2="176" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar2)"/>
-  <rect x="200" y="178" width="340" height="34" rx="6" fill="#cfdcf5" stroke="#2456c4"/>
-  <text x="370" y="200" text-anchor="middle">图像感知（image-aware）的过滤与去重</text>
-  <line x1="370" y1="212" x2="370" y2="226" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar2)"/>
-  <rect x="235" y="228" width="270" height="34" rx="6" fill="#c2d2f2" stroke="#2456c4" stroke-width="1.5"/>
-  <text x="370" y="250" text-anchor="middle">SmolVLM 严格质量打分</text>
-  <line x1="370" y1="262" x2="370" y2="276" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar2)"/>
-  <rect x="255" y="278" width="230" height="34" rx="6" fill="#2456c4"/>
-  <text x="370" y="300" text-anchor="middle" fill="#ffffff">高质量图文交错数据</text>
-  <path d="M 505 245 C 610 245 620 190 660 185" fill="none" stroke="#9a7b1c" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ar2)"/>
-  <rect x="655" y="160" width="190" height="52" rx="8" fill="#fff8e8" stroke="#e6c96a"/>
-  <text x="750" y="182" text-anchor="middle" font-size="12">被淘汰的文档</text>
-  <text x="750" y="201" text-anchor="middle" font-size="12">部分回收为图文对</text>
+  <text x="60" y="26" font-size="11" fill="#64748b">成本递增：越往下越贵，但处理的文档越少</text>
+  <rect x="60" y="36" width="560" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="340" y="57" text-anchor="middle" font-size="12" fill="#1e40af">网页 / PDF 原始文档（从 Common Crawl 重新引导爬虫）</text>
+  <path d="M340,75 L340,85" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrow2)"/>
+  <rect x="100" y="96" width="480" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="340" y="117" text-anchor="middle" font-size="12" fill="#1e40af">启发式 + 统计过滤 · 去重 · 质量模型 → 选出高价值文档</text>
+  <path d="M340,135 L340,145" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrow2)"/>
+  <rect x="135" y="156" width="410" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="340" y="177" text-anchor="middle" font-size="12" fill="#1e40af">拼装成图文交错序列</text>
+  <path d="M340,175 L340,185" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrow2)"/>
+  <rect x="170" y="216" width="340" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="340" y="237" text-anchor="middle" font-size="12" fill="#1e40af">图像感知（image-aware）的过滤与去重</text>
+  <path d="M340,255 L340,265" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrow2)"/>
+  <rect x="205" y="276" width="270" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="340" y="297" text-anchor="middle" font-size="12" fill="#1e40af">SmolVLM 严格质量打分</text>
+  <path d="M340,315 L340,325" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#arrow2)"/>
+  <rect x="225" y="336" width="230" height="34" rx="6" fill="#3b82f6"/>
+  <text x="340" y="357" text-anchor="middle" font-size="12" fill="#ffffff" font-weight="bold">高质量图文交错数据</text>
+  <path d="M475,293 C535,293 615,278 599,278" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow2-orange)"/>
+  <rect x="610" y="252" width="190" height="52" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="705" y="273" text-anchor="middle" font-size="11" fill="#b45309" font-weight="bold">被淘汰的文档</text>
+  <text x="705" y="291" text-anchor="middle" font-size="10" fill="#b45309">部分回收为图文对</text>
 </svg>
 <p class="cap"><b>图 2</b>：多模态交错数据的"成本递增漏斗"（依据论文 §4.1 Multimodal Data Curation 段落绘制）。漏斗主体层层收窄，越靠后的环节越昂贵（SmolVLM 打分最贵），因此放在最后只处理幸存者；黄色虚线是"废料回收"：被淘汰的文档经筛选重组后部分变成图文对数据，不浪费。</p>
 </div>
@@ -284,35 +292,36 @@ window.MathJax = {
 <p class="cap"><b>表 1</b>：DeepSeek-V4.1-Flash 模型设置（数据出处：论文印刷页 21–22，§4.2.1；pixel-unshuffle 一行出自 §2.1.1）。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, sans-serif" font-size="12">
-  <text x="30" y="24" font-size="13" font-weight="bold">编码器 20 层</text>
-  <text x="30" y="42" fill="#5a6272">CSA2 压缩率 m=2（前 2 层纯 SWA）；3 组 × 6 层，每组 1 Full + 5 Reuse</text>
+<svg viewBox="0 0 860 260" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="30" y="28" font-size="12" font-weight="bold" fill="#1e293b">编码器 20 层</text>
+  <text x="30" y="48" font-size="11" fill="#64748b">CSA2 压缩率 m=2（前 2 层纯 SWA）；3 组 × 6 层，每组 1 Full + 5 Reuse</text>
   <g>
-    <rect x="30" y="52" width="26" height="30" fill="#9aa3b2"/><rect x="58" y="52" width="26" height="30" fill="#9aa3b2"/>
-    <rect x="86" y="52" width="26" height="30" fill="#2456c4"/>
-    <rect x="114" y="52" width="130" height="30" fill="#a9c0ea"/>
-    <rect x="248" y="52" width="26" height="30" fill="#2456c4"/>
-    <rect x="276" y="52" width="130" height="30" fill="#a9c0ea"/>
-    <rect x="410" y="52" width="26" height="30" fill="#2456c4"/>
-    <rect x="438" y="52" width="130" height="30" fill="#a9c0ea"/>
+    <rect x="30" y="54" width="26" height="30" fill="#94a3b8"/><rect x="58" y="54" width="26" height="30" fill="#94a3b8"/>
+    <rect x="86" y="54" width="26" height="30" fill="#3b82f6"/>
+    <rect x="114" y="54" width="130" height="30" fill="#bfdbfe"/>
+    <rect x="248" y="54" width="26" height="30" fill="#3b82f6"/>
+    <rect x="276" y="54" width="130" height="30" fill="#bfdbfe"/>
+    <rect x="410" y="54" width="26" height="30" fill="#3b82f6"/>
+    <rect x="438" y="54" width="130" height="30" fill="#bfdbfe"/>
   </g>
-  <text x="30" y="100" font-size="12" fill="#5a6272">深蓝 = Full Mode（生成全局 KV 并索引）　浅蓝 = Reuse Mode（复用上一层全局 KV 与 Top-K 索引）　灰 = 纯 SWA</text>
-  <text x="30" y="138" font-size="13" font-weight="bold">解码器 20 层</text>
-  <text x="30" y="156" fill="#5a6272">CSA2 压缩率 m=1；5 组 × 4 层：第 1 组 1 Full + 3 Reuse；其余 4 组各 1 Reindex + 3 Reuse</text>
+  <text x="30" y="102" font-size="11" fill="#64748b">深蓝 = Full Mode（生成全局 KV 并索引）　浅蓝 = Reuse Mode（复用上一层全局 KV 与 Top-K 索引）　灰 = 纯 SWA</text>
+  <text x="30" y="140" font-size="12" font-weight="bold" fill="#1e293b">解码器 20 层</text>
+  <text x="30" y="158" font-size="11" fill="#64748b">CSA2 压缩率 m=1；5 组 × 4 层：第 1 组 1 Full + 3 Reuse；其余 4 组各 1 Reindex + 3 Reuse</text>
   <g>
-    <rect x="30" y="166" width="26" height="30" fill="#2456c4"/>
-    <rect x="58" y="166" width="78" height="30" fill="#a9c0ea"/>
-    <rect x="140" y="166" width="26" height="30" fill="#5b7fc7"/>
-    <rect x="168" y="166" width="78" height="30" fill="#a9c0ea"/>
-    <rect x="250" y="166" width="26" height="30" fill="#5b7fc7"/>
-    <rect x="278" y="166" width="78" height="30" fill="#a9c0ea"/>
-    <rect x="360" y="166" width="26" height="30" fill="#5b7fc7"/>
-    <rect x="388" y="166" width="78" height="30" fill="#a9c0ea"/>
-    <rect x="470" y="166" width="26" height="30" fill="#5b7fc7"/>
-    <rect x="498" y="166" width="78" height="30" fill="#a9c0ea"/>
+    <rect x="30" y="166" width="26" height="30" fill="#3b82f6"/>
+    <rect x="58" y="166" width="78" height="30" fill="#bfdbfe"/>
+    <rect x="140" y="166" width="26" height="30" fill="#60a5fa"/>
+    <rect x="168" y="166" width="78" height="30" fill="#bfdbfe"/>
+    <rect x="250" y="166" width="26" height="30" fill="#60a5fa"/>
+    <rect x="278" y="166" width="78" height="30" fill="#bfdbfe"/>
+    <rect x="360" y="166" width="26" height="30" fill="#60a5fa"/>
+    <rect x="388" y="166" width="78" height="30" fill="#bfdbfe"/>
+    <rect x="470" y="166" width="26" height="30" fill="#60a5fa"/>
+    <rect x="498" y="166" width="78" height="30" fill="#bfdbfe"/>
   </g>
-  <text x="30" y="214" font-size="12" fill="#5a6272">中蓝 = Reindex Mode（复用全局 KV，但用自己的索引器重新打分选出新的 Top-K）</text>
-  <text x="30" y="234" font-size="12" fill="#5a6272">大多数层工作在 Reuse Mode，全局 KV 存储被大量摊薄——这正是 552B 模型能把 KV cache 压小的原因之一</text>
+  <text x="30" y="216" font-size="11" fill="#64748b">中蓝 = Reindex Mode（复用全局 KV，但用自己的索引器重新打分选出新的 Top-K）</text>
+  <text x="30" y="236" font-size="11" fill="#64748b">大多数层工作在 Reuse Mode，全局 KV 存储被大量摊薄——这正是 552B 模型能把 KV cache 压小的原因之一</text>
 </svg>
 <p class="cap"><b>图 3</b>：编码器/解码器逐层注意力模式布局（依据论文 §4.2.1 原文绘制）。三种模式的语义出自 §1 引言与 §2.3；本图只是把文字描述可视化。</p>
 </div>
@@ -360,35 +369,35 @@ window.MathJax = {
 </div>
 
 <div class="fig">
-<svg viewBox="0 0 860 290" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, sans-serif" font-size="12">
+<svg viewBox="0 0 860 300" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
   <defs>
-    <marker id="ar3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-      <path d="M0,0 L8,4 L0,8 z" fill="#5a6272"/>
+    <marker id="arrow4" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
     </marker>
   </defs>
-  <line x1="60" y1="240" x2="830" y2="240" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar3)"/>
-  <line x1="60" y1="240" x2="60" y2="40" stroke="#5a6272" stroke-width="1.5" marker-end="url(#ar3)"/>
-  <text x="836" y="258" text-anchor="end">训练 token 数</text>
-  <text x="52" y="34" text-anchor="end">学习率</text>
-  <text x="822" y="258" text-anchor="end">45T</text>
-  <text x="533" y="258" text-anchor="middle">28T</text>
-  <text x="735" y="258" text-anchor="middle">40T</text>
-  <text x="70" y="258">0</text>
-  <polyline points="62,238 64,74 533,74" fill="none" stroke="#2456c4" stroke-width="2.5"/>
-  <path d="M 533 74 C 590 74 660 206 735 208" fill="none" stroke="#2456c4" stroke-width="2.5"/>
-  <line x1="735" y1="208" x2="820" y2="208" stroke="#2456c4" stroke-width="2.5"/>
-  <line x1="64" y1="74" x2="533" y2="74" stroke="#2456c4" stroke-width="2.5"/>
-  <text x="120" y="66">warmup 2000 步 → 2.6×10⁻⁴（放大图里是缓坡，这里几乎瞬时）</text>
-  <text x="300" y="94">恒定 2.6×10⁻⁴（0 → 28T）</text>
-  <text x="560" y="150">余弦衰减 28T → 40T</text>
-  <text x="742" y="196">恒定 2.6×10⁻⁵（40T → 45T）</text>
-  <line x1="634" y1="60" x2="634" y2="240" stroke="#e0862c" stroke-width="1.5" stroke-dasharray="5 4"/>
-  <text x="640" y="56" fill="#e0862c">34T：上下文 64K → 1M</text>
-  <rect x="90" y="120" width="300" height="34" rx="6" fill="#fff8e8" stroke="#e6c96a"/>
-  <text x="240" y="142" text-anchor="middle">批大小全程固定 100.6M token / 步</text>
-  <circle cx="64" cy="74" r="4" fill="#2456c4"/>
-  <circle cx="533" cy="74" r="4" fill="#2456c4"/>
-  <circle cx="735" cy="208" r="4" fill="#2456c4"/>
+  <line x1="60" y1="240" x2="830" y2="240" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <line x1="60" y1="240" x2="60" y2="40" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow4)"/>
+  <text x="830" y="278" text-anchor="end" font-size="11" fill="#64748b">训练 token 数</text>
+  <text x="50" y="34" text-anchor="end" font-size="11" fill="#64748b">学习率</text>
+  <text x="822" y="258" text-anchor="middle" font-size="11" fill="#64748b">45T</text>
+  <text x="533" y="258" text-anchor="middle" font-size="11" fill="#64748b">28T</text>
+  <text x="735" y="258" text-anchor="middle" font-size="11" fill="#64748b">40T</text>
+  <text x="70" y="258" font-size="11" fill="#64748b">0</text>
+  <polyline points="62,238 64,74 533,74" fill="none" stroke="#3b82f6" stroke-width="2.5"/>
+  <path d="M 533 74 C 590 74 660 206 735 208" fill="none" stroke="#3b82f6" stroke-width="2.5"/>
+  <line x1="735" y1="208" x2="820" y2="208" stroke="#3b82f6" stroke-width="2.5"/>
+  <text x="120" y="60" font-size="11" fill="#1e40af">warmup 2000 步 → 2.6×10⁻⁴（放大图里是缓坡，这里几乎瞬时）</text>
+  <text x="300" y="94" font-size="11" fill="#1e40af">恒定 2.6×10⁻⁴（0 → 28T）</text>
+  <text x="648" y="120" font-size="11" fill="#1e40af">余弦衰减 28T → 40T</text>
+  <text x="770" y="226" text-anchor="middle" font-size="11" fill="#1e40af">恒定 2.6×10⁻⁵（40T → 45T）</text>
+  <line x1="634" y1="60" x2="634" y2="240" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <text x="640" y="56" font-size="11" fill="#b45309">34T：上下文 64K → 1M</text>
+  <rect x="90" y="120" width="300" height="34" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="240" y="142" text-anchor="middle" font-size="11" fill="#b45309">批大小全程固定 100.6M token / 步</text>
+  <circle cx="64" cy="74" r="4" fill="#3b82f6"/>
+  <circle cx="533" cy="74" r="4" fill="#3b82f6"/>
+  <circle cx="735" cy="208" r="4" fill="#3b82f6"/>
 </svg>
 <p class="cap"><b>图 4</b>：学习率与阶段时间线（依据论文 §4.2.2 的数字绘制；横轴按 token 数线性映射，warmup 2000 步 ≈ 0.2T token，在图上宽度不足 1%，故画成近乎竖直的上升段）。橙色虚线标记 34T 处的 1M 上下文扩展。</p>
 </div>
@@ -496,61 +505,62 @@ window.MathJax = {
 <p class="cap"><b>表 4</b>：基座模型评测对比（数字逐格复现论文 Table 1，印刷页 24）。多模态四行在原文中只有 V4.1-Flash 一列有数值。</p>
 
 <div class="fig">
-<svg viewBox="0 0 860 345" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, sans-serif" font-size="12">
-  <line x1="90" y1="280" x2="830" y2="280" stroke="#5a6272" stroke-width="1.5"/>
-  <line x1="90" y1="280" x2="90" y2="30" stroke="#5a6272" stroke-width="1.5"/>
-  <text x="82" y="284" text-anchor="end">0</text>
-  <text x="82" y="224" text-anchor="end">25</text>
-  <text x="82" y="164" text-anchor="end">50</text>
-  <text x="82" y="104" text-anchor="end">75</text>
-  <text x="82" y="44" text-anchor="end">100</text>
-  <line x1="86" y1="220" x2="90" y2="220" stroke="#5a6272"/>
-  <line x1="86" y1="160" x2="90" y2="160" stroke="#5a6272"/>
-  <line x1="86" y1="100" x2="90" y2="100" stroke="#5a6272"/>
-  <line x1="86" y1="40" x2="90" y2="40" stroke="#5a6272"/>
+<svg viewBox="0 0 860 350" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <line x1="90" y1="280" x2="830" y2="280" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="90" y1="280" x2="90" y2="30" stroke="#64748b" stroke-width="1.5"/>
+  <text x="82" y="284" text-anchor="end" font-size="11" fill="#64748b">0</text>
+  <text x="82" y="224" text-anchor="end" font-size="11" fill="#64748b">25</text>
+  <text x="82" y="164" text-anchor="end" font-size="11" fill="#64748b">50</text>
+  <text x="82" y="104" text-anchor="end" font-size="11" fill="#64748b">75</text>
+  <text x="82" y="44" text-anchor="end" font-size="11" fill="#64748b">100</text>
+  <line x1="86" y1="220" x2="90" y2="220" stroke="#64748b" stroke-width="1"/>
+  <line x1="86" y1="160" x2="90" y2="160" stroke="#64748b" stroke-width="1"/>
+  <line x1="86" y1="100" x2="90" y2="100" stroke="#64748b" stroke-width="1"/>
+  <line x1="86" y1="40" x2="90" y2="40" stroke="#64748b" stroke-width="1"/>
   <g>
-    <rect x="104" y="116.1" width="40" height="163.9" fill="#9db4dd"/>
-    <rect x="150" y="103.6" width="40" height="176.4" fill="#5b7fc7"/>
-    <rect x="196" y="102.2" width="40" height="177.8" fill="#e07b39"/>
-    <text x="124" y="111" text-anchor="middle">68.3</text>
-    <text x="170" y="98" text-anchor="middle">73.5</text>
-    <text x="216" y="97" text-anchor="middle" font-weight="bold">74.1</text>
-    <text x="170" y="302" text-anchor="middle">MMLU-Pro</text>
+    <rect x="104" y="116.1" width="40" height="163.9" fill="#bfdbfe"/>
+    <rect x="150" y="103.6" width="40" height="176.4" fill="#60a5fa"/>
+    <rect x="196" y="102.2" width="40" height="177.8" fill="#f59e0b"/>
+    <text x="124" y="111" text-anchor="middle" font-size="10" fill="#1e293b">68.3</text>
+    <text x="170" y="98" text-anchor="middle" font-size="10" fill="#1e293b">73.5</text>
+    <text x="216" y="97" text-anchor="middle" font-size="10" fill="#1e293b" font-weight="bold">74.1</text>
+    <text x="170" y="302" text-anchor="middle" font-size="12" fill="#1e293b">MMLU-Pro</text>
   </g>
   <g>
-    <rect x="294" y="113.2" width="40" height="166.8" fill="#9db4dd"/>
-    <rect x="340" y="95.7" width="40" height="184.3" fill="#5b7fc7"/>
-    <rect x="386" y="89.4" width="40" height="190.6" fill="#e07b39"/>
-    <text x="314" y="108" text-anchor="middle">69.5</text>
-    <text x="360" y="90" text-anchor="middle">76.8</text>
-    <text x="406" y="84" text-anchor="middle" font-weight="bold">79.4</text>
-    <text x="360" y="302" text-anchor="middle">HumanEval</text>
+    <rect x="294" y="113.2" width="40" height="166.8" fill="#bfdbfe"/>
+    <rect x="340" y="95.7" width="40" height="184.3" fill="#60a5fa"/>
+    <rect x="386" y="89.4" width="40" height="190.6" fill="#f59e0b"/>
+    <text x="314" y="108" text-anchor="middle" font-size="10" fill="#1e293b">69.5</text>
+    <text x="360" y="90" text-anchor="middle" font-size="10" fill="#1e293b">76.8</text>
+    <text x="406" y="84" text-anchor="middle" font-size="10" fill="#1e293b" font-weight="bold">79.4</text>
+    <text x="360" y="302" text-anchor="middle" font-size="12" fill="#1e293b">HumanEval</text>
   </g>
   <g>
-    <rect x="484" y="142.2" width="40" height="137.8" fill="#9db4dd"/>
-    <rect x="530" y="125.2" width="40" height="154.8" fill="#5b7fc7"/>
-    <rect x="576" y="133.4" width="40" height="146.6" fill="#e07b39"/>
-    <text x="504" y="137" text-anchor="middle">57.4</text>
-    <text x="550" y="120" text-anchor="middle" font-weight="bold">64.5</text>
-    <text x="596" y="128" text-anchor="middle">61.1</text>
-    <text x="550" y="302" text-anchor="middle">MATH</text>
+    <rect x="484" y="142.2" width="40" height="137.8" fill="#bfdbfe"/>
+    <rect x="530" y="125.2" width="40" height="154.8" fill="#60a5fa"/>
+    <rect x="576" y="133.4" width="40" height="146.6" fill="#f59e0b"/>
+    <text x="504" y="137" text-anchor="middle" font-size="10" fill="#1e293b">57.4</text>
+    <text x="550" y="120" text-anchor="middle" font-size="10" fill="#1e293b" font-weight="bold">64.5</text>
+    <text x="596" y="128" text-anchor="middle" font-size="10" fill="#1e293b">61.1</text>
+    <text x="550" y="302" text-anchor="middle" font-size="12" fill="#1e293b">MATH</text>
   </g>
   <g>
-    <rect x="674" y="74.3" width="40" height="205.7" fill="#9db4dd"/>
-    <rect x="720" y="77.4" width="40" height="202.6" fill="#5b7fc7"/>
-    <rect x="766" y="87.5" width="40" height="192.5" fill="#e07b39"/>
-    <text x="694" y="69" text-anchor="middle" font-weight="bold">85.7</text>
-    <text x="740" y="72" text-anchor="middle">84.4</text>
-    <text x="786" y="82" text-anchor="middle">80.2</text>
-    <text x="740" y="302" text-anchor="middle">MGSM</text>
+    <rect x="674" y="74.3" width="40" height="205.7" fill="#bfdbfe"/>
+    <rect x="720" y="77.4" width="40" height="202.6" fill="#60a5fa"/>
+    <rect x="766" y="87.5" width="40" height="192.5" fill="#f59e0b"/>
+    <text x="694" y="69" text-anchor="middle" font-size="10" fill="#1e293b" font-weight="bold">85.7</text>
+    <text x="740" y="72" text-anchor="middle" font-size="10" fill="#1e293b">84.4</text>
+    <text x="786" y="82" text-anchor="middle" font-size="10" fill="#1e293b">80.2</text>
+    <text x="740" y="302" text-anchor="middle" font-size="12" fill="#1e293b">MGSM</text>
   </g>
-  <rect x="560" y="8" width="14" height="14" fill="#9db4dd"/>
-  <text x="580" y="20">V4-Flash-Base</text>
-  <rect x="672" y="8" width="14" height="14" fill="#5b7fc7"/>
-  <text x="692" y="20">V4-Pro-Base</text>
-  <rect x="776" y="8" width="14" height="14" fill="#e07b39"/>
-  <text x="796" y="20">V4.1-Flash-Base</text>
-  <text x="460" y="330" text-anchor="middle">橙色为 V4.1-Flash：MMLU-Pro / HumanEval 反超 1.6T 的 Pro；MATH 略逊、MGSM 明显落后</text>
+  <rect x="259" y="8" width="12" height="12" fill="#bfdbfe"/>
+  <text x="277" y="18" font-size="11" fill="#1e293b">V4-Flash-Base</text>
+  <rect x="374" y="8" width="12" height="12" fill="#60a5fa"/>
+  <text x="392" y="18" font-size="11" fill="#1e293b">V4-Pro-Base</text>
+  <rect x="477" y="8" width="12" height="12" fill="#f59e0b"/>
+  <text x="495" y="18" font-size="11" fill="#1e293b">V4.1-Flash-Base</text>
+  <text x="430" y="328" text-anchor="middle" font-size="11" fill="#64748b">橙色为 V4.1-Flash：MMLU-Pro / HumanEval 反超 1.6T 的 Pro；MATH 略逊、MGSM 明显落后</text>
 </svg>
 <p class="cap"><b>表 4 中 4 个代表性基准的图形化</b>（数据同 Table 1）。选这四个是因为它们最能说明"强项与弱项并存"：代码与英文知识/数学上是亮点，多语言数学上是短板。</p>
 </div>
