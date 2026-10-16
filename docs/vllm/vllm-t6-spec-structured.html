@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vLLM 投机解码与结构化输出：draft-verify 与 grammar bitmask（源码级九讲 · 第 6 讲）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .toc {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 20px; margin: 16px 0; font-size: 0.93em;
+  }
+  .toc ol { margin: 6px 0 2px; padding-left: 22px; }
+  .toc li { margin: 3px 0; }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>vLLM 投机解码与结构化输出：draft-verify 与 grammar bitmask</h1>
+<div class="meta">
+  <b>vLLM 源码解析系列 · 第 6 讲（共 9 讲）</b> · 生成于 2026-10-08 ·
+  源码版本：本地仓库 main@d9dac2b3d（dev 树） ·
+  上一篇：<a href="vllm-t5-distributed.html">第 5 讲 · 分布式与并行</a>
+</div>
+<div class="toc">
+  <b>本篇导航</b>
+  <ol>
+    <li><a href="#family">草稿器家族： proposer 全景</a></li>
+    <li><a href="#flow">一次投机 step 的全流程</a></li>
+    <li><a href="#ngram">ngram：零模型成本草稿</a></li>
+    <li><a href="#eagle">EAGLE：草稿模型怎么跑</a></li>
+    <li><a href="#rejection">拒绝采样：数学与 kernel</a></li>
+    <li><a href="#sched">Scheduler 与 KV 侧的配合</a></li>
+    <li><a href="#structured">结构化输出：从 JSON schema 到 bitmask</a></li>
+    <li><a href="#so-backends">backend 矩阵与失败路径</a></li>
+    <li><a href="#check">源码阅读检查点</a></li>
+  </ol>
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：投机解码把"采样 k+1 次"换成"草稿器免费猜 k 个 + 目标模型一次前向验证 k+1 个"——接受与否由拒绝采样保证输出分布与直接采样<b>完全一致</b>；结构化输出则是在采样前用 grammar 的 bitmask 把"非法 token"的 logits 压成 -∞。两者都汇合在同一个点：<code>_sample</code> 之前对 logits 做手脚。</p>
+  <p><b>本篇主线</b>：proposer 家族 → step 全流程 → ngram 细节 → EAGLE 细节 → 拒绝采样数学 → scheduler/KV 配合 → 结构化输出管线与 backend 矩阵。</p>
+</div>
+
+<h2 id="family">1. 草稿器家族：proposer 全景</h2>
+<p>这棵 dev 树的 <code>vllm/v1/spec_decode/</code> 已经大幅重构（旧的 <code>eagle_proposer.py</code>/<code>draft_model_runner.py</code> 不在了），当前家族：</p>
+<table>
+<tr><th>草稿器</th><th>位置</th><th>草稿来源</th><th>成本</th></tr>
+<tr><td><code>NgramProposer</code></td><td><code>ngram_proposer.py:135</code></td><td>prompt+输出里找最长 n-gram 匹配，抄后面的 token</td><td>CPU numba，零 GPU</td></tr>
+<tr><td><code>NgramProposerGPU</code></td><td><code>ngram_proposer_gpu.py:217</code></td><td>同上，张量化实现（<code>@support_torch_compile</code>，<code>:28</code>）</td><td>GPU kernel，<code>use_ngram_gpu()</code>（<code>config/speculative.py:1410</code>）</td></tr>
+<tr><td><code>EagleProposer</code></td><td><code>eagle.py:12</code>（逻辑在 <code>llm_base_proposer.py:68</code> 基类）</td><td>小草稿模型自回归 k 步（EAGLE / EAGLE-3）</td><td>草稿模型前向</td></tr>
+<tr><td><code>Step3p5MTPProposer</code> / MTP</td><td><code>step3p5.py:24</code>、<code>gemma4.py</code></td><td>模型自带的 next-token 预测头</td><td>复用主模型 hidden states</td></tr>
+<tr><td>Medusa / Suffix / DFlash</td><td><code>medusa.py</code>、<code>suffix_decoding.py</code>、<code>dflash.py</code></td><td>多头 / 后缀树 / 其他范式</td><td>各不相同</td></tr>
+<tr><td>自定义类</td><td><code>custom_class_proposer.py</code></td><td>用户提供的 proposer 类</td><td>—</td></tr>
+</table>
+<p>所有 proposer 实现同一份合同：<code>propose(...)</code> 产出 ≤ <code>num_speculative_tokens</code> 个 draft token；元数据统一装进 <code>SpecDecodeMetadata</code>（<code>spec_decode/metadata.py:10-24</code>）——<code>draft_token_ids</code>、<code>num_draft_tokens</code>、<code>cu_num_draft_tokens</code>、bonus/验证的 <code>logits_indices</code> 等。</p>
+
+<h2 id="flow">2. 一次投机 step 的全流程</h2>
+<div class="fig">
+<svg viewBox="0 0 900 290" role="img" aria-label="投机解码 step 全流程">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- ===== 第一行：五个阶段（y=24, h=88; x=28/202/376/550/724, w=148）===== -->
+  <rect x="28" y="24" width="148" height="88" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="102" y="47" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">Scheduler.schedule</text>
+  <text x="102" y="65" font-size="10" fill="#1e40af" text-anchor="middle">allocate_slots</text>
+  <text x="102" y="80" font-size="10" fill="#1e40af" text-anchor="middle">+num_lookahead_tokens</text>
+  <text x="102" y="95" font-size="10" fill="#1e40af" text-anchor="middle">（scheduler.py:578）</text>
+
+  <rect x="202" y="24" width="148" height="88" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="276" y="47" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">Proposer</text>
+  <text x="276" y="65" font-size="10" fill="#b45309" text-anchor="middle">ngram：最长匹配</text>
+  <text x="276" y="80" font-size="10" fill="#b45309" text-anchor="middle">EAGLE：草稿 k 步</text>
+  <text x="276" y="95" font-size="10" fill="#b45309" text-anchor="middle">dispatch :5020</text>
+
+  <rect x="376" y="24" width="148" height="88" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="450" y="47" font-size="12" font-weight="bold" fill="#166534" text-anchor="middle">Target 验证前向</text>
+  <text x="450" y="65" font-size="10" fill="#166534" text-anchor="middle">k+1 个 token 一批</text>
+  <text x="450" y="80" font-size="10" fill="#166534" text-anchor="middle">logits → 采样约束</text>
+  <text x="450" y="95" font-size="10" fill="#166534" text-anchor="middle">execute_model :4166</text>
+
+  <rect x="550" y="24" width="148" height="88" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="624" y="47" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">RejectionSampler</text>
+  <text x="624" y="65" font-size="10" fill="#1e40af" text-anchor="middle">greedy：argmax 相等</text>
+  <text x="624" y="80" font-size="10" fill="#1e40af" text-anchor="middle">采样：max(p−q,0) 恢复</text>
+  <text x="624" y="95" font-size="10" fill="#1e40af" text-anchor="middle">调用点 :3712</text>
+
+  <rect x="724" y="24" width="148" height="88" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="798" y="47" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">记账修正</text>
+  <text x="798" y="65" font-size="10" fill="#64748b" text-anchor="middle">parse_output 剥 −1</text>
+  <text x="798" y="80" font-size="10" fill="#64748b" text-anchor="middle">回滚 num_computed</text>
+  <text x="798" y="95" font-size="10" fill="#64748b" text-anchor="middle">:3770-3779</text>
+
+  <!-- 阶段间主流程箭头（源右缘+5 → 目标左缘−11） -->
+  <line x1="181" y1="68" x2="191" y2="68" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="355" y1="68" x2="365" y2="68" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="529" y1="68" x2="539" y2="68" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="703" y1="68" x2="713" y2="68" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- ===== 第二行：三项配合机制（y=148, h=68; x=46/324/602, w=252）===== -->
+  <rect x="46" y="148" width="252" height="68" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="172" y="168" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">草稿 token 也占 KV</text>
+  <text x="172" y="188" font-size="10" fill="#64748b" text-anchor="middle">lookahead 块先分配（:578-580）</text>
+  <text x="172" y="203" font-size="10" fill="#64748b" text-anchor="middle">分配失败 → 抢占别的请求</text>
+
+  <rect x="324" y="148" width="252" height="68" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="450" y="168" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">async 乐观并发</text>
+  <text x="450" y="188" font-size="10" fill="#64748b" text-anchor="middle">按占位预记账（num_output_placeholders）</text>
+  <text x="450" y="203" font-size="10" fill="#64748b" text-anchor="middle">valid_sampled_token_count 事后校正</text>
+
+  <rect x="602" y="148" width="252" height="68" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="728" y="168" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">SpecDecodeMetadata</text>
+  <text x="728" y="188" font-size="10" fill="#64748b" text-anchor="middle">draft_token_ids / cu_num_draft_tokens</text>
+  <text x="728" y="203" font-size="10" fill="#64748b" text-anchor="middle">bonus 与验证的 logits 索引</text>
+
+  <!-- 注释 -->
+  <text x="48" y="246" font-size="10" fill="#64748b">指标：vllm:spec_decode_num_accepted_tokens_per_pos（metrics.py:254）；平均接受长度 = 1 + accepted/drafts（:114）</text>
+  <text x="48" y="264" font-size="10" fill="#64748b">greedy 接受条件 = draft token 与目标 argmax 逐位相等，全收才补 bonus（v1/sample/rejection_sampler.py:756-771）</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：一次投机 step 的五个阶段。注意图 1 与第 2/4 讲是同一台机器：阶段 1/5 就是 Scheduler 与持久批的记账，阶段 3/4 对应 <code>execute_model → sample_tokens</code> 的拆分。</p>
+
+<h2 id="ngram">3. ngram：零模型成本草稿</h2>
+<p>最便宜的草稿器完全不跑模型——它赌"输出会重复 prompt 或已生成内容里的片段"。实现要点（<code>ngram_proposer.py</code>）：</p>
+<ul>
+  <li>窗口参数 <code>prompt_lookup_min/max</code>（<code>:19-21</code>），草稿数 <code>k = num_speculative_tokens</code>（<code>:25</code>）；</li>
+  <li>直接读持久批的 CPU 缓冲 <code>num_tokens_no_spec</code> 与 <code>token_ids_cpu</code>（形状 <code>[max_num_seqs, max_model_len]</code>，<code>gpu_input_batch.py:134-140,390</code>）——零 H2D 拷贝；</li>
+  <li>核心是 numba <code>@njit(parallel=True)</code> 的 <code>batch_propose_numba</code>（<code>:177</code>）：KMP 式 LPS 在<b>反转</b>的 token 序列上找 <code>[min_n, max_n]</code> 内最长匹配，然后抄匹配后面的 k 个 token（<code>_find_longest_matched_ngram_and_propose_tokens</code>，<code>:206-293</code>）；</li>
+  <li>k 会被 <code>max_model_len − total_tokens</code> 截断（<code>:226</code>），超出 <code>max_model_len</code> 的请求整只跳过（<code>:156-158</code>）；</li>
+  <li>线程数被钉在 1（<code>:48</code>，注释：留给 TP 并行），总量 ≥ 8192 token 才开并行（<code>:36</code>）。</li>
+</ul>
+<p>适用场景非常明确：翻译/改写/代码补全这类"输入里已经出现过答案"的任务，接受率可以很高；闲聊任务接近零收益（白付验证成本——好在接受率低时只多花一次 k+1 前向中拒绝的部分，正确性无损）。</p>
+
+<h2 id="eagle">4. EAGLE：草稿模型怎么跑</h2>
+<p>EAGLE 用一个轻量草稿模型，输入 = 目标模型的<b>特征层 hidden states</b> + token，自回归地草拟 k 步。关键机制：</p>
+<h3>4.1 草稿模型的发现与加载</h3>
+<p><code>load_model(target_model)</code>（<code>llm_base_proposer.py:1330</code>）加载草稿权重后，用"<b>草稿模型的 attention 层 = 草稿配置的层列表 − 目标模型的层列表</b>"求差集定位草稿层（<code>:1343-1350</code>）；embedding 与 lm_head 默认与目标模型共享（<code>_maybe_share_embeddings</code> <code>:1424</code> / <code>_maybe_share_lm_head</code> <code>:1517</code>）。EAGLE-3 额外收集多个 aux hidden states 合并（<code>model.combine_hidden_states</code>，<code>:531-543</code>）。</p>
+<h3>4.2 草稿循环与草稿 KV</h3>
+<p><code>propose</code>（<code>:502</code>）先做 first pass（<code>set_inputs_first_pass</code> <code>:821</code> + 一次完整前向 <code>:592-599</code>），之后：</p>
+<ul>
+  <li><code>num_speculative_tokens==1</code>（或并行草拟）直接返回（<code>:612-621</code>）；</li>
+  <li>否则自回归循环 <code>for token_index in range(k−1)</code>（<code>:670-760</code>）：每步把 input_ids/hidden_states 写进<b>预分配的 cudagraph 缓冲</b>（<code>:699-702</code>），按层重建草稿 attention 元数据（<code>draft_index=token_index+1</code>，<code>:689-695</code>），草稿前向后采样（<code>_sample_draft_tokens</code> <code>:743</code>）；</li>
+  <li>草稿 KV 必须归属<b>同一个 kv cache 组</b>（<code>validate_same_kv_cache_group</code> <code>:1698-1717</code>；组 id 与 block size 在 <code>initialize_attn_backend</code> <code>:1721</code> 从 kernel 实际 block sizes 推出 <code>:1780-1795</code>）；滑窗/Mamba 型草稿层因多步语义被拒（<code>allowed_attn_types</code> 检查，<code>:632-642</code>）；</li>
+  <li>拒绝后的 slot 重算由 <code>prepare_inputs</code>（<code>:1164</code>）完成：<code>num_rejected = n+1−len(sampled)</code>（<code>:1193-1195</code>），配套 triton kernel 在 <code>spec_decode/utils.py:88</code>。</li>
+</ul>
+<h3>4.3 草稿模型的 CUDA Graph 策略</h3>
+<p>草稿执行体 <code>EagleSpeculator</code>（<code>vllm/v1/worker/gpu/spec_decode/eagle/speculator.py:12</code>，基类 <code>autoregressive/speculator.py:28</code>）配<b>两张图</b>（<code>init_cudagraph_manager</code>，<code>:61-83</code>）：草稿 prefill 用 PIECEWISE、草稿 decode 用 FULL_DECODE_ONLY（<code>:71-73</code>）。同时主图的 capture 尺寸被对齐到 <code>uniform_decode_query_len = num_speculative_tokens + 1</code> 的倍数（<code>compilation.py:1518-1530</code>）——这就是第 2 讲里"decode 被 pad 到 k+1"在图形状层的落点。</p>
+
+<h2 id="rejection">5. 拒绝采样：数学与 kernel</h2>
+<p>验证的目标是<b>无损</b>：输出分布必须等于直接用目标模型采样。实现在 <code>vllm/v1/sample/rejection_sampler.py</code>（<code>RejectionSampler</code>，<code>:38</code>，<code>MAX_SPEC_LEN=128</code> <code>:36</code>），两条路径：</p>
+<table>
+<tr><th>路径</th><th>接受条件</th><th>拒绝位怎么补</th><th>kernel</th></tr>
+<tr><td>greedy（全温度 0）</td><td>draft token == 目标 argmax，逐位比较（<code>:756-762</code>）</td><td>第一个不等处停止；<b>全部接受</b>才补一个 bonus token（<code>:766-771</code>）</td><td><code>rejection_greedy_sample_kernel</code>（<code>:454-467</code>）</td></tr>
+<tr><td>采样</td><td>逐位 <code>u &lt; p_target/q_draft</code>（隐式在 kernel 内）</td><td>恢复分布 <code>max(p_target − q_draft, 0)</code> 归一化后采样（<code>:482-489</code>），证明可还原目标分布</td><td><code>rejection_random_sample_kernel</code>（<code>:491-506</code>）</td></tr>
+</table>
+<p>公共前置（<code>forward</code> <code>:92</code>）：bonus token 先采样（<code>:127-140</code>）；目标 logits 升 fp32、过 logits processors 与采样约束（<code>:159-172</code>）；目标概率 = <code>softmax(fp32)</code>（<code>:479</code>）。被拒槽位填 <code>PLACEHOLDER_TOKEN_ID = −1</code>，由 <code>parse_output</code>（<code>:253</code>）在记账时剥掉（调用点 <code>gpu_model_runner.py:327,3770-3779</code>）。</p>
+<pre><code># 采样路径的直觉：draft 分布 q，目标分布 p
+# 接受位：  Bernoulli(min(1, p/q))          → 分布恰好是 p 的"截断修正"
+# 拒绝位：  sample(max(p − q, 0) / ‖max(p−q,0)‖₁)  → 把残差补回 p
+# 两者合成的输出分布 = p，与直接采样目标模型完全一致</code></pre>
+
+<h2 id="sched">6. Scheduler 与 KV 侧的配合</h2>
+<p>投机解码对调度器是"隐形"的，只有四处可见：</p>
+<ol>
+  <li><b>lookahead 分配</b>：<code>allocate_slots(..., num_lookahead_tokens=self.num_lookahead_tokens)</code>（<code>scheduler.py:578-580</code>）——k 个草稿位<b>先占 KV</b>；分配失败会抢占其他请求（<code>:588-646</code>）。各方法的 lookahead 数在 <code>:246-270</code> 初始化；</li>
+  <li><b>批形状对齐</b>：decode 被统一 pad 到 <code>1 + num_spec_tokens</code> 以匹配 FULL cudagraph（<code>:885-897</code>，<code>pad_spec_decode</code> <code>:1076-1079</code>）；</li>
+  <li><b>草稿往返</b>：<code>scheduled_spec_decode_tokens[req_id]</code>（<code>SchedulerOutput</code> 字段，<code>core/sched/output.py:212</code>）带下去，回来时 <code>update_draft_token_ids_in_output</code>（<code>:2168</code>）按实际接受数修剪、被 grammar 拒的填 −1（<code>:2189-2199</code>）；</li>
+  <li><b>async 乐观并发</b>：<code>use_async_spec_decode = use_async_scheduling and num_spec_tokens&gt;0</code>（<code>:671-673</code>）——第 2 讲的占位/校正机制在 spec 下最复杂：乐观接受、<code>valid_sampled_token_count</code> 事后回滚 <code>num_computed_tokens</code>，结构化输出请求还要过 <code>pending_structured_output_tokens</code> 门（<code>output.py:241</code>）。</li>
+</ol>
+<p>统计面：<code>SpecDecodingStats</code>（<code>spec_decode/metrics.py:18</code>）逐位置记录接受数，Prometheus 指标 <code>vllm:spec_decode_num_drafts/_num_draft_tokens/_num_accepted_tokens</code>（<code>:228-232</code>）与 per-pos（<code>:254-264</code>）。</p>
+
+<h2 id="structured">7. 结构化输出：从 JSON schema 到 bitmask</h2>
+<div class="fig">
+<svg viewBox="0 0 900 300" role="img" aria-label="结构化输出管线">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow2-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- ===== 第一行（y=22, h=84; x=48/325/602, w=250）===== -->
+  <rect x="48" y="22" width="250" height="84" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="173" y="43" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">请求参数</text>
+  <text x="173" y="61" font-size="10" fill="#1e40af" text-anchor="middle">json / regex / choice / grammar</text>
+  <text x="173" y="76" font-size="10" fill="#1e40af" text-anchor="middle">json_object · structural_tag</text>
+
+  <rect x="325" y="22" width="250" height="84" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="450" y="43" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">InputProcessor 校验</text>
+  <text x="450" y="61" font-size="10" fill="#1e40af" text-anchor="middle">_validate_structured_outputs</text>
+  <text x="450" y="76" font-size="10" fill="#1e40af" text-anchor="middle">自动 failover：xgrammar 失败 →</text>
+  <text x="450" y="91" font-size="10" fill="#1e40af" text-anchor="middle">guidance / outlines（:1050-1075）</text>
+
+  <rect x="602" y="22" width="250" height="84" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="727" y="43" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">StructuredOutputManager</text>
+  <text x="727" y="61" font-size="10" fill="#b45309" text-anchor="middle">后台线程编译 grammar（:169）</text>
+  <text x="727" y="76" font-size="10" fill="#b45309" text-anchor="middle">backend 单选：xgrammar / guidance</text>
+  <text x="727" y="91" font-size="10" fill="#b45309" text-anchor="middle">/ outlines / lm-format-enforcer</text>
+
+  <!-- 行间箭头 -->
+  <line x1="303" y1="64" x2="314" y2="64" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <line x1="580" y1="64" x2="591" y2="64" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- 回环：编译管理器 → 等待编译完成（直角折线改圆角曲线） -->
+  <path d="M727,111 L727,116 Q727,124 719,124 L182,124 Q173,124 173,131" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- ===== 第二行（y=142, h=84）===== -->
+  <rect x="48" y="142" width="250" height="84" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="173" y="163" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">等待编译完成</text>
+  <text x="173" y="181" font-size="10" fill="#64748b" text-anchor="middle">状态 WAITING_FOR_STRUCTURED</text>
+  <text x="173" y="196" font-size="10" fill="#64748b" text-anchor="middle">_OUTPUT_GRAMMAR（request.py:112）</text>
+  <text x="173" y="211" font-size="10" fill="#64748b" text-anchor="middle">→ 排入 skipped_waiting（:2049）</text>
+
+  <rect x="325" y="142" width="250" height="84" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="450" y="163" font-size="12" font-weight="bold" fill="#166534" text-anchor="middle">每步 get_grammar_bitmask</text>
+  <text x="450" y="181" font-size="10" fill="#166534" text-anchor="middle">scheduler.py:1646 → 管理器 :212</text>
+  <text x="450" y="196" font-size="10" fill="#166534" text-anchor="middle">[num_reqs×(1+spec), ⌈vocab/32⌉]</text>
+  <text x="450" y="211" font-size="10" fill="#166534" text-anchor="middle">int32 位掩码（fill_bitmask）</text>
+
+  <rect x="602" y="142" width="250" height="84" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="727" y="163" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">GPU：_sample 之前</text>
+  <text x="727" y="181" font-size="10" fill="#1e40af" text-anchor="middle">apply_grammar_bitmask（:4584）</text>
+  <text x="727" y="196" font-size="10" fill="#1e40af" text-anchor="middle">logits 逐行掩码后再采样</text>
+  <text x="727" y="211" font-size="10" fill="#1e40af" text-anchor="middle">草稿 token 先过 validate_tokens</text>
+
+  <line x1="303" y1="184" x2="314" y2="184" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <line x1="580" y1="184" x2="591" y2="184" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- 注释 -->
+  <text x="48" y="254" font-size="10" fill="#64748b">终止：accept_tokens 逐 token 校验，is_terminated 判定 JSON 完成（backend_types.py:31）</text>
+  <text x="48" y="272" font-size="10" fill="#64748b">编译失败 → FINISHED_ABORTED（scheduler.py:2220）；异步调度与 spec 共存的门控见 output.py:241</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：结构化输出管线。编译在请求进入调度前就开始（后台线程），但调度会等它——grammar 没就绪的请求停在 <code>skipped_waiting</code>，不占 token budget。</p>
+
+<p>要点拆解：</p>
+<ul>
+  <li><b>backend 是单选</b>：<code>StructuredOutputManager</code>（<code>v1/structured_output/__init__.py:33</code>）按 <code>params.structured_outputs._backend</code> 实例化一个后端（xgrammar <code>:138</code> / guidance <code>:142</code> / outlines <code>:148</code> / lm-format-enforcer <code>:154</code>），不做运行时故障切换；<code>_backend</code> 在 InputProcessor 校验阶段就已定死（<code>:131</code> 注释）；</li>
+  <li><b>自动选型</b>：用户没指定时按优先级试——先 <code>validate_xgrammar_grammar</code>，schema 带 guidance 不支持的特性或 Mistral 非 tekken tokenizer 则落到 outlines/guidance（<code>sampling_params.py:1050-1075</code>）；</li>
+  <li><b>编译异步</b>：<code>grammar_init</code>（<code>:169-176</code>）把编译丢进 ThreadPoolExecutor，主循环不阻塞；请求状态置 <code>WAITING_FOR_STRUCTURED_OUTPUT_GRAMMAR</code>（<code>v1/request.py:112-114</code>），调度器把它放进 <code>skipped_waiting</code>（<code>scheduler.py:2049-2056</code>）轮询完成；</li>
+  <li><b>bitmask 形状</b>：<code>[num_struct_reqs × (1+spec), ⌈vocab/32⌉]</code> int32——每个草稿位 + bonus 各占一行（<code>__init__.py:226-241</code>），所以投机解码与结构化输出的组合是"每行一个草稿位"地展开；</li>
+  <li><b>应用时机</b>：<code>apply_grammar_bitmask</code>（<code>structured_output/utils.py:86</code>）把压缩行号映射回 batch 顺序（考虑 spec 偏移，<code>:110-116</code>），异步 H2D 后在 GPU 上原地掩 logits（<code>:148-150</code>），调用点在 <code>gpu_model_runner.py:4584-4587</code>——<b>紧贴 <code>_sample</code> 之前</b>，这就是第 0 讲 <code>step()</code> 里 <code>grammar_output</code> 的去向。</li>
+</ul>
+
+<h2 id="so-backends">8. backend 矩阵与失败路径</h2>
+<table>
+<tr><th>backend</th><th>位置</th><th>支持语法</th><th>备注</th></tr>
+<tr><td>xgrammar</td><td><code>backend_xgrammar.py:78</code></td><td>JSON / JSON_OBJECT / GRAMMAR / REGEX / STRUCTURAL_TAG</td><td>不支持 CHOICE（<code>:81-96</code>）；默认首选</td></tr>
+<tr><td>guidance</td><td><code>backend_guidance.py:108</code></td><td>全支持（含 CHOICE <code>:256</code>）</td><td>功能最全</td></tr>
+<tr><td>outlines</td><td><code>backend_outlines.py:73</code></td><td>JSON / REGEX / CHOICE（<code>:76-80</code>）</td><td>不支持 GRAMMAR</td></tr>
+<tr><td>lm-format-enforcer</td><td><code>backend_lm_format_enforcer.py</code></td><td>JSON / REGEX</td><td>历史选项</td></tr>
+</table>
+<p>后端接口合同在 <code>backend_types.py</code>：<code>StructuredOutputGrammar</code>（<code>:31</code>：accept_tokens / validate_tokens / <b>rollback</b> / fill_bitmask / is_terminated / reset——rollback 支撑 spec 拒绝后回退语法状态）与引擎级 <code>StructuredOutputBackend</code>（<code>:99</code>：compile_grammar / allocate_token_bitmask / destroy）。</p>
+<p>失败路径两条：编译抛错 → 请求 <code>FINISHED_ABORTED</code>（<code>scheduler.py:2220-2226</code>，由 <code>grammar_compile_error_reqs</code> <code>:2702</code> 收集）；草稿 token 违反 grammar → 在 <code>update_draft_token_ids_in_output</code> 里被 <code>validate_tokens</code> 过滤、占位 −1（<code>:2189-2193</code>）。</p>
+
+<h2 id="check">9. 源码阅读检查点</h2>
+<ol>
+  <li><code>v1/spec_decode/ngram_proposer.py:206-293</code>：手推一次"反转 + LPS + 抄后缀"的例子；</li>
+  <li><code>v1/spec_decode/llm_base_proposer.py:670-760</code>：草稿自回归循环的 cudagraph 缓冲复用；</li>
+  <li><code>v1/sample/rejection_sampler.py:454-506</code>：greedy / random 两条 kernel 路径对照第 5 节公式；</li>
+  <li><code>v1/core/sched/scheduler.py:578-660</code>：lookahead 分配与草稿记账；</li>
+  <li><code>v1/structured_output/__init__.py:212-241</code>：bitmask 的批量填充与 spec 行展开；</li>
+  <li><code>v1/worker/gpu_model_runner.py:4584-4593</code>：<code>apply_grammar_bitmask → _sample → rejection_sampler</code> 的调用次序。</li>
+</ol>
+
+<footer>生成于 2026-10-08 · vLLM 源码解析系列 · 第 6 讲 / 共 9 讲 · 源码版本 main@d9dac2b3d · 下一篇：<a href="vllm-t7-models-quant.html">第 7 讲 · 模型加载与量化</a></footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

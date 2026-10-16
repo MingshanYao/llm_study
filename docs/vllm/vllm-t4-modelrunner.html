@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vLLM GPUModelRunner：调度输出如何变成一次 GPU 执行（源码级九讲 · 第 4 讲）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .toc { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 20px; margin: 22px 0; font-size: 0.92em; }
+  .toc b { color: var(--ink); }
+  .toc ol { margin: 8px 0 0; padding-left: 22px; }
+  .toc li { margin: 2px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>vLLM GPUModelRunner：调度输出如何变成一次 GPU 执行</h1>
+<div class="meta">
+  <b>vLLM 源码解析系列 · 第 4 讲（共 9 讲）</b> · 生成于 2026-10-08 ·
+  源码版本：本地仓库 main@d9dac2b3d（dev 树） ·
+  上一篇：<a href="vllm-t3-kvcache.html">第 3 讲 · KV Cache 与 PagedAttention</a>
+</div>
+<div class="toc">
+  <b>本篇导航</b>
+  <ol>
+    <li><a href="#role">ModelRunner 的角色与持久批</a></li>
+    <li><a href="#flow">execute_model → sample_tokens 全流程</a></li>
+    <li><a href="#update">_update_states：十件事</a></li>
+    <li><a href="#prepare">_prepare_inputs：从 token ids 到 kernel 输入</a></li>
+    <li><a href="#graph">编译与 CUDA Graph</a></li>
+    <li><a href="#sample">采样：Sampler 九步与 rejection sampling</a></li>
+    <li><a href="#backend">Attention 后端体系</a></li>
+    <li><a href="#ubatch">ubatching：双微批交叠</a></li>
+    <li><a href="#output">ModelRunnerOutput 与 async 输出</a></li>
+  </ol>
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：GPUModelRunner（<code>v1/worker/gpu_model_runner.py:453</code>，约 4700 行，是全仓最重的单文件）把 <code>SchedulerOutput</code> 这份"数据合同"翻译成 kernel 输入：维护持久批、准备 position/slot 映射、在 CUDA Graph 里重放前向，最后跑采样并把 token 写回。本篇的主线是 <code>execute_model</code> 与 <code>sample_tokens</code> 这对被刻意拆开的函数。</p>
+</div>
+
+<h2 id="role">1. ModelRunner 的角色与持久批</h2>
+<p>为什么需要"持久批"？如果每步都从零构造 batch 张量，decode 阶段每次只多一个 token，重建整个输入的 CPU 开销会吃掉 GPU 收益。vLLM 的解法是<b>持久批</b>：Worker 里常驻两份状态，请求跨 step 累积更新：</p>
+<table>
+<tr><th>状态</th><th>位置</th><th>内容</th></tr>
+<tr><td><code>CachedRequestState</code></td><td><code>gpu_input_batch.py:34</code></td><td>每请求一份：<code>prompt_token_ids</code>、<code>block_ids</code>、<code>num_computed_tokens</code>、<code>output_token_ids</code>、采样参数、per-request generator（seed 复现）</td></tr>
+<tr><td><code>InputBatch</code></td><td><code>gpu_input_batch.py</code>（创建于 runner <code>:704</code>）</td><td>行式持久缓冲：CPU pinned 的 <code>token_ids_cpu_tensor</code>（<code>[max_num_reqs, max_model_len]</code> int32，<code>:134</code>）、num_tokens/num_computed 计数、<code>MultiGroupBlockTable</code>、采样参数张量、logits processors 状态</td></tr>
+<tr><td>预分配 GPU 缓冲</td><td>runner <code>:764-810</code></td><td><code>input_ids/positions/query_start_loc/seq_lens/discard_request_mask</code> 等固定地址张量——CUDA Graph 的前提</td></tr>
+</table>
+<p><code>InputBatch.remove_request</code>（<code>:530</code>）有个值得学的细节：删除请求只在行上"挖洞"（索引表移除），物理行不动；批量删除后 <code>condense()</code>（<code>:708</code>）一次性把空洞压实，避免每步 memcopy。</p>
+
+<h2 id="flow">2. execute_model → sample_tokens 全流程</h2>
+<p>第 0 讲说过：本树把采样从 <code>execute_model</code> 中拆出，前者返回 <code>None</code>（把中间态存进 <code>execute_model_state</code>，<code>:4516</code>），后者由 EngineCore 在拿到 grammar bitmask 后调用。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 383" role="img" aria-label="execute_model 与 sample_tokens 数据流">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <!-- Blue arrow for the primary flow (markerUnits="userSpaceOnUse" is mandatory) -->
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- entry pill: x=25..425, y=22..58 -->
+  <rect x="25" y="22" width="400" height="36" rx="18" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="225" y="44" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">SchedulerOutput（来自 EngineCore）</text>
+  <text x="445" y="44" font-size="11" fill="#64748b">execute_model（gpu_model_runner.py:4166）</text>
+
+  <!-- pill -> step 1 -->
+  <path d="M100,63 L100,89" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- execute_model row: boxes 150x64 at x=25,200,375,550,725 (25px gaps), y=100..164 -->
+  <rect x="25" y="100" width="150" height="64" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="100" y="122" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">① _update_states</text>
+  <text x="100" y="140" font-size="10" fill="#64748b" text-anchor="middle">清理 · 置零 · CoW</text>
+  <text x="100" y="154" font-size="10" fill="#64748b" text-anchor="middle">encoder cache</text>
+  <rect x="200" y="100" width="150" height="64" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="275" y="122" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">② _prepare_inputs</text>
+  <text x="275" y="140" font-size="10" fill="#64748b" text-anchor="middle">positions · slot_mapping</text>
+  <text x="275" y="154" font-size="10" fill="#64748b" text-anchor="middle">block_table · logits 索引</text>
+  <rect x="375" y="100" width="150" height="64" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="450" y="122" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">③ batch 决策</text>
+  <text x="450" y="140" font-size="10" fill="#64748b" text-anchor="middle">uniform decode 判定</text>
+  <text x="450" y="154" font-size="10" fill="#64748b" text-anchor="middle">ubatch 切分</text>
+  <rect x="550" y="100" width="150" height="64" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="625" y="122" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">④ attention metadata</text>
+  <text x="625" y="140" font-size="10" fill="#64748b" text-anchor="middle">builder.build</text>
+  <text x="625" y="154" font-size="10" fill="#64748b" text-anchor="middle">cascade 前缀长度</text>
+  <rect x="725" y="100" width="150" height="64" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="800" y="122" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">⑤ _model_forward</text>
+  <text x="800" y="140" font-size="10" fill="#64748b" text-anchor="middle">piecewise compile</text>
+  <text x="800" y="154" font-size="10" fill="#64748b" text-anchor="middle">graph wrapper</text>
+
+  <!-- row 1 connectors: 5px start / 11px end clearance -->
+  <path d="M180,132 L189,132" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M355,132 L364,132" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M530,132 L539,132" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M705,132 L714,132" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- ⑤ returns to ⑥: smooth curve, no right angles -->
+  <path d="M800,169 C800,196 788,196 758,196 L242,196 C152,196 100,210 100,239" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <text x="450" y="220" font-size="10" fill="#64748b" text-anchor="middle">返回 None：中间态存入 execute_model_state（:4516），采样延迟</text>
+
+  <text x="125" y="242" font-size="11" fill="#64748b">sample_tokens（gpu_model_runner.py:4553）</text>
+
+  <!-- sample_tokens row: y=250..314 -->
+  <rect x="25" y="250" width="150" height="64" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="100" y="272" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">⑥ grammar bitmask</text>
+  <text x="100" y="290" font-size="10" fill="#64748b" text-anchor="middle">apply_grammar_bitmask</text>
+  <text x="100" y="304" font-size="10" fill="#64748b" text-anchor="middle">（structured_output）</text>
+  <rect x="200" y="250" width="150" height="64" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="275" y="272" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">⑦ _sample</text>
+  <text x="275" y="290" font-size="10" fill="#64748b" text-anchor="middle">Sampler 或</text>
+  <text x="275" y="304" font-size="10" fill="#64748b" text-anchor="middle">rejection_sampler</text>
+  <rect x="375" y="250" width="150" height="64" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="450" y="272" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">⑧ drafter</text>
+  <text x="450" y="290" font-size="10" fill="#64748b" text-anchor="middle">EAGLE / ngram 生成</text>
+  <text x="450" y="304" font-size="10" fill="#64748b" text-anchor="middle">下一步 draft tokens</text>
+  <rect x="550" y="250" width="150" height="64" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="625" y="272" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">⑨ bookkeeping</text>
+  <text x="625" y="290" font-size="10" fill="#64748b" text-anchor="middle">写回 token ids</text>
+  <text x="625" y="304" font-size="10" fill="#64748b" text-anchor="middle">logprobs · discard 清理</text>
+  <rect x="725" y="250" width="150" height="64" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="800" y="278" font-size="11" font-weight="bold" fill="#1e40af" text-anchor="middle">ModelRunnerOutput</text>
+  <text x="800" y="296" font-size="10" fill="#64748b" text-anchor="middle">回 EngineCore</text>
+
+  <!-- row 2 connectors -->
+  <path d="M180,282 L189,282" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M355,282 L364,282" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M530,282 L539,282" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M705,282 L714,282" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <text x="25" y="340" font-size="10" fill="#64748b">旁路：EC 生产者分支只跑多模态 encoder（:4210）· kv_connector_no_forward 早退（:4234）。两段拆开的收益：grammar bitmask 可在采样前注入，</text>
+  <text x="25" y="358" font-size="10" fill="#64748b">CPU 侧 update_from_output 的准备也与 GPU 前向重叠（配合第 2 讲的 async scheduling）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：一步执行的完整数据流。注意 ⑥ 与 ⑦ 之间没有"回到 GPU 等待"——grammar bitmask 是 CPU 侧准备好的张量，恰好卡在 logits 之后、采样之前。</p>
+
+<h2 id="update">3. _update_states：十件事</h2>
+<p><code>_update_states</code>（<code>gpu_model_runner.py:1192</code>）按序做：</p>
+<ol class="refs">
+  <li>清 finished：<code>self.requests</code> pop + <code>input_batch.remove_request</code>（<code>:1203-1217</code>）；</li>
+  <li>新块置零 <code>_zero_block_ids</code>（<code>:1221</code>，KVBlockZeroer 用单独 stream）；</li>
+  <li>执行 CoW 拷贝 <code>copy_kv_cache_blocks_inplace</code>（<code>:1223</code>）；</li>
+  <li>处理 encoder cache 释放（<code>:1231</code>）；</li>
+  <li>未调度的请求移出持久批（保留 CachedRequestState，<code>:1238</code>）；</li>
+  <li>新请求建 <code>CachedRequestState</code>（<code>:1295</code>）；</li>
+  <li>async+spec 的乐观扩展与延迟校正（<code>:1363</code>，依 <code>valid_sampled_token_count</code> 回滚 <code>num_computed_tokens</code>）；</li>
+  <li><b>resumed_from_preemption</b>：普通请求 <code>block_ids.extend(new_ids)</code>，被抢占恢复的请求<b>整组替换</b> block_ids（<code>:1442-1452</code>），并从 <code>all_token_ids</code> 恢复输出；</li>
+  <li>更新持久批行：num_computed、block_table.append_row、token_ids（<code>:1471</code>）；</li>
+  <li><code>condense</code> + 重排 + <code>refresh_metadata</code>（<code>:1516-1520</code>）。</li>
+</ol>
+
+<h2 id="prepare">4. _prepare_inputs：从 token ids 到 kernel 输入</h2>
+<p><code>_prepare_inputs</code>（<code>:1960</code>）是"翻译"的核心：</p>
+<table>
+<tr><th>产物</th><th>做法</th><th>位置</th></tr>
+<tr><td><code>positions</code></td><td><code>num_computed + query_pos</code>，逐请求 repeat；mrope/xdrope 特判多轴位置</td><td><code>:1992</code></td></tr>
+<tr><td>input_ids 收集</td><td><code>index_select</code> 展平的 <code>token_ids_cpu_tensor</code>（每行 max_model_len）→ 整段 H2D；async 模式直接把上一步 GPU 上的 <code>prev_sampled_token_ids</code> scatter 进 <code>input_ids.gpu</code>，省一次 D2H+H2D</td><td><code>:2011</code> / <code>:1868</code></td></tr>
+<tr><td><code>query_start_loc</code> / <code>seq_lens</code></td><td>cumsum + pad 到非递减（FlashAttention 要求）；乐观 seq_lens 供 async 用</td><td><code>:2073</code> / <code>:2085</code></td></tr>
+<tr><td><code>discard_request_mask</code></td><td><code>optimistic_seq_len &lt; num_tokens</code> 的请求标记丢弃——async 下这些请求本步不采样</td><td><code>:2102</code></td></tr>
+<tr><td><code>slot_mapping</code></td><td>Triton kernel 算 position → (block_id, offset)，含 DCP interleave 处理</td><td><code>block_table.py:182</code></td></tr>
+<tr><td><code>logits_indices</code></td><td>无 spec 时 = <code>query_start_loc[1:] − 1</code>（每请求最后一个 token）；chunked prefill 的半截请求也算 logits 但结果被丢弃</td><td><code>:2239</code></td></tr>
+<tr><td>cascade attention</td><td><code>num_common_prefix_blocks × block_size</code> → 共享前缀长度，双 kernel（先算共享前缀再算各自部分）</td><td><code>:2620</code></td></tr>
+<tr><td>多模态 embedding</td><td><code>_gather_mm_embeddings</code> 按 <code>mm_position.offset/length</code> 从 encoder cache 切片，<code>model.embed_input_ids</code> 统一替换 token embedding</td><td><code>:3227</code> / <code>:3607</code></td></tr>
+</table>
+
+<h2 id="graph">5. 编译与 CUDA Graph</h2>
+<p>模型前向不是裸调用 <code>model(...)</code>（<code>_model_forward</code>，<code>:3879</code>），而是包了三层：</p>
+<ol>
+  <li><b>torch.compile piecewise</b>：<code>@support_torch_compile</code> 装饰的模型由 <code>VllmBackend</code>/<code>PiecewiseCompileInterpreter</code>（<code>compilation/backends.py:687/:805</code>）在 attention 算子处切段编译（<code>splitting_ops</code>，<code>:554</code>）——每段可独立编译成优化 kernel。</li>
+  <li><b>CUDA Graph wrapper</b>：按模式包 <code>BreakableCUDAGraphWrapper</code> / <code>CUDAGraphWrapper</code> / <code>UBatchWrapper</code>（load_model，<code>:5452-5478</code>）。</li>
+  <li><b>dispatch</b>：<code>cudagraph_dispatcher</code>（<code>v1/cudagraph_dispatcher.py</code>）每步决定用哪张图。</li>
+</ol>
+
+<div class="fig">
+<svg viewBox="0 0 855 306" role="img" aria-label="CUDA Graph 机制">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <!-- Blue arrow (markerUnits="userSpaceOnUse" is mandatory) -->
+    <marker id="arrow2-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <text x="25" y="30" font-size="10" fill="#64748b">捕获（启动时一次性）：capture_model（:6806）→ warmup 若干次 → _dummy_run(mode, is_graph_capturing=True)（:6912）</text>
+  <text x="25" y="48" font-size="10" fill="#64748b">→ torch.cuda.graph(pool=全局池)（cuda_graph.py:265）；custom allreduce 需 register_graph_buffers（custom_all_reduce.py:329）</text>
+
+  <!-- capture buffers: y=84..140, 45px gaps -->
+  <rect x="25" y="84" width="220" height="56" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="135" y="106" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">CPU 持久缓冲</text>
+  <text x="135" y="124" font-size="10" fill="#64748b" text-anchor="middle">input_ids_cpu / positions_cpu</text>
+  <rect x="290" y="84" width="245" height="56" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="412" y="106" font-size="11" font-weight="bold" fill="#1e40af" text-anchor="middle">GPU 静态缓冲（地址固定）</text>
+  <text x="412" y="124" font-size="10" fill="#64748b" text-anchor="middle">input_ids.gpu / positions.gpu …</text>
+  <rect x="580" y="84" width="250" height="56" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="705" y="106" font-size="11" font-weight="bold" fill="#b45309" text-anchor="middle">graph.replay()</text>
+  <text x="705" y="124" font-size="10" fill="#64748b" text-anchor="middle">固定地址的 kernel 序列整体重放</text>
+
+  <path d="M250,112 L279,112" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <text x="267" y="98" font-size="10" fill="#64748b" text-anchor="middle">H2D</text>
+  <path d="M540,112 L569,112" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <text x="557" y="98" font-size="10" fill="#64748b" text-anchor="middle">写入后</text>
+
+  <text x="25" y="182" font-size="10" fill="#64748b">每步 dispatch：batch 大小 pad 到 bucket（cudagraph_dispatcher.py:72），把输入写进静态缓冲后重放对应 shape 的图（cuda_graph.py:357）。</text>
+  <text x="25" y="200" font-size="10" fill="#64748b">静态缓冲归 runner 持有（CUDAGraphWrapper docstring，cuda_graph.py:161），wrapper 只负责按 BatchDescriptor 键 capture/replay。</text>
+
+  <!-- dispatch modes: y=224..280, 25px gaps -->
+  <rect x="25" y="224" width="250" height="56" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="150" y="246" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">FULL</text>
+  <text x="150" y="264" font-size="10" fill="#64748b" text-anchor="middle">整图重放 · 需要 exact num_reqs 键</text>
+  <rect x="300" y="224" width="250" height="56" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="425" y="246" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">PIECEWISE</text>
+  <text x="425" y="264" font-size="10" fill="#64748b" text-anchor="middle">compile 段间 graph · 键放宽 num_reqs=None</text>
+  <rect x="575" y="224" width="250" height="56" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="700" y="246" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">NONE</text>
+  <text x="700" y="264" font-size="10" fill="#64748b" text-anchor="middle">纯 eager（shape 不友好 / 不支持时）</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：CUDA Graph 的"捕获一次、重放万次"。混合模式决议取各 attention backend <code>get_cudagraph_support</code> 的最小值（<code>_check_and_update_cudagraph_mode</code>，<code>gpu_model_runner.py:7153</code>）——一个不支持的 backend 会把整批拉回 eager。</p>
+
+<h2 id="sample">6. 采样：Sampler 九步与 rejection sampling</h2>
+<p><code>Sampler</code>（<code>v1/sample/sampler.py:20</code>）源码 docstring 自述 9 步流程（<code>:21-59</code>），<code>forward</code>（<code>:72</code>)的要点：</p>
+<table>
+<tr><th>阶段</th><th>内容</th><th>位置</th></tr>
+<tr><td>logits 后处理</td><td>float32 化 → <code>apply_logits_processors</code>：allowed/bad words mask、penalties（frequency/presence/repetition）、thinking budget、min_p 等"argmax 不变"处理器</td><td><code>:98</code> / <code>:371-417</code></td></tr>
+<tr><td>greedy 快路径</td><td>全部请求 greedy 时直接 argmax 返回</td><td><code>:260-271</code></td></tr>
+<tr><td>top-k / top-p</td><td><code>TopKTopPSampler</code>（<code>topk_topp_sampler.py:77</code>），top_k-only 快路径</td><td><code>:411</code></td></tr>
+<tr><td>采样</td><td>temperature=0 的请求走 argmax，其余 Gumbel/random</td><td><code>:296-301</code></td></tr>
+<tr><td>logprobs</td><td><code>gather_logprobs</code>：topk + 采中 token 的 rank</td><td><code>:308</code></td></tr>
+</table>
+<p><b>投机解码的采样</b>走 <code>RejectionSampler</code>（<code>v1/sample/rejection_sampler.py:38</code>）：按论文 2211.17192 一次产出 accepted / recovered / bonus tokens；bonus token 用普通 <code>Sampler</code> 采，以支持 top-p/top-k。spec 采样与 drafter 的衔接在 <code>sample_tokens</code> 里：GPU 采出的 token 直接喂 EAGLE/ngram drafter 生成下一步 draft（<code>:4645-4697</code>），全程不落 CPU。</p>
+
+<h2 id="backend">7. Attention 后端体系</h2>
+<p>后端注册在 <code>v1/attention/backends/</code>（flash_attn、flashinfer、triton_attn、flex_attention、rocm 系、mla 子目录、线性注意力/SSM 系等 20+ 文件）。选择入口 <code>get_attn_backend</code>（<code>selector.py:101</code>）→ CUDA 平台 <code>get_attn_backend_cls</code>（<code>platforms/cuda.py:397</code>）：显式 <code>--attention-backend</code> 只做校验，否则按<b>优先级表</b>（<code>:83</code>）取通过 <code>validate_configuration</code> 的最小 priority 后端：</p>
+<table>
+<tr><th>场景</th><th>优先顺序</th><th>备注</th></tr>
+<tr><td>MLA @ SM100</td><td>FlashInfer_MLA → TokenSpeed → Cutlass → FA_MLA → FlashMLA → Triton_MLA</td><td><code>:118-129</code></td></tr>
+<tr><td>非 MLA @ SM100</td><td>FlashInfer 优先</td><td>SM100 要求 HND 物理布局（<code>get_required_kv_cache_layout</code>）</td></tr>
+<tr><td>其余 GPU</td><td>FlashAttention 优先</td><td>block_size 须 16 的倍数（<code>flash_attn.py:134</code>）</td></tr>
+</table>
+<p>接口契约在 <code>AttentionBackend</code>（<code>v1/attention/backend.py:56</code>）与 <code>AttentionMetadataBuilder</code>（<code>:623</code>）：<code>get_kv_cache_shape</code> / <code>get_kv_cache_stride_order</code>（KV 物理布局协商）、<code>supports_block_size</code>（决定调度器能用什么 block_size）、<code>build(common_prefix_len, …)</code>（每步元数据）、<code>use_cascade_attention</code>、<code>build_for_cudagraph_capture</code>。KV layout 的分歧是真实存在的：FlashAttn 用 <code>(num_blocks, heads, block, 2·head)</code>，FlashInfer SM100 要 HND——由 <code>get_kv_cache_stride_order</code> 在分配期统一，混合布局由 <code>_has_mixed_attention_kv_layout</code>（<code>gpu_model_runner.py:7473</code>）+ <code>_reshape_kv_cache_tensors</code>（<code>:7356</code>）处理。</p>
+
+<h2 id="ubatch">8. ubatching：双微批交叠</h2>
+<p>调度器不感知 ubatch——切分发生在 ModelRunner（<code>maybe_create_ubatch_slices</code>，<code>:4293</code>）。<code>UBatchWrapper</code>（<code>gpu_ubatch_wrapper.py:441</code>）的逻辑：</p>
+<ul>
+  <li>两个 ubatch 各自一个线程（各自 init CUDA context），捕获期主线程在 <code>torch.cuda.graph</code> 内 join 两线程再 cat 输出（<code>:287</code>）；</li>
+  <li>执行期 <code>UBatchContext</code>（<code>ubatching.py:20</code>）用 CPU 环形事件 + barrier 保证"单线程语义"：<code>_cpu_yield</code>（<code>:94</code>）让两个 ubatch 的 Python 代码像交替协程一样跑，同时 GPU 侧 compute/comm 双 stream 通过 <code>switch_to_comm/compute</code>（<code>:107</code>）交叠——这就是 DB0/DB1 双微批的落地，用于隐藏 all-to-all 等通信空泡。</li>
+</ul>
+
+<h2 id="output">9. ModelRunnerOutput 与 async 输出</h2>
+<p>最终产物 <code>ModelRunnerOutput</code>（<code>v1/outputs.py:261</code>）：req_ids、<code>sampled_token_ids</code>、logprobs、prompt_logprobs、connector 输出、<code>num_nans_in_logits</code>（数值健康度）、cudagraph 统计、routed_experts（EPLB 用）。async 模式下走 <code>AsyncGPUModelRunnerOutput</code>（<code>:259</code>）：D2H 拷贝由独立 copy stream 完成（<code>:4794</code>），被 <code>discard_request_mask</code> 标记的请求以 <code>invalid_req_indices</code> 形式上报，由 scheduler 丢弃——这就是乐观调度"错了怎么办"的最后一环。</p>
+
+<h2>9+1. 源码阅读检查点</h2>
+<ol class="refs">
+  <li>对着图 1 通读 <code>execute_model</code>（<code>:4166</code>）与 <code>sample_tokens</code>（<code>:4553</code>），每一步在源码里找到对应行。</li>
+  <li>用 <code>VLLM_LOGGING_LEVEL=DEBUG</code> 启动，观察 attention backend 选择日志与 cudagraph capture 的 bucket 尺寸列表。</li>
+  <li>对比 <code>_prepare_input_ids</code> 的普通/async 两路径（<code>:1801</code> vs <code>:1868</code>），理解"GPU 上的输出直接当下一步输入"省了什么。</li>
+  <li>读 <code>compilation/cuda_graph.py:145-361</code>，确认 wrapper 不持有静态缓冲的设计（职责边界）。</li>
+</ol>
+
+<footer>生成于 2026-10-08 · vLLM 源码解析系列 · 源码版本：本地仓库 main@d9dac2b3d（dev 树） · 下一篇：<a href="vllm-t5-distributed.html">分布式与并行</a></footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

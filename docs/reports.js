@@ -268,6 +268,69 @@ var REPORTS = [
     "group": "rl"
   },
   {
+    "slug": "vllm/vllm-t0-overview",
+    "title": "vLLM 源码解析九讲 · 第 0 讲：整体架构总览——分层地图与一次请求的生命周期",
+    "date": "2026-10-08",
+    "repo": "https://github.com/vllm-project/vllm",
+    "group": "vllm"
+  },
+  {
+    "slug": "vllm/vllm-t1-engine",
+    "title": "vLLM 源码解析九讲 · 第 1 讲：Engine 与进程模型——AsyncLLM、EngineCore 与 ZMQ 消息总线",
+    "date": "2026-10-08",
+    "repo": "https://github.com/vllm-project/vllm",
+    "group": "vllm"
+  },
+  {
+    "slug": "vllm/vllm-t2-scheduler",
+    "title": "vLLM 源码解析九讲 · 第 2 讲：Scheduler——token budget、混批、抢占与 async scheduling",
+    "date": "2026-10-08",
+    "repo": "https://github.com/vllm-project/vllm",
+    "group": "vllm"
+  },
+  {
+    "slug": "vllm/vllm-t3-kvcache",
+    "title": "vLLM 源码解析九讲 · 第 3 讲：KV Cache 与 PagedAttention——BlockPool、prefix caching 与 offload",
+    "date": "2026-10-08",
+    "repo": "https://github.com/vllm-project/vllm",
+    "group": "vllm"
+  },
+  {
+    "slug": "vllm/vllm-t4-modelrunner",
+    "title": "vLLM 源码解析九讲 · 第 4 讲：GPUModelRunner——调度输出如何变成一次 GPU 执行",
+    "date": "2026-10-08",
+    "repo": "https://github.com/vllm-project/vllm",
+    "group": "vllm"
+  },
+  {
+    "slug": "vllm/vllm-t5-distributed",
+    "title": "vLLM 源码解析九讲 · 第 5 讲：分布式与并行——TP/PP/EP/DP 的 rank 世界",
+    "date": "2026-10-08",
+    "repo": "https://github.com/vllm-project/vllm",
+    "group": "vllm"
+  },
+  {
+    "slug": "vllm/vllm-t6-spec-structured",
+    "title": "vLLM 源码解析九讲 · 第 6 讲：投机解码与结构化输出——draft-verify 与 grammar bitmask",
+    "date": "2026-10-08",
+    "repo": "https://github.com/vllm-project/vllm",
+    "group": "vllm"
+  },
+  {
+    "slug": "vllm/vllm-t7-models-quant",
+    "title": "vLLM 源码解析九讲 · 第 7 讲：模型加载与量化——weight_loader 回调与 quant_method 多态",
+    "date": "2026-10-08",
+    "repo": "https://github.com/vllm-project/vllm",
+    "group": "vllm"
+  },
+  {
+    "slug": "vllm/vllm-t8-multimodal-lora",
+    "title": "vLLM 源码解析九讲 · 第 8 讲：多模态与 LoRA——mm_hash 指纹、encoder cache 与 punica kernel",
+    "date": "2026-10-08",
+    "repo": "https://github.com/vllm-project/vllm",
+    "group": "vllm"
+  },
+  {
     "slug": "misc/llm-arch-evolution",
     "title": "LLM 架构演进技术报告：FFN 与 Attention 的降算/降存主线（短板迁移视角的 2022–2026 全景）",
     "date": "2026-09-20",

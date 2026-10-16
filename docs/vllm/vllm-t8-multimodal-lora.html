@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vLLM 多模态与 LoRA：mm_hash 指纹、encoder cache 与 punica kernel（源码级九讲 · 第 8 讲）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .toc {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 20px; margin: 16px 0; font-size: 0.93em;
+  }
+  .toc ol { margin: 6px 0 2px; padding-left: 22px; }
+  .toc li { margin: 3px 0; }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>vLLM 多模态与 LoRA：mm_hash 指纹、encoder cache 与 punica kernel</h1>
+<div class="meta">
+  <b>vLLM 源码解析系列 · 第 8 讲（共 9 讲）</b> · 生成于 2026-10-08 ·
+  源码版本：本地仓库 main@d9dac2b3d（dev 树） ·
+  上一篇：<a href="vllm-t7-models-quant.html">第 7 讲 · 模型加载与量化</a>
+</div>
+<div class="toc">
+  <b>本篇导航</b>
+  <ol>
+    <li><a href="#mmflow">多模态请求的旅程</a></li>
+    <li><a href="#processor">解析与 processor 体系</a></li>
+    <li><a href="#hash">mm_hash：多模态的内容指纹</a></li>
+    <li><a href="#encache">Encoder cache 与预算</a></li>
+    <li><a href="#lorareq">LoRA：请求侧与管理器</a></li>
+    <li><a href="#loralayer">层 wrapper 与 punica kernel</a></li>
+    <li><a href="#lorav1">V1 集成与调度约束</a></li>
+    <li><a href="#check">源码阅读检查点</a></li>
+  </ol>
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：多模态的核心难题是"媒体 token 与文本 token 混在同一个序列里"——vLLM 用<b>占位符区间</b>（placeholder）标记媒体位置、用 <b>mm_hash 内容指纹</b>让 encoder 输出与 prefix cache 都能复用、用<b>独立 encoder cache</b> 避免重复编码。LoRA 的核心难题是"一个 batch 里混着多个适配器"——解法是<b>逐 token 的适配器 id 映射</b>喂给 punica kernel，权重则常驻在 stacked buffer 里靠 LRU 换入换出。</p>
+  <p><b>本篇主线</b>：多模态六步流水线 → processor 体系 → mm_hash → encoder cache 记账 → LoRA 三层栈（请求/管理器/kernel）。</p>
+</div>
+
+<h2 id="mmflow">1. 多模态请求的旅程</h2>
+<p>入口是 <code>InputProcessor</code>（<code>vllm/v1/engine/input_processor.py:38</code>，旧版 <code>processor.py</code> 已改名），它持有 <code>InputPreprocessor</code>（<code>inputs/preprocess.py:48</code>）与预算器 <code>MultiModalBudget</code>（<code>multimodal/encoder_budget.py:45</code>）。一次带图请求经过六步：</p>
+<div class="fig">
+<svg viewBox="0 0 900 290" role="img" aria-label="多模态请求六步流水线">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- ===== 第一行（y=24, h=88; x=46/324/602, w=252）===== -->
+  <rect x="46" y="24" width="252" height="88" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="172" y="47" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">① 解析与校验</text>
+  <text x="172" y="65" font-size="10" fill="#1e40af" text-anchor="middle">parse_mm_data（renderers/base.py:746）</text>
+  <text x="172" y="80" font-size="10" fill="#1e40af" text-anchor="middle">limit_mm_per_prompt 上限校验</text>
+  <text x="172" y="95" font-size="10" fill="#1e40af" text-anchor="middle">（processing/context.py:409）</text>
+
+  <rect x="324" y="24" width="252" height="88" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="450" y="47" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">② HF processor.apply</text>
+  <text x="450" y="65" font-size="10" fill="#1e40af" text-anchor="middle">BaseMultiModalProcessor（:1025）</text>
+  <text x="450" y="80" font-size="10" fill="#1e40af" text-anchor="middle">PromptReplacement 找占位（:423）</text>
+  <text x="450" y="95" font-size="10" fill="#1e40af" text-anchor="middle">输出 placeholder 区间（:1127）</text>
+
+  <rect x="602" y="24" width="252" height="88" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="728" y="47" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">③ mm_hash 内容指纹</text>
+  <text x="728" y="65" font-size="10" fill="#1e40af" text-anchor="middle">blake3（FIPS 用 sha256，:22）</text>
+  <text x="728" y="80" font-size="10" fill="#1e40af" text-anchor="middle">同内容同 hash → 可跨请求复用</text>
+  <text x="728" y="95" font-size="10" fill="#1e40af" text-anchor="middle">参与 prefix cache 块哈希（:450）</text>
+
+  <!-- ===== 第二行（y=148, h=88）===== -->
+  <rect x="46" y="148" width="252" height="88" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="172" y="171" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">④ EncoderCacheManager</text>
+  <text x="172" y="189" font-size="10" fill="#b45309" text-anchor="middle">scheduler 侧按 mm_hash 记账</text>
+  <text x="172" y="204" font-size="10" fill="#b45309" text-anchor="middle">（encoder_cache_manager.py:18）</text>
+  <text x="172" y="219" font-size="10" fill="#b45309" text-anchor="middle">全部消费完才释放（:244）</text>
+
+  <rect x="324" y="148" width="252" height="88" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="450" y="171" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">⑤ _execute_mm_encoder</text>
+  <text x="450" y="189" font-size="10" fill="#b45309" text-anchor="middle">只编码本步调度的输入（:3005）</text>
+  <text x="450" y="204" font-size="10" fill="#b45309" text-anchor="middle">输出进 runner.encoder_cache（:572）</text>
+  <text x="450" y="219" font-size="10" fill="#b45309" text-anchor="middle">命中 hash 直接复用</text>
+
+  <rect x="602" y="148" width="252" height="88" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="728" y="171" font-size="12" font-weight="bold" fill="#166534" text-anchor="middle">⑥ embed 替换</text>
+  <text x="728" y="189" font-size="10" fill="#166534" text-anchor="middle">model.embed_input_ids 统一嵌入</text>
+  <text x="728" y="204" font-size="10" fill="#166534" text-anchor="middle">（gpu_model_runner.py:3607）</text>
+  <text x="728" y="219" font-size="10" fill="#166534" text-anchor="middle">_gather_mm_embeddings 切片（:3227）</text>
+
+  <!-- 流程箭头 -->
+  <line x1="303" y1="68" x2="313" y2="68" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="581" y1="68" x2="591" y2="68" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <!-- ③→④ 折线：请求侧指纹 → 调度/执行侧记账（直角改圆角曲线） -->
+  <path d="M728,117 L728,122 Q728,130 720,130 L180,130 Q172,130 172,137" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="303" y1="192" x2="313" y2="192" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="581" y1="192" x2="591" y2="192" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <!-- 注释 -->
+  <text x="48" y="264" font-size="10" fill="#64748b">profile 决定预算：MultiModalBudget（encoder_budget.py:45）→ mm_encoder_cache_size 限制单请求媒体 token 数（input_processor.py:463-476）</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：多模态六步流水线。③④ 的分界很有意思：mm_hash 在请求侧就算好，scheduler 与 runner 两级 cache 都以它为键——"同样的图第二次发"从 encoder 到 KV cache 全链路免费。</p>
+
+<h2 id="processor">2. 解析与 processor 体系</h2>
+<p><code>vllm/multimodal/parse.py</code> 的 <code>MultiModalDataParser.parse_mm_data</code>（<code>:718</code>）把原始输入（URL / base64 / PIL / 张量 / 直接给 embeddings）整理成每模态的 item 集合：<code>ImageProcessorItems</code>（<code>:326</code>）、<code>AudioProcessorItems</code>（<code>:300</code>）、<code>VideoProcessorItems</code>（<code>:359</code>）；<code>limit_mm_per_prompt</code> 的数量校验在 <code>processing/context.py:409-428</code>（报错文案会提示 <code>--limit-mm-per-prompt</code>）。</p>
+<p>真正的 tokenizer + 特征提取发生在 processor 的 <code>apply</code>（<code>processing/processor.py:1722</code>）：</p>
+<ul>
+  <li><code>_cached_apply_hf_processor</code> 调 HF processor（<code>_call_hf_processor</code> <code>:1150</code>），再把输出里的媒体特殊 token 定位出来；两种模板机制：<code>PromptReplacement</code>（<code>:423</code>，替换）与 <code>PromptInsertion</code>（<code>:354</code>，插入）；</li>
+  <li>占位区间由 <code>_find_mm_placeholders</code>（<code>:1127</code>）找出，封装成 <code>PlaceholderFeaturesInfo</code>（<code>:688</code>，<code>to_range()</code> <code>:699</code>）；</li>
+  <li>每个媒体项的特征怎么切成 kwargs 由 <code>MultiModalFieldConfig</code>（<code>processing/inputs.py</code>）描述，最终装进 <code>MultiModalKwargs</code>；</li>
+  <li>processor 按<b>模型类</b>注册——各模型文件里 <code>@MULTIMODAL_REGISTRY.register_processor(...)</code> 自带自己的 processor（<code>multimodal/registry.py:98</code>，装饰器 <code>:142</code>），没有全局默认表。</li>
+</ul>
+<p>产物进入请求：<code>process_inputs</code>（<code>input_processor.py:251</code>）把 mm_kwargs / mm_placeholders / mm_hashes 按位置排序展平成 <code>MultiModalFeatureSpec</code> 列表（<code>:344-377</code>，数据类 <code>multimodal/inputs.py:322</code>）。</p>
+
+<h2 id="hash">3. mm_hash：多模态的内容指纹</h2>
+<p><code>get_mm_hashes</code>（<code>processing/inputs.py:26-78</code>）优先复用用户提供的 UUID；否则把媒体内容交给 <code>MultiModalHasher</code>（<code>multimodal/hasher.py:51</code>）：</p>
+<table>
+<tr><th>输入类型</th><th>参与哈希的内容</th><th>位置</th></tr>
+<tr><td>PIL 图像</td><td>mode + 像素字节；EXIF ImageID 存在时用原始字节</td><td><code>hasher.py:62-90</code></td></tr>
+<tr><td>视频</td><td>抽帧后逐帧哈希；给原始字节时直接哈希字节</td><td><code>:92-96</code></td></tr>
+<tr><td>tensor</td><td>含 bfloat16 的字节视图（不能直接 tobytes）</td><td><code>:98-118</code></td></tr>
+<tr><td>ndarray / 其他</td><td>dtype+shape+data / pickle 兜底</td><td><code>:120-143</code></td></tr>
+</table>
+<p>哈希算法默认 <b>blake3</b>，FIPS 环境切 sha256/sha512（<code>:22-48</code>，配置 <code>MMHasherAlgorithm</code>）。这个 hash 有两个下游消费者：</p>
+<ol>
+  <li><b>encoder cache 命中键</b>（下一节）；</li>
+  <li><b>prefix cache 的块哈希</b>：<code>_gen_mm_extra_hash_keys</code>（<code>v1/core/kv_cache_utils.py:450-514</code>）把 <code>(mm_feature.identifier, 块内偏移)</code> 追加进块哈希的 extra keys（聚合于 <code>generate_block_hash_extra_keys</code> <code>:558-593</code>，最终进 <code>hash_block_tokens</code> <code>:596-623</code>）——第 3 讲的块哈希公式在多模态下因此多了一项"这块里含哪张图的第几段"。</li>
+</ol>
+
+<h2 id="encache">4. Encoder cache 与预算</h2>
+<p>媒体 embedding 的编码是<b>贵的一次性计算</b>，且一个媒体项可能被 chunked prefill 分多个 step 消费。两级 cache 配合：</p>
+<table>
+<tr><th>角色</th><th>位置</th><th>语义</th></tr>
+<tr><td><code>EncoderCacheManager</code>（调度侧）</td><td><code>v1/core/encoder_cache_manager.py:18</code></td><td>按 mm_hash 记账（<code>cached: dict[str, set[str]]</code> <code>:74</code>）；<code>allocate</code> <code>:185</code>；请求<b>消费完所有占位区间</b>才释放（<code>free</code> <code>:244</code>，freed hashes 回传 <code>:256</code>）。调度器在放行 mm 请求前调用（<code>scheduler.py:663/669/1088</code>），完成时释放（<code>:993</code>）</td></tr>
+<tr><td><code>runner.encoder_cache</code>（GPU 侧）</td><td><code>gpu_model_runner.py:572</code></td><td><code>dict[mm_hash, Tensor]</code>。<code>_execute_mm_encoder</code>（<code>:3005</code>）只把<b>本步调度的</b> encoder 输入凑批执行（<code>_batch_mm_inputs_from_scheduler</code> <code>:2956</code>），输出存入（<code>_cache_encoder_output</code> <code>:2993-3003</code>）</td></tr>
+</table>
+<p>消费端 <code>_gather_mm_embeddings</code>（<code>:3227</code>）按每个占位区间的 <code>offset/length</code> 从缓存张量切片（<code>:3294-3296</code>），mrope 类模型的多轴位置交错也在这里处理（<code>:3314-3325</code>）；最后 <code>model.embed_input_ids(input_ids, multimodal_embeddings=..., ...)</code>（<code>:3607-3611</code>）一次性把占位 token 的 embedding 替换掉——对模型而言，"图"和"文本"在进入第一层之前就已是同一种东西。</p>
+<p><b>预算从哪来</b>：启动 profile 时 <code>profile_run</code>（<code>:6425</code>）用"token 数最多的模态"造 dummy batch 跑一遍 encoder（<code>model.embed_multimodal</code> <code>:6473</code>，临时占位 <code>tmp_i</code> <code>:6482</code>），据此得 <code>mm_encoder_cache_size</code>；<code>compute_mm_encoder_budget</code>（<code>encoder_cache_manager.py:273</code>）拆成"每 step 编码预算 + cache 容量"，单请求媒体超限直接在 <code>input_processor.py:463-476</code> 拒绝。</p>
+
+<h2 id="lorareq">5. LoRA：请求侧与管理器</h2>
+<div class="fig">
+<svg viewBox="0 0 900 382" role="img" aria-label="LoRA 服务三层栈">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow3-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- ① 请求与调度：x=46, y=24, w=808, h=88 -->
+  <rect x="46" y="24" width="808" height="88" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="60" y="47" font-size="12" font-weight="bold" fill="#1e40af">① 请求与调度</text>
+  <text x="60" y="65" font-size="10" fill="#1e40af">LoRARequest：lora_name / lora_int_id / lora_path（request.py:8-31），相等性按 lora_name</text>
+  <text x="60" y="80" font-size="10" fill="#1e40af">请求校验 + 调度断言：每步不同适配器数 ≤ max_loras（input_processor.py:155 / scheduler.py:674-681）</text>
+  <text x="60" y="95" font-size="10" fill="#1e40af">超过 max_loras 的新请求不调度（scheduler.py:724-734）</text>
+
+  <!-- ①→② 层间箭头 -->
+  <line x1="80" y1="117" x2="80" y2="137" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow3-blue)"/>
+
+  <!-- ② 管理器与 LRU：x=46, y=148, w=808, h=88 -->
+  <rect x="46" y="148" width="808" height="88" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="60" y="171" font-size="12" font-weight="bold" fill="#b45309">② 管理器与 LRU（vllm/lora/worker_manager.py:241）</text>
+  <text x="60" y="189" font-size="10" fill="#b45309">PEFTHelper 读 adapter_config.json 校验 → LoRAModel.from_local_checkpoint 读 safetensors（peft_helper.py:91）</text>
+  <text x="60" y="204" font-size="10" fill="#b45309">GPU 槽位 = max_loras 个；两级 LRU（注册 + 激活），满则逐出最旧（model_manager.py:1186-1205）</text>
+  <text x="60" y="219" font-size="10" fill="#b45309">activate_adapter 把 A/B 权重 set_lora 拷进各 wrapper 的 stacked buffer（model_manager.py:301-340）</text>
+
+  <!-- ②→③ 层间箭头 -->
+  <line x1="80" y1="241" x2="80" y2="261" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow3-blue)"/>
+
+  <!-- ③ 层 wrapper 与 punica kernel：x=46, y=272, w=808, h=88 -->
+  <rect x="46" y="272" width="808" height="88" rx="8" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="60" y="295" font-size="12" font-weight="bold" fill="#166534">③ 层 wrapper 与 punica kernel（vllm/lora/layers/）</text>
+  <text x="60" y="313" font-size="10" fill="#166534">每个并行层包一层 WithLoRA：RowParallel（:22）/ QKVParallel（:371）/ MergedQKV（:437）/ FusedMoE（fused_moe.py:33）</text>
+  <text x="60" y="328" font-size="10" fill="#166534">kernel：add_shrink（X@A，punica_gpu.py:90）→ add_expand（:123）；LoRAMapping 逐 token 适配器 id（layers/utils.py:34）</text>
+  <text x="60" y="343" font-size="10" fill="#166534">混合批无需特殊调度：per-token mapping 携带适配器 id；cudagraph 键含 num_active_loras（gpu_model_runner.py:3967）</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：LoRA 三层栈。适配器权重" residency"（常驻哪些槽位）与"激活"（本 batch 用哪些）是两级独立 LRU——加载贵、激活便宜，所以磁盘→CPU→GPU 的路径走注册 LRU，batch 切换只动指针。</p>
+
+<p>请求侧的关键约定（<code>lora/request.py:8</code>）：<code>lora_int_id</code> 必须 &gt; 0 且全局唯一（<code>:40</code>），相等性/哈希按 <code>lora_name</code>（<code>:58-73</code>）；MoE 3D 融合权重用 <code>is_3d_lora_weight</code> 标记（<code>:31</code>）。管理器加载链：<code>_load_adapter</code>（<code>worker_manager.py:105</code>）→ <code>PEFTHelper.from_local_dir</code> 读 <code>adapter_config.json</code> 并校验合法性（<code>peft_helper.py:91-93,118</code>）→ <code>LoRAModel.from_local_checkpoint</code> 读 <code>adapter_model.safetensors</code>（<code>lora_model.py:167,205,269</code>），落 CPU（<code>:147</code>）。</p>
+
+<h2 id="loralayer">6. 层 wrapper 与 punica kernel</h2>
+<p>LoRA 不是"把 W 换成 W+BA"，而是每个并行层外面<b>包一层</b> <code>BaseLayerWithLoRA</code>（<code>layers/base.py:16</code>）：基础权重照旧分片常驻，A/B 矩阵进 stacked buffer（形状按 <code>max_loras × rank</code> 预分配）。前向时 punica kernel 一次处理 batch 里所有 token，每个 token 按自己的适配器 id 选 A/B 行：</p>
+<ul>
+  <li><code>PunicaWrapperGPU</code>（<code>punica_wrapper/punica_gpu.py:33</code>）持两份 <code>LoRAKernelMeta</code> 缓冲（token 级 + prompt 级，<code>:57-73</code>，cudagraph 专用的 lora 数量维度 <code>:53-55</code>）；</li>
+  <li>每步 <code>update_metadata</code>（<code>:75</code>）消费 <code>LoRAMapping</code>（<code>layers/utils.py:34</code>）：`index_mapping` = 每个 token 的适配器 id（由 <code>request_lora_mapping.repeat(num_scheduled_tokens)</code> 展开，<code>gpu_input_batch.py:1020-1027</code>），`prompt_mapping` = 每个采样槽位的 id（采样出的 token 也要算 LoRA 投影）；</li>
+  <li>kernel 对：`add_shrink`（X·Aᵀ，SGMV 风格，<code>:90</code>）→ 中间加基础层输出 → `add_expand`（<code>:123</code>）；embedding 与线性层辅助路径 <code>:171</code>/<code>:203</code>；</li>
+  <li>元数据链：<code>set_active_loras</code>（<code>gpu_model_runner.py:2269-2277</code>）→ mixin（<code>lora_model_runner_mixin.py:73-91</code>）→ <code>set_adapter_mapping</code>（<code>model_manager.py:360-383</code>）→ <code>update_metadata</code>。</li>
+</ul>
+<p>这种"逐 token id + stacked buffer"设计的直接收益：<b>一个 batch 混任意多个适配器不需要任何特殊调度</b>——代价只是 punica kernel 比纯 GEMM 慢一些（SGMV/BGEMV 形状不规整）。</p>
+
+<h2 id="lorav1">7. V1 集成与调度约束</h2>
+<table>
+<tr><th>机制</th><th>位置</th><th>语义</th></tr>
+<tr><td>InputBatch 持有映射</td><td><code>gpu_input_batch.py:260,262</code></td><td><code>request_lora_mapping</code> / <code>lora_id_to_lora_request</code>；add 时登记（<code>:494-496</code>）、完成时清理（<code>:551-558</code>）</td></tr>
+<tr><td>调度约束</td><td><code>scheduler.py:674-681</code> / <code>:724-734</code></td><td>断言每步不同适配器数 ≤ <code>max_loras</code>；会把超限的新请求挡在门外（其余照常）</td></tr>
+<tr><td>CUDA Graph</td><td><code>gpu_model_runner.py:3967-3973</code></td><td>dispatch 键含 <code>num_active_loras</code>/<code>has_lora</code>——LoRA 计数变化会选不同的图</td></tr>
+<tr><td>多塔模型（VLM）</td><td><code>:3061-3130</code></td><td>tower/connector 的 LoRA 单独建映射；<code>LoRAMappingType</code> 分 LANGUAGE/TOWER/CONNECTOR（<code>layers/utils.py:27-30</code>）</td></tr>
+</table>
+<div class="infer">与老版本相比的三个变化：权重加载入口从 <code>from_peft</code> 换成 <code>LoRAModel.from_local_checkpoint</code>（融合模块的合并打包在 <code>_create_merged_loras_inplace</code> <code>model_manager.py:740</code>，MoE 堆叠 <code>:843</code>）；LongLoRA（scaled rope 支持）在本树已整体移除；<code>set_lora_kernel_meta</code> 等 kernel 侧接口收敛为 <code>update_metadata</code>。</div>
+
+<h2 id="check">8. 源码阅读检查点</h2>
+<ol>
+  <li><code>multimodal/processing/processor.py:1722-1766</code>：一次 apply 怎么产出 prompt_token_ids + 占位区间；</li>
+  <li><code>multimodal/hasher.py:62-143</code>：找一张本地图片推一遍哈希输入；</li>
+  <li><code>v1/core/encoder_cache_manager.py:95-256</code>：对照图 1 的 ④，注意"消费完才释放"；</li>
+  <li><code>v1/worker/gpu_model_runner.py:3005-3003,3227</code>：encoder 执行与切片；</li>
+  <li><code>lora/model_manager.py:301-340</code>：activate_adapter 的 set_lora 路径；</li>
+  <li><code>lora/punica_wrapper/punica_gpu.py:75-123</code>：mapping 如何变成 kernel 元数据。</li>
+</ol>
+
+<footer>生成于 2026-10-08 · vLLM 源码解析系列 · 第 8 讲 / 共 9 讲 · 源码版本 main@d9dac2b3d · 全系列（第 0-8 讲）完结 · <a href="../index.html">返回报告索引</a></footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

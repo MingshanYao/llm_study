@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vLLM 整体架构总览：分层地图与一次请求的生命周期（源码级九讲 · 第 0 讲）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .toc { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 20px; margin: 22px 0; font-size: 0.92em; }
+  .toc b { color: var(--ink); }
+  .toc ol { margin: 8px 0 0; padding-left: 22px; }
+  .toc li { margin: 2px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>vLLM 整体架构总览：分层地图与一次请求的生命周期</h1>
+<div class="meta">
+  <b>vLLM 源码解析系列 · 第 0 讲（共 9 讲）</b> · 生成于 2026-10-08 ·
+  源码版本：/Users/mingshan.yao/vllm 本地仓库（main 分支，commit <code>d9dac2b3d</code>，dev 树）·
+  所有行号引用均可在该仓库直接定位
+</div>
+<div class="toc">
+  <b>系列目录</b>
+  <ol>
+    <li><b>总览：分层地图与请求生命周期</b>（本篇）</li>
+    <li><a href="vllm-t1-engine.html">Engine 与进程模型：AsyncLLM、EngineCore 与 ZMQ 消息总线</a></li>
+    <li><a href="vllm-t2-scheduler.html">Scheduler：token budget、混批、抢占与 async scheduling</a></li>
+    <li><a href="vllm-t3-kvcache.html">KV Cache 与 PagedAttention：BlockPool、prefix caching 与 offload</a></li>
+    <li><a href="vllm-t4-modelrunner.html">ModelRunner 执行与 Attention 后端</a></li>
+    <li><a href="vllm-t5-distributed.html">分布式与并行：TP / PP / EP / DP</a></li>
+    <li><a href="vllm-t6-spec-structured.html">投机解码与结构化输出</a></li>
+    <li><a href="vllm-t7-models-quant.html">模型加载与量化</a></li>
+    <li><a href="vllm-t8-multimodal-lora.html">多模态与 LoRA</a></li>
+  </ol>
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：vLLM 是一个"进程分治"的推理引擎——API/前端进程负责输入输出与流式体验，EngineCore 进程负责调度与 KV cache 生命周期管理，Worker 进程负责真正的 GPU 执行；三者之间用 ZMQ 消息总线连接，每一层都可以独立替换。</p>
+  <p><b>本篇给你</b>：① 一张可对照源码的分层架构图；② 一次请求从 HTTP 到流式 token 的完整调用链（带行号）；③ 这棵 dev 树相对你印象中 vLLM 的关键变化（V0 已删除、ubatching、KV offload 等）。</p>
+</div>
+
+<h2 id="sec-map">1. 本系列怎么读：九讲地图</h2>
+<p>vLLM 代码量很大（仅 <code>vllm/</code> 包就有数百个 Python 文件），直接按目录顺序读很容易迷失。本系列按"控制流"来切分：一篇对应请求生命周期中的一段，读完任意一篇都能独立回到源码对照。各篇之间的依赖关系是 0 → 1 → 2 → 3 为主线（前端 → 调度 → 显存），4 以后可按需跳读。</p>
+
+<table>
+<tr><th>篇</th><th>主题</th><th>对应源码区域</th><th>回答的核心问题</th></tr>
+<tr><td>0（本篇）</td><td>总览与请求生命周期</td><td><code>entrypoints/</code>、<code>v1/engine/</code></td><td>一次请求经过了哪些进程、哪些函数？</td></tr>
+<tr><td>1</td><td>Engine 与进程模型</td><td><code>v1/engine/core_client.py</code>、<code>core.py</code></td><td>为什么要分进程？ZMQ 拓扑长什么样？</td></tr>
+<tr><td>2</td><td>Scheduler</td><td><code>v1/core/sched/</code></td><td>每一步 GPU 跑什么，由谁决定？</td></tr>
+<tr><td>3</td><td>KV Cache 与 PagedAttention</td><td><code>v1/core/kv_cache_manager.py</code> 等</td><td>显存怎么像虚拟内存一样分页管理？</td></tr>
+<tr><td>4</td><td>ModelRunner 执行与 Attention 后端</td><td><code>v1/worker/gpu_model_runner.py</code></td><td>调度决策如何变成一次 kernel 执行？</td></tr>
+<tr><td>5</td><td>分布式与并行</td><td><code>v1/executor/</code>、<code>distributed/</code></td><td>TP/PP/EP/DP 各自在哪一层切分？</td></tr>
+<tr><td>6</td><td>投机解码与结构化输出</td><td><code>v1/spec_decode/</code>、<code>v1/structured_output/</code></td><td>多猜 token 与 grammar 约束如何嵌入主循环？</td></tr>
+<tr><td>7</td><td>模型加载与量化</td><td><code>model_executor/model_loader/</code>、<code>quantization/</code></td><td>权重从磁盘到 GPU 经历什么？</td></tr>
+<tr><td>8</td><td>多模态与 LoRA</td><td><code>multimodal/</code>、<code>lora/</code></td><td>非文本输入与适配器如何进 batch？</td></tr>
+</table>
+
+<h2 id="sec-arch">2. 一张图看懂：分层架构</h2>
+<p>下图自上而下是控制流的传递方向：用户请求从入口层进入，经引擎前端做输入/输出处理，通过 ZMQ 跨进程交给 EngineCore，由 Scheduler 决定本步调度内容，Executor 把任务分发给 Worker 进程，最终落到模型执行层。右向箭头之外，输出沿虚线反向回流。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 740" role="img" aria-label="vLLM 分层架构图">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- Band 1: entrypoints, x=25..875 -->
+  <rect x="25" y="22" width="850" height="88" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="39" y="38" font-size="11" fill="#64748b">入口层 · 用户 API（vllm/entrypoints/）</text>
+  <rect x="40" y="54" width="260" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="170" y="71" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">LLM 离线推理</text>
+  <text x="170" y="89" font-size="10" fill="#64748b" text-anchor="middle">vllm/entrypoints/llm.py</text>
+  <rect x="325" y="54" width="290" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="470" y="71" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">OpenAI API Server</text>
+  <text x="470" y="89" font-size="10" fill="#64748b" text-anchor="middle">vllm/entrypoints/openai/api_server.py</text>
+  <rect x="640" y="54" width="220" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="750" y="71" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">gRPC / CLI / PDL</text>
+  <text x="750" y="89" font-size="10" fill="#64748b" text-anchor="middle">entrypoints/grpc_server.py 等</text>
+
+  <!-- gap 1 -->
+  <path d="M440,115 L440,135" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M460,141 L460,121" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="470" y="124" font-size="10" fill="#1e40af">add_request / generate（msgspec）</text>
+  <text x="430" y="138" font-size="10" fill="#64748b" text-anchor="end">EngineCoreOutputs（流式输出）</text>
+
+  <!-- Band 2: engine frontend -->
+  <rect x="25" y="146" width="850" height="88" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="39" y="162" font-size="11" fill="#64748b">引擎前端 · AsyncLLM / LLMEngine（vllm/v1/engine/）</text>
+  <rect x="40" y="178" width="260" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="170" y="195" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">AsyncLLM（异步引擎前端）</text>
+  <text x="170" y="213" font-size="10" fill="#64748b" text-anchor="middle">vllm/v1/engine/async_llm.py:72</text>
+  <rect x="325" y="178" width="290" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="470" y="195" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">Input/OutputProcessor · Detokenizer</text>
+  <text x="470" y="213" font-size="10" fill="#64748b" text-anchor="middle">v1/engine/output_processor.py:429</text>
+  <rect x="640" y="178" width="220" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="750" y="195" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">LLMEngine（同步）</text>
+  <text x="750" y="213" font-size="10" fill="#64748b" text-anchor="middle">v1/engine/llm_engine.py:48</text>
+
+  <!-- gap 2 -->
+  <path d="M440,239 L440,259" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M460,265 L460,245" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="470" y="248" font-size="10" fill="#1e40af">ADD / ABORT / UTILITY（请求）</text>
+  <text x="430" y="262" font-size="10" fill="#64748b" text-anchor="end">EngineCoreOutputs（ZMQ PUSH→PULL）</text>
+
+  <!-- Band 3: ZMQ bus -->
+  <rect x="25" y="270" width="850" height="36" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="450" y="292" font-size="12" fill="#1e40af" text-anchor="middle" font-weight="bold">ZMQ 消息总线 · ROUTER/DEALER + PUSH/PULL · msgspec 序列化（core_client.py ↔ core.py）</text>
+
+  <!-- gap 3 -->
+  <path d="M440,311 L440,331" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M460,337 L460,317" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="470" y="320" font-size="10" fill="#1e40af">execute_model（collective_rpc）</text>
+  <text x="430" y="334" font-size="10" fill="#64748b" text-anchor="end">ModelRunnerOutput / IntermediateTensors</text>
+
+  <!-- Band 4: EngineCore -->
+  <rect x="25" y="342" width="850" height="130" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="39" y="358" font-size="11" fill="#64748b">EngineCore 进程 · 每 DP rank 一个（vllm/v1/engine/core.py:103）</text>
+  <rect x="40" y="376" width="260" height="84" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="170" y="401" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">Scheduler</text>
+  <text x="170" y="420" font-size="10" fill="#64748b" text-anchor="middle">v1/core/sched/scheduler.py:69</text>
+  <text x="170" y="439" font-size="10" fill="#64748b" text-anchor="middle">token budget · 抢占 · prefix cache</text>
+  <rect x="325" y="376" width="290" height="84" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="470" y="401" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">KVCacheManager</text>
+  <text x="470" y="420" font-size="10" fill="#64748b" text-anchor="middle">v1/core/kv_cache_manager.py:117</text>
+  <text x="470" y="439" font-size="10" fill="#64748b" text-anchor="middle">BlockPool · prefix caching · 分组 KV</text>
+  <rect x="640" y="376" width="220" height="84" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="750" y="401" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">Executor</text>
+  <text x="750" y="420" font-size="10" fill="#64748b" text-anchor="middle">v1/executor/abstract.py:37</text>
+  <text x="750" y="439" font-size="10" fill="#64748b" text-anchor="middle">uni / multiproc / ray</text>
+
+  <!-- gap 4 -->
+  <path d="M440,477 L440,497" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M460,503 L460,483" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="470" y="486" font-size="10" fill="#1e40af">execute_model → sample_tokens</text>
+  <text x="430" y="500" font-size="10" fill="#64748b" text-anchor="end">ModelRunnerOutput（token ids）</text>
+
+  <!-- Band 5: workers -->
+  <rect x="25" y="508" width="850" height="88" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="39" y="524" font-size="11" fill="#64748b">Worker 进程 · 每 TP/PP rank 一个（vllm/v1/worker/）</text>
+  <rect x="40" y="540" width="260" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="170" y="557" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">Worker（GPU）</text>
+  <text x="170" y="575" font-size="10" fill="#64748b" text-anchor="middle">v1/worker/gpu_worker.py:128</text>
+  <rect x="325" y="540" width="290" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="470" y="557" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">GPUModelRunner</text>
+  <text x="470" y="575" font-size="10" fill="#64748b" text-anchor="middle">v1/worker/gpu_model_runner.py:453</text>
+  <rect x="640" y="540" width="220" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="750" y="557" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">Sampler</text>
+  <text x="750" y="575" font-size="10" fill="#64748b" text-anchor="middle">v1/sample/sampler.py:20</text>
+
+  <!-- gap 5 -->
+  <path d="M440,601 L440,621" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M460,627 L460,607" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="470" y="610" font-size="10" fill="#1e40af">collective_rpc（execute_model 等）</text>
+  <text x="430" y="624" font-size="10" fill="#64748b" text-anchor="end">IntermediateTensors（PP 流水）</text>
+
+  <!-- Band 6: model execution -->
+  <rect x="25" y="632" width="850" height="88" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="39" y="648" font-size="11" fill="#64748b">模型执行层（model_executor/ · compilation/ · csrc/）</text>
+  <rect x="40" y="664" width="260" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="170" y="681" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">模型实现（数百个）</text>
+  <text x="170" y="699" font-size="10" fill="#64748b" text-anchor="middle">vllm/models/ · model_executor/layers</text>
+  <rect x="325" y="664" width="290" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="470" y="681" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">torch.compile + CUDA Graph</text>
+  <text x="470" y="699" font-size="10" fill="#64748b" text-anchor="middle">vllm/compilation/cuda_graph.py</text>
+  <rect x="640" y="664" width="220" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="750" y="681" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">C++/CUDA 算子</text>
+  <text x="750" y="699" font-size="10" fill="#64748b" text-anchor="middle">csrc/ · kernels/</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：vLLM（V1，dev 树）分层架构。实线箭头为请求/指令下行路径，虚线箭头为输出回流路径。EngineCore 是"大脑"：Scheduler + KVCacheManager 决定每一步做什么，Executor 只负责把决定送达 Worker。</p>
+
+<p>这张图里有三个最值得记住的"关节"，后续每一讲都围绕它们展开：</p>
+<table>
+<tr><th>关节</th><th>位置</th><th>职责</th></tr>
+<tr><td>进程边界</td><td>ZMQ 消息总线</td><td>前端与 EngineCore 之间全部走消息（<code>msgspec</code> 序列化），任一侧崩溃不影响对端的数据结构</td></tr>
+<tr><td>调度边界</td><td><code>Scheduler.schedule()</code> → <code>SchedulerOutput</code></td><td>调度器产出的不是"决定"，而是一份自描述的<em>数据</em>（本步调度哪些请求、各自几个 token、块的增量变化），Worker 是这份数据的纯消费者</td></tr>
+<tr><td>执行边界</td><td><code>Executor</code> → <code>Worker</code>（<code>collective_rpc</code>）</td><td>单机无 TP 时走 <code>UniProcExecutor</code>（同进程），多卡时走 <code>MultiprocExecutor</code> / Ray，EngineCore 代码不变</td></tr>
+</table>
+
+<h2 id="sec-v1">3. 从 V0 到 V1：这棵树已经是"纯 V1"</h2>
+<p>如果你上次认真读 vLLM 是 2024 年，请注意几个"地标"已经变了：</p>
+<ul>
+  <li><b>V0 引擎已整体删除</b>。全仓搜索 <code>VLLM_USE_V1</code> 零命中——不存在 V0/V1 切换开关。<code>vllm/engine/llm_engine.py:6</code> 和 <code>vllm/engine/async_llm_engine.py:6</code> 只是两个指向 <code>vllm.v1.*</code> 的兼容别名（shim），<code>vllm/v1/engine/llm_engine.py:48</code> 的 <code>LLMEngine</code> 自述为 "Legacy LLMEngine for backwards compatibility"——即"同步引擎"这个<em>用法</em>保留，"V0 实现"没有了。</li>
+  <li><b>PagedAttention 从论文级概念变成了基础设施</b>。V0 时代它是一个突出的 kernel 名；这棵树里它下沉为 <code>v1/core/</code> 下的通用块管理（BlockPool / KVCacheManager / KVCacheCoordinator），并衍生出 hybrid 模型（Mamba + Attention）的多组 KV 布局、prefix caching、KV offload、PD 分离传输等一整个子系统。</li>
+  <li><b>speculative decoding、structured output 成为一等公民</b>，直接接入 <code>EngineCore.step</code> 主循环（见 <a href="vllm-t6-spec-structured.html">第 6 讲</a>）。</li>
+  <li><b>async scheduling 默认开启</b>：调度与 GPU 执行重叠一个深度（<code>EngineCore.step_with_batch_queue</code>，<code>core.py:625</code>），这改变了"一步 = schedule + execute + update"的朴素理解，第 2 讲详述。</li>
+</ul>
+
+<h2 id="sec-tree">4. 顶层仓库地图</h2>
+<p>按"你会在哪类问题里碰到它"给 <code>vllm/</code> 包的主要子模块标注职责：</p>
+
+<table>
+<tr><th>模块</th><th>职责</th><th>所属讲解</th></tr>
+<tr><td><code>entrypoints/</code></td><td>对外接口：离线 <code>LLM</code>（<code>llm.py:67</code>）、OpenAI 兼容服务（<code>openai/api_server.py</code>）、gRPC、CLI、pooling、scale_out 前端扩展</td><td>第 0、1 讲</td></tr>
+<tr><td><code>engine/</code></td><td><code>EngineArgs</code> 参数体系（<code>arg_utils.py:422</code>）与 V1 别名 shim</td><td>第 1 讲</td></tr>
+<tr><td><code>v1/engine/</code></td><td>引擎前端：<code>AsyncLLM</code>、<code>LLMEngine</code>（同步）、Input/OutputProcessor、Detokenizer、CoreClient、DP coordinator</td><td>第 1 讲</td></tr>
+<tr><td><code>v1/core/</code></td><td>调度与 KV cache：<code>sched/</code>（Scheduler）、<code>kv_cache_manager.py</code>、<code>block_pool.py</code>、<code>kv_cache_coordinator.py</code>、<code>encoder_cache_manager.py</code></td><td>第 2、3 讲</td></tr>
+<tr><td><code>v1/executor/</code></td><td>执行器抽象与实现：uni / multiproc / ray（含 v2）</td><td>第 5 讲</td></tr>
+<tr><td><code>v1/worker/</code></td><td>各平台 ModelRunner：<code>gpu_model_runner.py</code>（约 4500 行，本系列最重要单文件）、cpu/tpu/xpu 变体、ubatching、kv/ec connector mixin</td><td>第 4、5 讲</td></tr>
+<tr><td><code>v1/attention/</code></td><td>Attention 后端注册与选择（<code>backends/</code>、<code>selector.py</code>、<code>ops/</code>）</td><td>第 4 讲</td></tr>
+<tr><td><code>v1/sample/</code></td><td>采样（<code>sampler.py</code>）与 rejection sampling（<code>rejection_sampler.py</code>，投机解码用）</td><td>第 4、6 讲</td></tr>
+<tr><td><code>v1/spec_decode/</code></td><td>Eagle / Ngram / MTP 等投机解码实现</td><td>第 6 讲</td></tr>
+<tr><td><code>v1/structured_output/</code></td><td>结构化输出（grammar bitmask，xgrammar 等后端）</td><td>第 6 讲</td></tr>
+<tr><td><code>v1/kv_offload/</code>、<code>v1/simple_kv_offload/</code></td><td>KV 卸载框架与简化 CPU offload connector</td><td>第 3 讲</td></tr>
+<tr><td><code>model_executor/</code></td><td>模型执行组件：<code>layers/</code>（attention、linear、fused_moe、mla…）、<code>model_loader/</code>、<code>quantization/</code>、<code>custom_op.py</code></td><td>第 7 讲</td></tr>
+<tr><td><code>models/</code></td><td>各模型实现（deepseek_v4、kimi_k3、minimax_m3 等数百个）</td><td>第 7 讲</td></tr>
+<tr><td><code>multimodal/</code>、<code>lora/</code></td><td>多模态输入处理与 LoRA 适配器管理</td><td>第 8 讲</td></tr>
+<tr><td><code>distributed/</code></td><td><code>parallel_state.py</code>（TP/PP/DP 通信组）、<code>kv_transfer/</code>（PD 分离 KV 传输）、<code>ec_transfer/</code>（encoder cache 传输）、eplb、elastic_ep</td><td>第 5 讲</td></tr>
+<tr><td><code>compilation/</code></td><td>torch.compile + CUDA Graph 体系（piecewise backend、cudagraph 捕获/重放）</td><td>第 4 讲</td></tr>
+<tr><td><code>config/</code></td><td>配置包：<code>VllmConfig</code>（<code>vllm.py:331</code>）聚合 cache/model/quantization/scheduler 等子配置</td><td>贯穿</td></tr>
+<tr><td><code>platforms/</code></td><td>平台抽象（cuda/rocm/cpu/tpu/xpu），<code>current_platform</code> 单例</td><td>第 4、5 讲</td></tr>
+<tr><td><code>renderers/</code>、<code>tokenizers/</code>、<code>parser/</code>、<code>tool_parsers/</code>、<code>reasoning/</code></td><td>输入渲染与输出解析层：chat template → <code>EngineInput</code>；模型输出 → tool call / 思考内容</td><td>第 0、8 讲</td></tr>
+<tr><td><code>csrc/</code></td><td>C++/CUDA 算子（attention、moe、quantization、custom_all_reduce、cumem_allocator 等）</td><td>第 4 讲</td></tr>
+<tr><td><code>rust/</code></td><td>实验性：用 Rust 重写 serving 前端（经 ZMQ 对接 Python 引擎进程）</td><td>第 1 讲</td></tr>
+</table>
+
+<h2 id="sec-lifecycle">5. 一次请求的生命周期</h2>
+
+<h3>5.1 在线路径（OpenAI chat 请求）</h3>
+<p>以 <code>POST /v1/chat/completions</code> 流式请求为例。下图是时间轴（自上而下），圆角虚线框标出的部分是"每个 step 循环一次"的部分：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 552" role="img" aria-label="vLLM 请求生命周期时序图">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow2-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <rect x="30" y="24" width="240" height="48" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="150" y="43" font-size="13" font-weight="bold" fill="#1e40af" text-anchor="middle">API Server 进程（前端）</text>
+  <text x="150" y="61" font-size="10" fill="#64748b" text-anchor="middle">AsyncLLM · Input/OutputProcessor</text>
+  <rect x="330" y="24" width="240" height="48" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="450" y="43" font-size="13" font-weight="bold" fill="#1e40af" text-anchor="middle">EngineCore 进程</text>
+  <text x="450" y="61" font-size="10" fill="#64748b" text-anchor="middle">Scheduler · KVCacheManager · Executor</text>
+  <rect x="630" y="24" width="240" height="48" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="750" y="43" font-size="13" font-weight="bold" fill="#1e40af" text-anchor="middle">Worker 进程（TP/PP rank）</text>
+  <text x="750" y="61" font-size="10" fill="#64748b" text-anchor="middle">GPUModelRunner · Sampler</text>
+
+  <line x1="150" y1="76" x2="150" y2="532" stroke="#cbd5e1" stroke-dasharray="4 4"/>
+  <line x1="450" y1="76" x2="450" y2="532" stroke="#cbd5e1" stroke-dasharray="4 4"/>
+  <line x1="750" y1="76" x2="750" y2="532" stroke="#cbd5e1" stroke-dasharray="4 4"/>
+
+  <!-- step 1 -->
+  <text x="300" y="116" font-size="10" fill="#1e293b" text-anchor="middle">① add_request：渲染 + 分词</text>
+  <text x="300" y="132" font-size="10" fill="#64748b" text-anchor="middle">（async_llm.py:283）</text>
+
+  <!-- step 2 -->
+  <text x="300" y="162" font-size="10" fill="#1e293b" text-anchor="middle">② ADD 请求 · ROUTER→DEALER</text>
+  <path d="M155,170 L439,170" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- loop frame -->
+  <rect x="120" y="196" width="660" height="232" rx="8" fill="none" stroke="#cbd5e1" stroke-dasharray="6 4"/>
+  <text x="770" y="190" font-size="10" fill="#64748b" text-anchor="end">每 step 循环</text>
+
+  <!-- step 3 -->
+  <text x="600" y="214" font-size="10" fill="#1e293b" text-anchor="middle">③ Scheduler.schedule()（scheduler.py:439）</text>
+  <text x="600" y="230" font-size="10" fill="#64748b" text-anchor="middle">prefix cache 命中 + allocate_slots</text>
+
+  <!-- step 4 -->
+  <text x="600" y="260" font-size="10" fill="#1e293b" text-anchor="middle">④ execute_model（collective_rpc）</text>
+  <path d="M455,268 L749,268" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- step 5 -->
+  <text x="600" y="312" font-size="10" fill="#1e293b" text-anchor="middle">⑤ _update_states → 模型前向 → sample_tokens</text>
+
+  <!-- step 6 -->
+  <text x="600" y="348" font-size="10" fill="#1e293b" text-anchor="middle">⑥ ModelRunnerOutput</text>
+  <path d="M755,356 L461,356" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- step 7 -->
+  <text x="600" y="400" font-size="10" fill="#1e293b" text-anchor="middle">⑦ update_from_output（scheduler.py:1670）</text>
+  <text x="600" y="416" font-size="10" fill="#64748b" text-anchor="middle">更新请求状态 · cache_blocks · 释放</text>
+
+  <!-- step 8 -->
+  <text x="300" y="452" font-size="10" fill="#1e293b" text-anchor="middle">⑧ EngineCoreOutputs · PUSH→PULL</text>
+  <path d="M445,460 L161,460" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- step 9 -->
+  <text x="300" y="504" font-size="10" fill="#1e293b" text-anchor="middle">⑨ process_outputs：反解码 → collector</text>
+  <text x="300" y="520" font-size="10" fill="#64748b" text-anchor="middle">（output_processor.py:589 · detokenizer.py）</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：在线流式请求的进程间时序。注意 ③–⑦ 在 EngineCore 侧是紧密循环，与前端 ⑧–⑨ 完全异步——前端只在 PULL socket 上等输出，不参与调度决策。</p>
+
+<p>逐步展开（行号可直接跳转）：</p>
+<table>
+<tr><th>#</th><th>阶段</th><th>调用链</th></tr>
+<tr><td>①</td><td>HTTP → 引擎前端</td><td><code>create_chat_completion</code>（<code>openai/chat_completion/serving.py:219</code>）→ <code>AsyncLLM.generate</code>（<code>v1/engine/async_llm.py:544</code>）→ <code>add_request</code>（<code>async_llm.py:283</code>）→ <code>process_inputs_async</code>（<code>v1/engine/input_processor.py</code>，在线程池里做渲染与分词，避免阻塞事件循环）</td></tr>
+<tr><td>②</td><td>注册与发送</td><td>前端先在 <code>OutputProcessor</code> 注册 per-request 的 <code>RequestOutputCollector</code>，再经 <code>engine_core.add_request_async</code> 把 <code>EngineCoreRequest</code>（msgspec 编码）发往 EngineCore 进程（<code>v1/engine/core_client.py:1145</code>）</td></tr>
+<tr><td>③</td><td>调度</td><td><code>Scheduler.schedule()</code>（<code>v1/core/sched/scheduler.py:439</code>）：内部先 <code>kv_cache_manager.get_computed_blocks</code> 查 prefix cache 命中，再 <code>allocate_slots</code> 为新 token 分配 KV block；产出 <code>SchedulerOutput</code></td></tr>
+<tr><td>④⑤</td><td>执行</td><td><code>Executor.execute_model</code>（<code>v1/executor/abstract.py:210</code>）经 <code>collective_rpc</code> 到各 Worker：<code>Worker.execute_model</code>（<code>gpu_worker.py:1019</code>）→ <code>GPUModelRunner.execute_model</code>（<code>gpu_model_runner.py:4166</code>）：更新 persistent batch → 准备输入 → 模型前向 → 存中间态返回</td></tr>
+<tr><td>⑥</td><td>采样拆分</td><td>本树的 decode 采样从 <code>execute_model</code> 中拆出：EngineCore 随后调 <code>sample_tokens</code>（<code>gpu_model_runner.py:4553</code>），应用 grammar bitmask 后跑 <code>Sampler</code></td></tr>
+<tr><td>⑦</td><td>更新状态</td><td><code>Scheduler.update_from_output</code>（<code>scheduler.py:1670</code>）：把采样出的 token 写回请求状态、<code>kv_cache_manager.cache_blocks</code> 把完整 block 纳入 prefix cache、处理 stop 条件与抢占恢复</td></tr>
+<tr><td>⑧</td><td>输出回流</td><td><code>EngineCoreOutputs</code> 经 PUSH→PULL 回到前端；<code>AsyncLLM</code> 的后台任务 <code>_run_output_handler</code>（<code>async_llm.py:657</code>）循环取出并按 <code>engine_index</code> 分发</td></tr>
+<tr><td>⑨</td><td>流式输出</td><td><code>OutputProcessor.process_outputs</code>（<code>output_processor.py:589</code>）用 <code>IncrementalDetokenizer</code> 增量解码、检查 stop string，写入 collector；<code>generate</code> 的 AsyncGenerator 与 SSE 生成器逐块吐给客户端</td></tr>
+</table>
+
+<h3>5.2 离线路径（<code>LLM.generate</code>）</h3>
+<p>离线入口复用同一套引擎，只是把"流式 generator"换成"for 循环 step"：<code>LLM.generate</code>（<code>entrypoints/llm.py:414</code>）→ <code>_add_completion_requests</code>（<code>entrypoints/offline_utils.py:290</code>，逐条 <code>LLMEngine.add_request</code>）→ <code>_run_engine</code>（<code>offline_utils.py:573</code>）反复调 <code>LLMEngine.step</code>（<code>v1/engine/llm_engine.py:296</code>）直到 <code>has_unfinished_requests()</code> 为假。同步 <code>LLMEngine</code> 与 <code>AsyncLLM</code> 共享同一套 Input/OutputProcessor 代码；区别只在 EngineCore client 的形态——默认 <code>SyncMPClient</code>（子进程 + 后台线程），设置 <code>VLLM_ENABLE_V1_MULTIPROCESSING=0</code> 时退化为 <code>InprocClient</code>（同进程直调 <code>EngineCore.step</code>，<code>core_client.py:306</code>），这是单进程调试时最方便的模式。</p>
+
+<h2 id="sec-step">6. EngineCore.step：主循环的五拍</h2>
+<p>整个引擎的"心跳"只有 30 行（<code>v1/engine/core.py:584</code>）：</p>
+<pre><code class="language-python">def step(self) -&gt; tuple[dict[int, EngineCoreOutputs], bool]:
+    """Schedule, execute, and make output. ..."""
+    if not self.scheduler.has_requests():
+        return {}, False
+    scheduler_output = self.scheduler.schedule(self._should_throttle_prefills())
+    future = self.model_executor.execute_model(scheduler_output, non_block=True)
+    grammar_output = self.scheduler.get_grammar_bitmask(scheduler_output)
+    with (...):
+        model_output = future.result()
+        if model_output is None:
+            model_output = self.model_executor.sample_tokens(grammar_output)
+    self._process_aborts_queue()
+    engine_core_outputs = self.scheduler.update_from_output(scheduler_output, model_output)
+    return engine_core_outputs, scheduler_output.total_num_scheduled_tokens &gt; 0</code></pre>
+<p>五拍节奏值得背下来，它是理解 vLLM 所有优化的坐标系：</p>
+<ol>
+  <li><b>schedule</b>：纯 CPU 决策——本步调度谁、各几个 token、KV 块怎么增减（第 2、3 讲）。</li>
+  <li><b>execute_model（异步提交）</b>：<code>non_block=True</code> 返回 future，GPU 开始跑；CPU 不等它，立刻做第 3 拍（第 4 讲）。</li>
+  <li><b>get_grammar_bitmask</b>：与 GPU 执行重叠，为结构化输出请求计算约束掩码（第 6 讲）。</li>
+  <li><b>sample_tokens</b>：等模型前向完成，采样下一个 token；decode 采样独立成拍是为了让 grammar bitmask 能在采样前注入，也让 CPU 调度与 GPU 前向的重叠成为可能。</li>
+  <li><b>update_from_output</b>：用采样结果更新请求状态、KV cache 引用计数，产出回程消息；处理此刻积压的 abort（<code>_process_aborts_queue</code>）。</li>
+</ol>
+<div class="tldr">
+  <p><b>注意</b>：以上是"同步 step"的心智模型。开启 async scheduling 后实际运行的是 <code>step_with_batch_queue</code>（<code>core.py:625</code>）：schedule 第 N+1 步不等第 N 步的采样结果，用"占位 token"（<code>num_output_placeholders</code>）先记账，等第 N 步结果回来再对账。第 2 讲会展开这套乐观并发。</p>
+</div>
+
+<h2 id="sec-new">7. 这棵 dev 树的新特性速览</h2>
+<p>相对 2024–2025 年中你熟悉的 vLLM，本树出现了不少新子系统。读懂它们的共同视角：都是往"第 6 节的五拍循环"里插入环节，而不是推翻循环。</p>
+<table>
+<tr><th>特性</th><th>位置</th><th>一句话</th><th>插入点</th></tr>
+<tr><td>ubatching</td><td><code>v1/worker/ubatching.py</code>、<code>gpu_ubatch_wrapper.py</code>、<code>ubatch_utils.py:14</code></td><td>把一个调度 batch 切成两个微批（ubatch），在同进程两个线程里交叠执行，隐藏 CPU/GPU 空泡</td><td>ModelRunner 侧（调度器无感知）</td></tr>
+<tr><td>KV offload</td><td><code>v1/kv_offload/</code>（通用框架）+ <code>v1/simple_kv_offload/</code>（简化 CPU 版）</td><td>KV block 从 GPU 分层放到 CPU/远端，命中则免 prefill</td><td><code>KVCacheManager.allocate_slots</code> 的外部块来源</td></tr>
+<tr><td>fault tolerance</td><td><code>v1/fault_tolerance/engine_core_sentinel.py</code></td><td>EngineCore 崩溃时前端可降级而不是整服不可用（配合 <code>FT_STATUS_CALL_ID</code> 哨兵消息）</td><td>CoreClient 消息分发</td></tr>
+<tr><td>EC transfer</td><td><code>distributed/ec_transfer/</code>、<code>v1/worker/ec_connector_model_runner_mixin.py</code></td><td>PD 分离架构下传输多模态 encoder cache（对称于 KV transfer）</td><td><code>execute_model</code> 前处理（<code>gpu_model_runner.py:4215</code>）</td></tr>
+<tr><td>sleep mode / 可插拔分配器</td><td><code>device_allocator/cumem.py</code>、<code>sleep_mode_backend.py</code></td><td>基于 cumem 的显存释放/恢复，多引擎分时复用 GPU</td><td>Worker 启动时注册 allocator</td></tr>
+<tr><td>自有算子 IR</td><td><code>vllm/ir/</code>（<code>op.py</code>、<code>ops/layernorm.py</code>）</td><td>注册自定义 torch op 与数值容差，为跨后端 kernel 体系铺路</td><td>模型层</td></tr>
+<tr><td>统一输出解析</td><td><code>vllm/parser/</code>（<code>parser_manager.py</code>）、<code>tool_parsers/</code>、<code>reasoning/</code></td><td>按模型家族聚合 tool call / 思考内容解析，服务层不再各写一套</td><td>OpenAI serving 流式生成器</td></tr>
+<tr><td>streaming 会话</td><td><code>v1/request.py:214</code>、<code>scheduler.py:1367</code></td><td>同 ID 请求复用已生成的 KV，服务于多轮流式会话（MoE DP wave 协作场景）</td><td>Scheduler 双 waiting 队列</td></tr>
+</table>
+
+<h2 id="sec-reading">8. 源码阅读路线建议</h2>
+<p>如果只给自己留一条路线，我会按"先主干后支线、先数据结构后算法"：</p>
+<ol class="refs">
+  <li><code>vllm/v1/engine/__init__.py</code>——所有跨进程消息结构（<code>EngineCoreRequest</code> / <code>EngineCoreOutputs</code>）定义在这里，是全系统的"通用语"。</li>
+  <li><code>vllm/v1/engine/core.py:584</code>（step 主循环）→ <code>vllm/v1/core/sched/scheduler.py:439</code>（schedule）——控制流主干。</li>
+  <li><code>vllm/v1/core/kv_cache_manager.py:117</code> → <code>block_pool.py</code>——显存账本。</li>
+  <li><code>vllm/v1/worker/gpu_model_runner.py:4166</code>（execute_model）+ <code>1192</code>（_update_states）——调度决策如何落地。</li>
+  <li>单进程跑通一次推理：<code>VLLM_ENABLE_V1_MULTIPROCESSING=0</code> + 断点打在 <code>EngineCore.step</code>，观察五拍。这比读十遍代码都有用。</li>
+</ol>
+
+<footer>生成于 2026-10-08 · vLLM 源码解析系列 · 源码版本：本地仓库 main@d9dac2b3d（dev 树） · 行号引用以该版本为准，上游代码演进后可能漂移 · 下一篇：<a href="vllm-t1-engine.html">Engine 与进程模型</a></footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

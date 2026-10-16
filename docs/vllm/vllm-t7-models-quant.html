@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vLLM 模型加载与量化：weight_loader 回调与 quant_method 多态（源码级九讲 · 第 7 讲）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .toc {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 20px; margin: 16px 0; font-size: 0.93em;
+  }
+  .toc ol { margin: 6px 0 2px; padding-left: 22px; }
+  .toc li { margin: 3px 0; }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>vLLM 模型加载与量化：weight_loader 回调与 quant_method 多态</h1>
+<div class="meta">
+  <b>vLLM 源码解析系列 · 第 7 讲（共 9 讲）</b> · 生成于 2026-10-08 ·
+  源码版本：本地仓库 main@d9dac2b3d（dev 树） ·
+  上一篇：<a href="vllm-t6-spec-structured.html">第 6 讲 · 投机解码与结构化输出</a>
+</div>
+<div class="toc">
+  <b>本篇导航</b>
+  <ol>
+    <li><a href="#pipeline">加载四级流水线</a></li>
+    <li><a href="#registry">ModelRegistry：架构名怎么变成类</a></li>
+    <li><a href="#loader">DefaultModelLoader 与格式选择</a></li>
+    <li><a href="#shard">TP 分片：weight_loader 回调</a></li>
+    <li><a href="#quant">量化框架：quant_method 多态</a></li>
+    <li><a href="#repack">重打包：为什么 load 完还要再动一遍</a></li>
+    <li><a href="#kvquant">KV cache 量化</a></li>
+    <li><a href="#check">源码阅读检查点</a></li>
+  </ol>
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：加载是一条四级流水线——<code>config.json</code> 定型 → 注册表把 <code>architectures</code> 变成模型类 → 建空模块树（同时装好 <code>quant_method</code>）→ 权重流式灌入，每个参数经过自己的 <code>weight_loader</code> 回调切成本 TP rank 的分片 → 最后 <code>process_weights_after_loading</code> 把 HF 布局重打包成 kernel 布局。量化不是"换模型"，是 Linear 层上的方法多态。</p>
+  <p><b>本篇主线</b>：流水线 → 注册表 → 迭代器 → 分片回调 → 量化方法注册表 → 重打包 → KV 量化。</p>
+</div>
+
+<h2 id="pipeline">1. 加载四级流水线</h2>
+<p>入口在 Worker 的 <code>load_model</code>（<code>gpu_worker.py:435</code>）→ <code>gpu_model_runner.load_model</code>（<code>gpu_model_runner.py:5303</code>）：先 <code>get_model_loader(load_config)</code>（<code>:5323</code>，按 load_format 分发 <code>_LOAD_FORMAT_TO_MODEL_LOADER</code>，<code>model_loader/__init__.py:50-66</code>），再 <code>loader.load_model(...)</code>。模板方法在 <code>base_loader.py:43-82</code>，四步固定：</p>
+<div class="fig">
+<svg viewBox="0 0 900 258" role="img" aria-label="模型加载四级流水线">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- ===== 第一行（y=24, h=88; x=46/324/602, w=252）===== -->
+  <rect x="46" y="24" width="252" height="88" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="172" y="47" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">① ModelConfig</text>
+  <text x="172" y="65" font-size="10" fill="#1e40af" text-anchor="middle">get_config 读 config.json（:581）</text>
+  <text x="172" y="80" font-size="10" fill="#1e40af" text-anchor="middle">dtype / architectures / overrides</text>
+  <text x="172" y="95" font-size="10" fill="#1e40af" text-anchor="middle">（vllm/config/model.py）</text>
+
+  <rect x="324" y="24" width="252" height="88" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="450" y="47" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">② ModelRegistry.resolve</text>
+  <text x="450" y="65" font-size="10" fill="#1e40af" text-anchor="middle">in-tree 字典（registry.py:74）</text>
+  <text x="450" y="80" font-size="10" fill="#1e40af" text-anchor="middle">缺失 → Transformers 后备（:1148）</text>
+  <text x="450" y="95" font-size="10" fill="#1e40af" text-anchor="middle">@register_model 自定义（:1057）</text>
+
+  <rect x="602" y="24" width="252" height="88" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="728" y="47" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">③ initialize_model</text>
+  <text x="728" y="65" font-size="10" fill="#1e40af" text-anchor="middle">建空模块树（meta 设备）</text>
+  <text x="728" y="80" font-size="10" fill="#1e40af" text-anchor="middle">LinearBase 装载 quant_method</text>
+  <text x="728" y="95" font-size="10" fill="#1e40af" text-anchor="middle">（linear.py:275-279）</text>
+
+  <!-- ===== 第二行（y=148, h=88）===== -->
+  <rect x="46" y="148" width="252" height="88" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="172" y="171" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">④ 权重迭代器</text>
+  <text x="172" y="189" font-size="10" fill="#b45309" text-anchor="middle">safetensors / multithread /</text>
+  <text x="172" y="204" font-size="10" fill="#b45309" text-anchor="middle">fastsafetensors / pt / np_cache</text>
+  <text x="172" y="219" font-size="10" fill="#b45309" text-anchor="middle">（default_loader.py:244-319）</text>
+
+  <rect x="324" y="148" width="252" height="88" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="450" y="171" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">⑤ model.load_weights</text>
+  <text x="450" y="189" font-size="10" fill="#b45309" text-anchor="middle">weight_loader(param, w, shard_id)</text>
+  <text x="450" y="204" font-size="10" fill="#b45309" text-anchor="middle">narrow 到本 rank 分片 + copy_</text>
+  <text x="450" y="219" font-size="10" fill="#b45309" text-anchor="middle">（linear.py:560-581）</text>
+
+  <rect x="602" y="148" width="252" height="88" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="728" y="171" font-size="12" font-weight="bold" fill="#166534" text-anchor="middle">⑥ process_weights_…loading</text>
+  <text x="728" y="189" font-size="10" fill="#166534" text-anchor="middle">重打包成 kernel 布局</text>
+  <text x="728" y="204" font-size="10" fill="#166534" text-anchor="middle">fp8 转置 · marlin 重编码</text>
+  <text x="728" y="219" font-size="10" fill="#166534" text-anchor="middle">（utils.py:100-152）</text>
+
+  <!-- 行内箭头 -->
+  <line x1="303" y1="68" x2="313" y2="68" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="581" y1="68" x2="591" y2="68" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <!-- ③→④ 折线：先建树、后灌水（直角改圆角曲线） -->
+  <path d="M728,117 L728,122 Q728,130 720,130 L180,130 Q172,130 172,137" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="303" y1="192" x2="313" y2="192" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <line x1="581" y1="192" x2="591" y2="192" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：加载流水线。③→④ 的折线表示"先建树、后灌水"：模块树先于任何权重存在，量化方法在此时就位，权重只是流经的流水。</p>
+<pre><code># base_loader.py:43-82 的骨架（意译）
+with set_default_torch_dtype(dtype):      # 空参数以目标 dtype 建模
+    model = initialize_model(config, ...) # 建树 + 装载 quant_method
+    model.load_weights(weights_iterator)  # ④⑤ 流式灌入
+    process_weights_after_loading(model)  # ⑥ kernel 布局重打包</code></pre>
+
+<h2 id="registry">2. ModelRegistry：架构名怎么变成类</h2>
+<p><code>get_model_architecture</code>（<code>model_loader/utils.py:52</code>，缓存包装 <code>:239-255</code>）读 <code>hf_config.architectures</code>，交给 <code>ModelRegistry.resolve_model_cls</code>（<code>models/registry.py:1296-1348</code>）三级解析：</p>
+<table>
+<tr><th>层级</th><th>机制</th><th>位置</th></tr>
+<tr><td>in-tree 模型</td><td>架构名 → <code>("模块","类名")</code> 惰性映射字典（如 <code>"LlamaForCausalLM"</code>，<code>:74+</code>）</td><td><code>registry.py:74+</code></td></tr>
+<tr><td>Transformers 后备</td><td>in-tree 找不到时尝试用 transformers 的实现（<code>_try_resolve_transformers</code>）</td><td><code>:1148-1216</code></td></tr>
+<tr><td>报错带提示</td><td><code>_raise_for_unsupported</code> 列出相近名字与帮助链接</td><td><code>:1103-1134</code></td></tr>
+</table>
+<p>自定义模型三种姿势：<code>@register_model("名字")</code> 装饰器（接受类或 <code>"模块:类"</code> 惰性字符串，<code>:1057-1101</code>）；trust_remote_code 动态模块（<code>try_get_class_from_dynamic_module</code>，<code>:1171,1185</code>）；或直接传实现类的 path 给 registry。架构名先过 <code>_normalize_arch</code> 归一化后缀（<code>:1218-1242</code>），所以 <code>...ForCausalLM</code>/<code>...ForConditionalGeneration</code> 的大小写差异能兜住。</p>
+
+<h2 id="loader">3. DefaultModelLoader 与格式选择</h2>
+<p>默认加载器（<code>default_loader.py:43</code>）两阶段：</p>
+<ul>
+  <li><b>_prepare_weights</b>（<code>:128-242</code>）：下载/筛选文件——auto 格式下含 Mistral 系检测（<code>:151-163</code>），按格式套 allow_patterns（<code>:166-184</code>），index 文件去重防止重复读分片（<code>:217-235</code>）；</li>
+  <li><b>_get_weights_iterator</b>（<code>:244-319</code>）：按环境与参数选迭代器——<code>np_cache</code>（<code>:256</code>）、fastsafetensors（<code>:267</code>）、instanttensor（<code>:272</code>）、多线程 safetensors（<code>:278,300</code>）、标准 safetensors（<code>:287</code>）、pt（<code>:310</code>）。迭代器实现都在 <code>weight_utils.py</code>：自然排序分片（<code>:857</code>）、大文件 NFS/RAM 预取启发式（<code>:859-921</code>）、tqdm 进度（<code>:634</code>）。</li>
+</ul>
+<p><b>load_format 全家福</b>（分发表 <code>model_loader/__init__.py:50-66</code>）：</p>
+<table>
+<tr><th>format</th><th>类</th><th>一句话</th></tr>
+<tr><td>auto / safetensors</td><td><code>DefaultModelLoader</code></td><td>上文标准路径</td></tr>
+<tr><td>tensorizer</td><td><code>tensorizer_loader.py:44</code></td><td>CoreWeave 序列化格式，加载快一个量级</td></tr>
+<tr><td>runai_streamer</td><td><code>runai_streamer_loader.py:25</code></td><td>从 S3/GCS/Azure 流式读 safetensors</td></tr>
+<tr><td>sharded_state</td><td><code>sharded_state_loader.py:30</code></td><td>每个 TP rank 只读自己的分片（省网络）</td></tr>
+<tr><td>bitsandbytes</td><td><code>bitsandbytes_loader.py</code></td><td>4/8-bit 现场量化加载</td></tr>
+<tr><td>dummy</td><td><code>dummy_loader.py:23</code></td><td>随机权重，profiling 专用</td></tr>
+</table>
+<div class="infer">老版本常见的 <code>gguf</code> load_format 在本树已从 <code>LoadFormats</code> 移除；GGUF 权重要先转 safetensors。加载完还有 strict 校验：迭代器未消费完或参数没被灌到都会报错（<code>default_loader.py:436-470</code>）。</div>
+
+<h2 id="shard">4. TP 分片：weight_loader 回调</h2>
+<p>TP 下每个 rank 只存自己的那份权重。实现方式不是"加载器知道怎么切"，而是<b>每个参数自带回调</b>——<code>model.load_weights</code> 遍历迭代器时，按参数名把张量递给对应模块的 <code>weight_loader(param, loaded_weight, shard_id, ...)</code>：</p>
+<table>
+<tr><th>层</th><th>切法</th><th>位置</th></tr>
+<tr><td><code>ColumnParallelLinear</code></td><td>输出维 narrow：<code>loaded_weight.narrow(output_dim, rank*shard_size, shard_size)</code> 后 <code>param_data.copy_</code></td><td><code>layers/linear.py:560-581</code></td></tr>
+<tr><td><code>MergedColumnParallelLinear</code></td><td>按 shard_id（含融合 gate_up 的两段）分别定位偏移</td><td><code>:746+</code></td></tr>
+<tr><td><code>QKVParallelLinear</code></td><td>q/k/v 三段各自偏移（<code>:1248-1261</code>）；FP8 block-scale 分片校正（<code>:1270-1274</code>）；marlin 打包特判（<code>:1280</code>）</td><td><code>:1222+</code></td></tr>
+<tr><td><code>RowParallelLinear</code></td><td>输入维 narrow（<code>:1717-1737</code>）；forward 末尾 all_reduce（<code>:1766-1767</code>）</td><td><code>:1717+</code></td></tr>
+<tr><td><code>VocabParallelEmbedding</code></td><td>词表 padding 感知的分片</td><td><code>vocab_parallel_embedding.py:445</code></td></tr>
+</table>
+<p>新版还在迁移"v2 路径"：直接调用 <code>param.load_column_parallel_weight(...)</code> 等批量接口（<code>:583-589</code>、<code>:1178</code>、<code>:1739-1746</code>），跳过逐参回调的开销。</p>
+
+<h2 id="quant">5. 量化框架：quant_method 多态</h2>
+<div class="fig">
+<svg viewBox="0 0 900 372" role="img" aria-label="量化方法多态与 kernel 工厂">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow2-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- LinearBase：x=46, y=24, w=252, h=88 -->
+  <rect x="46" y="24" width="252" height="88" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="172" y="47" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">LinearBase.__init__</text>
+  <text x="172" y="65" font-size="10" fill="#1e40af" text-anchor="middle">有 quant_config → get_quant_method</text>
+  <text x="172" y="80" font-size="10" fill="#1e40af" text-anchor="middle">无 → UnquantizedLinearMethod</text>
+  <text x="172" y="95" font-size="10" fill="#1e40af" text-anchor="middle">（linear.py:275-279, 184-230）</text>
+
+  <!-- get_quant_method：x=324, y=24, w=252, h=88 -->
+  <rect x="324" y="24" width="252" height="88" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="450" y="47" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">get_quant_method（:180）</text>
+  <text x="450" y="65" font-size="10" fill="#1e40af" text-anchor="middle">方法合同三件套：</text>
+  <text x="450" y="80" font-size="10" fill="#1e40af" text-anchor="middle">create_weights / apply /</text>
+  <text x="450" y="95" font-size="10" fill="#1e40af" text-anchor="middle">process_weights_after_loading</text>
+
+  <!-- kernel 工厂：x=602, y=24, w=252, h=176 -->
+  <rect x="602" y="24" width="252" height="176" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="728" y="46" font-size="12" font-weight="bold" fill="#166534" text-anchor="middle">apply → kernel 工厂</text>
+  <text x="728" y="64" font-size="10" fill="#166534" text-anchor="middle">forward 调 quant_method.apply</text>
+  <text x="728" y="79" font-size="10" fill="#166534" text-anchor="middle">（linear.py:403/598/1764）</text>
+  <text x="728" y="94" font-size="10" fill="#166534" text-anchor="middle">fp8 kernel 工厂（kernels/linear/</text>
+  <text x="728" y="109" font-size="10" fill="#166534" text-anchor="middle">__init__.py:612）：cutlass / triton</text>
+  <text x="728" y="124" font-size="10" fill="#166534" text-anchor="middle">/ marlin / deep_gemm</text>
+  <text x="728" y="139" font-size="10" fill="#166534" text-anchor="middle">wNa16 → machete / marlin</text>
+  <text x="728" y="154" font-size="10" fill="#166534" text-anchor="middle">（utils/machete_utils.py:12）</text>
+  <text x="728" y="169" font-size="10" fill="#166534" text-anchor="middle">重打包发生在 load 之后：</text>
+  <text x="728" y="184" font-size="10" fill="#166534" text-anchor="middle">fp8 转置 / marlin 重编码</text>
+
+  <!-- 常见 QuantConfig：x=324, y=148, w=252, h=104 -->
+  <rect x="324" y="148" width="252" height="104" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="450" y="172" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">常见 QuantConfig</text>
+  <text x="450" y="190" font-size="10" fill="#b45309" text-anchor="middle">Fp8Config · block 128×128（:145）</text>
+  <text x="450" y="205" font-size="10" fill="#b45309" text-anchor="middle">AutoGPTQ / Marlin（:153）</text>
+  <text x="450" y="220" font-size="10" fill="#b45309" text-anchor="middle">CompressedTensors（:155）</text>
+  <text x="450" y="235" font-size="10" fill="#b45309" text-anchor="middle">GptOssMxfp4（gpt-oss）</text>
+
+  <!-- 连接箭头 -->
+  <line x1="303" y1="68" x2="313" y2="68" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <line x1="450" y1="117" x2="450" y2="137" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <line x1="581" y1="68" x2="591" y2="68" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- KV cache 量化注记条：x=46, y=282, w=808, h=68 -->
+  <rect x="46" y="282" width="808" height="68" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="60" y="302" font-size="12" font-weight="bold" fill="#1e293b">KV cache 量化（挂 attention 层，不动权重）</text>
+  <text x="60" y="322" font-size="10" fill="#64748b">cache_dtype = fp8_e4m3/e5m2（config/cache.py:24）· k/v_scale 参数（attention.py:271-273）</text>
+  <text x="60" y="337" font-size="10" fill="#64748b">checkpoint 键映射 kv_scale → attn.k_scale（base_config.py:194-227）· 在线计算 :586-589</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：量化的全部秘密是"Linear 持有一个方法对象"。checkpoint 里的 HF 布局从左边进来，kernel 要的布局在右边出去，中间由方法对象的三个合同阶段衔接。</p>
+
+<p>注册表侧（<code>layers/quantization/__init__.py</code>）：</p>
+<ul>
+  <li><code>QUANTIZATION_METHODS</code> 列举全部方法名（<code>:12-48</code>）；第三方可用 <code>@register_quantization_config</code> 注册（<code>:59-106</code>）；</li>
+  <li><code>get_quantization_config</code>（<code>:109-183</code>）：方法名 → config 类（<code>"fp8"</code>→<code>Fp8Config</code> <code>:145</code>，<code>gptq/gptq_marlin</code>→<code>AutoGPTQConfig</code> <code>:153-154</code>，<code>compressed-tensors</code> <code>:155</code>），在线量化简写（<code>"fp8_w8a8"</code> 等）也在这里展开（<code>:177-178</code>）；</li>
+  <li>配置从 HF 的 <code>quantization_config</code> json 解析：<code>get_quant_config</code>（<code>weight_utils.py:240-275</code>，<code>compression_config</code> 兜底 <code>:256</code>）；</li>
+  <li>逐层动态覆盖（同一模型不同层不同位宽）：<code>get_dynamic_override</code>（<code>utils/gptq_utils.py:51</code>）。</li>
+</ul>
+<p>方法基类的三个合同（<code>base_config.py</code>）：<code>create_weights</code>（<code>:31</code>，按方法建参数，比如多建一个 <code>weight_scale</code>）、<code>apply</code>（<code>:40</code>）、<code>process_weights_after_loading</code>（<code>:67</code>）。</p>
+
+<h2 id="repack">6. 重打包：为什么 load 完还要再动一遍</h2>
+<p>HF checkpoint 的权重布局是"给人看的"；GPU kernel 要的布局是"给机器算的"。两者之间的差全部由 <code>process_weights_after_loading</code> 抹平（遍历模块逐个调 <code>quant_method</code> 的钩子，<code>model_loader/utils.py:100-152</code>，attention 层单独一轮 <code>:127-134</code>）：</p>
+<table>
+<tr><th>方法</th><th>重打包内容</th><th>位置</th></tr>
+<tr><td>FP8</td><td>per-tensor 策略会<b>重新量化</b>（<code>:414</code>）、权重转置以匹配 kernel（<code>:423</code>）；block-wise（如 DeepSeek 128×128，<code>weight_block_size</code> 配置 <code>:115-132</code>）保留块 scale；marlin 后端再重编码（<code>:389-398</code>）</td><td><code>fp8.py:388-434</code></td></tr>
+<tr><td>GPTQ-Marlin</td><td><code>ops.gptq_marlin_repack</code> 把 int4 列布局转成 marlin 的 tile 布局</td><td><code>marlin_utils_fp4.py:254,721</code>、<code>marlin_utils_fp8.py:147</code></td></tr>
+<tr><td>AWQ</td><td>位序重排 + <code>AWQUtils.repack</code></td><td><code>auto_awq.py:981</code>（原理 docstring <code>:102</code>）</td></tr>
+<tr><td>compressed-tensors</td><td>按 recipe 分派：wNa16（<code>:198,637,798</code>）或 fp8-w8a8（<code>:526,812-854</code>），scheme 自己执行 repack（<code>:975-976</code>）</td><td><code>compressed_tensors/…py</code></td></tr>
+<tr><td>MXFP4（gpt-oss）</td><td><code>GptOssMxfp4Config</code> 把 HF 的 mxfp4 块转成 triton_kernels 的张量布局</td><td><code>mxfp4.py:110-151,342,355</code></td></tr>
+</table>
+<p>这个设计的好处：同一份 checkpoint、同一个模型类，换量化方法只是换掉 <code>quant_method</code>，模型代码零改动；kernel 选择也收敛到工厂函数（fp8 的 <code>init_fp8_linear_kernel</code>，<code>kernels/linear/__init__.py:612</code>，按形状/硬件挑 cutlass / triton / marlin / deep_gemm）。</p>
+
+<h2 id="kvquant">7. KV cache 量化</h2>
+<p>KV 量化与权重量化共用 <code>quantization_config</code>，但作用点在 attention 层：</p>
+<ul>
+  <li><code>cache_config.cache_dtype</code> 选 <code>fp8_e4m3</code>/<code>fp8_e5m2</code>（<code>vllm/config/cache.py:24-25,76</code>）；</li>
+  <li><code>Attention.__init__</code> 读入并决定是否加载 scale 参数（<code>layers/attention/attention.py:271-273</code>）；默认 1.0 的 q/k/v/prob scale 占位（<code>:124-150</code>）；<code>_init_kv_cache_quant</code>（<code>:153-220</code>）仅在后端需要时把 <code>k_scale</code> 注册成 parameter（<code>:195-220</code>）；</li>
+  <li>checkpoint 里的键名是 <code>kv_scale</code>，加载时经 <code>get_cache_scale_mapper</code> 映射成 <code>attn.k_scale</code>（<code>base_config.py:194-227</code>）；在线重算走 <code>calculate_kv_scales</code>（<code>attention.py:586-589</code>）；</li>
+  <li>方法侧统一入口 <code>BaseKVCacheMethod</code>（<code>quantization/kv_cache.py:42</code>）。</li>
+</ul>
+
+<h2 id="check">8. 源码阅读检查点</h2>
+<ol>
+  <li><code>model_executor/model_loader/base_loader.py:43-82</code>：对照图 1 的四步；</li>
+  <li><code>models/registry.py:1296-1348</code> + <code>:1103-1134</code>：解析成功/失败的两种结局；</li>
+  <li><code>layers/linear.py:560-581</code> vs <code>:1717-1737</code>：列并行切输出维、行并行切输入维的镜像关系；</li>
+  <li><code>layers/quantization/__init__.py:109-183</code>：方法注册表；再挑 <code>fp8.py:388-434</code> 看一次完整重打包；</li>
+  <li><code>model_loader/utils.py:100-152</code>：<code>process_weights_after_loading</code> 的遍历与 device_loading_context（<code>:155-197</code>，CPU offload 场景的安全加载）。</li>
+</ol>
+
+<footer>生成于 2026-10-08 · vLLM 源码解析系列 · 第 7 讲 / 共 9 讲 · 源码版本 main@d9dac2b3d · 下一篇：<a href="vllm-t8-multimodal-lora.html">第 8 讲 · 多模态与 LoRA</a></footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

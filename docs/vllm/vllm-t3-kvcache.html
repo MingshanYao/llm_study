@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vLLM KV Cache 与 PagedAttention：BlockPool、prefix caching 与 offload（源码级九讲 · 第 3 讲）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .toc { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 20px; margin: 22px 0; font-size: 0.92em; }
+  .toc b { color: var(--ink); }
+  .toc ol { margin: 8px 0 0; padding-left: 22px; }
+  .toc li { margin: 2px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>vLLM KV Cache 与 PagedAttention：BlockPool、prefix caching 与 offload</h1>
+<div class="meta">
+  <b>vLLM 源码解析系列 · 第 3 讲（共 9 讲）</b> · 生成于 2026-10-08 ·
+  源码版本：本地仓库 main@d9dac2b3d（dev 树） ·
+  上一篇：<a href="vllm-t2-scheduler.html">第 2 讲 · Scheduler</a>
+</div>
+<div class="toc">
+  <b>本篇导航</b>
+  <ol>
+    <li><a href="#paged">PagedAttention 的今天：从 kernel 名到基础设施</a></li>
+    <li><a href="#profile">显存是怎么算出来的</a></li>
+    <li><a href="#spec">KVCacheSpec 体系与 hybrid 分组</a></li>
+    <li><a href="#pool">BlockPool：块池的数据结构</a></li>
+    <li><a href="#lifecycle">一个请求的块操作生命周期</a></li>
+    <li><a href="#prefix">prefix caching 端到端与 CoW</a></li>
+    <li><a href="#offload">KV offload 与 PD 分离</a></li>
+    <li><a href="#new">正确性新机制四件套</a></li>
+  </ol>
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：vLLM 把显存当成一台"虚拟内存机"——KV cache 是物理页框（BlockPool），每个请求持有一张页表（block_table），相同内容自动共享（prefix caching），写共享页前复制（CoW），放不下时换出到 CPU/远端（offload）。第 2 讲调度器做的每个决定，都要经过这一层的记账。</p>
+  <p><b>本篇主线</b>：显存 profile 公式 → spec 分组 → BlockPool 结构 → 三个块操作函数 → CoW 与驱逐 → offload / connector。</p>
+</div>
+
+<h2 id="paged">1. PagedAttention 的今天：从 kernel 名到基础设施</h2>
+<p>2023 年读 vLLM，"PagedAttention" 是一个 CUDA kernel；这棵 dev 树里它已经是<b>一整套显存管理子系统</b>的代称：</p>
+<ul>
+  <li><b>旧 kernel 已删除</b>：原版 CUDA <code>paged_attention_v1/v2</code> 在本树已被移除（csrc/attention 只剩 dtype 头文件），主路径是 FlashAttention / FlashInfer / Triton 等 backend 直接按 <code>block_table</code> + <code>(num_blocks, page_size)</code> 布局的 KV tensor 计算（仅 ROCm 保留 paged 系 kernel）。</li>
+  <li><b>概念上升为接口</b>：<code>KVCacheSpec</code>（<code>v1/kv_cache_interface.py:107</code>）描述每层 KV 的形状/页大小，<code>KVCacheManager</code>（<code>v1/core/kv_cache_manager.py:117</code>）在调度器侧记账，<code>BlockTable</code>（<code>v1/worker/block_table.py:48</code>）在 worker 侧变成 kernel 可直接吃的张量。</li>
+  <li><b>衍生出整个生态</b>：prefix caching、hybrid 模型分组、KV offload、PD 分离传输、投机解码 lookahead 块，全部长在同一套块池上。</li>
+</ul>
+
+<h2 id="profile">2. 显存是怎么算出来的</h2>
+<p>启动时四步 collective（第 5 讲详述启动链），这里聚焦显存公式：</p>
+<ol>
+  <li><b>profile_run</b>：<code>Worker.determine_available_memory</code>（<code>gpu_worker.py:460</code>）在 <code>memory_profiling</code> 上下文中跑一次 <code>model_runner.profile_run()</code>（<code>gpu_model_runner.py:6425</code>，dummy run 最大 batch）。用 <code>mem_get_info</code> 前后差值算出 <code>total_consumed</code>，加 transient 峰值余量得 <code>non_kv_cache_memory</code>（<code>utils/mem_utils.py:317</code>）。</li>
+  <li><b>公式</b>（<code>gpu_worker.py:544-548</code>）：
+    <pre><code>available_kv = requested − non_kv_cache_memory − cudagraph_memory_estimate
+requested   = total_memory × gpu_memory_utilization</code></pre>
+    注意 cudagraph 显存<b>单独预留</b>——捕获几十张 graph 的输入缓冲不是小数目。</li>
+  <li><b>页数</b>：<code>get_kv_cache_configs</code>（<code>v1/core/kv_cache_utils.py:2094</code>）按组求 <code>num_blocks = available_memory // page_size // group_size</code>（<code>:993</code>），多 rank/PP 分段不一致时取最小值并按比例收缩张量（<code>:2210</code>）。</li>
+  <li><b>分配</b>：<code>initialize_kv_cache</code>（<code>gpu_model_runner.py:7616</code>）→ <code>_allocate_kv_cache_tensors</code>（<code>:7304</code>）一次性大块分配，之后所有"分配/释放"都只是这个大张量上的<b>索引记账</b>，不再触碰 cudaMalloc。</li>
+</ol>
+
+<h2 id="spec">3. KVCacheSpec 体系与 hybrid 分组</h2>
+<p>不同层要的 KV 形状完全不同。spec 体系（<code>v1/kv_cache_interface.py</code>）用一组数据类描述：</p>
+<table>
+<tr><th>Spec</th><th>位置</th><th>对应注意力</th><th>关键点</th></tr>
+<tr><td><code>FullAttentionSpec</code></td><td><code>:234</code></td><td>普通 full attention</td><td>页大小 = <code>2·block_size·kv_heads·head_dim·dtype</code></td></tr>
+<tr><td><code>SlidingWindowSpec</code> / <code>RSWASpec</code></td><td><code>:558</code> / <code>:478</code></td><td>SWA / 递归分段 SWA</td><td>窗口外的块要换成 null 并释放（回收感知）</td></tr>
+<tr><td><code>MLAAttentionSpec</code></td><td><code>:388</code></td><td>DeepSeek MLA</td><td>无 K/V 之分，656B/584B 特殊布局（<code>:408</code>）</td></tr>
+<tr><td><code>MambaSpec</code></td><td><code>:709</code></td><td>Mamba/SSM 状态</td><td>"页"是每请求一份的 state；align 模式内存 <code>page·(2+spec_blocks)</code>（<code>:729</code>）</td></tr>
+<tr><td><code>ChunkedLocalAttentionSpec</code> / <code>SinkFullAttentionSpec</code> 等</td><td><code>:518</code> / <code>:782</code></td><td>分块局部注意力 / attention-sink</td><td>各带自己的命中/驱逐语义</td></tr>
+</table>
+<p><b>分组</b>：<code>KVCacheCoordinator</code>（<code>v1/core/kv_cache_coordinator.py:60</code>）持有全局唯一 BlockPool + 每组一个 <code>SingleTypeKVCacheManager</code>。混合模型（如 full + sliding + mamba）按 spec 分组、full attention 组排最前（<code>:633</code>），页大小不齐时统一放大 block_size（<code>kv_cache_utils.py:1070</code>）。</p>
+<p><b>找最长命中</b>（<code>find_longest_cache_hit</code>）各组算法差异巨大：</p>
+<table>
+<tr><th>组类型</th><th>搜索方向</th><th>命中条件</th><th>位置</th></tr>
+<tr><td>FullAttention</td><td>左→右</td><td>逐块哈希命中，miss 即停</td><td><code>single_type_kv_cache_manager.py:681</code></td></tr>
+<tr><td>SlidingWindow</td><td>右→左</td><td>窗口内需连续块命中；窗口外补 null</td><td><code>:897</code></td></tr>
+<tr><td>Mamba</td><td>右→左</td><td>只需 1 个命中的 state block</td><td><code>:1279</code></td></tr>
+</table>
+<p>多组并存时 coordinator 做<b>不动点迭代</b>（<code>coordinator.py:685-817</code>）：任一组缩短命中长度就全体重扫，直到没有组再缩短。这就是 hybrid 模型 prefix cache 查找比单组贵的原因。</p>
+
+<h2 id="pool">4. BlockPool：块池的数据结构</h2>
+<p>核心三个角色（<code>v1/core/block_pool.py:143</code> 与 <code>kv_cache_utils.py:117</code>）：</p>
+<table>
+<tr><th>结构</th><th>内容</th><th>说明</th></tr>
+<tr><td><code>KVCacheBlock</code></td><td><code>block_id</code>、<code>ref_cnt</code>、<code>_block_hash</code>（含 group id 打包，<code>:127</code>）、free 链表 prev/next（<code>:134</code>）、<code>is_null</code></td><td>一"页"的元数据；<code>ref_cnt</code> = 正在引用它的请求数</td></tr>
+<tr><td><code>FreeKVCacheBlockQueue</code></td><td>双向链表 + fake head/tail（<code>:184</code>）</td><td>O(1) 中间删除；<b>队首 = LRU 最先驱逐</b>；同刻释放时"哈希 token 更多的块"排前（<code>:193</code> docstring）</td></tr>
+<tr><td><code>cached_block_hash_to_block</code></td><td>hash → 块（或同 hash 多副本 dict）</td><td>prefix cache 的索引；<code>null_block</code>（id=0，<code>block_pool.py:190</code>）永不释放，用来给滑窗/Mamba 的"跳过位"占位</td></tr>
+</table>
+
+<div class="fig">
+<svg viewBox="0 0 769 360" role="img" aria-label="块池共享与 CoW 示意">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <!-- Default gray arrow (markerUnits="userSpaceOnUse" is mandatory) -->
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- CoW copy arrow: block 3 -> block 8, routed above the band -->
+  <text x="484.0" y="30" font-size="10" fill="#64748b">CoW：写前复制（copy 后 block 8 与 3 内容相同）</text>
+  <path d="M216.0 57Q216.0 38 236.0 38L446.0 38Q466.0 38 466.0 51" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arrow)"/>
+
+  <!-- BlockPool band: x=60..700, y=56..104 -->
+  <rect x="24.0" y="56" width="640" height="48" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="652.0" y="48" font-size="10" fill="#64748b" text-anchor="end">BlockPool（v1/core/block_pool.py:143）</text>
+
+  <!-- block cells: y=62..98, text y=84 -->
+  <rect x="44.0" y="62" width="44" height="36" rx="4" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="66.0" y="84" font-size="10" fill="#64748b" text-anchor="middle">0</text>
+  <rect x="94.0" y="62" width="44" height="36" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="116.0" y="84" font-size="10" fill="#1e40af" text-anchor="middle">1</text>
+  <rect x="144.0" y="62" width="44" height="36" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="166.0" y="84" font-size="10" fill="#1e40af" text-anchor="middle">2</text>
+  <rect x="194.0" y="62" width="44" height="36" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="216.0" y="84" font-size="10" fill="#1e40af" text-anchor="middle">3</text>
+  <rect x="244.0" y="62" width="44" height="36" rx="4" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="266.0" y="84" font-size="10" fill="#64748b" text-anchor="middle">4</text>
+  <rect x="294.0" y="62" width="44" height="36" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="316.0" y="84" font-size="10" fill="#166534" text-anchor="middle">5</text>
+  <rect x="344.0" y="62" width="44" height="36" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="366.0" y="84" font-size="10" fill="#166534" text-anchor="middle">6</text>
+  <rect x="394.0" y="62" width="44" height="36" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="416.0" y="84" font-size="10" fill="#166534" text-anchor="middle">7</text>
+  <rect x="444.0" y="62" width="44" height="36" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="466.0" y="84" font-size="10" fill="#b45309" text-anchor="middle">8</text>
+  <rect x="494.0" y="62" width="44" height="36" rx="4" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="516.0" y="84" font-size="10" fill="#64748b" text-anchor="middle">9</text>
+  <rect x="544.0" y="62" width="44" height="36" rx="4" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="566.0" y="84" font-size="10" fill="#64748b" text-anchor="middle">10</text>
+  <rect x="594.0" y="62" width="44" height="36" rx="4" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="616.0" y="84" font-size="10" fill="#64748b" text-anchor="middle">11</text>
+
+  <!-- legend chips: y=112..126 -->
+  <rect x="44.0" y="112" width="20" height="14" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="72.0" y="123" font-size="10" fill="#64748b">共享前缀块（ref_cnt=3）</text>
+  <rect x="204.0" y="112" width="20" height="14" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="232.0" y="123" font-size="10" fill="#64748b">请求独占块</text>
+  <rect x="304.0" y="112" width="20" height="14" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="332.0" y="123" font-size="10" fill="#64748b">CoW 目标</text>
+  <rect x="404.0" y="112" width="20" height="14" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="432.0" y="123" font-size="10" fill="#64748b">null / free（LRU 队列）</text>
+
+  <!-- request rows: cells 36x30, gap 26 between rows -->
+  <text x="44.0" y="167" font-size="11" fill="#1e293b">请求 A</text>
+  <text x="114.0" y="167" font-size="11" fill="#64748b">block_table = [1, 2, 3, 5]</text>
+  <rect x="324.0" y="148" width="36" height="30" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="342.0" y="167" font-size="10" fill="#1e40af" text-anchor="middle">1</text>
+  <rect x="366.0" y="148" width="36" height="30" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="384.0" y="167" font-size="10" fill="#1e40af" text-anchor="middle">2</text>
+  <rect x="408.0" y="148" width="36" height="30" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="426.0" y="167" font-size="10" fill="#1e40af" text-anchor="middle">3</text>
+  <rect x="450.0" y="148" width="36" height="30" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="468.0" y="167" font-size="10" fill="#166534" text-anchor="middle">5</text>
+
+  <text x="44.0" y="223" font-size="11" fill="#1e293b">请求 B</text>
+  <text x="114.0" y="223" font-size="11" fill="#64748b">block_table = [1, 2, 3, 6]</text>
+  <rect x="324.0" y="204" width="36" height="30" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="342.0" y="223" font-size="10" fill="#1e40af" text-anchor="middle">1</text>
+  <rect x="366.0" y="204" width="36" height="30" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="384.0" y="223" font-size="10" fill="#1e40af" text-anchor="middle">2</text>
+  <rect x="408.0" y="204" width="36" height="30" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="426.0" y="223" font-size="10" fill="#1e40af" text-anchor="middle">3</text>
+  <rect x="450.0" y="204" width="36" height="30" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="468.0" y="223" font-size="10" fill="#166534" text-anchor="middle">6</text>
+
+  <text x="44.0" y="279" font-size="11" fill="#1e293b">请求 C</text>
+  <text x="114.0" y="279" font-size="11" fill="#64748b">写共享块 3 之前 → CoW</text>
+  <rect x="324.0" y="260" width="36" height="30" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="342.0" y="279" font-size="10" fill="#1e40af" text-anchor="middle">1</text>
+  <rect x="366.0" y="260" width="36" height="30" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="384.0" y="279" font-size="10" fill="#1e40af" text-anchor="middle">2</text>
+  <rect x="408.0" y="260" width="36" height="30" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="426.0" y="279" font-size="10" fill="#b45309" text-anchor="middle">8</text>
+  <rect x="450.0" y="260" width="36" height="30" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="468.0" y="279" font-size="10" fill="#166534" text-anchor="middle">7</text>
+
+  <!-- notes -->
+  <text x="44.0" y="316" font-size="10" fill="#64748b">ref_cnt 保护共享块：只有 ref_cnt=0 的块才进 free 队列；有 hash 的块挂队尾（保留为缓存，LRU 驱逐），</text>
+  <text x="44.0" y="334" font-size="10" fill="#64748b">无 hash 的块挂队首（最先被复用）。命中块 touch 时 ref_cnt+1 并移出 free 队列（block_pool.py:702/719）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：块池、三张"页表"与一次 CoW。A/B/C 共享系统 prompt 的前三个块（内容相同的块哈希相同，天然去重）；C 要往共享块 3 追加 token 时，先复制到新块 8 再写，A/B 不受影响。注意整块共享靠哈希对齐，故 block 边界即共享边界。</p>
+
+<h2 id="lifecycle">5. 一个请求的块操作生命周期</h2>
+<p>调度器每一步与 KV cache 的交互收敛为三个函数（<code>v1/core/kv_cache_manager.py</code>），本步的块布局如下：</p>
+
+<div class="fig">
+<svg viewBox="0 0 824 149" role="img" aria-label="allocate_slots 的序列布局">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+
+  <text x="22.0" y="28" font-size="10" fill="#64748b">← 序列开始</text>
+  <text x="802.0" y="28" font-size="10" fill="#64748b" text-anchor="end">seq 末端 →</text>
+
+  <!-- sequence strip: y=44..92 -->
+  <rect x="22.0" y="44" width="240" height="48" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="142.0" y="64" font-size="10" fill="#1e40af" text-anchor="middle">comp：已计算</text>
+  <text x="142.0" y="80" font-size="10" fill="#64748b" text-anchor="middle">（含 prefix 命中）</text>
+  <rect x="262.0" y="44" width="130" height="48" fill="#bfdbfe" stroke="#3b82f6"/>
+  <text x="327.0" y="64" font-size="10" fill="#1e40af" text-anchor="middle">new_comp</text>
+  <text x="327.0" y="80" font-size="10" fill="#64748b" text-anchor="middle">本轮新命中</text>
+  <rect x="392.0" y="44" width="130" height="48" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="457.0" y="64" font-size="10" fill="#166534" text-anchor="middle">ext_comp</text>
+  <text x="457.0" y="80" font-size="10" fill="#64748b" text-anchor="middle">外部块命中</text>
+  <rect x="522.0" y="44" width="180" height="48" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="612.0" y="72" font-size="10" fill="#b45309" text-anchor="middle">new：本步新算</text>
+  <rect x="702.0" y="44" width="100" height="48" fill="#ffffff" stroke="#cbd5e1" stroke-dasharray="4 3"/>
+  <text x="752.0" y="64" font-size="10" fill="#64748b" text-anchor="middle">lookahead</text>
+  <text x="752.0" y="80" font-size="10" fill="#64748b" text-anchor="middle">占位不缓存</text>
+
+  <text x="22.0" y="124" font-size="10" fill="#64748b">布局注释见 kv_cache_manager.py:390-411；lookahead 只占槽位不进缓存（:491），watermark 与 full_sequence_must_fit 检查发生在分配之前。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：<code>allocate_slots</code> 眼中的序列布局。<code>ext_comp</code> 是 PD 分离 / offload connector 报告的外部命中；<code>new_comp</code> 是本轮 prefix cache 新命中的完整块。</p>
+
+<table>
+<tr><th>函数</th><th>位置</th><th>做什么</th></tr>
+<tr><td><code>get_computed_blocks</code></td><td><code>kv_cache_manager.py:229</code></td><td>prefix cache 查找：只命中<b>完整块</b>；<code>max_cache_hit_length = num_tokens − 1</code>（<code>:259</code>）——全命中也要留最后 1 个 token 重算，因为需要它的 logits</td></tr>
+<tr><td><code>allocate_slots</code></td><td><code>:344</code></td><td>按上图布局分配：先释放滑窗外块（<code>:504</code>）→ 求各组需分配块数（<code>:510</code>）→ 水线检查（<code>:463</code>，仅对 waiting/被抢占请求生效）→ <code>full_sequence_must_fit</code> 整序列准入检查（<code>:472</code>）→ 先 touch 全部命中块再分配新块（防组间互相驱逐，<code>coordinator.py:219</code>）</td></tr>
+<tr><td><code>cache_blocks</code> / <code>free</code></td><td><code>:760</code> / <code>:567</code></td><td>step 结束把满块提交进哈希索引；请求结束释放（逆序传入使尾块先驱逐）</td></tr>
+</table>
+
+<h2 id="prefix">6. prefix caching 端到端与 CoW</h2>
+<p>一条命中的完整链路：</p>
+<ol>
+  <li><b>查找</b>：scheduler 在 <code>num_computed_tokens==0</code> 时调 <code>get_computed_blocks</code>（本地哈希索引）+ connector 外部查找；<code>num_computed_tokens = local + external</code>（<code>scheduler.py:829</code>）。远端命中与本地部分块冲突时，截断本地尾块避免 CoW 竞争（<code>:773</code>）。</li>
+  <li><b>引用</b>：命中块 <code>touch</code> ref_cnt+1 并移出 free 队列；cascade attention 用 <code>ref_cnt == len(req_to_blocks)</code> 判定"所有请求共享的公共前缀"（<code>single_type_kv_cache_manager.py:821</code>），让多个请求的 attention 共享一次 kernel 计算。</li>
+  <li><b>CoW</b>：只在<b>部分块命中</b>（fine-grained 模式，<code>hash_block_size &lt; block_size</code>）时发生——<code>_cache_partial_tail_block</code> 登记部分哈希条目，下一步 <code>allocate_new_blocks</code> 发现 partial hit 就取新块执行 <code>_apply_cow</code>（<code>:347-425</code>）；运行中的 Mamba 请求因 block table 只增不改，改用 <code>move_block_hashes</code> 迁移哈希（<code>:1590</code>）。副本指令经 <code>SchedulerOutput.kv_cache_block_copies</code> 下发，worker 在前向前 <code>copy_kv_cache_blocks_inplace</code> 执行（<code>gpu_model_runner.py:1223</code>）。</li>
+  <li><b>驱逐</b>：请求结束 ref_cnt−1；归零后带 hash 的块进 free 队尾继续当缓存，不带 hash 的进队首等着被复用；<code>_maybe_evict_cached_block</code>（<code>block_pool.py:679</code>）驱逐时只清哈希、不动 ref_cnt&gt;0 的块。</li>
+</ol>
+
+<h2 id="offload">7. KV offload 与 PD 分离</h2>
+<p>两套机制、一个抽象。共同思想：本地未命中的前缀，去"更慢但更大的地方"找。</p>
+<h3>7.1 KV offload 框架</h3>
+<p><code>v1/kv_offload/base.py</code> 定义了对偶原语：<b>调度侧</b> <code>OffloadingManager</code>（<code>:220</code>：lookup / prepare_load / complete_load / touch / prepare_store / on_request_finished）与<b>worker 侧</b> <code>OffloadingWorker</code>（<code>:545</code>：submit_store / submit_load / get_finished）。Key = <code>block_hash + group_idx</code>（<code>:26</code>），所以 offload 与 prefix caching 共享同一套块哈希。实现有三档：</p>
+<table>
+<tr><th>实现</th><th>位置</th><th>说明</th></tr>
+<tr><td>CPU offloading</td><td><code>kv_offload/cpu/</code></td><td>GPU↔CPU 异步 DMA（Triton swap kernel）；调度器管元数据，worker 管搬运</td></tr>
+<tr><td>Tiering</td><td><code>kv_offload/tiering/</code></td><td>CPU 主层 + 文件/对象/点对点二级层，异步 lookup 与上浮 promotion</td></tr>
+<tr><td>SimpleCPUOffload</td><td><code>v1/simple_kv_offload/</code></td><td>以 KV connector 形态实现的轻量版（eager+lazy store 策略）</td></tr>
+</table>
+<h3>7.2 KV connector（PD 分离）</h3>
+<p><code>KVConnectorBase_V1</code>（<code>distributed/kv_transfer/kv_connector/v1/base.py:157</code>）把"预填充实例 → 解码实例"的 KV 传输抽象成两组钩子：</p>
+<table>
+<tr><th>侧</th><th>钩子</th><th>语义</th></tr>
+<tr><td rowspan="3">Scheduler</td><td><code>get_num_new_matched_tokens</code>（<code>:466</code>）</td><td>查外部命中；返回 None 表示"稍后再问"，bool 表示可异步</td></tr>
+<tr><td><code>update_state_after_alloc</code>（<code>:501</code>）</td><td>分配完成后提交加载任务</td></tr>
+<tr><td><code>build_connector_meta</code> / <code>take_events</code>（<code>:527</code>/<code>:580</code>）</td><td>每步元数据下发 / 事件回收</td></tr>
+<tr><td rowspan="3">Worker</td><td><code>start_load_kv</code> / <code>wait_for_layer_load</code>（<code>:305</code>/<code>:323</code>）</td><td>逐层加载，与 forward 重叠</td></tr>
+<tr><td><code>save_kv_layer</code> / <code>wait_for_save</code>（<code>:337</code>/<code>:359</code>）</td><td>逐层保存（预填充实例侧）</td></tr>
+<tr><td><code>get_finished</code> / <code>get_block_ids_with_load_errors</code>（<code>:369</code>/<code>:387</code>）</td><td>完成/失败回报，驱动调度器晋升或重算</td></tr>
+</table>
+<p>注册表在 <code>factory.py:27</code>：LMCache、Nixl、Mooncake、MultiConnector、OffloadingConnector 等。<b>异步加载与失败重算</b>：加载中的请求置 <code>WAITING_FOR_REMOTE_KVS</code> 并预占块（<code>scheduler.py:1023</code>）；完成则晋升并 <code>cache_blocks</code>（全命中也留最后 1 token 重算，<code>:2673</code>）；失败按 <code>recompute_kv_load_failures</code> 策略保留已验证前缀、把未写块记入置零清单后重试（<code>:2651</code>）。远端命中体现为 <code>num_external_computed_tokens</code>（<code>kv_cache_manager.py:351</code>）——外部上下文不占本地 prefill 计算，但槽位照常分配。</p>
+
+<h2 id="new">8. 正确性新机制四件套</h2>
+<p>这一节是"踩过坑的人才会写"的代码，也是面试/排查的高频考点：</p>
+<table>
+<tr><th>机制</th><th>位置</th><th>解决的问题</th></tr>
+<tr><td><code>new_block_ids_to_zero</code></td><td><code>kv_cache_interface.py:1014</code>、worker <code>_zero_block_ids</code>（<code>gpu_model_runner.py:1154</code>）</td><td>块池复用后显存是脏的：Mamba 状态 / 混合精度布局读到 NaN 之前必须显式置零</td></tr>
+<tr><td><code>defer_block_free</code></td><td><code>scheduler.py:131</code>、栅栏 <code>:2341-2380</code></td><td>async scheduling 下第 N 步的 GPU kernel 还在写第 N−1 步的块，free 必须 fence 延迟归还</td></tr>
+<tr><td>CoW 保留块延迟释放</td><td><code>_free_cow_retained_blocks</code>（<code>scheduler.py:2356</code>）</td><td>副本源块在拷贝 kernel 完成前不能回池——同属一个 fence 体系</td></tr>
+<tr><td><code>KVCacheMetricsCollector</code></td><td><code>kv_cache_metrics.py:46</code></td><td>1% 采样跟踪块生命周期（birth/reuse gap/驱逐事件），为调 prefix cache 提供数据</td></tr>
+</table>
+<p>另有两个 hybrid 特有的设计：Mamba <b>align 模式</b>（<code>mamba_cache_mode</code>，config/cache.py:139）按块边界对齐切 chunk、双块滚动写 state，使 SSM 状态也能参与哈希复用；<b>partial_tail_offloads</b>（<code>kv_cache_manager.py:848</code>）把"最后一个 prompt 边界的部分块"pin 住交给 connector offload，实现 sub-block 粒度的跨请求复用（Marconi 式稀疏保留）。</p>
+
+<h2>8+1. 源码阅读检查点</h2>
+<ol class="refs">
+  <li>通读 <code>block_pool.py</code>（约 700 行）：重点 <code>cache_full_blocks</code>（<code>:225</code>）、<code>get_new_blocks</code>（<code>:647</code>）、<code>touch/free_blocks</code>（<code>:702/:719</code>）。</li>
+  <li>把 <code>single_type_kv_cache_manager.py</code> 当作"四种缓存策略的模式库"读：FullAttention <code>:678</code> / SlidingWindow <code>:878</code> / ChunkedLocal <code>:1095</code> / Mamba <code>:1253</code>。</li>
+  <li>跑一次带 <code>--enable-prefix-caching</code> 的负载，在 <code>KVCacheManager.get_computed_blocks</code> 观察 <code>num_new_computed_tokens</code> 随请求相似度的变化。</li>
+  <li>对照第 2 讲：思考为什么 <code>full_sequence_must_fit</code> 属于 <code>allocate_slots</code> 而不是 scheduler——答案是：只有这层知道"整条序列最终要多少块"。</li>
+</ol>
+
+<footer>生成于 2026-10-08 · vLLM 源码解析系列 · 源码版本：本地仓库 main@d9dac2b3d（dev 树） · 下一篇：<a href="vllm-t4-modelrunner.html">ModelRunner 执行与 Attention 后端</a></footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

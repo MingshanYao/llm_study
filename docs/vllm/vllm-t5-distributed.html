@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vLLM 分布式与并行：TP/PP/EP/DP 的 rank 世界（源码级九讲 · 第 5 讲）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .toc {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 20px; margin: 16px 0; font-size: 0.93em;
+  }
+  .toc ol { margin: 6px 0 2px; padding-left: 22px; }
+  .toc li { margin: 3px 0; }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>vLLM 分布式与并行：TP/PP/EP/DP 的 rank 世界</h1>
+<div class="meta">
+  <b>vLLM 源码解析系列 · 第 5 讲（共 9 讲）</b> · 生成于 2026-10-08 ·
+  源码版本：本地仓库 main@d9dac2b3d（dev 树） ·
+  上一篇：<a href="vllm-t4-modelrunner.html">第 4 讲 · ModelRunner 执行</a>
+</div>
+<div class="toc">
+  <b>本篇导航</b>
+  <ol>
+    <li><a href="#config">五维并行全景：ParallelConfig 与 rank 布局</a></li>
+    <li><a href="#groups">GroupCoordinator：通信组怎么分</a></li>
+    <li><a href="#executor">Worker 从哪来：Executor 四种后端</a></li>
+    <li><a href="#startup">启动时序：从 EngineCore 到可服务的 KV cache</a></li>
+    <li><a href="#tp">TP：一次 forward 的集合通信</a></li>
+    <li><a href="#pp">PP：stage 之间的接力</a></li>
+    <li><a href="#ep">EP：专家并行与 EPLB</a></li>
+    <li><a href="#dp">DP：引擎级复制与请求路由</a></li>
+    <li><a href="#kvtransfer">跨实例 KV transfer 一瞥</a></li>
+    <li><a href="#check">源码阅读检查点</a></li>
+  </ol>
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：vLLM 把"多卡"拆成两个正交问题——<b>逻辑切分</b>（TP/PP/PCP/DCP/EP 决定每个 rank 干什么活，由 <code>initialize_model_parallel</code> 画成一张 rank 网格）与<b>物理承载</b>（Executor 决定这些 rank 的进程从哪来：单进程 / 多进程 / Ray）；DP 再把整套东西复制 N 份，每份独立的 EngineCore + Scheduler + KV cache，互不通信。</p>
+  <p><b>本篇主线</b>：rank 布局公式 → 通信组 → Executor 选型 → 启动 collective → TP 的 all_reduce 六级 fallback → PP 接力 → EP/EPLB → DP 负载均衡。</p>
+</div>
+
+<h2 id="config">1. 五维并行全景：ParallelConfig 与 rank 布局</h2>
+<p>所有并行参数都在 <code>ParallelConfig</code>（<code>vllm/config/parallel.py:119</code>）。先看五个"模型内"维度（它们决定一台进程内 world 的形状）：</p>
+<table>
+<tr><th>维度</th><th>参数</th><th>切什么</th><th>本树备注</th></tr>
+<tr><td>TP</td><td><code>tensor_parallel_size</code>（<code>:124</code>）</td><td>每层权重矩阵（列并行切输出 / 行并行切输入）</td><td>层内通信最频繁</td></tr>
+<tr><td>PP</td><td><code>pipeline_parallel_size</code>（<code>:122</code>）</td><td>按层段切模型，stage 间只传激活</td><td><code>world_size = PP×TP×PCP</code>（<code>:833-838</code>）</td></tr>
+<tr><td>PCP</td><td><code>prefill_context_parallel_size</code></td><td>prefill 长上下文的上下文维切分</td><td>与 DP 互斥（<code>:530-532</code>）</td></tr>
+<tr><td>DCP</td><td><code>decode_context_parallel_size</code>（<code>:342</code>）</td><td>decode 的上下文维（KV 沿序列切）</td><td>PCP 禁用时复用 TP ranks，要求 <code>tp % dcp == 0</code>（<code>:535-537</code>）</td></tr>
+<tr><td>EP</td><td><code>enable_expert_parallel</code>（<code>:165</code>）</td><td>MoE 专家放到不同 rank，token 走 all2all</td><td>不改变 world 形状，只改专家分布</td></tr>
+</table>
+<p><b>DP</b> 是另一个层级：<code>data_parallel_size</code> 乘在进程世界<b>外面</b>——<code>world_size_across_dp = world_size × DP</code>（<code>:549-551</code>），每个 DP rank 是一整份独立的模型副本 + 调度器（第 8 节）。</p>
+
+<p>rank 全局编号的排布规则只有一句注释 + 一行 reshape（<code>vllm/distributed/parallel_state.py:1822-1830</code>）：</p>
+<pre><code># the layout order is: ExternalDP x DP x PP x PCP x TP
+all_ranks = torch.arange(world_size).reshape(
+    -1, data_parallel_size, pipeline_model_parallel_size,
+    prefill_context_parallel_size, tensor_model_parallel_size)
+
+# TP 组：view(-1, tp)              → 相邻 rank（:1846）
+# DCP 组：transpose(-1,-2) 跨 PCP/TP（:1852-1860）
+# PCP 组：transpose(3,4)           （:1874）
+# PP 组：transpose(2,4)            （:1883）
+# DP 组：transpose(1,4)            （:1893）</code></pre>
+<p>TP 是<b>最快变化</b>的维度——rank 0 和 rank 1 永远是同一层内通信最频繁的伙伴，这也解释了为什么排布时"相邻 rank 放同一台机器"（<code>initialize_model_parallel</code> docstring，<code>:1771-1774</code>）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 772 320" role="img" aria-label="五维并行 rank 布局示例">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+
+  <text x="24.0" y="30" font-size="10" fill="#64748b">rank 布局：ExternalDP × DP × PP × PCP × TP，TP 最快变化（本图 PCP=DCP=1，ExternalDP 省略）</text>
+  <text x="24.0" y="48" font-size="10" fill="#64748b">示例：TP=2 · PP=2 · DP=4 → world_size=16 · rank = dp×4 + pp×2 + tp</text>
+
+  <!-- DP group headers, centered over each 2x2 group -->
+  <text x="201.0" y="84" font-size="10" font-weight="bold" fill="#1e40af" text-anchor="middle">DP 0</text>
+  <text x="361.0" y="84" font-size="10" font-weight="bold" fill="#b45309" text-anchor="middle">DP 1</text>
+  <text x="521.0" y="84" font-size="10" font-weight="bold" fill="#166534" text-anchor="middle">DP 2</text>
+  <text x="681.0" y="84" font-size="10" font-weight="bold" fill="#64748b" text-anchor="middle">DP 3</text>
+
+  <text x="124.0" y="121" font-size="10" fill="#64748b" text-anchor="end">PP stage 0</text>
+  <text x="124.0" y="179" font-size="10" fill="#64748b" text-anchor="end">PP stage 1</text>
+
+  <!-- DP 0: cells 64x52, 26px gap between groups -->
+  <rect x="134.0" y="92" width="64" height="52" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="166.0" y="115" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">0</text>
+  <text x="166.0" y="133" font-size="10" fill="#64748b" text-anchor="middle">(0,0,0)</text>
+  <rect x="204.0" y="92" width="64" height="52" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="236.0" y="115" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">1</text>
+  <text x="236.0" y="133" font-size="10" fill="#64748b" text-anchor="middle">(0,0,1)</text>
+  <rect x="134.0" y="150" width="64" height="52" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="166.0" y="173" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">2</text>
+  <text x="166.0" y="190" font-size="10" fill="#64748b" text-anchor="middle">(0,1,0)</text>
+  <rect x="204.0" y="150" width="64" height="52" rx="4" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="236.0" y="173" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">3</text>
+  <text x="236.0" y="190" font-size="10" fill="#64748b" text-anchor="middle">(0,1,1)</text>
+
+  <!-- DP 1 -->
+  <rect x="294.0" y="92" width="64" height="52" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="326.0" y="115" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">4</text>
+  <text x="326.0" y="133" font-size="10" fill="#64748b" text-anchor="middle">(1,0,0)</text>
+  <rect x="364.0" y="92" width="64" height="52" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="396.0" y="115" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">5</text>
+  <text x="396.0" y="133" font-size="10" fill="#64748b" text-anchor="middle">(1,0,1)</text>
+  <rect x="294.0" y="150" width="64" height="52" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="326.0" y="173" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">6</text>
+  <text x="326.0" y="190" font-size="10" fill="#64748b" text-anchor="middle">(1,1,0)</text>
+  <rect x="364.0" y="150" width="64" height="52" rx="4" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="396.0" y="173" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">7</text>
+  <text x="396.0" y="190" font-size="10" fill="#64748b" text-anchor="middle">(1,1,1)</text>
+
+  <!-- DP 2 -->
+  <rect x="454.0" y="92" width="64" height="52" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="486.0" y="115" font-size="12" font-weight="bold" fill="#166534" text-anchor="middle">8</text>
+  <text x="486.0" y="133" font-size="10" fill="#64748b" text-anchor="middle">(2,0,0)</text>
+  <rect x="524.0" y="92" width="64" height="52" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="556.0" y="115" font-size="12" font-weight="bold" fill="#166534" text-anchor="middle">9</text>
+  <text x="556.0" y="133" font-size="10" fill="#64748b" text-anchor="middle">(2,0,1)</text>
+  <rect x="454.0" y="150" width="64" height="52" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="486.0" y="173" font-size="12" font-weight="bold" fill="#166534" text-anchor="middle">10</text>
+  <text x="486.0" y="190" font-size="10" fill="#64748b" text-anchor="middle">(2,1,0)</text>
+  <rect x="524.0" y="150" width="64" height="52" rx="4" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="556.0" y="173" font-size="12" font-weight="bold" fill="#166534" text-anchor="middle">11</text>
+  <text x="556.0" y="190" font-size="10" fill="#64748b" text-anchor="middle">(2,1,1)</text>
+
+  <!-- DP 3 -->
+  <rect x="614.0" y="92" width="64" height="52" rx="4" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="646.0" y="115" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">12</text>
+  <text x="646.0" y="133" font-size="10" fill="#64748b" text-anchor="middle">(3,0,0)</text>
+  <rect x="684.0" y="92" width="64" height="52" rx="4" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="716.0" y="115" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">13</text>
+  <text x="716.0" y="133" font-size="10" fill="#64748b" text-anchor="middle">(3,0,1)</text>
+  <rect x="614.0" y="150" width="64" height="52" rx="4" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="646.0" y="173" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">14</text>
+  <text x="646.0" y="190" font-size="10" fill="#64748b" text-anchor="middle">(3,1,0)</text>
+  <rect x="684.0" y="150" width="64" height="52" rx="4" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="716.0" y="173" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">15</text>
+  <text x="716.0" y="190" font-size="10" fill="#64748b" text-anchor="middle">(3,1,1)</text>
+
+  <!-- group semantics -->
+  <text x="24.0" y="235" font-size="10" fill="#64748b">TP 组 = 块内同行相邻 2 rank（[0,1]、[2,3]…），view(−1,tp)，共 8 组（:1846）</text>
+  <text x="24.0" y="255" font-size="10" fill="#64748b">PP 组 = 同列上下 2 rank（[0,2]、[1,3]…），transpose(2,4)，共 8 组（:1883）</text>
+  <text x="24.0" y="275" font-size="10" fill="#64748b">DP 组 = 跨块同位置 4 rank（[0,4,8,12]…），transpose(1,4)，共 4 组（:1893）</text>
+  <text x="24.0" y="295" font-size="10" fill="#1e293b">组内同步语义：TP 组 all-reduce · PP 组逐层接力 · DP 组只用于全局同步（各 rank 独立生成）</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：五维并行的 rank 网格。小字 (dp,pp,tp) 是各维度坐标，与 rank 编号满足 rank = dp×4 + pp×2 + tp。跨 DP 的复制由第 8 节的引擎级复制承担，不在这张进程世界图里。</p>
+
+<h2 id="groups">2. GroupCoordinator：通信组怎么分</h2>
+<p>第 1 节的 reshape 产出的每组 rank 列表，交给 <code>init_model_parallel_group</code> 包成 <code>GroupCoordinator</code>（<code>vllm/distributed/parallel_state.py:380</code>），注册成全局单例 <code>_TP/_PP/_DP/_PCP/_DCP</code>，之后全代码库用 <code>get_tp_group()</code> 等访问。<code>GroupCoordinator</code> 是"一个组 + 该组内本 rank 的角色"的组合体：</p>
+<table>
+<tr><th>方法</th><th>位置</th><th>语义</th></tr>
+<tr><td><code>all_reduce</code> / <code>reduce_scatter</code></td><td><code>:662</code> / <code>:722</code></td><td>TP 组的核心操作（行并行层输出求和）</td></tr>
+<tr><td><code>all_gather</code> / <code>all_gatherv</code></td><td><code>:691</code> / <code>:712</code></td><td>列并行输出拼回 / 不等长 gather</td></tr>
+<tr><td><code>broadcast</code> / <code>broadcast_object</code></td><td><code>:766</code> / <code>:781</code></td><td>PP 输出广播、控制面对象下发</td></tr>
+<tr><td><code>send_object</code> 等 P2P</td><td><code>:822</code></td><td>PP stage 间接力</td></tr>
+</table>
+<p>两个容易忽略的细节：</p>
+<ul>
+  <li><b>torch.compile 兼容</b>：collective 另有 free-function 版本注册成 custom op（<code>parallel_state.py:152-196</code>，<code>all_reduce</code>/<code>all_reduce_fake</code>…），piecewise 编译时 attention 两侧的通信段才能被正确 trace；</li>
+  <li><b>全局 rank 折算</b>：开 DP 后进程世界被拉大，全局 rank = <code>dp_rank × world_size + rank</code>，全局 world = <code>world_size_across_dp</code>（<code>:1561-1562</code>）——NCCL 初始化用这套全局编号（<code>init_distributed_environment</code>）。</li>
+</ul>
+
+<h2 id="executor">3. Worker 从哪来：Executor 四种后端</h2>
+<p>"rank 网格"画好了，还得有人扮演每个 rank。<code>Executor</code>（<code>vllm/v1/executor/abstract.py:37</code>）负责这件事，选型集中在 <code>Executor.get_class</code>（<code>:49-98</code>）：</p>
+<table>
+<tr><th>后端</th><th>类</th><th>进程模型</th><th>PP</th><th>何时启用</th></tr>
+<tr><td><code>uni</code></td><td><code>UniProcExecutor</code>（<code>uniproc_executor.py:45</code>）</td><td>无子进程，worker 就在 EngineCore 进程内</td><td>—</td><td><code>world_size==1</code> 时默认（<code>config/parallel.py:955-956</code>）</td></tr>
+<tr><td><code>mp</code></td><td><code>MultiprocExecutor</code>（<code>multiproc_executor.py:103</code>）</td><td>spawn 每 rank 一个 <code>WorkerProc</code> 子进程（<code>:568</code>）</td><td>✓（<code>:104</code>）</td><td>未指定后端且 <code>world_size_across_dp&gt;1</code> 时默认（<code>config/parallel.py:911</code>）</td></tr>
+<tr><td><code>ray</code></td><td><code>RayDistributedExecutor</code>（<code>ray_executor.py:64</code>）；设 <code>VLLM_USE_RAY_V2_EXECUTOR_BACKEND</code> 则 <code>RayExecutorV2</code>（<code>ray_executor_v2.py:219</code>）</td><td>Ray actor 扮演 rank</td><td>✓（<code>:68</code>/<code>:230</code>）</td><td>多机；V2 复用 <code>WorkerProc</code> + 消息队列（<code>RayWorkerProc</code>，<code>:76</code>）</td></tr>
+<tr><td>自定义</td><td>字符串 → <code>resolve_obj_by_qualname</code>，或直接传类（校验 <code>Executor</code> 子类，<code>:54-59</code>）</td><td>自定</td><td>—</td><td>verl 等外挂框架</td></tr>
+<tr><td><code>external_launcher</code></td><td><code>ExecutorWithExternalLauncher</code>（<code>uniproc_executor.py:150</code>）</td><td>通信组由外部预先建好</td><td>—</td><td>RL 框架集成（此时 world 含 DP，<code>config/parallel.py:840-841</code>）</td></tr>
+</table>
+<p><b>MultiprocExecutor 的骨架</b>（<code>_init_executor</code>，<code>:111-330</code>）：建 <code>rpc_broadcast_mq</code> 共享内存消息队列把 <code>SchedulerOutput</code> 广播给所有 worker（<code>:144-152</code>），逐 local_rank <code>WorkerProc.make_worker_process</code>（<code>:161</code>）拉起子进程（未就绪句柄 <code>UnreadyWorkerProcHandle</code>，<code>:531</code>），心跳监控 + 死亡即整体 shutdown（<code>:470</code>/<code>:784</code>）。<code>execute_model</code>（<code>:321</code>）把 SchedulerOutput 写进广播队列，各 worker 读完自行执行，输出经各自队列回传聚合。</p>
+<p><b>所有跨进程控制面走一个口子</b>：<code>collective_rpc</code>。EngineCore 持有 <code>self.model_executor</code>（<code>engine/core.py:132</code>），任何"对全体 worker 执行方法 X"都调 <code>collective_rpc</code>（<code>engine/core.py:953-960</code>）：UniProc 直接本地调用（<code>uniproc_executor.py:79</code>），Multiproc 打进广播队列（<code>multiproc_executor.py:354</code>）。<code>execute_model</code> 本质上也是 rpc 的一种。</p>
+
+<h2 id="startup">4. 启动时序：从 EngineCore 到可服务的 KV cache</h2>
+<div class="fig">
+<svg viewBox="0 0 890 433" role="img" aria-label="分布式启动时序">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <!-- Blue arrow (markerUnits="userSpaceOnUse" is mandatory) -->
+    <marker id="arrow2-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- column headers -->
+  <text x="145" y="30" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">API server 进程</text>
+  <text x="445" y="30" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">EngineCore 进程</text>
+  <text x="745" y="30" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Worker 进程 ×N（TP/PP rank）</text>
+  <line x1="295" y1="42" x2="295" y2="394" stroke="#cbd5e1" stroke-dasharray="4 4"/>
+  <line x1="595" y1="42" x2="595" y2="394" stroke="#cbd5e1" stroke-dasharray="4 4"/>
+
+  <!-- row 1: init chain -->
+  <rect x="25" y="58" width="240" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="145" y="78" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">AsyncLLM.__init__</text>
+  <text x="145" y="95" font-size="10" fill="#64748b" text-anchor="middle">DP&gt;1 → 启动 DP 份 EngineCore</text>
+  <rect x="325" y="58" width="240" height="48" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="445" y="78" font-size="11" font-weight="bold" fill="#1e40af" text-anchor="middle">EngineCore.__init__</text>
+  <text x="445" y="95" font-size="10" fill="#64748b" text-anchor="middle">executor_class(vll_config)（:132）</text>
+  <rect x="625" y="58" width="240" height="48" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="745" y="78" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Executor._init_executor</text>
+  <text x="745" y="95" font-size="10" fill="#64748b" text-anchor="middle">mp：广播 MQ + spawn WorkerProc</text>
+
+  <path d="M270,82 L314,82" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <text x="292" y="68" font-size="10" fill="#64748b" text-anchor="middle">创建</text>
+  <path d="M570,82 L614,82" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <text x="592" y="68" font-size="10" fill="#64748b" text-anchor="middle">spawn</text>
+
+  <!-- Worker column: y=130..186 -->
+  <rect x="625" y="130" width="240" height="56" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="745" y="150" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Worker.__init__ → collective_rpc</text>
+  <text x="745" y="166" font-size="10" fill="#64748b" text-anchor="middle">init_device → load_model →</text>
+  <text x="745" y="180" font-size="10" fill="#64748b" text-anchor="middle">determine_available_memory（:293）</text>
+  <path d="M745,111 L745,119" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- y=216..272 -->
+  <rect x="625" y="216" width="240" height="56" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="745" y="236" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">init_distributed_environment</text>
+  <text x="745" y="252" font-size="10" fill="#64748b" text-anchor="middle">→ initialize_model_parallel（:1746）</text>
+  <text x="745" y="266" font-size="10" fill="#64748b" text-anchor="middle">TP/PP/DP/PCP/DCP 通信组</text>
+  <path d="M745,191 L745,205" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- y=302..358 -->
+  <rect x="625" y="302" width="240" height="56" rx="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="745" y="322" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">load_model：TP 分片加载</text>
+  <text x="745" y="338" font-size="10" fill="#64748b" text-anchor="middle">weight_loader 逐参 narrow+copy</text>
+  <text x="745" y="352" font-size="10" fill="#64748b" text-anchor="middle">profile_run → 显存测量</text>
+  <path d="M745,277 L745,291" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- KV cache init on EngineCore -->
+  <rect x="325" y="246" width="240" height="48" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="445" y="266" font-size="11" font-weight="bold" fill="#1e40af" text-anchor="middle">_initialize_kv_caches（:250）</text>
+  <text x="445" y="283" font-size="10" fill="#64748b" text-anchor="middle">显存 → 页数 → 分发 KV cache 配置</text>
+  <path d="M620,321 L576,284" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <text x="598" y="286" font-size="10" fill="#64748b" text-anchor="middle">显存页数</text>
+
+  <!-- engine ready -->
+  <rect x="25" y="334" width="240" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="145" y="354" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">engine ready → step 循环</text>
+  <text x="145" y="371" font-size="10" fill="#64748b" text-anchor="middle">见第 0 讲 EngineCore.step</text>
+  <path d="M321,288 L273,333" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <text x="307" y="324" font-size="10" fill="#64748b" text-anchor="middle">就绪</text>
+
+  <text x="25" y="408" font-size="10" fill="#64748b">collective_rpc 是 EngineCore 与 Worker 间唯一的同步控制通道（core.py:953 → multiproc_executor.py:354）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：启动时序三泳道。注意 Worker 的三步都由 EngineCore 通过 <code>collective_rpc</code> 驱动：<code>init_device</code>（建通信组）、<code>load_model</code>（第 7 讲）、<code>determine_available_memory</code>（第 3 讲的 profile 公式）。</p>
+<p>通信组建立后，<code>get_tp_group().ranks</code> 等在<b>每个 worker 进程里</b>各有一份——进程间没有共享这些单例，靠的是大家用同样的参数（rank、init_method、backend）各自初始化出"拓扑一致"的组。这也是为什么 <code>initialize_model_parallel</code> 必须在所有 rank 上以一致的配置调用。</p>
+
+<h2 id="tp">5. TP：一次 forward 的集合通信</h2>
+<p>TP 的层间规则第 4 讲已经露过面：<code>ColumnParallelLinear</code> 把权重按输出维切开（每 rank 一份 <code>weight_loader</code> narrow，<code>layers/linear.py:560-581</code>），输出无需通信；<code>RowParallelLinear</code> 按输入维切开，输出是各 rank 的<b>部分和</b>，forward 末尾一次 <code>all_reduce</code> 求和（<code>:1766-1767</code>）。一个 transformer 层因此是"两个无通信的列并行 + 中间激活 gather + 两个带 all_reduce 的行并行"。</p>
+<p>实际执行 <code>all_reduce</code> 的是 <code>CudaCommunicator</code>（<code>vllm/distributed/device_communicators/cuda_communicator.py:29</code>），它内部持有一排候选实现，<code>all_reduce</code>（<code>:275</code>）按<b>六级 fallback 链</b>选路：</p>
+<table>
+<tr><th>#</th><th>实现</th><th>触发条件</th><th>价值</th></tr>
+<tr><td>1</td><td>NCCL symmetric memory AR（NVLS）</td><td><code>should_nccl_symm_mem_allreduce</code>（<code>:278</code>）</td><td>硬件组播，大消息最快</td></tr>
+<tr><td>2</td><td>QuickReduce</td><td>仅 ROCm MI3\*（<code>:286</code> 注释）</td><td>AMD 专用快路径</td></tr>
+<tr><td>3</td><td>FlashInfer AR</td><td><code>fi_ar_comm.should_use_fi_ar</code>（<code>:293</code>）</td><td>融合 norm 的 AR（TRT-LLM 风格）</td></tr>
+<tr><td>4</td><td>AITER AR</td><td>ROCm（<code>:303</code>）</td><td>AMD custom AR</td></tr>
+<tr><td>5</td><td><b>vLLM custom allreduce</b></td><td>输入 &lt; 8 MiB（<code>custom_all_reduce.py:74</code> <code>max_size=8192*1024</code>；<code>should_custom_ar</code> <code>:348</code>）</td><td>单 kernel NVLink 直写，小消息延迟最低；CUDA graph 需 <code>register_graph_buffers</code>（<code>:329</code>）</td></tr>
+<tr><td>6</td><td>PyNCCL</td><td>兜底（<code>pynccl.py</code>）</td><td>Python 封装的 NCCL，异步可 overlap</td></tr>
+</table>
+<p>decode 时每层 all_reduce 的消息只有几 KB 到几百 KB，正落在 custom allreduce 的甜点区——这是 vLLM 小卡间 decode 吞吐的关键优化之一。all_gather / reduce_scatter 走类似的分级（symm mem NVLS 优先，见 <code>cuda_communicator.py</code> 的 <code>_all_gather_symm_mem</code> 等）。</p>
+
+<h2 id="pp">6. PP：stage 之间的接力</h2>
+<p>PP 把模型按层切成 <code>pipeline_parallel_size</code> 段，每个 stage 是一个（或一组 TP）worker。V1 的 PP 是<b>同步微批接力</b>，关键分支全在 <code>gpu_model_runner.py</code>：</p>
+<table>
+<tr><th>角色</th><th>行为</th><th>位置</th></tr>
+<tr><td>first rank</td><td>唯一处理多模态输入 / prompt embeds 的 rank（embedding 只存在于 stage 0）</td><td><code>:3559</code>、<code>:3570</code>、<code>:3623</code></td></tr>
+<tr><td>中间 / 非 last</td><td>不做采样（logits 只在最后一个 stage 算），前向完把隐藏态 <code>send_tensor_dict</code> 给下一 stage</td><td><code>:1333</code>、<code>:1408</code>、<code>:4497</code></td></tr>
+<tr><td>last rank</td><td>采样并产出 <code>ModelRunnerOutput</code>；<code>broadcast_pp_output</code> 时把结果广播回各 rank（<code>broadcast_tensor_dict</code>，src=last）</td><td><code>:4469-4511</code></td></tr>
+<tr><td>async scheduling</td><td>非 last rank 收到 <code>use_async_scheduling</code> 输出时的特殊处理（占位输出）</td><td><code>:4560</code></td></tr>
+</table>
+<p>调度器侧对 PP 无感知——每个 EngineCore 只有自己的 stage 的请求状态，KV cache 也是各 stage 各管一段层。PP 的代价是气泡；vLLM 目前不做 interleave/virtual pipeline 调度，推理场景更常用 TP 或 DP 扩容。</p>
+
+<h2 id="ep">7. EP：专家并行与 EPLB</h2>
+<p>EP（<code>enable_expert_parallel</code>，<code>config/parallel.py:165</code>）不动 rank 网格，只改 MoE 层的专家分布：专家权重散到 EP 组各 rank，token 按 gate 选中的专家经 all2all 送到"专家所在 rank"计算再送回。MoE 实现在 <code>vllm/model_executor/layers/fused_moe/</code>。</p>
+<p><b>EPLB（Expert Parallelism Load Balancer）</b>（<code>vllm/distributed/eplb/</code>）解决 EP 的经典问题——热门专家被挤爆：</p>
+<table>
+<tr><th>组件</th><th>位置</th><th>职责</th></tr>
+<tr><td><code>EplbState</code></td><td><code>eplb_state.py:220</code></td><td>逻辑→物理专家映射、专家负载统计、重平衡触发</td></tr>
+<tr><td><code>EplbCommunicator</code></td><td><code>eplb_communicator.py:45</code></td><td>rank 间统计/映射同步，四种实现：NCCL（<code>:98</code>）、Gloo staged（<code>:155</code>）、NIXL（<code>:241</code>）、PyNCCL（<code>:614</code>）</td></tr>
+<tr><td><code>policy/</code> + <code>rebalance_execute.py</code></td><td>同目录</td><td>重平衡策略与权重在 GPU 上的实际搬运</td></tr>
+</table>
+<p>配置校验串成一串：EPLB 必须开 EP（<code>config/parallel.py:499-500</code>）；Elastic EP（运行期增减 EP rank）必须开 EPLB（<code>:845-849</code>），由 <code>AsyncLLM.scale_elastic_ep</code>（<code>v1/engine/async_llm.py:1032-1073</code>）配合 DP 协调器在排水后改 <code>data_parallel_size</code>。</p>
+
+<h2 id="dp">8. DP：引擎级复制与请求路由</h2>
+<p>DP 是最"贵"也最简单的扩容方式：<code>data_parallel_size=N</code> 时，AsyncLLM 启动 <b>N 份完全独立的 EngineCore</b>（各含自己的 Scheduler、KV cache、模型副本），彼此零通信。好处：</p>
+<ul>
+  <li>调度完全并行，N 份 token budget；</li>
+  <li>prefill/decode 干扰被物理隔离；</li>
+  <li>TP 组变小（TP×1 即可），all_reduce 频率大幅下降。</li>
+</ul>
+<p>请求路由在 client 侧：<code>DPAsyncMPClient</code>（<code>v1/engine/core_client.py:1249</code>）docstring 明说 "<b>Assumes external load-balancing by default</b>"——典型部署前置一个外部 LB。内置策略维护每 engine 的 <code>lb_engines = [waiting, running, kv_cache_usage]</code>（<code>:1271-1273</code>）做最低负载选择。跨 engine 的统计与弹性伸缩由独立协调进程负责：<code>DPCoordinator</code>（<code>v1/engine/coordinator.py:23</code>）/ <code>DPCoordinatorProc</code>（<code>:146</code>）。</p>
+<div class="infer">DP 组（<code>transpose(1,4)</code> 建出的通信组）在纯推理里几乎不用——同 DP 组的 rank "应同时 generate"的语义（<code>parallel_state.py:1824-1829</code> 注释）主要服务 verl 这类 RL 训练集成的同步采样。</div>
+
+<h2 id="kvtransfer">9. 跨实例 KV transfer 一瞥</h2>
+<p>分布式最后一块拼图是"KV cache 跨实例搬运"（PD 分离、多轮对话跨机复用），统一走 <code>KVConnectorBase_V1</code> 钩子（第 3 讲）。本树内置 connector（<code>vllm/distributed/kv_transfer/kv_connector/v1/</code>）：</p>
+<table>
+<tr><th>类别</th><th>实现</th></tr>
+<tr><td>专业 KV 传输</td><td><code>nixl/</code>（NIXL RDMA）、<code>lmcache_connector.py</code>、<code>mooncake/</code>（Mooncake 传输引擎）、<code>hf3fs/</code>（3FS 存储）、<code>flexkv_connector.py</code></td></tr>
+<tr><td>CPU/本地 offload</td><td><code>offloading_connector.py</code>、<code>simple_cpu_offload_connector.py</code></td></tr>
+<tr><td>组合与示例</td><td><code>multi_connector.py</code>（多 connector 级联）、<code>example_connector.py</code>、<code>moriio/</code></td></tr>
+</table>
+<p>这些 connector 的调度侧原语（<code>WAITING_FOR_REMOTE_KVS</code> 状态机、OffloadingManager 对偶）已在第 3 讲展开，此处不重复。</p>
+
+<h2 id="check">10. 源码阅读检查点</h2>
+<p>建议按此顺序读一遍（都对本树行号）：</p>
+<ol>
+  <li><code>config/parallel.py:119-960</code>：ParallelConfig 字段与 <code>__post_init__</code> 的校验链（PCP/DCP 互斥、EPLB 依赖、默认后端选择）；</li>
+  <li><code>distributed/parallel_state.py:1746-1935</code>：<code>initialize_model_parallel</code> 全函数——对着图 1 手算一遍 16 rank 的五组划分；</li>
+  <li><code>v1/executor/abstract.py:49-98</code>：<code>Executor.get_class</code> 选型；再读 <code>multiproc_executor.py:103-330</code> 的 spawn 与消息队列；</li>
+  <li><code>distributed/device_communicators/cuda_communicator.py:275-330</code>：all_reduce 六级 fallback；顺手看 <code>custom_all_reduce.py:69-74</code> 的 8 MiB 阈值；</li>
+  <li><code>v1/worker/gpu_model_runner.py:4460-4520</code>：PP 的收发与输出广播；</li>
+  <li><code>distributed/eplb/eplb_state.py:220</code>：EplbState 的映射结构。</li>
+</ol>
+
+<footer>生成于 2026-10-08 · vLLM 源码解析系列 · 第 5 讲 / 共 9 讲 · 源码版本 main@d9dac2b3d · 下一篇：<a href="vllm-t6-spec-structured.html">第 6 讲 · 投机解码与结构化输出</a></footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

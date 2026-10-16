@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vLLM Engine 与进程模型：AsyncLLM、EngineCore 与 ZMQ 消息总线（源码级九讲 · 第 1 讲）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .toc { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 20px; margin: 22px 0; font-size: 0.92em; }
+  .toc b { color: var(--ink); }
+  .toc ol { margin: 8px 0 0; padding-left: 22px; }
+  .toc li { margin: 2px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>vLLM Engine 与进程模型：AsyncLLM、EngineCore 与 ZMQ 消息总线</h1>
+<div class="meta">
+  <b>vLLM 源码解析系列 · 第 1 讲（共 9 讲）</b> · 生成于 2026-10-08 ·
+  源码版本：本地仓库 main@d9dac2b3d（dev 树） ·
+  上一篇：<a href="vllm-t0-overview.html">第 0 讲 · 总览</a>
+</div>
+<div class="toc">
+  <b>本篇导航</b>
+  <ol>
+    <li><a href="#why">为什么要分进程</a></li>
+    <li><a href="#topo">进程拓扑与启动握手</a></li>
+    <li><a href="#asyncllm">AsyncLLM 解剖：前端的事件循环</a></li>
+    <li><a href="#client">CoreClient 家族：三种客户端形态</a></li>
+    <li><a href="#zmq">ZMQ socket 拓扑清单</a></li>
+    <li><a href="#dp">DP coordinator 与 wave 协调</a></li>
+    <li><a href="#output">输出回程：OutputProcessor 与 Detokenizer</a></li>
+    <li><a href="#death">优雅关闭与错误传播</a></li>
+    <li><a href="#ipc">多模态 tensor 的零拷贝通道</a></li>
+  </ol>
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：vLLM 把"说话"（API/流式输出）与"干活"（调度+GPU 执行）拆到不同进程，用一组 ZMQ socket 相连；EngineCore 是无阻塞消息泵，前端 AsyncLLM 是纯 asyncio 消费者。理解了 socket 拓扑与消息类型，vLLM 的"骨架"就通了。</p>
+  <p><b>本篇主线</b>：进程拓扑 → AsyncLLM 的三个关键任务 → CoreClient 三形态 → 全部 socket 清单 → DP wave 协调 → 崩溃时会发生什么。</p>
+</div>
+
+<h2 id="why">1. 为什么要分进程</h2>
+<p>把调度器和 uvicorn 放在同一个进程里行不行？技术上可以（<code>InprocClient</code> 就是这么做的），但 vLLM 默认选择分进程，动机有四个：</p>
+<ul>
+  <li><b>错误隔离</b>：EngineCore 操作 CUDA，任何 CUDA error 都是"进程级不可恢复"（CUDA context 损坏后同进程继续跑必然 UB）。拆出子进程后，EngineCore 崩溃时前端能体面地返回 503 并重启，而不是整个 uvicorn 进程被 abort。</li>
+  <li><b>GIL 与阻塞</b>：调度器做 KV 块分配、prefix cache 查找是纯 CPU 工作；detokenizer、logprobs 处理也是。分进程后前端的事件循环永远不会被调度逻辑卡住，流式延迟（TTFT/ITL）更平滑。</li>
+  <li><b>DP 扩展</b>：数据并行 = 多个 EngineCore 进程 + 一个前端做路由。分进程让"1 个前端带 N 个引擎"成为自然拓扑（见 <a href="#dp">第 6 节</a>）。</li>
+  <li><b>前端可替换</b>：引擎接口就是一组 ZMQ 消息，所以官方可以用 Rust 重写前端（<code>rust/</code>，"vllm-frontend-rs"）而完全不动引擎。</li>
+</ul>
+<p>代价是跨进程消息开销。vLLM 的对策是把消息做"薄"：<code>EngineCoreRequest</code>/<code>EngineCoreOutputs</code> 用 <code>msgspec</code> 编码（比 pickle 快一个量级），tensor 本体不走消息（多模态例外，见 <a href="#ipc">第 9 节</a>）。</p>
+
+<h2 id="topo">2. 进程拓扑与启动握手</h2>
+
+<div class="fig">
+<svg viewBox="0 0 900 420" role="img" aria-label="vLLM 进程拓扑">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <rect x="290" y="24" width="320" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="450" y="47" font-size="13" font-weight="bold" fill="#1e40af" text-anchor="middle">API Server 进程</text>
+  <text x="450" y="65" font-size="10" fill="#64748b" text-anchor="middle">AsyncLLM · Input/OutputProcessor（api_server.py:751）</text>
+
+  <path d="M450,85 L450,109" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <text x="462" y="102" font-size="10" fill="#1e40af">ZMQ 消息总线（下图）</text>
+
+  <rect x="280" y="120" width="340" height="72" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="450" y="139" font-size="13" font-weight="bold" fill="#1e40af" text-anchor="middle">EngineCoreProc 进程（每 DP rank 一个）</text>
+  <text x="450" y="158" font-size="10" fill="#64748b" text-anchor="middle">core.py:1008 · Scheduler + KVCacheManager</text>
+  <text x="450" y="177" font-size="10" fill="#64748b" text-anchor="middle">Executor（进程内对象）</text>
+
+  <!-- fan-out: vertical trunk then smooth branches to each worker -->
+  <path d="M450,197 L450,226" fill="none" stroke="#3b82f6" stroke-width="1.5"/>
+  <path d="M450,226 C360,226 155,226 155,240 L155,259" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M450,226 L450,259" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M450,226 C540,226 745,226 745,240 L745,259" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <text x="462" y="214" font-size="10" fill="#64748b">MultiprocExecutor spawn（multiproc_executor.py:705）</text>
+  <text x="143" y="248" font-size="10" fill="#64748b" text-anchor="end">collective_rpc</text>
+
+  <rect x="20" y="270" width="270" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="155" y="289" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">Worker 进程 0</text>
+  <text x="155" y="307" font-size="10" fill="#64748b" text-anchor="middle">GPUModelRunner（TP rank 0）</text>
+  <rect x="315" y="270" width="270" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="450" y="289" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">Worker 进程 1</text>
+  <text x="450" y="307" font-size="10" fill="#64748b" text-anchor="middle">GPUModelRunner（TP rank 1）</text>
+  <rect x="610" y="270" width="270" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="745" y="289" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">Worker 进程 N</text>
+  <text x="745" y="307" font-size="10" fill="#64748b" text-anchor="middle">GPUModelRunner（TP rank N）</text>
+
+  <text x="20" y="358" font-size="10" fill="#64748b">变体 ① Inproc：VLLM_ENABLE_V1_MULTIPROCESSING=0，同进程直调 EngineCore（core_client.py:306，调试用）</text>
+  <text x="20" y="376" font-size="10" fill="#64748b">变体 ② Ray：EngineCoreActor（core.py:2460）/ RayExecutorV2，跨机时用</text>
+  <text x="20" y="394" font-size="10" fill="#64748b">变体 ③ 多 API server：launcher 先起 engines，每个 API server 子进程作为纯 client 连接（run_multi_api_server）</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：默认单机拓扑（DP=1）。三个方框 = 三类进程。DP&gt;1 时"EngineCoreProc + Worker 池"这一整套按 DP rank 复制 N 份，MoE 模型还会多一个 DPCoordinator 进程（图 2）。</p>
+
+<h3>2.1 启动握手</h3>
+<p>进程不是拉起来就能用的，两侧有一段仪式（<code>vllm/v1/engine/utils.py:1054</code> 的 <code>launch_core_engines</code> / <code>wait_for_engine_startup</code>）：</p>
+<ol>
+  <li>前端先 <b>bind</b> 一个随机端口的 ROUTER socket 作为握手地址，把它随 <code>CoreEngineProcManager</code> 启动参数传给子进程（<code>utils.py:120</code> 的 <code>CoreEngineProcManager</code> 用 <code>multiprocessing.Process(target=EngineCoreProc.run_engine_core)</code>，每个本地 DP rank 一个）。</li>
+  <li>EngineCore 进程用 <b>DEALER</b> socket（identity 为 2 字节 rank 编号，<code>core.py:1205</code>）连上握手地址，发送 <code>HELLO</code>。</li>
+  <li>前端回 <code>EngineHandshakeMetadata</code>（各 socket 地址 + DP 配置），EngineCore 完成自己的 socket 连接后回 <code>READY</code>（<code>core.py:1233-1269</code>）。</li>
+  <li>前端收齐所有 rank 的 READY 才继续构建 <code>AsyncLLM</code>。任何一侧超时/崩溃都会让启动直接失败——这是 vLLM 启动报错最常见的来源，读懂握手就懂了怎么排查。</li>
+</ol>
+<p>EngineCore 进程内部再由 <code>Executor</code> 拉起 Worker：<code>MultiprocExecutor</code>（<code>v1/executor/multiproc_executor.py:103</code>）spawn 每个 TP/PP rank 的 <code>WorkerProc</code>（<code>:568</code>）。所以完整的进程树是：API server → EngineCore×DP → Worker×(TP·PP)。</p>
+
+<h2 id="asyncllm">3. AsyncLLM 解剖：前端的事件循环</h2>
+<p><code>AsyncLLM</code>（<code>v1/engine/async_llm.py:72</code>）是前端的全部。它不持有任何模型，只有四样东西：InputProcessor、OutputProcessor、一个 engine_core client、一个后台输出任务。关键成员与任务：</p>
+<table>
+<tr><th>成员/任务</th><th>位置</th><th>职责</th></tr>
+<tr><td><code>output_handler</code></td><td><code>async_llm.py:657</code>（<code>_run_output_handler</code> 内 <code>:676</code>）</td><td>唯一的输出汇聚点：循环 <code>engine_core.get_output_async()</code>，按 <code>VLLM_V1_OUTPUT_PROC_CHUNK_SIZE=128</code>（<code>envs.py:160</code>）分块调 <code>process_outputs</code>；发现 stop-string 触发完的请求就回发 abort</td></tr>
+<tr><td><code>add_request</code></td><td><code>async_llm.py:283</code></td><td>先 <code>process_inputs_async</code>（在线程池渲染+分词），再注册 <code>RequestOutputCollector</code>，最后 <code>_add_request</code>（<code>:420</code>）：注册到 OutputProcessor → 发 EngineCore</td></tr>
+<tr><td><code>generate</code></td><td><code>async_llm.py:544</code></td><td>AsyncGenerator：循环从 collector 的队列取输出并 yield；客户端断开（<code>CancelledError</code>）→ 自动 abort 该请求</td></tr>
+<tr><td><code>ParentRequest</code></td><td><code>v1/engine/parallel_sampling.py:13</code></td><td><code>n&gt;1</code> 的并行采样：一个父请求 fan-out 成 n 个子请求（child id = <code>{index}_{request_id}</code>），流式直传、非流式聚合</td></tr>
+<tr><td><code>errored</code></td><td><code>async_llm.py:1094</code></td><td>引擎死亡 = <code>engine_core.resources.engine_dead</code> 或 output_handler 任务退出</td></tr>
+</table>
+<p>一个容易忽略的设计：<b>每个请求的输出用一个"单槽 collector"（<code>RequestOutputCollector</code>，<code>output_processor.py:45</code>）接力</b>。生产端（output_handler）只 put 最新输出，消费端（generate 协程）只取一次；如果消费端消费慢了，后续输出会在 collector 里<em>合并</em>（<code>RequestOutput.add(aggregate=True)</code>，<code>output_processor.py:62</code>）——这就是为什么慢客户端不会拖垮整台服务器的内存，代价是丢失中间 delta 的粒度（对 OpenAI 流式语义无损）。</p>
+
+<h2 id="client">4. CoreClient 家族：三种客户端形态</h2>
+<p>前端与 EngineCore 的所有交互都收口在 <code>EngineCoreClient</code> 抽象（<code>core_client.py:78</code>）。工厂 <code>make_client</code>（<code>:90</code>）按两个维度分派：是否多进程 × 是否 asyncio：</p>
+<table>
+<tr><th>实现</th><th>位置</th><th>使用场景</th><th>关键机制</th></tr>
+<tr><td><code>InprocClient</code></td><td><code>core_client.py:306</code></td><td>单进程调试（<code>VLLM_ENABLE_V1_MULTIPROCESSING=0</code>）</td><td>直接持有 <code>EngineCore</code> 对象，<code>get_output()</code> = 直接调 <code>step()</code></td></tr>
+<tr><td><code>SyncMPClient</code></td><td><code>:802</code></td><td>离线 <code>LLM</code>（同步世界）</td><td>后台线程跑 <code>process_outputs_socket</code> + <code>queue.Queue</code>；utility 调用走 concurrent Future（<code>:893</code>）</td></tr>
+<tr><td><code>AsyncMPClient</code></td><td><code>:974</code></td><td>在线 serving（AsyncLLM）</td><td>asyncio task 收 socket → <code>asyncio.Queue</code>（<code>:1037</code>）；utility 走 <code>call_utility_async</code>（<code>:1125</code>）</td></tr>
+<tr><td><code>DPAsyncMPClient</code> / <code>DPLBAsyncMPClient</code></td><td><code>:1249</code> / <code>:1431</code></td><td>DP&gt;1：外部负载均衡 / 内置负载均衡打分</td><td>订阅 coordinator 统计（waiting/running/KV 占用），按引擎健康度路由请求</td></tr>
+</table>
+<p>跨进程的消息类型只有 6 种，定义在 <code>v1/engine/__init__.py:261</code>：</p>
+<pre><code class="language-python">class EngineCoreRequestType(enum.Enum):
+    """Request types defined as hex byte strings, so it can be sent over sockets
+    without separate encoding step."""
+
+    ADD = b"\x00"
+    ABORT = b"\x01"
+    START_DP_WAVE = b"\x02"
+    UTILITY = b"\x03"
+    # Sentinel used within EngineCoreProc.
+    EXECUTOR_FAILED = b"\x04"
+    # Sentinel to wake up input_queue.get() during shutdown.
+    WAKEUP = b"\x05"</code></pre>
+<p>每条消息的第 1 字节就是上表的类型字节，随后的 payload 是对应的 msgspec 结构（<code>EngineCoreRequest</code> / <code>UtilityResult</code> 等）。注意 <code>WAKEUP</code> 和 <code>EXECUTOR_FAILED</code> 不是"请求"，而是哨兵消息：前者用来在优雅关闭时叫醒阻塞在 <code>input_queue.get()</code> 的引擎（<code>core.py:1322</code>），后者是 EngineCoreProc 内部把 executor 死亡传播给主循环用的。</p>
+
+<h2 id="zmq">5. ZMQ socket 拓扑清单</h2>
+<p>vLLM 的 ZMQ 用法是"前端 bind、引擎 connect"为主。全部 socket 如下：</p>
+
+<div class="fig">
+<svg viewBox="0 0 890 512" role="img" aria-label="vLLM ZMQ socket 拓扑">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow2-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- top: processes, x=40..290 / 315..565 / 590..840 -->
+  <rect x="40" y="24" width="250" height="44" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="165" y="41" font-size="13" font-weight="bold" fill="#1e40af" text-anchor="middle">前端进程（API Server）</text>
+  <text x="165" y="59" font-size="10" fill="#64748b" text-anchor="middle">core_client.py</text>
+  <rect x="315" y="24" width="250" height="44" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="440" y="41" font-size="13" font-weight="bold" fill="#1e40af" text-anchor="middle">EngineCore 进程 ×DP</text>
+  <text x="440" y="59" font-size="10" fill="#64748b" text-anchor="middle">core.py:1008</text>
+  <rect x="590" y="24" width="250" height="44" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="715" y="41" font-size="13" font-weight="bold" fill="#b45309" text-anchor="middle">DPCoordinator 进程</text>
+  <text x="715" y="59" font-size="10" fill="#b45309" text-anchor="middle">coordinator.py:146</text>
+
+  <!-- row 1: ROUTER <-> DEALER -->
+  <rect x="40" y="96" width="250" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="165" y="115" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">ROUTER（bind）</text>
+  <text x="165" y="133" font-size="10" fill="#64748b" text-anchor="middle">请求 · abort · utility</text>
+  <rect x="315" y="96" width="250" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="440" y="115" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">DEALER（connect）</text>
+  <text x="440" y="133" font-size="10" fill="#64748b" text-anchor="middle">ADD / ABORT / UTILITY / EXECUTOR_FAILED</text>
+
+  <!-- row 2: PULL <-> PUSH -->
+  <rect x="40" y="170" width="250" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="165" y="189" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">PULL（bind）</text>
+  <text x="165" y="207" font-size="10" fill="#64748b" text-anchor="middle">EngineCoreOutputs（多引擎合流）</text>
+  <rect x="315" y="170" width="250" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="440" y="189" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">PUSH（connect, linger=4000）</text>
+  <text x="440" y="207" font-size="10" fill="#64748b" text-anchor="middle">输出推给前端</text>
+
+  <!-- row 3: XSUB (both ends) -->
+  <rect x="40" y="244" width="250" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="165" y="263" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">XSUB（connect）</text>
+  <text x="165" y="281" font-size="10" fill="#64748b" text-anchor="middle">订阅 DP 统计与 wave 事件</text>
+  <rect x="315" y="244" width="250" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="440" y="263" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">XSUB（connect）</text>
+  <text x="440" y="281" font-size="10" fill="#64748b" text-anchor="middle">订阅 START_DP_WAVE 广播</text>
+
+  <!-- handshake row -->
+  <rect x="40" y="396" width="250" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="165" y="415" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">ROUTER（bind）</text>
+  <text x="165" y="433" font-size="10" fill="#64748b" text-anchor="middle">启动握手（随机端口）</text>
+  <rect x="315" y="396" width="250" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="440" y="415" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">DEALER（connect）</text>
+  <text x="440" y="433" font-size="10" fill="#64748b" text-anchor="middle">HELLO / READY（identity = rank）</text>
+
+  <!-- coordinator column -->
+  <rect x="590" y="240" width="250" height="56" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="715" y="263" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">XPUB（bind）</text>
+  <text x="715" y="281" font-size="10" fill="#64748b" text-anchor="middle">统计 → 两端 XSUB</text>
+  <rect x="590" y="314" width="250" height="56" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="715" y="337" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">PULL（bind）</text>
+  <text x="715" y="355" font-size="10" fill="#64748b" text-anchor="middle">收集 engines 统计</text>
+  <text x="590" y="396" font-size="10" fill="#64748b">仅 DP&gt;1 · MoE 时启动</text>
+
+  <!-- connectors: bidirectional pairs drawn as two opposite paths -->
+  <path d="M295,120 L304,120" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <path d="M310,120 L301,120" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <path d="M295,194 L304,194" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <path d="M310,194 L301,194" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <path d="M570,268 L579,268" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M570,342 L579,342" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow2)"/>
+  <path d="M295,420 L304,420" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+  <path d="M310,420 L301,420" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow2-blue)"/>
+
+  <!-- detour: front-end XSUB subscribes to coordinator XPUB, routed outside all boxes -->
+  <path d="M35,268 C24,268 18,275 18,290 L18,430 C18,456 44,464 80,464 L810,464 C842,464 868,455 868,420 L868,300 C868,278 862,268 851,268"
+        fill="none" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5 3" marker-end="url(#arrow2)"/>
+  <text x="440" y="488" font-size="10" fill="#64748b" text-anchor="middle">前端 XSUB 订阅 coordinator 统计</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：ZMQ socket 全景（灰色为统计/订阅路径，蓝色为主数据路径）。前端另有一条 PAIR socket 直连 coordinator 做 first-req 通知（<code>core_client.py:1281</code>、<code>coordinator.py:349</code>），图未画出以保持简洁。</p>
+
+<table>
+<tr><th>socket 对</th><th>模式</th><th>承载</th><th>代码</th></tr>
+<tr><td>前端 ROUTER ↔ 引擎 DEALER</td><td>多对多</td><td>ADD/ABORT/UTILITY 请求（msgspec + 1 字节类型前缀）</td><td><code>core_client.py:554</code> / <code>core.py:1661</code></td></tr>
+<tr><td>前端 PULL ← 引擎 PUSH</td><td>多对一合流</td><td><code>EngineCoreOutputs</code>；linger=4000 保证引擎死亡前发出死信</td><td><code>core_client.py:561</code> / <code>core.py:1760</code></td></tr>
+<tr><td>握手 ROUTER ↔ DEALER</td><td>一次性</td><td>HELLO / READY / <code>EngineHandshakeMetadata</code></td><td><code>utils.py:1206</code> / <code>core.py:1233</code></td></tr>
+<tr><td>coordinator XPUB ↔ 两端 XSUB</td><td>发布订阅</td><td>DP 统计（每 100ms）、START_DP_WAVE 广播</td><td><code>coordinator.py:208</code></td></tr>
+<tr><td>coordinator PULL ← 引擎 PUSH</td><td>多对一</td><td>per-engine [waiting, running, kv_cache_usage]</td><td><code>coordinator.py:215</code> / <code>core.py:1767</code></td></tr>
+</table>
+<p>两个实用细节：<code>make_zmq_socket</code>（<code>vllm/utils/network_utils.py:284</code>）给 PULL/DEALER/ROUTER 设置 <code>RCVHWM=0</code>（不丢消息，靠应用层背压）并开 <code>ROUTER_HANDOVER</code>（对端重连时路由不卡死）；输出 PUSH 的 <code>linger=4000</code> 配合 <code>ENGINE_CORE_DEAD</code> 死信，保证"我死了"这句话一定送达前端。</p>
+
+<h2 id="dp">6. DP coordinator 与 wave 协调</h2>
+<p>数据并行有两种姿势：<b>外部负载均衡</b>（上游 LB 把请求打到不同 API server 实例，各 DP rank 完全独立，MoE 模型除外）和<b>内置协调</b>。MoE 模型做 DP 时，每个 DP rank 都有全部专家，如果各 rank 各自跑各自的 batch，all-to-all 通信时就会出现"有 rank 没活干"的空泡。vLLM 的解法是 <b>wave 同步</b>：</p>
+<ul>
+  <li><b>DPCoordinator 进程</b>（<code>v1/engine/coordinator.py:146</code>）：仅 <code>DP&gt;1</code> 且 MoE 时由 rank0 前端拉起（<code>utils.py:1091</code>）。状态极简：<code>current_wave</code> + <code>engines_running</code>（<code>:199</code>），外加每个引擎的 [waiting, running, kv_cache_usage] 统计。</li>
+  <li><b>wave 生命周期</b>：所有引擎 idle 时，第一个请求到达任意 rank → 前端经 PAIR 发 FIRST_REQ → coordinator 广播 <code>START_DP_WAVE</code>（<code>coordinator.py:349</code>）→ 所有引擎醒来并开始调度；rank0 引擎跑完最后一个 step 后发 <code>wave_complete</code> → coordinator <code>current_wave+1</code>，回到 idle（<code>:422</code>）。</li>
+  <li><b>引擎侧配合</b>：没有请求时跑 dummy batch，并每 32 步 all-reduce 一次 <code>_has_global_unfinished_reqs</code> 确认全局没有活跃请求（<code>core.py:2144</code>）——这是把"独立 run loop"焊成"同步 wave"的胶水。</li>
+  <li><b>前端侧配合</b>：<code>DPLBAsyncMPClient</code>（<code>core_client.py:1431</code>）做内置 LB 打分：waiting+running 越多分越低、KV 占用 &gt;50% 额外惩罚（<code>:1468</code>）；也可以配外部 LB（如生产环境的 kube 服务发现）让 <code>DPAsyncMPClient</code> 只做粘性路由。</li>
+</ul>
+
+<h2 id="output">7. 输出回程：OutputProcessor 与 Detokenizer</h2>
+<p>输出从 PULL socket 到 SSE chunk 有三级流水：</p>
+<table>
+<tr><th>级</th><th>组件</th><th>位置</th><th>要点</th></tr>
+<tr><td>①</td><td><code>process_outputs_socket</code></td><td><code>core_client.py:1037</code></td><td>msgspec 解码 + 按 <code>engine_index</code> 分发，塞进 asyncio.Queue；引擎死信也在这里转成异常入队（<code>:1084</code>）</td></tr>
+<tr><td>②</td><td><code>output_handler</code></td><td><code>async_llm.py:676</code></td><td>分块（128 条/批）调 <code>process_outputs</code>；stop-string 结束的请求 → 回发 abort</td></tr>
+<tr><td>③</td><td><code>OutputProcessor</code></td><td><code>output_processor.py:429</code></td><td>per-request <code>RequestState</code>（<code>:129</code>）：detokenizer、logprobs 处理、<code>stream_interval</code> 节流（<code>:292</code>）、FINAL_ONLY/DELTA 模式</td></tr>
+</table>
+<p>反解码（detokenize）有两种实现（<code>detokenizer.py:25</code> 的 <code>from_new_request</code> 分派）：<b>Fast</b> 路径用 HF tokenizers ≥0.22 的 <code>DecodeStream</code>（增量解码 O(1)）；<b>Slow</b> 路径（<code>:251</code>）维护全量 prefix。stop string 检查（<code>:310</code> 的 <code>check_stop_strings</code>）有个精巧点：字符串可能跨 chunk 边界，所以它记住了每个 stop string 的"尾部长度-1"个字符做前缀状态机，并用 <code>stop_buffer_length</code> 扣住尾部不提前下发（<code>:149</code> 的 <code>get_next_output_text</code>）。</p>
+
+<h2 id="death">8. 优雅关闭与错误传播</h2>
+<p>EngineCore 死亡时，前端有三条独立的感知路径，对应三种死法：</p>
+<ol>
+  <li><b>应用层死信</b>（优雅崩溃）：EngineCore 捕获到自身异常 → <code>_send_engine_dead</code>（<code>core.py:1605</code>）在 output socket 上发 <code>ENGINE_CORE_DEAD</code> 字节串（linger=4000 确保送达）→ 前端 <code>validate_alive</code>（<code>core_client.py:490</code>）置 <code>engine_dead=True</code> 并抛 <code>EngineDeadError</code> → 异常被塞进每个请求的 collector → 所有 in-flight <code>generate()</code> 立刻结束 → <code>/health</code> 返回 503。</li>
+  <li><b>进程层监控</b>（OOM kill、segfault）：前端有专门的 <code>monitor_engine_liveness</code> 线程等进程 sentinel（<code>core_client.py:708</code>）；Ray 模式用 <code>ray.wait</code> 捕获 <code>RayActorError</code>（<code>utils.py:965</code>）。</li>
+  <li><b>socket 断链</b>：PULL socket 收到 EOF/异常 → 同样落进 <code>outputs_queue</code>（<code>core_client.py:1084</code>）转成引擎死亡。</li>
+</ol>
+<p>反向（前端先死）：API server 收 SIGTERM → <code>engine_client.shutdown(timeout)</code> → 向 EngineCore 发终止信号；EngineCore 置 <code>EngineShutdownState.REQUESTED</code>，按 <code>shutdown_timeout</code> 决定立即 abort 还是 drain 完存量请求（<code>core.py:1459</code>）。另外 uvicorn 侧还有个 <code>watchdog_loop</code>（<code>entrypoints/launcher.py:168</code>）每 5s 检查引擎健康——因为 StreamingResponse 内部的异常无法自然上抛，watchdog 是兜底的"最终退出手段"。</p>
+
+<h2 id="ipc">9. 多模态 tensor 的零拷贝通道</h2>
+<p>普通请求的输入是 token ids，msgspec 编码毫无压力；但多模态请求可能携带 mm embedding tensor（几百 MB 级）。走 msgpack 序列化就是一次全量拷贝。解法在 <code>v1/engine/tensor_ipc.py</code>：</p>
+<ul>
+  <li>前端侧 <code>TensorIpcSender</code>（<code>:69</code>）：tensor 先 <code>share_memory_()</code> 进共享内存，msgpack 帧里只留轻量句柄（<code>TensorIpcData</code>，<code>:30</code>）；共享内存创建失败则回退普通序列化（<code>:99</code>）。</li>
+  <li>引擎侧 <code>TensorIpcReceiver</code>（<code>:114</code>）：drain-and-buffer 支持多生产者乱序到达，按 <code>tensor_id</code> 配对。</li>
+  <li>接线：queue 在 <code>launch_core_engines</code> 创建（仅 multimodal 且 <code>mm_tensor_ipc=="torch_shm"</code>、DP=1，<code>utils.py:1079</code>），client 侧挂到 <code>MsgpackEncoder</code> 的 out-of-band 钩子（<code>core_client.py:622</code>）。</li>
+</ul>
+<p>这个"msgpack 帧内引用 + 共享内存传 tensor"的模式是理解 vLLM 大张量传输的通用范式，PD 分离的 KV 传输（第 5 讲）走的是另一条专用通道但设计思想类似。</p>
+
+<h2>9+1. 源码阅读检查点</h2>
+<ol class="refs">
+  <li>用 <code>VLLM_ENABLE_V1_MULTIPROCESSING=0</code> 起一次离线推理，在 <code>InprocClient.get_output</code>（<code>core_client.py:319</code>）打断点，确认每一步都直调 <code>EngineCore.step</code>。</li>
+  <li>正常模式起服务后 <code>lsof -p &lt;engine_pid&gt;</code>，对照图 2 数 socket 数量。</li>
+  <li>kill -9 EngineCore 进程，观察 API server 的日志路径（monitor 线程 → EngineDeadError → 503）。</li>
+  <li>读 <code>v1/engine/__init__.py</code> 全部 msgspec 结构——它是前后端之间的"API 合同"。</li>
+</ol>
+
+<footer>生成于 2026-10-08 · vLLM 源码解析系列 · 源码版本：本地仓库 main@d9dac2b3d（dev 树） · 下一篇：<a href="vllm-t2-scheduler.html">Scheduler</a></footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vLLM Scheduler：token budget、混批、抢占与 async scheduling（源码级九讲 · 第 2 讲）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .toc { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 20px; margin: 22px 0; font-size: 0.92em; }
+  .toc b { color: var(--ink); }
+  .toc ol { margin: 8px 0 0; padding-left: 22px; }
+  .toc li { margin: 2px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; overflow-x: auto; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>vLLM Scheduler：token budget、混批、抢占与 async scheduling</h1>
+<div class="meta">
+  <b>vLLM 源码解析系列 · 第 2 讲（共 9 讲）</b> · 生成于 2026-10-08 ·
+  源码版本：本地仓库 main@d9dac2b3d（dev 树） ·
+  上一篇：<a href="vllm-t1-engine.html">第 1 讲 · Engine 与进程模型</a>
+</div>
+<div class="toc">
+  <b>本篇导航</b>
+  <ol>
+    <li><a href="#worldview">V1 调度的世界观：没有 prefill / decode 之分</a></li>
+    <li><a href="#members">Scheduler 的成员与双 waiting 队列</a></li>
+    <li><a href="#algorithm">schedule() 主循环走读</a></li>
+    <li><a href="#kv">与 KV cache 的三个交互点</a></li>
+    <li><a href="#preempt">抢占：V1 只有 RECOMPUTE</a></li>
+    <li><a href="#fair">优先级与公平</a></li>
+    <li><a href="#status">请求状态机与 finish/abort</a></li>
+    <li><a href="#async">async scheduling：乐观并发</a></li>
+    <li><a href="#schedout">SchedulerOutput：调度器的"合同"</a></li>
+    <li><a href="#budget">预算参数速查</a></li>
+  </ol>
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：V1 调度器把"prefill 和 decode 混跑"统一成一个模型——每个请求都有一个 <code>num_computed_tokens</code> 在追赶它的总 token 数；<code>schedule()</code> 唯一的任务是在 <code>max_num_batched_tokens</code> 预算内，决定这一步让哪些请求追赶多少个 token。</p>
+  <p><b>本篇主线</b>：统一模型 → 主循环两个 for（running 先、waiting 后）→ 三个 KV 交互点 → 抢占与状态机 → async scheduling 的乐观记账。</p>
+</div>
+
+<h2 id="worldview">1. V1 调度的世界观：没有 prefill / decode 之分</h2>
+<p><code>Scheduler</code>（<code>v1/core/sched/scheduler.py:69</code>）源码开头的注释（<code>:441-450</code>）值得逐字读：V1 里<em>没有 prefill/decode 阶段之分</em>，每个请求只有 <code>num_computed_tokens</code> 追赶 <code>num_tokens_with_spec</code>（= prompt + output + spec tokens，<code>v1/request.py:276</code>）。差距为几千 → 这一步做"长 prefill"；差距为 1 → 这就是 decode；差距为 500 但预算只剩 200 → 切成 chunked prefill。</p>
+<p>这个统一模型带来两个直接推论：</p>
+<ul>
+  <li><b>混批是免费的</b>：decode 请求每步只吃 1 个 token 的预算，剩下的预算自然给 prefill 吃，不需要"阶段切换"逻辑。</li>
+  <li><b>chunked prefill 不是特性而是本态</b>：prefill 大请求自动被预算切碎，跨越多个 step。真正的问题只剩"每一刀切在哪"，见 <a href="#algorithm">第 3 节</a>。</li>
+</ul>
+
+<h2 id="members">2. Scheduler 的成员与双 waiting 队列</h2>
+<table>
+<tr><th>成员</th><th>位置</th><th>说明</th></tr>
+<tr><td><code>self.requests</code></td><td><code>scheduler.py:178</code></td><td>req_id → <code>Request</code> 全量字典</td></tr>
+<tr><td><code>self.waiting</code> + <code>self.skipped_waiting</code></td><td><code>:187-189</code></td><td><b>双 waiting 队列</b>：能立即调度的进 waiting；被"阻塞条件"挂起的进 skipped（见下）</td></tr>
+<tr><td><code>self.running</code></td><td><code>:190</code></td><td>已调度进 batch 的请求列表（decode + 未完成的 prefill chunk）</td></tr>
+<tr><td><code>max_num_running_reqs</code></td><td><code>:109</code></td><td>= <code>max_num_seqs</code>，batch 内并发请求数上限</td></tr>
+<tr><td><code>max_num_scheduled_tokens</code></td><td><code>:110-114</code></td><td>每步 token 预算（默认 = <code>max_num_batched_tokens</code>；spec decode 场景可调小）</td></tr>
+<tr><td><code>kv_cache_manager</code> / <code>encoder_cache_manager</code></td><td><code>:276</code> / <code>:235</code></td><td>KV 块账本（第 3 讲）与多模态 encoder 输出缓存（LRU）</td></tr>
+<tr><td><code>self.policy</code></td><td><code>:181</code></td><td>FCFS（deque）或 PRIORITY（heap），<code>request_queue.py:201</code> 工厂</td></tr>
+<tr><td><code>_pause_state</code> / <code>_inflight_prefills</code></td><td><code>:356</code> / <code>:360</code></td><td>暂停状态（budget 直接归零）与在途 prefill 追踪</td></tr>
+</table>
+<p>三种阻塞态会把请求放进 <code>skipped_waiting</code>，并在条件满足时晋升回 <code>waiting</code>（<code>:2050-2056</code>）：</p>
+<ul>
+  <li><code>WAITING_FOR_REMOTE_KVS</code>：PD 分离架构下异步接收远端 KV（<code>:1023</code>）；</li>
+  <li><code>WAITING_FOR_STRUCTURED_OUTPUT_REQUEST</code>：grammar 还没编译好；</li>
+  <li><code>WAITING_FOR_STREAMING_REQ</code>：streaming 会话等待前一轮（本树新特性，同 ID 请求复用 KV，<code>request.py:214</code>）。</li>
+</ul>
+
+<h2 id="algorithm">3. schedule() 主循环走读</h2>
+<p><code>schedule()</code> 本体在 <code>scheduler.py:439</code>（近 700 行）。流程如下：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 530" role="img" aria-label="schedule 主循环流程图">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- left column x=68..404, right column x=524..876 -->
+  <rect x="68" y="24" width="336" height="36" rx="18" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="236" y="46" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">schedule()：预算 = max_num_scheduled_tokens</text>
+
+  <path d="M236,65 L236,75" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="68" y="86" width="336" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="236" y="105" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">① running 循环：遍历 self.running</text>
+  <text x="236" y="123" font-size="10" fill="#64748b" text-anchor="middle">跳过：async 占位已到 max_tokens / DP 节流</text>
+
+  <path d="M236,139 L236,149" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="68" y="160" width="336" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="236" y="179" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">② num_new_tokens = 差值，截断到预算</text>
+  <text x="236" y="197" font-size="10" fill="#64748b" text-anchor="middle">long_prefill_token_threshold / max_model_len</text>
+
+  <path d="M236,213 L236,223" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="68" y="234" width="336" height="48" rx="6" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="236" y="253" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">③ allocate_slots 分配 KV 失败？</text>
+  <text x="236" y="271" font-size="10" fill="#64748b" text-anchor="middle">水线检查 · scheduler_reserve_full_isl · 滑窗释放</text>
+
+  <path d="M236,287 L236,297" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <text x="248" y="296" font-size="10" fill="#64748b">是</text>
+
+  <rect x="68" y="308" width="336" height="48" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="236" y="327" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">④ 抢占：running 队尾 / 低优先级出队</text>
+  <text x="236" y="345" font-size="10" fill="#b45309" text-anchor="middle">status=PREEMPTED · 重算 · 回 waiting 队头</text>
+
+  <!-- 否: ③ -> ④ (right-side bypass) -->
+  <path d="M409,258 C426,258 438,266 438,280 L438,318 C438,328 431,332 415,332" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <text x="448" y="274" font-size="10" fill="#64748b">否</text>
+
+  <!-- 重试: ④ -> ③ (left-side loop) -->
+  <path d="M63,332 C42,332 24,322 24,304 L24,286 C24,268 38,258 57,258" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <text x="34" y="298" font-size="10" fill="#64748b">重试</text>
+
+  <rect x="68" y="386" width="336" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="236" y="405" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">⑤ 计入 scheduled · 扣减 token budget</text>
+  <text x="236" y="423" font-size="10" fill="#64748b" text-anchor="middle">decode 每步 1 token → 余量给 prefill（混批）</text>
+
+  <rect x="524" y="86" width="352" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="700" y="105" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">⑥ waiting 循环：逐个 peek 队头</text>
+  <text x="700" y="123" font-size="10" fill="#64748b" text-anchor="middle">条件：未暂停 · running 未满 max_num_seqs</text>
+
+  <rect x="524" y="160" width="352" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="700" y="179" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">⑦ 阻塞态请求先尝试晋升</text>
+  <text x="700" y="197" font-size="10" fill="#64748b" text-anchor="middle">REMOTE_KVS / GRAMMAR / STREAMING</text>
+
+  <rect x="524" y="234" width="352" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="700" y="253" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">⑧ prefix cache 查找</text>
+  <text x="700" y="271" font-size="10" fill="#64748b" text-anchor="middle">get_computed_blocks：只命中完整 block</text>
+
+  <rect x="524" y="308" width="352" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="700" y="327" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">⑨ allocate_slots（失败 = break）</text>
+  <text x="700" y="345" font-size="10" fill="#64748b" text-anchor="middle">不抢占 running —— 防止新请求饿死 decode</text>
+
+  <rect x="524" y="386" width="352" height="48" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="700" y="405" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">⑩ 成功 → 状态进 RUNNING</text>
+  <text x="700" y="423" font-size="10" fill="#64748b" text-anchor="middle">被抢占过的请求重放 output tokens 重新 prefill</text>
+
+  <rect x="68" y="462" width="808" height="48" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="472" y="481" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle">SchedulerOutput（v1/core/sched/output.py:193）</text>
+  <text x="472" y="499" font-size="10" fill="#64748b" text-anchor="middle">new_reqs · cached_reqs（增量 diff）· 块拷贝/置零 · encoder inputs · finished_req_ids</text>
+
+  <path d="M236,439 L236,451" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M700,439 L700,451" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：<code>schedule()</code> 主循环。左列 running（decode + 在途 prefill chunk）先吃预算，右列 waiting（新 prefill）用剩余预算；④ 的抢占循环只发生在 running 侧，⑨ 的失败只会 break。</p>
+
+<h3>3.1 running 循环的关键细节</h3>
+<ul>
+  <li><b>num_new_tokens 的计算</b>（<code>:516-520</code>）：<code>num_tokens_with_spec + num_output_placeholders − num_computed_tokens</code>——async scheduling 的"占位 token"也计入（<a href="#async">第 8 节</a>）。随后经过 <code>long_prefill_token_threshold</code> 截断（<code>:521</code>）与 <code>max_model_len</code> 上限（<code>:527</code>）。</li>
+  <li><b>预算耗尽时 continue 而非 break</b>（<code>:557-573</code>）：某个 running 请求这次轮不到（<code>num_new_tokens==0</code>），跳过它继续看下一个——源码注释明说"不严格遵循 FCFS"，这让小请求不必排在大 prefill 后面。</li>
+  <li><b>chunk 大小决策</b>：除预算截断外还有三种切法——<code>disable_chunked_mm_input</code> 时切到多模态 item 边界（<code>:1559</code>）；encoder cache/预算不足时截断（<code>:1572</code>）；Mamba "align" 缓存模式下按 block 边界对齐切分（<code>_mamba_block_aligned_split</code>，<code>:362-437</code>），保证 hybrid 模型的 SSM 状态哈希在块边界完整。</li>
+  <li><b>在途 prefill 记账</b>：请求是否处于"prefill 半途"由 <code>request.is_prefill_chunk</code>（<code>request.py:188</code>）+ <code>_inflight_prefills</code>（<code>:1080</code>）追踪，不再有 V0 时代的独立 request_state 概念。</li>
+</ul>
+
+<h3>3.2 waiting 循环的关键细节</h3>
+<ul>
+  <li><b>准入闸门</b>：<code>len(running) + num_waiting_for_streaming_input &gt;= max_num_running_reqs</code> 即停（<code>:690</code>）。</li>
+  <li><b>prefix cache 在这里查</b>（<code>:745-766</code>）：仅当 <code>num_computed_tokens==0</code>（还没算过任何 token）时调 <code>kv_cache_manager.get_computed_blocks</code>；命中多少，本步就少算多少。</li>
+  <li><b>spec decode 的 pad</b>（<code>:884-897</code>）：投机解码的 draft token 数会被 pad 到统一长度，保证 cudagraph shape 稳定。</li>
+  <li><b>失败语义不对等</b>：waiting 侧 <code>allocate_slots</code> 失败直接 <code>break</code>（<code>:987-994</code>）——绝不为了新请求去抢占已经在跑的 decode。这是"decode 延迟优先"的显式设计。</li>
+</ul>
+
+<h2 id="kv">4. 与 KV cache 的三个交互点</h2>
+<p>调度器与 KV cache 的耦合被压缩到三个函数调用（都在 <code>v1/core/kv_cache_manager.py</code>，详见第 3 讲）：</p>
+<table>
+<tr><th>交互点</th><th>调用位置</th><th>语义</th></tr>
+<tr><td><code>get_computed_blocks</code></td><td><code>kv_cache_manager.py:229</code></td><td>prefix cache 查找：只命中<b>完整 block</b>；即使全命中也保留最后 1 个 token 重算（<code>max_cache_hit_length = num_tokens − 1</code>，<code>:259</code>），因为需要最后一个 token 的 logits</td></tr>
+<tr><td><code>allocate_slots</code></td><td><code>:344</code></td><td>为本步新 token 分配块。两个防御性设计：<code>full_sequence_must_fit</code>（<code>:472</code>，默认开）要求<b>整条序列</b>最终放得下才准入，防止 chunked prefill 上钩后显存不够、全体被抢占；<code>watermark</code>（<code>:463</code>）只在有请求被抢占过之后生效，避免水位长期偏低</td></tr>
+<tr><td><code>cache_blocks</code></td><td><code>:760</code></td><td>step 结束（<code>update_from_output</code> 内，<code>scheduler.py:2650</code>）把已填满的块提交进 prefix cache，供后续请求命中</td></tr>
+</table>
+<p>另有一个独立小系统：<b>EncoderCacheManager</b>（<code>v1/core/encoder_cache_manager.py</code>）按 <code>mm_hash</code> 缓存视觉 encoder 的输出，引用计数 + OrderedDict LRU 驱逐；每步的 encoder 输入调度由 <code>_try_schedule_encoder_inputs</code>（<code>scheduler.py:1469</code>）完成——输出区间重叠、未缓存、预算够才调度，否则把该请求的 <code>num_new_tokens</code> 截断到下一个 mm item 之前。</p>
+
+<h2 id="preempt">5. 抢占：V1 只有 RECOMPUTE</h2>
+<p>V0 时代有 RECOMPUTE / SWAP 两种抢占模式；V1 把 SWAP 删了，<b>全仓只有一种抢占 = 重算</b>（全仓 grep 无 <code>PreemptionMode</code>）。逻辑链：</p>
+<ol>
+  <li><b>触发</b>：running 循环里 <code>allocate_slots</code> 返回 None（<code>:588-625</code>）——本步的 KV 分不下去了。</li>
+  <li><b>选择受害者</b>：FCFS 下抢 <code>running.pop()</code>（队尾 = 最晚到的）；PRIORITY 下抢 <code>(priority, arrival_time)</code> 最大者（<code>:590-594</code>）。</li>
+  <li><b>执行</b>：<code>_preempt_request</code>（<code>:1274</code>）：free 它的 KV 块 → free encoder cache → <code>status=PREEMPTED</code>、<code>num_computed_tokens=0</code>（= 之后从零重算）→ 清 spec tokens → 在途未确认的输出标记 stale（<code>num_stale_output_tokens</code>，async 场景）→ <code>num_preemptions += 1</code> → <b>prepend 回 waiting 队头</b>（<code>:1314</code>，队头 = 最先恢复）。</li>
+  <li><b>恢复</b>：waiting 循环里重新走 prefill；output tokens 重放（<code>:876-879</code>）；ModelRunner 侧 <code>resumed_from_preemption</code> 用新 block_ids 整体替换（<code>gpu_model_runner.py:1442</code>）。</li>
+</ol>
+<p>为什么敢只有重算？因为重算的成本被 prefix cache 大幅摊薄：被抢占请求重算时，已提交进 prefix cache 的完整块会重新命中——最坏情况只是重算最后一个不完整块。SWAP 的"省重算"收益不再值得它的复杂度。</p>
+<p>此外还有一条"全体抢占"路径：<code>reset_prefix_cache(reset_running_requests=True)</code>（<code>:2441</code>）强制清空 prefix cache 并把所有 running 请求打回 waiting，用于 connector 元数据失效等罕见场景。</p>
+
+<h2 id="fair">6. 优先级与公平</h2>
+<ul>
+  <li>策略二选一：<code>SchedulerPolicy = "fcfs" | "priority"</code>（<code>vllm/config/scheduler.py:22</code>）。PRIORITY 用最小堆，比较序是 <code>Request.__lt__</code> = (priority, arrival_time, request_id, id)（<code>request.py:334</code>）——数值越小越优先，同优先级按到达时间（还是 FCFS）。</li>
+  <li>双队列选择：FCFS 下 <code>skipped_waiting</code> 优先（让异步 KV 加载完成的请求尽快恢复）；PRIORITY 下比较两队队首（<code>_select_waiting_queue_for_scheduling</code>，<code>:2064</code>）。</li>
+  <li>公平性三板斧：running 优先于 waiting（decode 不饿死）；抢占只牺牲低优先级/队尾；<code>num_new_tokens==0</code> 时 continue 允许"插队"。</li>
+  <li>V0 的 <code>delay_factor</code>（延迟调度换吞吐）已删除；本树新增的节流旋钮是 DP 场景的 <code>throttle_prefills</code> / <code>prefill_schedule_interval</code>（<code>:304</code>、config <code>:143</code>）。</li>
+</ul>
+
+<h2 id="status">7. 请求状态机与 finish/abort</h2>
+<p><code>RequestStatus</code>（<code>request.py:348</code>）：</p>
+<pre><code class="language-text">WAITING ─┬─→ WAITING_FOR_STRUCTURED_OUTPUT_GRAMMAR ─┐
+         ├─→ WAITING_FOR_REMOTE_KVS ────────────────┤（条件满足后晋升）
+         └─→ WAITING_FOR_STREAMING_REQ ─────────────┘
+WAITING ──→ RUNNING ⇄ PREEMPTED ──→ FINISHED_*
+FINISHED 终态：STOPPED / LENGTH_CAPPED / ABORTED / IGNORED / ERROR / REPETITION（本树新增）
+is_finished = status &gt; PREEMPTED（枚举序即生命周期）</code></pre>
+<ul>
+  <li><b>stop 判定</b>逐 token 进行：<code>check_stop</code>（<code>sched/utils.py:94</code>）查 eos、stop_token_ids、length/max_model_len，以及本树新增的<b>序列重复检测</b>（<code>check_sequence_repetition</code>，<code>:28</code>，防退化复读，终态 <code>FINISHED_REPETITION</code>）。grammar 拒绝 token → <code>FINISHED_ERROR</code>（<code>scheduler.py:1841</code>）。</li>
+  <li><b>清理</b>：客户端 abort 走 <code>finish_requests</code>（<code>:2237</code>）两遍式处理；<code>_free_request</code>（<code>:2300</code>）释放块/encoder cache，req_id 进 <code>finished_req_ids</code>——注意它随<b>下一个</b> SchedulerOutput 才发给 worker（让 worker 清 persistent batch，<code>:1222</code>），这是 pipeline 深度为 1 的消息传递。</li>
+  <li><b>观测</b>：<code>make_stats</code>（<code>:2495</code>）产出 running/waiting/kv_cache_usage/prefix_cache_stats，就是第 1 讲 coordinator 统计的数据源。</li>
+</ul>
+
+<h2 id="async">8. async scheduling：乐观并发</h2>
+<p>朴素主循环里，CPU 调度与 GPU 执行是串行的：schedule → 等 GPU → update → 再 schedule。GPU 越快，CPU 调度的固定开销越扎眼。async scheduling（本树默认开启，自动决策逻辑在 <code>config/vllm.py:1095</code>）把这个流水线打深一层：</p>
+
+<div class="fig">
+<svg viewBox="0 0 700 340" role="img" aria-label="同步与异步 step 时序对比">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow2-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <!-- panel 1: sync step -->
+  <text x="134" y="32" font-size="12" font-weight="bold" fill="#1e293b">同步 step（core.py:584）</text>
+  <text x="124" y="73" font-size="11" fill="#64748b" text-anchor="end">CPU</text>
+  <text x="124" y="119" font-size="11" fill="#64748b" text-anchor="end">GPU</text>
+
+  <rect x="134" y="52" width="110" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="189" y="73" font-size="11" fill="#1e40af" text-anchor="middle">schedule N</text>
+  <rect x="256" y="52" width="220" height="34" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="4 3"/>
+  <text x="366" y="73" font-size="11" fill="#64748b" text-anchor="middle">CPU 空等</text>
+  <rect x="488" y="52" width="110" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="543" y="73" font-size="11" fill="#1e40af" text-anchor="middle">update N</text>
+  <rect x="256" y="98" width="220" height="34" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="366" y="119" font-size="11" fill="#b45309" text-anchor="middle">execute + sample N</text>
+
+  <!-- panel 2: async step -->
+  <text x="134" y="176" font-size="12" font-weight="bold" fill="#1e293b">异步 step（step_with_batch_queue，core.py:625）</text>
+  <text x="124" y="217" font-size="11" fill="#64748b" text-anchor="end">CPU</text>
+  <text x="124" y="263" font-size="11" fill="#64748b" text-anchor="end">GPU</text>
+
+  <rect x="134" y="196" width="110" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="189" y="217" font-size="11" fill="#1e40af" text-anchor="middle">schedule N</text>
+  <rect x="256" y="196" width="115" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="313" y="217" font-size="11" fill="#1e40af" text-anchor="middle">schedule N+1</text>
+  <rect x="383" y="196" width="115" height="34" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="440" y="217" font-size="11" fill="#1e40af" text-anchor="middle">schedule N+2</text>
+  <text x="514" y="217" font-size="12" fill="#64748b">…</text>
+  <rect x="256" y="242" width="155" height="34" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="333" y="263" font-size="11" fill="#b45309" text-anchor="middle">execute+sample N</text>
+  <rect x="423" y="242" width="175" height="34" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="510" y="263" font-size="11" fill="#b45309" text-anchor="middle">execute+sample N+1</text>
+
+  <text x="134" y="300" font-size="10" fill="#64748b">重叠深度 = 1：schedule N+1 不等 N 的采样结果，</text>
+  <text x="134" y="316" font-size="10" fill="#64748b">用 num_output_placeholders 占位记账，等 N 的结果回来再对账</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：同步 vs 异步 step。异步模式下 CPU 在 GPU 跑第 N 步时就完成第 N+1 步的调度与提交；代价是"结果未回来就记账"带来的对账复杂度。</p>
+
+<p>乐观并发的三件配套机制：</p>
+<ul>
+  <li><b>占位记账</b>：<code>AsyncScheduler._update_after_schedule</code>（<code>async_scheduler.py:19</code>）在结果回来前就推进 <code>num_computed_tokens</code>，未确认的输出用 <code>num_output_placeholders</code>（<code>request.py:151</code>）占位，spec token 置 <code>-1</code>。下次调度时占位数参与 <code>num_new_tokens</code> 计算，到 <code>max_tokens</code> 的请求不再多调。</li>
+  <li><b>早期返回 / EOS 兜底</b>：GPU 上没法预知哪个请求这步会出 EOS，所以 model runner 维护 <code>discard_request_mask</code>（<code>gpu_model_runner.py:2100</code>）——乐观 seq_len 超界的请求不参与采样，结果回收时 <code>num_output_placeholders -= len(new_token_ids)</code> 对账（<code>async_scheduler.py:61</code>）。</li>
+  <li><b>释放栅栏</b>：第 N 步的 GPU kernel 可能还在读写第 N−1 步的 KV 块，所以块的 free 必须延迟：<code>defer_block_free</code>（<code>scheduler.py:130</code>）+ <code>sched_step_seq</code> / <code>processed_step_seq</code> 栅栏计数（<code>:327</code>、<code>:2341</code>）。结构化输出请求的占位未消化时还会把采样推迟到上一步处理完（<code>core.py:665</code> 的 <code>pending_structured_output_tokens</code>）。</li>
+</ul>
+
+<h2 id="schedout">9. SchedulerOutput：调度器的"合同"</h2>
+<p>调度器与 ModelRunner 之间没有方法调用，只有一份自描述数据。核心字段（<code>v1/core/sched/output.py:193</code>，节选）：</p>
+<pre><code class="language-python">@dataclass
+class SchedulerOutput:
+    # 首次调度的请求：全量数据（prompt / mm features / block_ids / num_computed_tokens）
+    scheduled_new_reqs: list[NewRequestData]
+    # 已调度过的请求：只发增量 diff，minimize 通信
+    scheduled_cached_reqs: CachedRequestData
+    # req_id -&gt; 本步调度 token 数
+    num_scheduled_tokens: dict[str, int]
+    total_num_scheduled_tokens: int
+    # 投机解码：req_id -&gt; draft token ids
+    scheduled_spec_decode_tokens: dict[str, list[int]]
+    # 多模态：req_id -&gt; 需要跑视觉 encoder 的 item 下标
+    scheduled_encoder_inputs: dict[str, list[int]]
+    # cascade attention 用：各组 KV 的公共前缀块数
+    num_common_prefix_blocks: list[int]
+    finished_req_ids: set[str]          # 通知 worker 清 persistent batch
+    free_encoder_mm_hashes: list[str]   # encoder cache 驱逐
+    # KV connector 元数据 / 新块置零（防 NaN）/ CoW 拷贝 / 动态 spec K
+    kv_connector_metadata: KVConnectorMetadata | None
+    new_block_ids_to_zero: list[int] | None
+    kv_cache_block_copies: list[KVCacheBlockCopy] | None
+    num_spec_tokens_to_schedule: int</code></pre>
+<p>三个设计点值得留意：① <code>scheduled_cached_reqs</code> 是<b>增量 diff</b>——Worker 进程持久缓存了请求状态，长请求几千步只传增量（<code>CachedRequestData</code>，<code>output.py:115</code>）；② <code>new_block_ids_to_zero</code>——块池复用后显存里是脏数据，attention/SSM 前必须置零，把"零初始化"显式变成合同的一部分；③ <code>kv_cache_block_copies</code>——prefix caching 的 CoW（写时复制）也下放为 worker 侧的拷贝指令。</p>
+
+<h2 id="budget">10. 预算参数速查</h2>
+<table>
+<tr><th>参数</th><th>默认（类内）</th><th>实际默认（<code>EngineArgs.get_batch_defaults</code>，arg_utils.py:2507）</th><th>作用</th></tr>
+<tr><td><code>max_num_batched_tokens</code></td><td>2048</td><td>显存 ≥70GiB 非 A100：16384（API 场景 8192）；否则 8192</td><td>每步 token 预算 = 吞吐/延迟的总闸门</td></tr>
+<tr><td><code>max_num_seqs</code></td><td>128</td><td>1024（大显存）/ 256</td><td>batch 内并发请求数上限</td></tr>
+<tr><td><code>long_prefill_token_threshold</code></td><td>0（禁用）</td><td>—</td><td>超过它的 prefill 强制分段</td></tr>
+<tr><td><code>enable_chunked_prefill</code></td><td>True</td><td>—</td><td>关闭时要求预算 ≥ max_model_len</td></tr>
+<tr><td><code>scheduler_reserve_full_isl</code></td><td>True</td><td>—</td><td>整条输入序列必须放得下才准入</td></tr>
+<tr><td><code>watermark</code></td><td>0.01</td><td>—</td><td>块池预留水线（仅抢占后生效）</td></tr>
+<tr><td><code>policy</code></td><td>fcfs</td><td>—</td><td>fcfs / priority</td></tr>
+</table>
+<div class="infer">A100 上 16384 的批预算反而掉吞吐（issue #17885），所以默认表里 A100 被单独压回 8192/2048——预算参数不是越大越好，与 kernel 的 shape 友好度强耦合。</div>
+
+<h2>10+1. 源码阅读检查点</h2>
+<ol class="refs">
+  <li>通读 <code>scheduler.py:441-450</code> 的注释块，再对照 <code>:516-520</code> 与 <code>:879</code>，确认两处 <code>num_new_tokens</code> 公式的一致性（占位 token 的角色）。</li>
+  <li>在 <code>allocate_slots</code>（<code>kv_cache_manager.py:344</code>）打断点，分别构造"水线拒绝"与"full_isl 拒绝"，观察抢占与 break 两种后果。</li>
+  <li>开/关 <code>async_scheduling</code> 各跑一次 benchmark，观察 ITL 的 p99 差异——这是该特性最直接的用户可感收益。</li>
+  <li>读 <code>request_queue.py</code>（仅 208 行），理解 FCFS deque 与 PRIORITY heap 的插入/弹出成本差异。</li>
+</ol>
+
+<footer>生成于 2026-10-08 · vLLM 源码解析系列 · 源码版本：本地仓库 main@d9dac2b3d（dev 树） · 下一篇：<a href="vllm-t3-kvcache.html">KV Cache 与 PagedAttention</a></footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
