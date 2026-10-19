@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vLLM 源码解析十讲 · 第 9 讲：算子是怎么被支持的——先懂 PyTorch，再懂 vLLM（以 DeepSeek-V4 为实例）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>算子是怎么被支持的——先懂 PyTorch，再懂 vLLM</h1>
+<div class="meta">
+  <b>vLLM 源码解析系列 · 第 9 讲（t9，十讲收官）</b> · 生成于 2026-10-16 ·
+  源码版本：<b>vLLM main@fa75d34</b>（sparse clone 于 2026-10-16 抓取，行号以此为准） ·
+  PyTorch API 依据：官方文档与 <a href="https://github.com/pytorch/pytorch">pytorch/pytorch</a> main 分支源码（2026-10 核对） ·
+  实例模型：DeepSeek-V4（vLLM 内置于 <code>vllm/models/deepseek_v4/</code>） ·
+  背景论文：DeepSeek-V4（<a href="https://arxiv.org/abs/2606.19348">arXiv:2606.19348</a>） ·
+  代码仓库：<a href="https://github.com/vllm-project/vllm">vllm-project/vllm</a><br>
+  <b>本篇导航</b>（只有四部分）：
+  <a href="#pt1">第一部分 · PyTorch 如何支持一个算子</a>（
+  <a href="#journey">旅程</a> ·
+  <a href="#py-compose">Python 组合</a> ·
+  <a href="#py-autograd">autograd.Function</a> ·
+  <a href="#py-cpp">cpp_extension</a> ·
+  <a href="#py-customop">custom op</a> ·
+  <a href="#py-triton">Triton</a> ·
+  <a href="#py-compile">compile</a> ）
+  · <a href="#pt2">第二部分 · vLLM 的六条工程化途径</a>
+  · <a href="#trace">第三部分 · DeepSeek-V4 全链路 trace</a>
+  · <a href="#summary">第四部分 · 总结</a>
+</div>
+
+<div class="tldr">
+  <p><b>一句话主线</b>：先把"PyTorch 是怎么支持一个算子的"彻底搞懂——一次调用经过 dispatcher，按 <b>dispatch key</b> 选出 kernel；开发者新增/扩展算子的每一条官方途径，都是往这套机制的不同环节挂钩子。<b>vLLM 的每种做法，都不外乎"在 PyTorch 的哪个机制上做了什么工程化封装"</b>：本文用六条途径对应六个 PyTorch 机制逐一讲透，最后以 vLLM 内置的 DeepSeek-V4 实现做一次前向全链路 trace，把每个算子钉到"PyTorch 机制 + vLLM 途径 + 具体 kernel"上。</p>
+  <p><b>读法建议</b>：第一部分是地基（约占四成篇幅），每一节都回答四个问题——为什么需要它、最小示例长什么样、背后机制是什么、vLLM 里对应谁。第二部分每条途径都显式回指第一部分。读完任何一节，你应该能不看笔记向同事复述它。</p>
+</div>
+
+<h2 id="pt1">第一部分 · PyTorch 如何支持一个算子</h2>
+
+<h3 id="journey">1.1 一次 <code>torch.mm(a, b)</code> 的完整旅程</h3>
+<p>一切从一次最普通的矩阵乘法开始。你在 Python 里写下 <code>torch.mm(a, b)</code>（a、b 是 CUDA 张量），到 CUDA kernel 真正执行，中间要经过四站：</p>
+<ol>
+  <li><b>Python API 层</b>：<code>torch.mm</code> 只是 C++ 绑定函数的薄壳——调用从 Python 一进来就进入 C++，Python 侧没有任何逻辑。</li>
+  <li><b>Dispatcher</b>：这是 PyTorch 的算子调度中枢。每个 op 在 dispatcher 里有一条记录，由两部分组成：一份 <b>schema</b>（op 名字 + 参数类型签名），和一张 <b>dispatch key → kernel 的映射表</b>。调用发生时，dispatcher 根据输入张量的设备/dtype/是否需要求导等信息算出一个 <b>DispatchKeySet</b>（再叠加线程局部的一组 include/exclude key），然后用它去查映射表、选出这次调用要执行的 kernel。</li>
+  <li><b>横切 key 的 kernel 先跑</b>：DispatchKeySet 里通常除了 backend key（<code>CUDA</code>）还有横切 key（<code>AutogradCUDA</code>、<code>AutocastCUDA</code> 等）。官方 dispatcher 教程的说法是："we first execute the Autograd kernel, and then we redispatch to the backend kernel"——autograd kernel 记录完 <code>grad_fn</code> 之后，把调用<b>重新分发</b>（redispatch）给下一层的 backend kernel。</li>
+  <li><b>Backend kernel</b>：key 为 <code>CUDA</code> 的 mm kernel，内部调 cuBLAS GEMM，数据落到显存。</li>
+</ol>
+
+<div class="fig">
+<svg viewBox="0 0 880 452" width="880" role="img" aria-label="torch.mm 调用旅程与 vLLM 各层介入点">
+  <style>
+    text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }
+  </style>
+  <defs>
+    <marker id="arrowA" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowA-purple" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#a855f7"/>
+    </marker>
+  </defs>
+
+  <text x="440" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">torch.mm(a, b) 的旅程（左）与 vLLM 在各层的介入点（右）</text>
+
+  <!-- ===== 左列：调用旅程 x=50..400 ===== -->
+  <rect x="50" y="60" width="350" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="225" y="82" font-size="12" fill="#1e40af" text-anchor="middle">Python API：torch.mm(a, b)</text>
+  <text x="225" y="100" font-size="10" fill="#475569" text-anchor="middle">C++ 绑定的薄壳，无 Python 逻辑</text>
+
+  <path d="M225,121 L 225,129" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrowA)"/>
+
+  <rect x="50" y="140" width="350" height="64" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="225" y="163" font-size="12" fill="#b45309" text-anchor="middle">Dispatcher（C++）</text>
+  <text x="225" y="181" font-size="10" fill="#92400e" text-anchor="middle">DispatchKeySet → 查 key→kernel 映射表</text>
+  <text x="225" y="196" font-size="10" fill="#92400e" text-anchor="middle">（op 记录 = schema + 映射表）</text>
+
+  <path d="M225,209 L 225,229" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrowA)"/>
+
+  <rect x="50" y="240" width="350" height="56" rx="8" fill="#f3e8ff" stroke="#a855f7"/>
+  <text x="225" y="262" font-size="12" fill="#6b21a8" text-anchor="middle">Autograd kernel（key = AutogradCUDA）</text>
+  <text x="225" y="280" font-size="10" fill="#7e22ce" text-anchor="middle">记录 grad_fn → redispatch 给下层</text>
+
+  <path d="M225,301 L 225,321" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrowA)"/>
+
+  <rect x="50" y="330" width="350" height="56" rx="8" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="225" y="352" font-size="12" fill="#166534" text-anchor="middle">Backend kernel（key = CUDA）</text>
+  <text x="225" y="370" font-size="10" fill="#15803d" text-anchor="middle">at::mm → cuBLAS GEMM → 显存</text>
+
+  <!-- ===== 右列：vLLM 介入点 x=540..830 ===== -->
+  <rect x="540" y="60" width="290" height="56" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="685" y="82" font-size="12" fill="#1e293b" text-anchor="middle">介入①：语义层 nn.Module</text>
+  <text x="685" y="100" font-size="10" fill="#64748b" text-anchor="middle">CustomOp / PluggableLayer（§2.1）</text>
+
+  <rect x="540" y="144" width="290" height="56" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="685" y="166" font-size="12" fill="#1e293b" text-anchor="middle">介入②：注册成 custom op</text>
+  <text x="685" y="184" font-size="10" fill="#64748b" text-anchor="middle">direct_register_custom_op（§2.2）</text>
+
+  <rect x="540" y="244" width="290" height="56" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="685" y="266" font-size="12" fill="#1e293b" text-anchor="middle">介入③：C++ 编译扩展算子</text>
+  <text x="685" y="284" font-size="10" fill="#64748b" text-anchor="middle">torch.ops._C.*（§2.2/§2.4）</text>
+
+  <rect x="540" y="334" width="290" height="56" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="685" y="356" font-size="12" fill="#1e293b" text-anchor="middle">介入④：外部 kernel 库</text>
+  <text x="685" y="374" font-size="10" fill="#64748b" text-anchor="middle">flashmla · deep_gemm · flashinfer（§2.3/§2.5）</text>
+
+  <!-- ===== 横向虚线关联（后画，压在盒子上层） ===== -->
+  <path d="M405,88 L 529,88" stroke="#a855f7" stroke-width="1.2" stroke-dasharray="6,4" marker-end="url(#arrowA-purple)"/>
+  <path d="M405,172 L 529,172" stroke="#a855f7" stroke-width="1.2" stroke-dasharray="6,4" marker-end="url(#arrowA-purple)"/>
+  <path d="M405,268 L 529,268" stroke="#a855f7" stroke-width="1.2" stroke-dasharray="6,4" marker-end="url(#arrowA-purple)"/>
+  <path d="M405,358 L 529,358" stroke="#a855f7" stroke-width="1.2" stroke-dasharray="6,4" marker-end="url(#arrowA-purple)"/>
+
+  <text x="50" y="412" font-size="10" fill="#64748b">注：Autograd / Autocast 等横切 key 的 kernel 先于 backend key 执行，再逐层 redispatch——每个环节只做一件事，</text>
+  <text x="50" y="426" font-size="10" fill="#64748b">注册可以分散进行而无需一个中央 if-else（PyTorch 官方 dispatcher 教程的核心论述）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：一次 <code>torch.mm(a, b)</code> 的四站旅程（对应 PyTorch 官方 <a href="https://docs.pytorch.org/tutorials/advanced/dispatcher.html">dispatcher 教程</a>的论述），右侧标出 vLLM 在各层的介入点及其对应本文章节。dispatcher 这层存在的意义：让 autograd、autocast、后端实现等关注点<b>去中心化地</b>各自注册，而不需要在一个大 if-else 里互相纠缠。</p>
+
+<p>有了这张图，"新增/扩展一个算子"的所有官方途径，都可以精确地定位成一个问题：<b>你要往 dispatcher 的哪一层挂钩子？</b>下面按从轻到重的顺序讲六条。</p>
+
+<h3 id="py-compose">1.2 途径 a：纯 Python 组合现有算子</h3>
+<p><b>为什么需要它</b>：其实不算"扩展"——90% 的模型层就是这么写的。它不往 dispatcher 加任何东西，只是把已有 op 串起来；好处是 autograd、shape 推导、编译器支持全部白送（每个成员 op 都是 ATen 的一等公民）。</p>
+<pre><code class="language-python">class SwiGLU(nn.Module):
+    def forward(self, x):
+        a, b = x.chunk(2, dim=-1)
+        return F.silu(a) * b      # 三次 dispatcher 调用，autograd 自动生效</code></pre>
+<p><b>背后机制</b>：每一次 <code>F.silu(a)</code>、<code>*</code> 都是一次完整的图 1 旅程（Python → dispatcher → CUDA kernel）。eager 模式下，这意味着<b>每个成员 op 一次 kernel launch</b>：kernel 太小则 launch 开销占比高，且无法把"读一遍显存做两件事"的融合写出来。<code>torch.compile</code>/Inductor 能事后把这些逐元素 op 融合回少数几个 kernel，但那是编译路径的补救，不是 eager 的能力。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 298" width="880" role="img" aria-label="纯 Python 组合与预编译融合 kernel 的 launch 次数对比">
+  <style>
+    text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }
+  </style>
+  <defs>
+    <marker id="arrowB" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <text x="440" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">同一个激活函数的两种支持方式（以 vLLM SiluAndMul 为例）</text>
+
+  <!-- native 路径 -->
+  <rect x="50" y="52" width="780" height="86" rx="10" stroke="#94a3b8" stroke-dasharray="6,4" fill="#f8fafc"/>
+  <text x="62" y="68" font-size="11" fill="#64748b">途径 a：纯 Python 组合（forward_native）—— eager 下 ≥2 次 kernel launch</text>
+  <rect x="80" y="82" width="200" height="36" rx="6" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="180" y="104" font-size="12" fill="#475569" text-anchor="middle">x[..., :d] 切片（view，0 kernel）</text>
+  <rect x="305" y="82" width="200" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="405" y="104" font-size="12" fill="#b45309" text-anchor="middle">F.silu（1 kernel）</text>
+  <rect x="530" y="82" width="200" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="630" y="104" font-size="12" fill="#b45309" text-anchor="middle">相乘 mul（1 kernel）</text>
+  <path d="M285,100 L 299,100" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrowB)"/>
+  <path d="M510,100 L 524,100" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrowB)"/>
+
+  <!-- fused 路径 -->
+  <rect x="50" y="162" width="780" height="86" rx="10" stroke="#94a3b8" stroke-dasharray="6,4" fill="#f8fafc"/>
+  <text x="62" y="178" font-size="11" fill="#64748b">途径 c：预编译融合 kernel（forward_cuda）—— 1 次 kernel launch</text>
+  <rect x="80" y="192" width="280" height="36" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="220" y="214" font-size="12" fill="#166534" text-anchor="middle">torch.ops._C.silu_and_mul（1 kernel）</text>
+  <rect x="400" y="192" width="410" height="36" rx="6" fill="none" stroke="#a855f7" stroke-dasharray="6,4"/>
+  <text x="605" y="207" font-size="11" fill="#6b21a8" text-anchor="middle">torch.compile / Inductor 也能事后把 native 路径融合回 1 个 kernel</text>
+  <text x="605" y="222" font-size="10" fill="#6b21a8" text-anchor="middle">——但那是编译路径的补救，eager 下做不到</text>
+
+  <text x="50" y="272" font-size="10" fill="#64748b">对应源码：vllm/model_executor/layers/activation.py:116-152（main@fa75d34）。融合 kernel 省的不只是 launch 开销，更是中间张量的显存往返。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：同一语义的两种支持方式对比（机制示意，非实测数字）。左上：纯 Python 组合在 eager 下逐 op launch；下方：vLLM 用 C++ 预编译的单个融合 kernel 覆盖同一语义。<code>SiluAndMul</code> 同时保留两条路径，正是 vLLM 全部算子框架的原型。</p>
+
+<p><b>在 vLLM 里对应谁</b>：每个 CustomOp 的 <code>forward_native</code>（§2.1）就是这条途径——它是兜底、是单测基准，也是 Inductor 融合的原料。而"局限"（融合做不了、多 launch）正是其余五条途径存在的全部理由。</p>
+
+<h3 id="py-autograd">1.3 途径 b：<code>torch.autograd.Function</code>——自定义 backward 的正道</h3>
+<p><b>为什么需要它</b>：当你要的数学在前向可以借现有 op 拼出来、但导数不好自动推（或你想要更省显存的手写导数）时，用 <code>autograd.Function</code> 显式声明前向/反向。</p>
+<pre><code class="language-python">class MyExp2(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        ctx.save_for_backward(x)
+        return x.exp2()                    # 前向在 no-grad 下执行，不记图
+    @staticmethod
+    def backward(ctx, g):
+        (x,) = ctx.saved_tensors
+        return g * x.exp2() * 2.0          # 自己写导数
+
+def my_exp2(x):
+    return MyExp2.apply(x)                 # 必须走 .apply() 才接上 autograd</code></pre>
+<p><b>背后机制</b>：<code>forward</code> 运行时 autograd 被关闭，只执行你写的逻辑；<code>.apply()</code> 会在图里挂一个自定义 <code>grad_fn</code>，反向时调你的 <code>backward</code>。它不产生新的 dispatcher op——本质是"在 autograd 层插入一段自定义代码"，而不是"给 dispatcher 加 kernel"。</p>
+<p><b>在 vLLM 里对应谁</b>：几乎没有。vLLM 主线是推理（不建反向图），这条途径在训练框架（以及 vLLM 里极少数带训练语义的组件）才有用武之地。它在此列出，是为了与 §1.5 的 <code>register_autograd</code> 区分：后者把 backward 公式注册到 <b>dispatcher 的 Autograd key</b> 上，是 custom op 体系内的对应物。</p>
+
+<h3 id="py-cpp">1.4 途径 c：<code>torch.utils.cpp_extension</code> 与 <code>torch.ops.load_library</code>——把仓外 C++/CUDA kernel 挂进 torch</h3>
+<p><b>为什么需要它</b>：当性能要求超出 Python 组合的能力（要融合、要手写 warp 级逻辑、要调 CUTLASS），就必须写 C++/CUDA。问题变成：怎么让 torch"认识"这个 kernel？答案分两步：C++ 侧向 dispatcher 注册，Python 侧让代码被加载。</p>
+<p><b>加载的两条路</b>：</p>
+<ul>
+  <li><b>JIT 编译</b>：<code>torch.utils.cpp_extension.load(name, sources=[...])</code> 在首次调用时用 Ninja 现场编译并缓存（缓存目录可用 <code>TORCH_EXTENSIONS_DIR</code> 指定）；<code>load_inline</code> 更进一步，直接从字符串源码编译。适合开发期与"随包携带源码"的库。</li>
+  <li><b>预编译 .so</b>：<code>torch.ops.load_library(path)</code> 加载已经编译好的动态库，"The library being loaded may run global initialization code to register custom operators with the PyTorch JIT runtime"（<code>torch/_ops.py</code> 中 <code>load_library</code> 的 docstring）——注册发生在库的加载时刻。正式发布的库（flash-attn 这类）走这条路或等价的 import 时注册。</li>
+</ul>
+<p><b>C++ 侧怎么注册</b>：用两个宏，恰好对应 §1.1 说的 op 记录的两半：</p>
+<pre><code class="language-cpp">// C++：向 dispatcher 注册 schema 与 backend kernel（与官方 dispatcher 教程一致）
+TORCH_LIBRARY(my_ns, m) {
+  m.def("fused_gate(Tensor x) -> Tensor");          // schema
+}
+TORCH_LIBRARY_IMPL(my_ns, CUDA, m) {
+  m.impl("fused_gate", &amp;fused_gate_cuda);           // key=CUDA 的 kernel
+}</code></pre>
+<p>之后 Python 侧 <code>torch.ops.my_ns.fused_gate(x)</code> 就是一次普通的 dispatcher 调用——与 <code>torch.mm</code> 完全同权。</p>
+<p><b>在 vLLM 里对应谁</b>：vLLM 的 <code>torch.ops._C.*</code>（如 <code>silu_and_mul</code>、<code>rotary_embedding</code>，见 <code>vllm/_custom_ops.py</code> 的调用处）就是 CMake 构建出的扩展模块在加载/导入时注册进 dispatcher 的；attention backend 依赖的 flashmla、deep_gemm、flashinfer 等外部库（§2.3/§2.5）也是同一模式的现成产品。§2.6 的插件体系则把"谁有资格加载这些库"也工程化了。</p>
+
+<h3 id="py-customop">1.5 途径 d：<code>torch.library</code> 注册 custom op——最关键的一节</h3>
+<p><b>为什么需要它</b>：C++ 算子（途径 c）天然在 dispatcher 里。但大量 kernel 是<b>纯 Python 写的</b>（或 Python 编排多个底层调用），它们默认只是普通函数——<code>torch.compile</code> 的 dynamo 会试图把它内联展开，遇到不支持的东西就 graph break；Inductor 也无从得知你的输入输出形状契约。把函数<b>注册成 custom op</b>，等于在 dispatcher 里给它建立正式的 op 记录（图 1 第二站），从而获得三个能力：</p>
+<ol>
+  <li><b>对 dynamo 是不透明节点</b>：trace 到这里就停，不会展开内部实现——这既是保护（Inductor 不会重排危险 kernel），也是图切分的锚点（vLLM 的 piecewise compilation 就靠它，§2.2）。</li>
+  <li><b>对 Inductor 可做 shape/dtype 推导</b>：这靠 <b>fake kernel</b>（下一小节单独讲）。</li>
+  <li><b>对 autograd 可在 op 层注册</b>：<code>register_autograd</code> 把 backward 公式挂到 Autograd key 上（途径 b 的 custom op 版）。</li>
+</ol>
+
+<h4>1.5.1 两种写法</h4>
+<p><b>底层写法</b>（vLLM 采用的就是这个，因为它绕开通用封装的开销）：</p>
+<pre><code class="language-python">lib = torch.library.Library("mylib", "FRAGMENT")            # 命名空间的"碎片"库
+lib.define("rms(Tensor x) -> Tensor")                        # ① schema 进 dispatcher
+lib.impl("rms", my_rmsnorm_cuda, "CUDA")                     # ② 注册 key=CUDA 的 kernel
+lib._register_fake("rms", my_rmsnorm_fake)                   # ③ 注册 fake/meta kernel
+
+def my_rmsnorm_fake(x):
+    return torch.empty_like(x)    # 只算 shape/dtype/device，不算数据</code></pre>
+<p><b>新一代写法</b>（<code>torch/_library/custom_ops.py</code> 实现，文档措辞："Wraps a function into custom operator"）：</p>
+<pre><code class="language-python">@torch.library.custom_op("mylib::rms2", mutates_args=[])
+def rms2(x: torch.Tensor) -> torch.Tensor:
+    return my_rmsnorm_cuda(x)
+
+@rms2.register_fake
+def _(x):
+    return torch.empty_like(x)
+
+@rms2.register_autograd
+def my_backward(ctx, g):                # backward 公式挂在 Autograd key 上
+    return g * scale</code></pre>
+<p><code>CustomOpDef</code> 上还提供 <code>register_kernel</code>（"Register an implementation for a device type"——同一 op 注册多个 backend 实现）与 <code>opcheck</code>（检查注册正确性）。<code>mutates_args</code> 必须如实声明哪些参数被就地修改：functionalization 依赖它做别名/顺序分析，漏报会导致 Inductor 错误重排就地写。</p>
+
+<h4>1.5.2 fake kernel 是什么，为什么没有它 compile 就没法工作</h4>
+<p><code>torch.compile</code> 的 tracing 阶段<b>从不执行真实 kernel</b>——张量被替换成 <code>FakeTensor</code>（实现于 <code>torch/_subclasses/fake_tensor.py</code>），上面只有 shape/dtype/device 这些元信息。FakeTensorMode 的目的就是"enable shape inference for torch.compile without actual computation"。<b>fake kernel 就是你为 op 写的 meta 实现</b>：给定输入的 FakeTensor，只做形状运算、返回输出 FakeTensor。没有它，Inductor 拿不到输出的形状契约，图推不下去（或退化成动态 shape）。ATen 的每个原生 op 自带 meta 实现，所以平时感觉不到它的存在；custom op 必须自己补上这一环。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 414" width="900" role="img" aria-label="custom op 三件套注册与三个消费者">
+  <style>
+    text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }
+  </style>
+  <defs>
+    <marker id="arrowC" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <text x="450" y="32" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">custom op 三件套注册（左）与三个消费者（右）</text>
+
+  <!-- 左：注册时刻 -->
+  <rect x="50" y="60" width="280" height="280" rx="10" stroke="#94a3b8" stroke-dasharray="6,4" fill="#f8fafc"/>
+  <text x="60" y="76" font-size="11" fill="#64748b">注册时刻（Python）</text>
+  <rect x="70" y="96" width="240" height="52" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="190" y="116" font-size="12" fill="#1e40af" text-anchor="middle">① lib.define(schema)</text>
+  <text x="190" y="134" font-size="10" fill="#475569" text-anchor="middle">op 名 + 参数类型签名</text>
+  <rect x="70" y="174" width="240" height="52" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="190" y="194" font-size="12" fill="#166534" text-anchor="middle">② lib.impl(fn, "CUDA")</text>
+  <text x="190" y="212" font-size="10" fill="#475569" text-anchor="middle">key=CUDA 的真实 kernel</text>
+  <rect x="70" y="252" width="240" height="52" rx="6" fill="#f3e8ff" stroke="#a855f7"/>
+  <text x="190" y="272" font-size="12" fill="#6b21a8" text-anchor="middle">③ lib._register_fake(fake_fn)</text>
+  <text x="190" y="290" font-size="10" fill="#7e22ce" text-anchor="middle">meta 实现：只推 shape/dtype</text>
+
+  <!-- 中：dispatcher 记录 -->
+  <rect x="360" y="160" width="180" height="80" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="450" y="186" font-size="12" fill="#b45309" text-anchor="middle">Dispatcher</text>
+  <text x="450" y="204" font-size="10" fill="#92400e" text-anchor="middle">op 记录 = schema</text>
+  <text x="450" y="220" font-size="10" fill="#92400e" text-anchor="middle">+ key→kernel 映射表</text>
+
+  <path d="M335,200 L 354,200" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrowC)"/>
+  <path d="M545,200 L 559,200" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrowC)"/>
+
+  <!-- 右：消费者 -->
+  <rect x="570" y="60" width="280" height="280" rx="10" stroke="#94a3b8" stroke-dasharray="6,4" fill="#f8fafc"/>
+  <text x="580" y="76" font-size="11" fill="#64748b">运行 / 编译时刻的三个消费者</text>
+  <rect x="590" y="96" width="240" height="52" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="710" y="116" font-size="12" fill="#166534" text-anchor="middle">eager 调用</text>
+  <text x="710" y="134" font-size="10" fill="#475569" text-anchor="middle">dispatcher 直达 CUDA kernel</text>
+  <rect x="590" y="174" width="240" height="52" rx="6" fill="#f3e8ff" stroke="#a855f7"/>
+  <text x="710" y="194" font-size="12" fill="#6b21a8" text-anchor="middle">torch.compile / Inductor</text>
+  <text x="710" y="212" font-size="10" fill="#7e22ce" text-anchor="middle">FakeTensor 走 ③ 推 shape/dtype</text>
+  <rect x="590" y="252" width="240" height="52" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="710" y="272" font-size="12" fill="#b45309" text-anchor="middle">dynamo tracing</text>
+  <text x="710" y="290" font-size="10" fill="#92400e" text-anchor="middle">不透明节点 → 切图锚点（§2.2）</text>
+
+  <text x="60" y="372" font-size="10" fill="#64748b">三件套分别对应：① schema（类型契约）② 真实执行 ③ 编译期元信息。fake kernel 从不被"执行"数据——</text>
+  <text x="60" y="388" font-size="10" fill="#64748b">Inductor 推图时张量是 FakeTensor，只带 shape/dtype/device 元信息（torch/_subclasses/fake_tensor.py）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3</b>：custom op 的注册三件套与三个消费者（对应 PyTorch 官方 <a href="https://docs.pytorch.org/tutorials/advanced/python_custom_ops.html">python custom ops 教程</a>）。vLLM 的 <code>direct_register_custom_op</code>（§2.2）就是对这套底层 API 的直通封装。</p>
+
+<p><b>在 vLLM 里对应谁</b>：这是第二部分的主角——<code>direct_register_custom_op</code>（§2.2）逐字对应本节的三行注册代码；vLLM 强制给 attention 相关 kernel 配 fake impl，正是因为没有 fake kernel 就没有 piecewise compilation。</p>
+
+<h3 id="py-triton">1.6 途径 e：Triton kernel 与 <code>triton_op</code></h3>
+<p><b>为什么需要它</b>：不是人人都想写 CUDA C++。Triton 让你用 Python 写 kernel、运行时 JIT 编译（<code>@triton.jit</code> 装饰的函数首次被调用时才编译，还有 <code>@triton.autotune</code> 枚举块形状），开发体验接近"带 GPU 常量的 Python"。代价是：一个裸的 Triton kernel launch 对 dynamo 来说是<b>不可追踪</b>的外部调用——官方 recipe 明说用户自定义 Triton kernel "do not automatically support all PyTorch subsystems"，直接混进被编译的函数里会 graph break。</p>
+<pre><code class="language-python">@triton.jit
+def sin_kernel(x_ptr, out_ptr, n, BLOCK: tl.constexpr): ...
+
+# 裸调用：能跑，但对 torch.compile 是黑盒/断点
+sin_kernel[(triton.cdiv(n, 1024),)](x, out, n, BLOCK=1024)
+
+# 正道：triton_op 包住"含 Triton kernel 的函数"，wrap_triton 包住"kernel 调用本身"
+@torch.library.triton_op("mylib::mysin", mutates_args={})
+def mysin(x: torch.Tensor) -> torch.Tensor:
+    out = torch.empty_like(x)
+    n = x.numel()
+    wrap_triton(sin_kernel[(triton.cdiv(n, 1024),)])(x, out, n, BLOCK=1024)
+    return out</code></pre>
+<p><b>背后机制</b>（<code>torch/_library/triton.py</code>）：<code>triton_op</code> "makes the implementation visible to these subsystems"——与 <code>custom_op</code> 的不透明相反，它<b>允许 trace 进函数体</b>，而 <code>wrap_triton</code> "Allows capture of a triton kernel into a graph via make_fx or non-strict torch.export"，把 kernel launch 本身捕获成图节点。于是一个 Triton kernel 在编译图里既可见（可被 Inductor 调度）又不必展开其内部实现。官方教程的原句："Use <code>torch.library.triton_op</code> to wrap a function that may invoke one or more Triton kernels"，"Use <code>torch.library.wrap_triton</code> to wrap the calls to the Triton kernel"。</p>
+<p><b>在 vLLM 里对应谁</b>：vLLM 大量热路径 kernel 是 <code>@triton.jit</code> 直用（§2.5），其中要参与 warmup/编译治理的那部分（如 DSv4 的融合 RMSNorm）以 <code>VllmTritonJitKernel</code> 基类管理编译键与预热；与 <code>triton_op</code> 精确对应的工程化则是把 Python 编排 + Triton kernel 整体注册成 custom op 的做法（§2.2 的 <code>sparse_attn_indexer</code> 内部正是 deep_gemm/top-k 等 kernel 的 Python 编排）。</p>
+
+<h3 id="py-compile">1.7 途径 f：<code>torch.compile</code> / Inductor——让 PyTorch 替你生成 kernel</h3>
+<p><b>为什么需要它</b>：前五条途径都是"人写 kernel"，这一条反过来：<b>PyTorch 替你生成并融合 kernel</b>。dynamo 把 Python 代码 trace 成图，Inductor 分析图、生成 Triton kernel，把相邻的逐元素/归约 op 融合，省 launch、省显存往返。</p>
+<pre><code class="language-python">@torch.compile
+def block(x):
+    y = rms2(x)          # 不透明 custom op：图在这里停，成为子图边界
+    return F.gelu(y)     # gelu 等交给 Inductor 生成/融合 kernel</code></pre>
+<p><b>背后机制</b>：对算子作者而言，关键是两个互动规则——</p>
+<ul>
+  <li><b>custom op 是融合的墙，也是切图的锚</b>：Inductor 不会穿透不透明 op 融合其内部，但可以把 op 前后的<b>普通 op 段</b>各自编译成高效子图。这正是 vLLM piecewise compilation 的原理：把 attention 主算子注册成 custom op，图就按它切成"可整体捕获的纯张量段 + attention 环节"（§2.2）。</li>
+  <li><b>graph break 是主线的断裂</b>：dynamo 遇到不支持的语言构造（数据依赖的 host 分支、<code>.item()</code> 等）就放弃这一段。vLLM 对"必须读 host 信息"的代码不是回避 break，而是<b>主动利用</b>它——用装饰器在 CUDA graph 捕获时把指定函数断成 eager 区域（§2.2 末尾）。</li>
+</ul>
+<p><b>在 vLLM 里对应谁</b>：vLLM 的整个 <code>CompilationConfig</code> / piecewise 模式（<a href="vllm-t4-modelrunner.html">第 4 讲</a>详述）就是对本节两条规则的全局编排；CustomOp 的 <code>custom_ops</code> 开关（§2.1）则是"这一个层，走我的 C++ kernel 还是留给 Inductor 融合"的逐层协商。</p>
+
+<h3>1.8 第一部分小结</h3>
+<table>
+  <tr><th>途径</th><th>何时需要</th><th>机制落点</th><th>vLLM 里的对应</th></tr>
+  <tr><td>a. 纯 Python 组合</td><td>默认写法，语义层</td><td>不新增 op，复用 ATen</td><td>CustomOp 的 <code>forward_native</code>（§2.1）</td></tr>
+  <tr><td>b. autograd.Function</td><td>需要自定义 backward</td><td>autograd 层插 <code>grad_fn</code></td><td>推理主线几乎不用</td></tr>
+  <tr><td>c. cpp_extension / load_library</td><td>C++/CUDA kernel 进 torch</td><td><code>TORCH_LIBRARY(_IMPL)</code> 注册 schema/kernel，加载时生效</td><td><code>torch.ops._C.*</code>；外部库 flashmla 等（§2.3/§2.5）</td></tr>
+  <tr><td>d. torch.library custom op</td><td>Python kernel 要对 compile 可见/可切图</td><td>define schema + impl + fake kernel + register_autograd</td><td><code>direct_register_custom_op</code>（§2.2）</td></tr>
+  <tr><td>e. Triton / triton_op</td><td>Python 写 kernel、运行时 JIT</td><td>运行时编译；<code>triton_op</code>+<code>wrap_triton</code> 使其可被捕获</td><td>Triton/TileLang/CuTeDSL JIT + warmup（§2.5）</td></tr>
+  <tr><td>f. torch.compile / Inductor</td><td>让编译器生成/融合 kernel</td><td>dynamo trace → Inductor 生成 Triton</td><td>piecewise compilation（§2.2）与 <code>custom_ops</code> 开关（§2.1）</td></tr>
+</table>
+
+<h2 id="pt2">第二部分 · vLLM 在这些机制上支持算子的六条途径</h2>
+<p>这一部分每条途径都回答同一个问题：<b>它建立在第一部分的哪个 PyTorch 机制上 + vLLM 加了什么</b>。每节末尾有一个三行小结框（PyTorch 机制 → vLLM 的工程化 → 你什么时候需要它）。所有行号属 vLLM main@fa75d34（2026-10-16 抓取）。</p>
+
+<h3 id="vllm-customop">2.1 CustomOp 层框架——按平台分发的 nn.Module</h3>
+<p><span class="pill">建立在机制 a 上</span>：子类用纯 PyTorch 写一个 <code>forward_native</code>（兜底/测试/编译原料三合一），再为有专属 kernel 的平台补 <code>forward_cuda</code> 等分支。<b>vLLM 加的东西</b>：不走 dispatcher，而是在 Python 侧做一次性的构造期分发——基类 <code>CustomOp</code>（<code>vllm/model_executor/custom_op.py:102</code>）在 <code>__init__</code> 里把 <code>self._forward_method</code> 绑定到平台对应实现，此后每次 <code>forward()</code> 是一条已解析的方法引用，<b>运行期零分支</b>：</p>
+
+<pre><code class="language-python"># vllm/model_executor/custom_op.py:172-199（有删节）
+def dispatch_forward(self, compile_native: bool):
+    compilation_config = get_cached_compilation_config()
+    enabled = self._enforce_enable or self.enabled()   # 受 CompilationConfig.custom_ops 控制
+    if not enabled:
+        # 被禁用时退回 native 实现，并可对该段单独 torch.compile
+        return self.maybe_compile(self.forward_native, enable=compile_native)
+    if current_platform.is_rocm():
+        return self.forward_hip        # 默认实现就是转发到 forward_cuda
+    elif current_platform.is_cpu():
+        return self.forward_cpu        # 默认实现是 forward_native
+    elif current_platform.is_tpu():
+        return self.forward_tpu
+    elif current_platform.is_xpu():
+        return self.forward_xpu
+    elif current_platform.is_out_of_tree():
+        return self.forward_oot
+    else:
+        return self.forward_cuda</code></pre>
+
+<p>三个配套设计：</p>
+<ul>
+  <li><b>缺省回退链</b>（<code>custom_op.py:144-169</code>）：<code>forward_hip → forward_cuda</code>，<code>forward_cpu/xpu/tpu/oot → forward_native</code>。子类只覆盖真正有专属 kernel 的平台，其余自动落到 PyTorch 原生实现——这就是 <code>forward_native</code> 永远必须存在的原因。</li>
+  <li><b>与编译器协商</b>：<code>enabled()</code>（<code>custom_op.py:269</code>）读 <code>CompilationConfig.custom_ops</code>（<code>"+op"/"-op"/"all"/"none"</code>；Inductor 后端默认 <code>none</code>，eager 默认 <code>all</code>）。被禁用的 op 回到 <code>forward_native</code> 交给 Inductor 做图内融合；<code>maybe_compile</code>（<code>custom_op.py:207</code>）还能把这段 native 代码单独编译——用于"外层被包成不透明 custom op、内层还想编译"的嵌套场景。</li>
+  <li><b>注册表 + 仓外替换</b>：<code>@CustomOp.register("名字")</code> 把类放进 <code>op_registry</code>（<code>custom_op.py:21</code>）；<code>register_oot</code>（<code>custom_op.py:335</code>）让仓外代码按类名<b>整体替换</b>仓内实现——<code>__new__</code>（<code>custom_op.py:107</code>）在实例化时检查 <code>op_registry_oot</code>，命中则直接换类。这是"改 kernel 不 fork vLLM"的第一条正道（与 §2.6 插件衔接）。</li>
+</ul>
+
+<p>标准层都是这条路的产物，教科书样例是 <code>SiluAndMul</code>（图 2 已画；源码 <code>vllm/model_executor/layers/activation.py:116-152</code>）：<code>forward_cuda</code> 走预编译 C++ 算子 <code>torch.ops._C.silu_and_mul</code>，<code>forward_native</code> 一行 <code>F.silu(x[..., :d]) * x[..., d:]</code>。同族还有 <code>RMSNorm</code>（<code>layernorm.py:37</code>，其 native 路径已升级为调用 vLLM IR op，实现可按 provider 优先级热插拔）、<code>RotaryEmbedding</code>（<code>rotary_embedding/base.py:14</code>，构造经 <code>get_rope</code> 工厂按 <code>rope_type</code> 选子类）。</p>
+
+<div class="tldr">
+  <p><b>小结 · CustomOp 层框架</b></p>
+  <p><b>PyTorch 机制</b>：途径 a——纯 Python 组合出 native 实现，C++ kernel 经途径 c 的 <code>torch.ops._C.*</code> 进 dispatcher。</p>
+  <p><b>vLLM 的工程化</b>：在 Python 侧（而非 dispatcher）做构造期平台分发；加 <code>custom_ops</code> 开关与 Inductor 协商；加注册表与 OOT 类替换。</p>
+  <p><b>什么时候用</b>：你要给一个"标准语义层"（归一化/激活/RoPE）提供多平台实现，并希望单测、兜底、编译三条需求一次满足。</p>
+</div>
+
+<h3 id="vllm-torchop">2.2 direct_register_custom_op——Python kernel 注册成 torch custom op</h3>
+<p><span class="pill">建立在机制 d 上</span>。vLLM 封装了 §1.5.1 的底层三行注册，官方函数是 <code>direct_register_custom_op</code>（<code>vllm/utils/torch_utils.py:1068</code>）：</p>
+
+<pre><code class="language-python"># vllm/utils/torch_utils.py:1065-1104（有删节）
+vllm_lib = Library("vllm", "FRAGMENT")      # 所有 vllm Python custom op 共用此库
+
+def direct_register_custom_op(
+    op_name: str,
+    op_func: Callable,
+    mutates_args: list[str] | None = None,   # 如实声明就地修改的参数
+    fake_impl: Callable | None = None,       # §1.5.2 的 fake kernel
+    target_lib: Library | None = None,
+    dispatch_key: str | None = None,         # 缺省 = current_platform.dispatch_key
+    tags: tuple[torch.Tag, ...] = (),
+):
+    """`torch.library.custom_op` can have significant overhead ... This function
+    directly registers a custom op and dispatches it to the CUDA backend."""
+    ...
+    schema_str = infer_schema(op_func, mutates_args=mutates_args)
+    my_lib = target_lib or vllm_lib
+    my_lib.define(op_name + schema_str, tags=tags)           # ① schema
+    my_lib.impl(op_name, op_func, dispatch_key=dispatch_key) # ② kernel
+    if fake_impl is not None:
+        my_lib._register_fake(op_name, fake_impl)            # ③ fake kernel</code></pre>
+
+<p>它比 <code>torch.library.custom_op</code> 装饰器少做很多通用分发逻辑（docstring 直说了这是为了绕开开销；schema 由函数签名自动推导），但三件套一个不少。<b>为什么 vLLM 模型里到处是它</b>？因为 piecewise compilation 需要切图锚点。vLLM 把整图交给 dynamo 后，按 <code>CompilationConfig.splitting_ops</code> 切开，attention 系算子是预声明的切点：</p>
+
+<pre><code class="language-python"># vllm/config/compilation.py:768-787（节选，_attention_ops）
+_attention_ops: ClassVar[list[str]] = [
+    "vllm::unified_attention_with_output",
+    "vllm::unified_mla_attention_with_output",
+    ...
+    "vllm::sparse_attn_indexer",
+    "vllm::deepseek_v4_attention",      # :786
+    ...
+]</code></pre>
+
+<p>这些 <code>vllm::</code> op 正是用 <code>direct_register_custom_op</code> 注册出来的。DeepSeek-V4 的 Lightning Indexer top-k 是标准用例——先写普通 Python 函数与 fake，再注册，然后<b>再包一层 CustomOp</b> 给"层"语义：</p>
+
+<pre><code class="language-python"># vllm/model_executor/layers/sparse_attn_indexer.py:992-1001
+direct_register_custom_op(
+    op_name="sparse_attn_indexer",
+    op_func=sparse_attn_indexer,
+    mutates_args=["topk_indices_buffer", "candidate_blocks"],
+    fake_impl=sparse_attn_indexer_fake,
+    dispatch_key=current_platform.dispatch_key,
+)
+
+@CustomOp.register("sparse_attn_indexer")
+class SparseAttnIndexer(CustomOp):        # 层级 CustomOp：平台分发、可 OOT 替换</code></pre>
+
+<p>注意这个<b>双层结构</b>：函数级 custom op（进编译图、可切图）套在层级 CustomOp（§2.1 平台分发）里；<code>forward_cuda</code> 里只是一句 <code>torch.ops.vllm.sparse_attn_indexer(...)</code>（<code>sparse_attn_indexer.py:1139</code>）。fake impl 在这里不是可选项——op 的输出要进 CUDA graph 与编译图，没有 fake kernel 图就推不完（§1.5.2）。另一侧的约束是 <code>mutates_args</code> 必须如实（两个 buffer 就地写，漏报会被 Inductor 错误重排）。若某段逻辑真的依赖 host 信息、无法进捕获图，vLLM 用 <code>@eager_break_during_capture</code>（<code>vllm/compilation/breakable_cudagraph.py:67</code>）把它主动断成 eager 区域，写进调用方预分配的输出 buffer——graph break 在这里被当成工具而非缺陷。</p>
+
+<div class="tldr">
+  <p><b>小结 · direct_register_custom_op</b></p>
+  <p><b>PyTorch 机制</b>：途径 d——Library.define/impl/_register_fake 三件套；fake kernel 支撑 FakeTensor 推图。</p>
+  <p><b>vLLM 的工程化</b>：直通注册绕开通用封装开销；统一 <code>vllm::</code> 命名空间；attention 系 op 进 <code>splitting_ops</code> 成为 piecewise 切图锚点。</p>
+  <p><b>什么时候用</b>：你的 kernel 是 Python 编排（可能内部还调 Triton/deep_gemm），又必须对 <code>torch.compile</code> 可见、可切图、可捕获。</p>
+</div>
+
+<h3 id="vllm-attnbackend">2.3 attention backend 注册表——"一组预编译 kernel + 一份协议"整体可换</h3>
+<p><span class="pill">建立在机制 c 上</span>：每个 backend 背后是一组来自外部库（flash-attn / FlashMLA / flashinfer / aiter / Triton…）的预编译 kernel，接法即 §1.4。vLLM 加的东西，是把"选哪组 kernel"从函数调用升级为<b>可注册、可校验、可覆盖的注册表</b>。attention 之所以值得整体抽象，是因为它不是单个算子，而是"一组算子 + 一份 metadata 协议 + 一种 KV cache 布局"的绑定整体（KV cache 机制见 <a href="vllm-t3-kvcache.html">第 3 讲</a>）。</p>
+
+<pre><code class="language-python"># vllm/v1/attention/backends/registry.py:34-109（节选）
+class AttentionBackendEnum(Enum, metaclass=_AttentionBackendEnumMeta):
+    FLASH_ATTN = "vllm.v1.attention.backends.flash_attn.FlashAttentionBackend"
+    TRITON_MLA = "vllm.v1.attention.backends.mla.triton_mla.TritonMLABackend"
+    FLASHMLA = "vllm.v1.attention.backends.mla.flashmla.FlashMLABackend"
+    FLASHMLA_SPARSE_DSV4 = (            # :100 —— 模型驱动的 DSV4 成员
+        "vllm.models.deepseek_v4.sparse_mla.DeepseekV4FlashMLABackend")
+    FLASHINFER_MLA_SPARSE_DSV4 = (...)
+    CUSTOM = None     # 第三方占位：使用前必须 register_backend</code></pre>
+
+<p>枚举成员是<b>类限定名字符串</b>（惰性 import），三个扩展口都开在枚举上：<code>register(name, class_path)</code> 动态加成员、<code>register_backend(...)</code> 装饰器把实现记进 override 表（可覆盖已有成员或填 <code>CUSTOM</code>——仓外后端的官方入口）、解析函数每次都尊重 override。</p>
+<p><b>选择逻辑</b>压缩成三句：用户显式指定 backend 时直接校验、不合法就报错（不静默回退）；未指定时按平台维护的优先级列表逐个"import 试试 + 校验"，第一个合法者胜出（入口 <code>get_attn_backend</code>，<code>vllm/v1/attention/selector.py:105</code>；平台实现 <code>get_attn_backend_cls</code>，<code>vllm/platforms/cuda.py:420</code>）；结果缓存。DeepSeek-V4 是对这套通用机制的<b>模型驱动例外</b>：不走通用 <code>Attention</code> 层与优先级竞逐，而是模型构造期直接指定层类——</p>
+
+<pre><code class="language-python"># vllm/models/deepseek_v4/nvidia/model.py:537-568（有删节）
+def _select_dsv4_attn_cls(vllm_config):
+    backend = vllm_config.attention_config.backend
+    if backend == AttentionBackendEnum.FLASHINFER_MLA_SPARSE_DSV4:
+        if device_capability.major == 12:
+            return DeepseekV4FlashInferSM120Attention
+        return DeepseekV4FlashInferMLAAttention
+    if backend in (AttentionBackendEnum.FLASHMLA_SPARSE,
+                   AttentionBackendEnum.FLASHMLA_SPARSE_DSV4):
+        return DeepseekV4FlashMLAAttention
+    # 默认：SM12 → FlashInfer；其他 CUDA arch → FlashMLA</code></pre>
+
+<p>最终 kernel 落到外部库：FlashMLA 变体调 <code>torch.ops._flashmla_extension_C.fwd_kvcache_mla_fp8</code> 与 <code>flash_mla_sparse_fwd</code>（<code>vllm/v1/attention/ops/flashmla.py:119-145</code>），FlashInfer 变体走 <code>flashinfer_trtllm_batch_decode_sparse_mla_dsv4</code>（<code>vllm/utils/flashinfer.py:331</code>）。论文侧的 CSA/HCA/Lightning Indexer 结构见 <a href="../deepseek-v4/deepseek-v4-attention.html">DeepSeek-V4 Attention 解读</a>与 <a href="../deepseek-v4/deepseek-v4-lightning-indexer.html">Lightning Indexer 解读</a>。</p>
+
+<div class="tldr">
+  <p><b>小结 · attention backend 注册表</b></p>
+  <p><b>PyTorch 机制</b>：途径 c——外部预编译库经 dispatcher 接入；backend 类只是这组 kernel 的 Python 门面。</p>
+  <p><b>vLLM 的工程化</b>：把"选哪组 kernel + metadata 协议 + KV 布局"做成可注册/可校验/可覆盖的枚举注册表；DSv4 由模型层直接指定，通用 selector 只兜底。</p>
+  <p><b>什么时候用</b>：你要整体替换注意力实现（含 KV 布局与 batch metadata 协议），而不是换单个算子。</p>
+</div>
+
+<h3 id="vllm-quant">2.4 量化与 MoE 方法类——用对象多态替换 GEMM 算子的实现</h3>
+<p><span class="pill">建立在 OO 多态上</span>：这条途径甚至不经过 dispatcher——它是 Python 的老朋友"鸭子类型"。<code>nn.Linear</code>（vLLM 的 <code>LinearBase</code>）在构造期拿到一个<b>方法对象</b>，前向只剩一句多态调用：</p>
+
+<pre><code class="language-python"># vllm/model_executor/layers/linear.py:620（RowParallelLinear 同型，:623）
+output = self.quant_method.apply(self, x, bias)
+
+# 方法基类：vllm/model_executor/layers/linear.py:124  LinearMethodBase
+#           vllm/model_executor/layers/fused_moe/fused_moe_method_base.py:28  FusedMoEMethodBase
+# 由量化配置分发：vllm/model_executor/layers/quantization/base_config.py:203  get_quant_method</code></pre>
+
+<p><b>vLLM 加的东西</b>有两层。<b>第一级</b>：checkpoint 的量化配置决定方法类（<code>Fp8LinearMethod</code>/<code>Mxfp4MoEMethod</code>…，<a href="vllm-t7-models-quant.html">第 7 讲</a>详述）。<b>第二级</b>：方法类内部再按平台优先级选具体 GEMM kernel——FP8 线性走 <code>vllm/model_executor/kernels/linear/__init__.py:449</code> 的平台 × 类型候选表：</p>
+
+<pre><code class="language-python"># vllm/model_executor/kernels/linear/__init__.py:449 附近（有删节）
+_POSSIBLE_FP8_KERNELS: dict[PlatformEnum, list[type]] = {
+    PlatformEnum.CUDA: [
+        FlashInferFP8ScaledMMLinearKernel,
+        CutlassFP8ScaledMMLinearKernel,
+        B12xTensorFP8ScaledMMLinearKernel,
+        PerTensorTorchFP8ScaledMMLinearKernel,
+        ...
+    ],
+    PlatformEnum.ROCM: [AiterHipbMMPerTokenFp8ScaledMMLinearKernel, ...],
+    PlatformEnum.CPU:  [CPUFP8W8A8ScaledMMLinearKernel, ...],
+}</code></pre>
+
+<p>逐 kernel 有 <code>is_supported</code> 细检（算力、依赖库），CLI 的 <code>--linear-backend</code> 可显式过滤，过滤为空时警告回退而非报错（一个模型常混多种量化层）。连未量化路径也走这套：<code>UnquantizedLinearMethod</code>（<code>linear.py:166</code>）构造时决定默认 <code>F.linear</code> 还是 FlashInfer bf16 GEMM。</p>
+<p>MoE 侧同一模式：<code>FusedMoEMethodBase</code> 子类的 <code>create_weights</code>/<code>apply</code> 承担"权重形状 + 分组 GEMM"全套。实例看 DeepSeek-V4：MXFP4 experts 在 MegaMoE 路径下直接实例化 <code>DeepGemmMegaMoEExperts</code>（<code>vllm/model_executor/layers/fused_moe/deep_gemm_mega_moe.py:235</code>，deep_gemm 的 masked 分组 GEMM，可把 shared experts 熔进同一 kernel）；标准路径则由 <code>moe_backend</code> 配置（<code>vllm/config/kernel.py:301</code>）经 oracle 优先级映射到 <code>Prepare/Finalize（token 重排与 DeepEP 通信）+ Experts（分组 GEMM）</code> 的模块化组合。路由 gate GEMM 甚至有七级 tier 逐级回退的 <code>GateLinear</code>（<code>fused_moe/router/gate_linear.py:21</code>），最终一级是 <code>F.linear</code>——绕一圈又回到途径 a。</p>
+
+<div class="tldr">
+  <p><b>小结 · 量化与 MoE 方法类</b></p>
+  <p><b>PyTorch 机制</b>：对象多态替换 <code>apply</code>（不是 dispatcher）；最终 kernel 仍经途径 c（scaled_mm/分组 GEMM 库）进入。</p>
+  <p><b>vLLM 的工程化</b>：<code>get_quant_method</code> 按 checkpoint 配置发方法对象；方法内再做平台 × 算力 × 依赖的 kernel 优先级选择。</p>
+  <p><b>什么时候用</b>：你要替换 GEMM 算子的<b>数值实现</b>（量化格式、分组方式、kernel 库），而不改层的语义接口。</p>
+</div>
+
+<h3 id="vllm-jit">2.5 JIT kernel 与外部库探测回退</h3>
+<p><span class="pill">建立在机制 e + c 上</span>。相当一部分 kernel 不是 AOT 编译的，而是运行时 JIT（途径 e）：<code>@triton.jit</code> 首调编译、<code>@triton.autotune</code> 枚举块形状（如 <code>vllm/model_executor/layers/mamba/ops/ssd_chunk_scan.py:17</code>）；TileLang（DSv4 的 mHC 算子族，<code>vllm/model_executor/kernels/mhc/tilelang.py</code>，<a href="../deepseek-v4/deepseek-mhc.html">mHC 解读</a>）与 CuTeDSL 同理。<b>vLLM 加的第一样东西</b>是声明式 warmup：<code>VllmTritonJitKernel</code>/<code>JitWarmupRegistry</code>（<code>vllm/model_executor/warmup/jit_warmup.py</code>，<code>register_warmup</code> 在 <code>:971</code>）——kernel 类声明 CompileKey 与 launch 描述，启动期把所有可能 shape 预编译，消除服务首请求的编译抖动（DSv4 一层构造函数就注册了十余个，<code>vllm/models/deepseek_v4/attention.py:375-468</code>）。这正是 §1.7 那条约束"编译/捕获不得发生在请求路径上"的工程化。</p>
+<p><b>第二样东西</b>是外部库（途径 c 的产品）的统一探测模式——"平台支持 ∧ 环境开关 ∧ 包存在"：</p>
+
+<pre><code class="language-python"># vllm/utils/deep_gemm.py:113-117
+@functools.cache
+def is_deep_gemm_supported() -&gt; bool:
+    """仅 Hopper/Blackwell。"""
+    is_supported_arch = current_platform.support_deep_gemm()   # 平台/算力
+    return is_supported_arch and envs.VLLM_USE_DEEP_GEMM and has_deep_gemm()
+        # 环境变量开关                          # 包是否存在（utils/import_utils.py:512）</code></pre>
+
+<p>回退有两种风格：<b>静默降级</b>（backend selector 把 ImportError 记为该候选不可用换下一个；RMSNorm 的 XPU 路径 <code>hasattr(torch.ops._C, "gemma_rms_norm")</code> 不在则走 native）与<b>硬失败</b>（被选中的 backend 缺依赖时直接 raise，如 <code>SparseAttnIndexer.__init__</code> 的 "CUDA op requires DeepGEMM" <code>RuntimeError</code>，<code>sparse_attn_indexer.py:1057-1059</code>）。另有一类数值兜底：MXFP4 无任何可用后端时退 <code>EMULATION</code>（反量化成 bf16 跑普通 GEMM）——"能跑"优先于"跑得快"。</p>
+
+<div class="tldr">
+  <p><b>小结 · JIT 与外部库</b></p>
+  <p><b>PyTorch 机制</b>：途径 e（<code>@triton.jit</code> 运行时编译）+ 途径 c（外部库经 dispatcher 接入）。</p>
+  <p><b>vLLM 的工程化</b>：CompileKey + 启动期 warmup 消除请求路径上的编译；"平台 ∧ 开关 ∧ 包存在"三级探测 + 两种回退风格。</p>
+  <p><b>什么时候用</b>：kernel 需按 shape 特化编译，或你依赖一个环境里"有没有、开没开、支不支持"都不确定的第三方 kernel 库。</p>
+</div>
+
+<h3 id="vllm-plugin">2.6 插件与 out-of-tree 扩展</h3>
+<p><span class="pill">建立在机制 c 的 load_library + Python entry_points 上</span>。前五条途径都发生在仓内；这条解决"仓外代码如何不 fork 就接入"。机制本身是标准的：<code>torch.ops.load_library</code>（§1.4）加载预编译扩展 + Python 的 <code>importlib.metadata.entry_points</code> 发现插件。<b>vLLM 加的东西</b>是分层契约：</p>
+<ol>
+  <li><b>general plugins</b>：entry point 组 <code>vllm.general_plugins</code>（<code>vllm/plugins/__init__.py:18</code>），进程启动时经 <code>load_plugins_by_group</code>（<code>:36</code>）逐个发现并执行 <code>load_general_plugins</code>（<code>:77</code>），可用 <code>VLLM_PLUGINS</code> 白名单收窄。插件函数体里调 <code>CustomOp.register_oot</code>（<code>custom_op.py:335</code>）即可整体替换仓内层。</li>
+  <li><b>platform plugins</b>：entry point 组 <code>vllm.platform_plugins</code>（<code>plugins/__init__.py:23</code>），每个插件返回平台类限定名，与内置探测器一起竞选 <code>current_platform</code>——新硬件支持由此接入，随后自动获得 CustomOp 的 <code>forward_oot</code> 分发位与 attention backend 选择权。</li>
+  <li><b>直接注册 custom op</b>：<code>direct_register_custom_op(..., target_lib=自己的 Library)</code>（§2.2 函数签名支持），仓外 Python kernel 与仓内在编译图里待遇完全一致；C++ 侧则回到 <code>torch.ops.load_library</code> 的本源。</li>
+</ol>
+
+<div class="tldr">
+  <p><b>小结 · 插件与 OOT</b></p>
+  <p><b>PyTorch 机制</b>：途径 c 的加载时注册 + Python 打包的 entry point 机制。</p>
+  <p><b>vLLM 的工程化</b>：general/platform 两组 entry point + <code>register_oot</code> 类替换 + <code>target_lib</code> 参数，形成"不 fork 就能换层/换平台/注册 op"的官方接口。</p>
+  <p><b>什么时候用</b>：你的扩展代码与 vLLM 仓库不同生命周期（独立发包、独立版本）。</p>
+</div>
+
+<h2 id="trace">第三部分 · DeepSeek-V4 全链路 trace</h2>
+<p>现在把六条途径合到一条前向传播上。DSv4 的主实现是 <code>vllm/models/deepseek_v4/nvidia/model.py</code>（平台入口 <code>__init__.py:11-39</code> 按 <code>current_platform</code> 在 nvidia/amd/cpu/xpu 四套实现间选择），一个 decoder layer 的数据流与每步算子的归属如图 4。</p>
+
+<div class="fig">
+<svg viewBox="0 0 950 500" width="950" role="img" aria-label="DeepSeek-V4 前向算子到 vLLM 算子途径的映射">
+  <style>
+    text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }
+  </style>
+  <defs>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <text x="455" y="30" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">DeepSeek-V4 单层前向：算子 → 途径映射（蛇形数据流）</text>
+
+  <!-- ===== Row 1: y=60, h=56; boxes x=40,220,400,580,760 w=150 ===== -->
+  <rect x="40" y="60" width="150" height="56" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="115" y="82" font-size="12" fill="#1e40af" text-anchor="middle">① embed_tokens</text>
+  <text x="115" y="100" font-size="9" fill="#475569" text-anchor="middle">PluggableLayer · 词并行</text>
+  <rect x="220" y="60" width="150" height="56" rx="6" fill="#fce7f3" stroke="#ec4899"/>
+  <text x="295" y="82" font-size="12" fill="#9d174d" text-anchor="middle">② mhc_pre 广播</text>
+  <text x="295" y="100" font-size="9" fill="#475569" text-anchor="middle">TileLang JIT</text>
+  <rect x="400" y="60" width="150" height="56" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="475" y="82" font-size="12" fill="#b45309" text-anchor="middle">③ fused_wqa_wkv</text>
+  <text x="475" y="100" font-size="9" fill="#475569" text-anchor="middle">FP8 方法类 · scaled_mm</text>
+  <rect x="580" y="60" width="150" height="56" rx="6" fill="#fce7f3" stroke="#ec4899"/>
+  <text x="655" y="82" font-size="12" fill="#9d174d" text-anchor="middle">④ fused_q_kv_rmsnorm</text>
+  <text x="655" y="100" font-size="9" fill="#475569" text-anchor="middle">Triton JIT · warmup</text>
+  <rect x="760" y="60" width="150" height="56" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="835" y="82" font-size="12" fill="#166534" text-anchor="middle">⑤ Q/RoPE+KV 插入</text>
+  <text x="835" y="100" font-size="9" fill="#475569" text-anchor="middle">torch.ops._C（C++）</text>
+
+  <!-- Row1 arrows -->
+  <path d="M195,88 L 209,88" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+  <path d="M375,88 L 389,88" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+  <path d="M555,88 L 569,88" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+  <path d="M735,88 L 749,88" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+
+  <!-- Row1 → Row2 wrap (right side) -->
+  <path d="M915,88 Q 935,88 935,120 Q 935,152 915,152" fill="none" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+
+  <!-- ===== Row 2: y=124, h=56; R→L ===== -->
+  <rect x="760" y="124" width="150" height="56" rx="6" fill="#fce7f3" stroke="#ec4899"/>
+  <text x="835" y="146" font-size="12" fill="#9d174d" text-anchor="middle">⑥ 压缩器写缓存</text>
+  <text x="835" y="164" font-size="9" fill="#475569" text-anchor="middle">Triton JIT · CSA 压缩</text>
+  <rect x="580" y="124" width="150" height="56" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="655" y="146" font-size="12" fill="#166534" text-anchor="middle">⑦ Indexer top-k</text>
+  <text x="655" y="164" font-size="9" fill="#475569" text-anchor="middle">torch custom op + deep_gemm</text>
+  <rect x="400" y="124" width="150" height="56" rx="6" fill="#f3e8ff" stroke="#a855f7"/>
+  <text x="475" y="146" font-size="12" fill="#6b21a8" text-anchor="middle">⑧ 稀疏 MLA</text>
+  <text x="475" y="164" font-size="9" fill="#475569" text-anchor="middle">attention backend</text>
+  <rect x="220" y="124" width="150" height="56" rx="6" fill="#fce7f3" stroke="#ec4899"/>
+  <text x="295" y="146" font-size="12" fill="#9d174d" text-anchor="middle">⑨ inv-RoPE + FP8 量化</text>
+  <text x="295" y="164" font-size="9" fill="#475569" text-anchor="middle">Triton JIT</text>
+  <rect x="40" y="124" width="150" height="56" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="115" y="146" font-size="12" fill="#b45309" text-anchor="middle">⑩ wo_a einsum → wo_b</text>
+  <text x="115" y="164" font-size="9" fill="#475569" text-anchor="middle">deep_gemm / FP8 方法类</text>
+
+  <!-- Row2 arrows (R→L) -->
+  <path d="M749,152 L 741,152" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+  <path d="M569,152 L 561,152" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+  <path d="M389,152 L 381,152" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+  <path d="M209,152 L 201,152" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+
+  <!-- Row2 → Row3 wrap (left side) -->
+  <path d="M35,152 Q 15,152 15,190 Q 15,228 35,228" fill="none" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+
+  <!-- ===== Row 3: y=200, h=56; L→R ===== -->
+  <rect x="40" y="200" width="150" height="56" rx="6" fill="#fce7f3" stroke="#ec4899"/>
+  <text x="115" y="222" font-size="12" fill="#9d174d" text-anchor="middle">⑪ mhc post+pre 融合</text>
+  <text x="115" y="240" font-size="9" fill="#475569" text-anchor="middle">TileLang JIT</text>
+  <rect x="220" y="200" width="150" height="56" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="295" y="222" font-size="12" fill="#1e40af" text-anchor="middle">⑫ gate 路由 GEMM</text>
+  <text x="295" y="240" font-size="9" fill="#475569" text-anchor="middle">GateLinear 七级 tier</text>
+  <rect x="400" y="200" width="150" height="56" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="475" y="222" font-size="12" fill="#166534" text-anchor="middle">⑬ top-k 选专家</text>
+  <text x="475" y="240" font-size="9" fill="#475569" text-anchor="middle">fused_topk_bias / mega_gate</text>
+  <rect x="580" y="200" width="150" height="56" rx="6" fill="#f3e8ff" stroke="#a855f7"/>
+  <text x="655" y="222" font-size="12" fill="#6b21a8" text-anchor="middle">⑭ routed experts</text>
+  <text x="655" y="240" font-size="9" fill="#475569" text-anchor="middle">MegaMoE / MXFP4 后端</text>
+  <rect x="760" y="200" width="150" height="56" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="835" y="222" font-size="12" fill="#b45309" text-anchor="middle">⑮ shared expert</text>
+  <text x="835" y="240" font-size="9" fill="#475569" text-anchor="middle">FP8 MLP（可熔入⑭）</text>
+
+  <!-- Row3 arrows -->
+  <path d="M195,228 L 209,228" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+  <path d="M375,228 L 389,228" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+  <path d="M555,228 L 569,228" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+  <path d="M735,228 L 749,228" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow2)"/>
+
+  <!-- ===== 图例 ===== -->
+  <text x="60" y="308" font-size="11" fill="#64748b">颜色 = vLLM 途径（对应第二部分章节）：</text>
+  <rect x="60" y="320" width="18" height="14" rx="3" fill="#dbeafe" stroke="#3b82f6"/>
+  <text x="84" y="331" font-size="10" fill="#475569">CustomOp / PluggableLayer 分发（§2.1）</text>
+  <rect x="285" y="320" width="18" height="14" rx="3" fill="#d1fae5" stroke="#22c55e"/>
+  <text x="309" y="331" font-size="10" fill="#475569">torch custom op / C++ 算子（§2.2）</text>
+  <rect x="500" y="320" width="18" height="14" rx="3" fill="#f3e8ff" stroke="#a855f7"/>
+  <text x="524" y="331" font-size="10" fill="#475569">attention / MoE backend（§2.3/§2.4）</text>
+  <rect x="715" y="320" width="18" height="14" rx="3" fill="#fef3c7" stroke="#f59e0b"/>
+  <text x="739" y="331" font-size="10" fill="#475569">量化方法类 kernel（§2.4）</text>
+  <rect x="60" y="348" width="18" height="14" rx="3" fill="#fce7f3" stroke="#ec4899"/>
+  <text x="84" y="359" font-size="10" fill="#475569">JIT kernel（Triton / TileLang，§2.5）</text>
+  <text x="300" y="359" font-size="10" fill="#475569">⑥ 与 ②③④⑨⑪ 并行执行于多 stream（attention.py:671 aux_fns）</text>
+
+  <!-- 注释 -->
+  <text x="60" y="395" font-size="10" fill="#64748b">⑧ 内部：SWA 窗口注意力（DeepseekV4SWACache）+ 压缩域稀疏 MLA；候选来源 = ⑦ 的 top-k 索引缓冲</text>
+  <text x="60" y="413" font-size="10" fill="#64748b">⑭ 内部：MegaMoE 路径为 DeepGemmMegaMoEExperts（deep_gemm 分组 GEMM，shared experts 熔入）；标准路径为 FusedMoEKernel = Prepare/Finalize + Experts</text>
+  <text x="60" y="431" font-size="10" fill="#64748b">层外收尾：mhc_post → hc_head_fused（TileLang）→ RMSNorm（IR op）→ lm_head（LogitsProcessor）</text>
+</svg>
+</div>
+<p class="cap"><b>图 4</b>：DeepSeek-V4 单 decoder layer 前向的算子 → 途径映射（对应 <code>vllm/models/deepseek_v4/nvidia/model.py:585-808</code> 的 <code>DeepseekV4DecoderLayer.forward</code> 与 <code>attention.py:470-846</code> 的 <code>DeepseekV4Attention.forward</code>）。CSA/HCA/Lightning Indexer 的模型语义见 <a href="../deepseek-v4/deepseek-v4-attention.html">attention 解读</a>与 <a href="../deepseek-v4/deepseek-v4-lightning-indexer.html">indexer 解读</a>；MoE 语义见 <a href="../moe/moe-t3-v4.html">MoE 第 3 讲</a>。</p>
+
+<h3>逐算子结论表</h3>
+<p>每行一句话：<b>定义于 X → 分发到 Y → kernel 来自 Z</b>（行号均属 main@fa75d34）：</p>
+<table>
+  <tr><th>前向算子</th><th>定义于</th><th>分发机制</th><th>实际 kernel</th></tr>
+  <tr><td>embedding</td><td><code>vocab_parallel_embedding.py:206</code> <code>VocabParallelEmbedding(PluggableLayer)</code></td><td>词表并行切分 + 可选量化方法</td><td>cuBLAS embedding / F.linear</td></tr>
+  <tr><td>mHC pre / fused post+pre / post / head</td><td><code>nvidia/model.py:730/760/788/1040</code></td><td>直接函数调用 + JIT warmup 注册（<code>model.py:667-712</code>）</td><td>TileLang <code>vllm/model_executor/kernels/mhc/tilelang.py</code>；prenorm GEMM 可切 deep_gemm</td></tr>
+  <tr><td>Q-lora+KV 联合投影 <code>fused_wqa_wkv</code></td><td><code>attention.py:247</code> <code>MergedColumnParallelLinear</code></td><td>quant_method.apply → FP8 kernel registry（§2.4）</td><td>FlashInfer/Cutlass/Torch scaled_mm</td></tr>
+  <tr><td>三路输入 GEMM 并行</td><td><code>attention.py:671</code> <code>_run_parallel_input_projections</code></td><td>多 stream + event 编排（非算子机制）</td><td>同上；<code>torch.mm(out_dtype=fp32)</code> 给 compressor/indexer 打分</td></tr>
+  <tr><td>Q/KV 融合 RMSNorm</td><td><code>models/common/ops/fused_qk_rmsnorm.py:195</code></td><td><code>VllmTritonJitKernel</code> + CompileKey + warmup（§2.5）</td><td>Triton kernel（PDL 可选）</td></tr>
+  <tr><td>Q 归一化 + RoPE + KV 量化插入</td><td><code>attention.py:799/819/833</code></td><td>按 KV 布局三分支直调</td><td><code>torch.ops._C.fused_deepseek_v4_qnorm_rope_kv_*</code>（C++，途径 c）</td></tr>
+  <tr><td>CSA/HCA 压缩写缓存</td><td><code>compressor.py:200</code> <code>DeepseekCompressor</code></td><td>head_dim/compress_ratio 条件分派（<code>:461-472</code>）</td><td><code>_SAVE_PARTIAL_STATES_KERNEL</code> + <code>compress_norm_rope_store(_two_stage)_triton</code>；C128A 走 CuTeDSL</td></tr>
+  <tr><td>Lightning Indexer（Q 量化 + logits + top-k）</td><td><code>attention.py:927</code> <code>DeepseekV4Indexer</code> → <code>sparse_attn_indexer.py:1001</code> <code>SparseAttnIndexer(CustomOp)</code></td><td>CustomOp 平台分发（§2.1）→ <code>torch.ops.vllm.sparse_attn_indexer</code>（§2.2），top-k 后端由 <code>kernel_config.sparse_indexer_topk_backend</code> 透传</td><td>deep_gemm fp8/fp4 mqa_logits + top_k_per_row（deep_select / flashinfer / aiter 等）</td></tr>
+  <tr><td>稀疏 MLA decode / prefill</td><td>层类 <code>DeepseekV4FlashMLAAttention</code>（<code>nvidia/flashmla.py:36</code>）/ <code>DeepseekV4FlashInferMLAAttention</code>（<code>nvidia/flashinfer_sparse.py:201</code>）/ SM120 变体（<code>:619</code>）</td><td>模型驱动 backend 选择（<code>model.py:537</code>，§2.3）+ <code>AttentionBackendEnum</code> DSV4 成员</td><td><code>torch.ops._flashmla_extension_C.fwd_kvcache_mla_fp8</code> / <code>flash_mla_sparse_fwd</code>；或 flashinfer trtllm sparse MLA</td></tr>
+  <tr><td>SWA 窗口注意力（压缩比 ≤1 的层）</td><td><code>attention.py:344</code> <code>DeepseekV4SWACache</code></td><td><code>swa_backend_cls</code> 指定 backend（<code>DeepseekSparseSWAFlashMLABackend</code>）</td><td>同上 backend 的 SWA 路径</td></tr>
+  <tr><td>O 投影（inv-RoPE + 分组 wo_a + wo_b）</td><td><code>nvidia/ops/o_proj.py:35</code> <code>deep_gemm_fp8_o_proj</code></td><td>FP8 与否按 <code>wo_a.weight.dtype</code>；bmm/einsum recipe 构造期选定</td><td>Triton <code>fused_inv_rope_fp8_quant</code> + deep_gemm fp8 einsum（或 torch.bmm）+ FP8 <code>wo_b</code></td></tr>
+  <tr><td>MoE gate GEMM</td><td><code>fused_moe/router/gate_linear.py:21</code> <code>GateLinear(PluggableLayer)</code></td><td>七级 tier 逐级尝试（§2.4）</td><td>CuTeDSL / fp32 专用 / cuBLAS / F.linear</td></tr>
+  <tr><td>top-k 路由（√Softplus / Hash / bias）</td><td><code>fused_topk_bias_router.py:146</code> <code>fused_topk_bias</code></td><td>参数组合（hash 表、bias_vl、routed_scaling）内部分支</td><td>仓内 CUDA <code>ops.topk_hash_softplus_sqrt</code> 等；MegaMoE 大 batch 走 deep_gemm <code>bf16_mega_gate</code>（<code>model.py:504</code>）</td></tr>
+  <tr><td>routed experts</td><td><code>fused_moe/deep_gemm_mega_moe.py:235</code> <code>DeepGemmMegaMoEExperts</code> 或 <code>RoutedExperts</code>+<code>Mxfp4MoEMethod</code>（<code>quantization/mxfp4.py:544</code>）/<code>Fp8MoEMethod</code></td><td><code>kernel_config.moe_backend</code> → oracle 优先级（§2.4）</td><td>deep_gemm masked 分组 GEMM（MegaMoE）/ FlashInfer TRTLLM / Marlin / AITER / EMULATION</td></tr>
+  <tr><td>shared experts MLP</td><td><code>nvidia/model.py:126</code> <code>DeepseekV4MLP</code></td><td><code>MergedColumnParallelLinear</code>+<code>SiluAndMul(CustomOp)</code>+<code>RowParallelLinear</code></td><td>FP8 scaled_mm + <code>torch.ops._C.silu_and_mul(_with_clamp)</code>；MegaMoE 下可整体熔入 experts（<code>model.py:374-398</code>）</td></tr>
+  <tr><td>层尾 RMSNorm / 最终 norm</td><td><code>layernorm.py:37</code></td><td>CustomOp 平台分发（§2.1）→ IR op provider 优先级</td><td>vllm_c CUDA / aiter / oink / native</td></tr>
+  <tr><td>激活 SiluAndMul（含 clamp）</td><td><code>activation.py:116/208</code></td><td>CustomOp（§2.1）；构造期绑 <code>torch.ops._C</code>，缺失平台落 native</td><td>C++ <code>_C.silu_and_mul</code></td></tr>
+  <tr><td>RoPE（主 / 压缩双 theta）</td><td><code>common/rope.py:9</code> 经 <code>get_rope</code> 工厂（<code>rotary_embedding/__init__.py:32</code>）</td><td>rope_type 注册表 → CustomOp</td><td><code>deepseek_yarn</code> 子类 CUDA kernel</td></tr>
+  <tr><td>MTP / DSpark 草稿头</td><td><code>nvidia/mtp.py:303</code> <code>DeepSeekV4MTP</code>；<code>nvidia/dspark.py</code> <code>DSparkDeepseekV4ForCausalLM</code></td><td>与主模型同构 + 专属融合 norm kernel warmup（<code>mtp.py:53-54</code>）</td><td><code>_FUSED_MTP_INPUT_RMSNORM_KERNEL</code> 等 Triton；术语见 <a href="../deepseek-v4/dspark-speculative-decoding.html">DSpark 解读</a></td></tr>
+</table>
+
+<div class="infer">
+两个值得注意的"反直觉"事实：① DSv4 的 attention <b>不经过</b>通用 <code>Attention</code> 层与通用 selector 的优先级竞逐，而是模型层直接指定 backend——通用机制对它只起"枚举与校验"作用；② 图 4 中的多 stream 并行（②③④⑤⑥⑦的重叠执行）不是任何"算子框架"提供的，而是模型代码手写的 stream/event 编排（<code>vllm/utils/multi_stream_utils.py</code> 的 <code>execute_in_parallel</code>），说明 vLLM 的算子支持并不试图把所有优化都塞进框架。
+</div>
+
+<h2 id="summary">第四部分 · 总结</h2>
+
+<h3>4.1 全景对照表</h3>
+<table>
+  <tr><th>PyTorch 机制</th><th>vLLM 的工程化</th><th>典型算子例子</th><th>扩展方式</th></tr>
+  <tr><td>dispatcher（§1.1）</td><td>（消费方）所有 <code>torch.ops.*</code> 调用都受益</td><td>一切算子</td><td>—</td></tr>
+  <tr><td>a. 纯 Python 组合</td><td>CustomOp 平台分发框架（§2.1）</td><td><code>SiluAndMul</code>、<code>RMSNorm</code>、<code>RotaryEmbedding</code></td><td>子类化 + <code>@CustomOp.register</code>；OOT 用 <code>register_oot</code></td></tr>
+  <tr><td>c. cpp_extension / load_library</td><td><code>torch.ops._C.*</code>；attention backend 注册表（§2.3）</td><td><code>_C.silu_and_mul</code>；FlashMLA/flashinfer 稀疏 MLA</td><td>新 backend 进枚举 / <code>register_backend</code>；外部库探测函数</td></tr>
+  <tr><td>d. torch.library custom op</td><td><code>direct_register_custom_op</code> + piecewise 切图（§2.2）</td><td><code>vllm::sparse_attn_indexer</code>、<code>vllm::deepseek_v4_attention</code></td><td>注册时给齐 <code>mutates_args</code> 与 fake impl；进 <code>splitting_ops</code></td></tr>
+  <tr><td>e. Triton / triton_op</td><td>JIT warmup 注册表 + TileLang/CuTeDSL 探测（§2.5）</td><td><code>fused_qk_rmsnorm</code>、mHC TileLang 族、CSA 压缩 Triton</td><td><code>VllmTritonJitKernel</code> 子类 + <code>register_warmup</code></td></tr>
+  <tr><td>OO 多态（apply）</td><td>量化/MoE 方法类 + kernel 优先级表（§2.4）</td><td>FP8 scaled_mm、<code>DeepGemmMegaMoEExperts</code></td><td>新 <code>QuantizationConfig</code>/方法类；kernel 进候选表 + <code>is_supported</code></td></tr>
+  <tr><td>entry_points + load_library</td><td>general/platform 插件 + OOT 替换（§2.6）</td><td>第三方 CustomOp、新硬件平台</td><td>打包 entry point，插件体内完成注册</td></tr>
+  <tr><td>f. torch.compile / Inductor</td><td>piecewise compilation + <code>custom_ops</code> 开关协商（§2.1/§2.2）</td><td>（约束所有途径）</td><td>过"可捕获、无 host 分支"关</td></tr>
+</table>
+
+<h3>4.2 给 vLLM 新增一个算子：五步指南</h3>
+<ol>
+  <li><b>分层定位（先想清楚挂在 PyTorch 哪个机制上）</b>：标准语义的新实现 → CustomOp 平台分支或 IR op provider；Python 编排的重 kernel 聚合 → <code>direct_register_custom_op</code>；整组注意力行为 → 新 attention backend；GEMM 数值实现 → 量化方法类。</li>
+  <li><b>实现双路径</b>：<code>forward_native</code> 必写（兜底 + 单测 + Inductor 融合原料），平台分支按需补；这是途径 a 的地基作用。</li>
+  <li><b>注册并声明契约</b>：语义层 <code>@CustomOp.register</code>；进编译图的再 <code>direct_register_custom_op</code>，如实写 <code>mutates_args</code> 与 fake kernel（§1.5.2：没有 fake，Inductor 推不完图）。仓外则经 general plugin 在 import 时完成同样动作。</li>
+  <li><b>接入选择机制</b>：给实现写 <code>is_supported</code> 类判定，加进对应注册表/优先级候选；同时支持用户显式指定 + 校验。</li>
+  <li><b>过编译与图捕获关</b>：跑一次 piecewise 编译与 CUDA graph 捕获；有 host 依赖的区域用 <code>@eager_break_during_capture</code> 或声明合适的 <code>AttentionCGSupport</code>；JIT kernel 补 <code>register_warmup</code>，确保编译不落在请求路径上。</li>
+</ol>
+
+<h2 id="boundary">事实与推断的边界</h2>
+<ul>
+  <li><b>源码证实</b>：全部 vLLM 文件路径、类名、函数名与行号均核对自 vLLM main@fa75d34（2026-10-16 sparse clone，仅含 <code>vllm/</code> Python 包）。行号会随后续提交漂移，引用时请以路径 + 符号名为主。</li>
+  <li><b>PyTorch 侧依据</b>：dispatcher/custom op/Triton op 的机制描述与引句核对自官方文档（dispatcher 教程、python custom ops 教程、Triton recipe）与 pytorch main 分支源码（<code>torch/_library/custom_ops.py</code>、<code>torch/_library/triton.py</code>、<code>torch/_subclasses/fake_tensor.py</code>、<code>torch/_ops.py</code>、<code>torch/utils/cpp_extension.py</code>，2026-10 核对）。第一部分的示例代码为教学简化，未在本地逐行执行（本机未装 torch）。</li>
+  <li><b>推断与限定</b>：①"构造期决策 + 运行期零开销转发"是对 vLLM 源码模式的归纳，非官方表述；② 图 2 的 launch 次数对比是结构示意，未做基准实测；③ FlashMLA/FlashInfer/deep_gemm 等外部库内部实现未深究，结论止于 vLLM 侧调用边界；④ DSv4 各 checkpoint（expert_dtype fp8/fp4）的实际运行组合未做端到端部署验证；⑤ 图 4 中 stream 并行的实际重叠效果取决于 shape 与阈值配置，图示表达代码结构而非时序保证。</li>
+  <li><b>本仓库前作关系</b>：DeepSeek-V4 模型侧（CSA/HCA、Lightning Indexer、mHC、MoE、DSpark）的原理不在此重复，见 <a href="../deepseek-v4/deepseek-v4-architecture.html">架构解读</a>等系列文章；引擎侧机制详见 <a href="vllm-t0-overview.html">t0</a>–<a href="vllm-t8-multimodal-lora.html">t8</a>（编译细节重点在 <a href="vllm-t4-modelrunner.html">第 4 讲</a>，量化在 <a href="vllm-t7-models-quant.html">第 7 讲</a>，KV cache 在 <a href="vllm-t3-kvcache.html">第 3 讲</a>）。</li>
+</ul>
+
+<h2>参考来源</h2>
+<ol class="refs">
+  <li>vLLM 源码（main@fa75d34，sparse clone 抓取于 2026-10-16）：<a href="https://github.com/vllm-project/vllm">github.com/vllm-project/vllm</a>。本篇直接引用的关键文件：<code>vllm/model_executor/custom_op.py</code>、<code>vllm/utils/torch_utils.py</code>、<code>vllm/config/compilation.py</code>、<code>vllm/config/kernel.py</code>、<code>vllm/v1/attention/backends/registry.py</code>、<code>vllm/v1/attention/selector.py</code>、<code>vllm/platforms/cuda.py</code>、<code>vllm/plugins/__init__.py</code>、<code>vllm/model_executor/kernels/linear/__init__.py</code>、<code>vllm/model_executor/layers/{activation,layernorm,linear,sparse_attn_indexer}.py</code>、<code>vllm/model_executor/layers/fused_moe/{layer,fused_moe_method_base,deep_gemm_mega_moe}.py</code>、<code>vllm/model_executor/layers/quantization/base_config.py</code>、<code>vllm/model_executor/warmup/jit_warmup.py</code>、<code>vllm/compilation/breakable_cudagraph.py</code>、<code>vllm/utils/{deep_gemm,import_utils,flashinfer}.py</code>、<code>vllm/models/deepseek_v4/</code>（attention / sparse_mla / compressor / quant_config / nvidia/{model,flashmla,flashinfer_sparse,mtp,dspark} / common/{rope,ops/*}）。</li>
+  <li>PyTorch 官方文档：dispatcher 教程 <a href="https://docs.pytorch.org/tutorials/advanced/dispatcher.html">docs.pytorch.org/tutorials/advanced/dispatcher.html</a>；python custom ops 教程 <a href="https://docs.pytorch.org/tutorials/advanced/python_custom_ops.html">docs.pytorch.org/tutorials/advanced/python_custom_ops.html</a>；Triton kernel 与 torch.compile recipe <a href="https://docs.pytorch.org/tutorials/recipes/torch_compile_user_defined_triton_kernel_tutorial.html">torch_compile_user_defined_triton_kernel_tutorial</a>。</li>
+  <li>PyTorch 源码（pytorch/pytorch main 分支，2026-10 核对）：<a href="https://github.com/pytorch/pytorch/blob/main/torch/_library/custom_ops.py">torch/_library/custom_ops.py</a>（custom_op/register_fake/register_autograd/register_kernel）、<a href="https://github.com/pytorch/pytorch/blob/main/torch/_library/triton.py">torch/_library/triton.py</a>（triton_op/wrap_triton）、<a href="https://github.com/pytorch/pytorch/blob/main/torch/_subclasses/fake_tensor.py">torch/_subclasses/fake_tensor.py</a>（FakeTensorMode）、<a href="https://github.com/pytorch/pytorch/blob/main/torch/_ops.py">torch/_ops.py</a>（load_library）、<a href="https://github.com/pytorch/pytorch/blob/main/torch/utils/cpp_extension.py">torch/utils/cpp_extension.py</a>（load/load_inline）。</li>
+  <li>DeepSeek-V4 论文：<a href="https://arxiv.org/abs/2606.19348">arXiv:2606.19348</a>；模型仓库 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/tree/main/inference">deepseek-ai/DeepSeek-V4-Pro</a>。</li>
+  <li>本仓库前作（交叉引用）：<code>docs/vllm/vllm-t0-overview.html</code> ~ <code>vllm-t8-multimodal-lora.html</code>；<code>docs/deepseek-v4/</code> 各篇；<code>docs/moe/moe-t3-v4.html</code>。</li>
+  <li>torch custom op 注册开销背景：<a href="https://gist.github.com/youkaichao/ecbea9ec9fc79a45d2adce1784d7a9a5">youkaichao 关于绕开 torch.library.custom_op 开销的说明</a>（<code>direct_register_custom_op</code> docstring 引用）。</li>
+</ol>
+
+<footer>生成于 2026-10-16 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

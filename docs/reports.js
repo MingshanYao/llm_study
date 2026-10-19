@@ -331,6 +331,14 @@ var REPORTS = [
     "group": "vllm"
   },
   {
+    "slug": "vllm/vllm-t9-ops",
+    "title": "vLLM 源码解析十讲 · 第 9 讲：算子是怎么被支持的——先懂 PyTorch，再懂 vLLM（以 DeepSeek-V4 为实例）",
+    "date": "2026-10-16",
+    "paper": "vLLM 官方仓库源码（main@fa75d34，2026-10-16 抓取）",
+    "repo": "https://github.com/vllm-project/vllm",
+    "group": "vllm"
+  },
+  {
     "slug": "misc/llm-arch-evolution",
     "title": "LLM 架构演进技术报告：FFN 与 Attention 的降算/降存主线（短板迁移视角的 2022–2026 全景）",
     "date": "2026-09-20",
