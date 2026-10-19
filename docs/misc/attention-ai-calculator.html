@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<!-- Attention AI 计算器：统一公式 + 可调参数。姊妹篇 misc/mha-prefill-decode.html（口径与数字对齐：式1b/式4/B_r=128）。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attention AI 计算器：一条统一公式算尽 MHA→GQA→MQA→MLA→稀疏→量化→投机解码</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  /* 计算器 */
+  .calc { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin: 14px 0; }
+  .calc fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 14px; padding: 10px 14px 12px; }
+  .calc legend { font-size: 0.85em; color: var(--accent); font-weight: 700; padding: 0 6px; }
+  .calc .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px 14px; }
+  .calc label { display: block; font-size: 0.82em; color: var(--muted); margin-bottom: 2px; }
+  .calc input[type=number], .calc select {
+    width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
+    font-size: 0.95em; font-family: inherit; background: #fbfbfd; color: var(--ink);
+  }
+  .calc .chk { display: inline-flex; align-items: center; gap: 5px; margin: 4px 18px 0 0; font-size: 0.9em; color: #2a3040; }
+  .calc .preset { margin-bottom: 14px; }
+  .calc .preset select { max-width: 100%; }
+  .out { background: var(--accent-soft); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; margin-top: 4px; }
+  .out .ai-main { font-size: 2.1em; font-weight: 800; color: var(--accent); line-height: 1.2; }
+  .out .ai-sub { color: var(--muted); font-size: 0.88em; }
+  .out table { font-size: 0.88em; margin: 10px 0 0; }
+  .verdict { display: inline-block; border-radius: 999px; padding: 2px 12px; font-size: 0.9em; font-weight: 700; }
+  .v-bw { background: #fbe3cc; color: #b0631e; }
+  .v-cmp { background: #d9f0e2; color: #1e7a4a; }
+  .ramp { position: relative; height: 46px; margin: 14px 0 2px; }
+  .ramp .track { position: absolute; left: 0; right: 0; top: 18px; height: 10px; border-radius: 5px;
+    background: linear-gradient(90deg, #dbe7ff 0%, #2456c4 100%); }
+  .ramp .mark { position: absolute; top: 8px; width: 2px; height: 30px; }
+  .ramp .mlabel { position: absolute; top: -4px; font-size: 0.72em; color: var(--muted); white-space: nowrap; transform: translateX(-50%); }
+  .ramp .ai-dot { position: absolute; top: 13px; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%;
+    background: #e8862a; border: 3px solid #fff; box-shadow: 0 0 0 1px #b0631e; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Attention AI 计算器：一条统一公式算尽 MHA→GQA→MQA→MLA→稀疏→量化→投机解码</h1>
+
+<div class="meta">
+  <b>这是什么</b>：注意力核算术强度（AI = FLOPs / HBM Bytes）的交互式账本——把所有注意力变种的 AI 归结为一条统一公式、四个旋钮，任意调参即时出数<br>
+  <b>口径</b>：KV 单遍读取（每条 KV entry 从 HBM 恰好读一遍）；Q / O 流量可选计入；硬件档位含自定义<br>
+  <b>姊妹篇</b>：<a href="mha-prefill-decode.html">MHA 的 Prefill 与 Decode 账本</a>（本页公式的推导与 preset 数字与它逐项对齐：式 1b / 式 4 / B_r=128）、<a href="../deepseek-v4/v4pro-ridge-point.html">V4-Pro roofline 账本</a><br>
+  <b>生成日期</b>：2026-10-19
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：所有注意力变种的算术强度都归结为一条乘法公式</p>
+  <div class="fig formula">\[
+  \mathrm{AI}_{\text{KV}} \;=\; \underbrace{\frac{2\,r}{b}}_{\text{元素经济性}}\;\times\;\underbrace{h_{sh}}_{\text{head 共享}}\;\times\;\underbrace{m_q}_{\text{query/步}}
+  \qquad\Big(r=\tfrac{d_k+d_v}{n_{kv}}\Big)\]</div>
+  <p>四个旋钮各归一个技术家族管：<b>m_q</b>（decode 1 → spec τ → prefill L，投机解码与 PD 形态）、<b>h_sh</b>（MHA 1 → GQA g → MQA H → MLA H，head 共享）、<b>r</b>（标准 1 → MLA ≈1.9，K/V 同源低秩压缩）、<b>b</b>（BF16 2 → FP8 1 → FP4 0.5，KV 量化）。而上下文 S、batch B、稀疏读取量 \(s_{\text{read}}\) <b>不在公式里</b>——它们在分子分母同时出现、恰好消掉。下面 §2 可以随便拧。</p>
+</div>
+
+<h2 id="sec1">一、统一公式：符号、推导与化简</h2>
+
+<h3>1.1 符号表</h3>
+
+<p>先立符号，再推导。分两组：<b>结构组</b>由模型架构决定（换架构才变），<b>执行组</b>由这一步怎么跑决定（同一个模型每步可不同）：</p>
+
+<table>
+  <tr><th style="width:13%">符号</th><th>含义</th><th style="width:42%">典型值 / 来源</th></tr>
+  <tr><td colspan="3" style="background:var(--accent-soft)"><b>结构组（架构决定）</b></td></tr>
+  <tr><td>\(H\)</td><td>query 头数</td><td>Llama-2-7B 32；DeepSeek-V2 128</td></tr>
+  <tr><td>\(H_{kv}\)</td><td>KV 头数</td><td>MHA \(=H\)；GQA-\(g\) \(=H/g\)；MQA \(=1\)；MLA 吸收态 \(=1\)（单潜向量）</td></tr>
+  <tr><td>\(h_{sh}\)</td><td>head 共享因子 \(=H/H_{kv}\)：一条 KV entry 服务几个 query 头</td><td>MHA 1 · GQA-8 4 · MQA 32 · MLA 128</td></tr>
+  <tr><td>\(d_h\)</td><td>标准模式头维</td><td>通常 128</td></tr>
+  <tr><td>\(d_k\)</td><td>打分点积维（Q·K 内积的长度）</td><td>标准 \(d_h\)；MLA 吸收 \(d_c{+}d_r\)</td></tr>
+  <tr><td>\(d_v\)</td><td>加权点积维（AV 中 V 的维）</td><td>标准 \(d_h\)；MLA 吸收 \(d_c\)</td></tr>
+  <tr><td>\(n_{kv}\)</td><td>一条 KV entry 的元素数</td><td>标准 \(2d_h\)（K、V 各一份）；MLA \(d_c{+}d_r\)（同一条潜向量）</td></tr>
+  <tr><td>\(e_{kv}\)</td><td>一条 entry 的字节数</td><td>标准 \(2d_h\,b\)；MLA \(d_c b_c+d_r b_r\)（可混合精度）</td></tr>
+  <tr><td>\(r\)</td><td>元素复用率 \(=(d_k{+}d_v)/n_{kv}\)：每个 entry 元素被点积的遍数</td><td>标准 1；MLA \(\approx 1.89\)（K/V 同源：读一次，既当 K 又当 V）</td></tr>
+  <tr><td>\(d_c,\,d_r\)</td><td>MLA 潜向量维 / 解耦 RoPE 维</td><td>DeepSeek-V2/V3：512 / 64</td></tr>
+  <tr><td colspan="3" style="background:var(--accent-soft)"><b>执行组（这一步怎么跑决定）</b></td></tr>
+  <tr><td>\(m_q\)</td><td>每步每请求参与计算的 query token 数</td><td>decode 1 · 投机解码 τ · prefill L</td></tr>
+  <tr><td>\(s\)</td><td>每步实际读取的 KV token 数（即 \(s_{\text{read}}\)）</td><td>全注意力 \(=S\)；滑窗 \(=W\)；top-k 稀疏 \(=k\)</td></tr>
+  <tr><td>\(S\)</td><td>存储的上下文长度（\(\ge s\)）</td><td>只进 cache 容量账，与 AI 无关</td></tr>
+  <tr><td>\(B\)</td><td>batch（并发请求数）</td><td>纯复制：只进时间与占用率账，AI 中消掉</td></tr>
+  <tr><td>\(b,\,b_c,\,b_r\)</td><td>每元素字节数（KV / 潜向量 / rope）</td><td>BF16 2 · FP8 1 · FP4 0.5</td></tr>
+  <tr><td>\(b_a\)</td><td>激活精度（Q、O 的每元素字节）</td><td>BF16 = 2，全文固定</td></tr>
+  <tr><td>\(\mathbb{1}_Q,\,\mathbb{1}_O\)</td><td>是否计入 Q 读取 / O 写回（0 或 1）</td><td>§2 计算器的两个勾选框</td></tr>
+</table>
+<p class="cap"><b>表 1</b>｜统一公式的全部符号。「entry」= 一个 KV 头在一个 token 上的 KV 数据：标准模式是 K、V 两个向量（\(2d_h\) 个元素），MLA 是一条 \([c_{kv}\mid k_r]\) 潜向量（\(d_c{+}d_r\) 个元素）。</p>
+
+<h3>1.2 推导：把 FLOPs 与 Bytes 分别数出来</h3>
+
+<p>口径先行：\(\mathrm{AI}=\text{FLOPs}/\text{Bytes}\)，两边都按「一次注意力核调用、每请求每步」计——batch 与层数只是把两边同乘常数，先不放进来（§4 会看到它们恰好消掉）。</p>
+
+<p><b>第 1 步｜FLOPs。</b>注意力核只有两次矩阵乘：QKᵀ 打分、AV 加权求和。先数一个 query 头里的<b>一条</b> query 向量——它要对 \(s\) 条 entry 各打分一次、加权一次：</p>
+
+<div class="fig formula">\[
+\underbrace{2\,d_k\,s}_{\text{QK}^\top\text{ 打分}}+\underbrace{2\,d_v\,s}_{\text{AV 加权}}=2\,(d_k+d_v)\,s
+\;\;\xrightarrow{\;\times\,H\ \text{个头}\;\times\,m_q\ \text{条 query}\;}\;\;
+\text{FLOPs}=2\,m_q\,H\,s\,(d_k+d_v)
+\tag{式 A1}\]</div>
+
+<p class="cap">乘加各计一次 FLOP；softmax、\(1/\sqrt{d}\) 缩放等 O(s) 低阶项不计（对 AI 影响 &lt;1%）。\(d_k\ne d_v\) 的来历：MLA 吸收态的打分走潜向量 + rope（\(d_c{+}d_r\) 维）、加权只走潜向量（\(d_c\) 维）；标准模式两者同为 \(d_h\)。</p>
+
+<p><b>第 2 步｜Bytes。</b>单遍口径：每条 KV entry 从 HBM <b>恰好读一次</b>——decode 的 PagedAttention / FlashDecoding 本来就按页读一遍；prefill 则是 L2 完美的理想假设（真实有 tile 重读，见 §1.3 口径注）。entry 共 \(s\times H_{kv}\) 条，每条 \(e_{kv}\) 字节；Q 读取与 O 写回按勾选计入：</p>
+
+<div class="fig formula">\[
+\text{Bytes}=\underbrace{s\,H_{kv}\,e_{kv}}_{\text{KV：}s\times H_{kv}\ \text{条}\times e_{kv}\ \text{B}}
++\mathbb{1}_Q\,\underbrace{m_q\,H\,d_k\,b_a}_{\text{Q 读一遍}}
++\mathbb{1}_O\,\underbrace{m_q\,H\,d_v\,b_a}_{\text{O 写回}}
+\tag{式 A2}\]</div>
+
+<p><b>第 3 步｜相除，得精确式：</b></p>
+
+<div class="fig formula">\[
+\mathrm{AI}=\frac{2\,m_q\,H\,s\,(d_k+d_v)}
+{s\,H_{kv}\,e_{kv}\;+\;\mathbb{1}_Q\,m_q\,H\,d_k\,b_a\;+\;\mathbb{1}_O\,m_q\,H\,d_v\,b_a}
+\tag{式 A}\]</div>
+
+<p class="cap">Q/O 不勾时分母只剩 KV 项——这是 §2 计算器的默认口径。<b>\(s\)（含稀疏的 \(s_{\text{read}}\)）只在 KV 项里线性出现</b>：KV 主导时它约掉；只有勾了 Q/O 且 \(m_q\) 很大时，才通过 Q/KV 比例回到 AI（§4 的「不消」情形）。</p>
+
+<p><b>第 4 步｜化简成乘法形式。</b>Q/O 不计时，分子分母的 \(s\) 约掉、\(H/H_{kv}\) 收拢为 \(h_{sh}\)：</p>
+
+<div class="fig formula">\[
+\mathrm{AI}_{KV}=\frac{2\,m_q\,H\,s\,(d_k+d_v)}{s\,H_{kv}\,e_{kv}}
+=\frac{2\,(d_k+d_v)}{e_{kv}}\times\underbrace{\frac{H}{H_{kv}}}_{h_{sh}}\times\,m_q
+\;\xrightarrow{\ e_{kv}=n_{kv}\,b\ }\;\frac{2\,r}{b}\times h_{sh}\times m_q
+\tag{式 B}\]</div>
+
+<p class="cap">最后一步要求 entry 内精度均匀（\(e_{kv}=n_{kv}b\)）：标准模式恒成立，MLA-V2 bf16 也成立；V3 混合精度（FP8 潜向量 + BF16 rope）时保留 \(\frac{2(d_k+d_v)}{e_{kv}}\) 整体作「元素经济性」因子，不拆成 \(2r/b\)。<b>倒过来读</b>：一条 entry 挣回 \(2(d_k{+}d_v)\,h_{sh}\,m_q\) FLOPs、花掉 \(e_{kv}\) 字节——AI 就是单条 entry 的收支比，所以它对整个核成立、与 \(s\) 和 \(B\) 无关。</p>
+
+<p>两类模式的符号取值（只有 \(r\) 与 \(e_{kv}\) 两处不同）：</p>
+<ul>
+  <li><b>标准变种</b>（MHA / GQA / MQA / NSA / 滑窗）：\(d_k=d_v=d_h\)、entry = K+V 共 \(n_{kv}=2d_h\) 个元素 → \(r=1\)、\(e_{kv}=2d_h\,b\)，统一公式塌缩成 \(\mathrm{AI}=2\,m_q\,h_{sh}/b\)。</li>
+  <li><b>MLA 吸收态</b>（DeepSeek-V2/V3）：entry = 单个潜向量 \([c_{kv}\mid k_r]\)，\(n_{kv}=d_c+d_r\)；打分走 \(d_k=d_c+d_r\)（吸收后的 \(q^\top c_{kv}\) + rope 点积）、加权走 \(d_v=d_c\) → \(r=\frac{2d_c+d_r}{d_c+d_r}\approx 1.9\)（K/V 同源双用），\(e_{kv}=d_c b_c+d_r b_r\)。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="440" y="40" font-size="15" font-weight="bold" fill="#1a1f2e" text-anchor="middle">AI = ( 2r / b ) × h_sh × m_q</text>
+  <g stroke="#c9d2e0" stroke-width="1.2" fill="none">
+    <line x1="440" y1="50" x2="440" y2="64"/>
+    <line x1="125" y1="64" x2="755" y2="64"/>
+    <line x1="125" y1="64" x2="125" y2="78"/>
+    <line x1="335" y1="64" x2="335" y2="78"/>
+    <line x1="545" y1="64" x2="545" y2="78"/>
+    <line x1="755" y1="64" x2="755" y2="78"/>
+  </g>
+  <rect x="30" y="78" width="190" height="62" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="125" y="98" font-size="12" font-weight="bold" fill="#2456c4" text-anchor="middle">m_q · query 维</text>
+  <text x="125" y="116" font-size="10" fill="#1a1f2e" text-anchor="middle">decode 1 · spec τ · prefill L</text>
+  <text x="125" y="132" font-size="10" fill="#5a6272" text-anchor="middle">投机解码 / PD 形态</text>
+  <rect x="240" y="78" width="190" height="62" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="335" y="98" font-size="12" font-weight="bold" fill="#b0631e" text-anchor="middle">h_sh · head 共享</text>
+  <text x="335" y="116" font-size="10" fill="#1a1f2e" text-anchor="middle">MHA 1 → GQA g → MQA H</text>
+  <text x="335" y="132" font-size="10" fill="#5a6272" text-anchor="middle">head 共享 / 低秩压缩</text>
+  <rect x="450" y="78" width="190" height="62" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="545" y="98" font-size="12" font-weight="bold" fill="#1e7a4a" text-anchor="middle">r · 元素复用</text>
+  <text x="545" y="116" font-size="10" fill="#1a1f2e" text-anchor="middle">标准 1 → MLA 1.89</text>
+  <text x="545" y="132" font-size="10" fill="#5a6272" text-anchor="middle">K/V 同源（吸收）</text>
+  <rect x="660" y="78" width="190" height="62" rx="8" fill="#e8ecf7" stroke="#163a86"/>
+  <text x="755" y="98" font-size="12" font-weight="bold" fill="#163a86" text-anchor="middle">b · 字节密度</text>
+  <text x="755" y="116" font-size="10" fill="#1a1f2e" text-anchor="middle">BF16 2 → FP8 1 → FP4 0.5</text>
+  <text x="755" y="132" font-size="10" fill="#5a6272" text-anchor="middle">KV 量化</text>
+  <text x="440" y="185" font-size="10" fill="#5a6272" text-anchor="middle">S（上下文）、B（batch）、s_read（稀疏读取量）不在公式里——分子分母同时出现、恰好消掉（§4）</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>｜统一公式的四个旋钮与各自的技术家族。GQA-8 与 FP4-KV 的 decode AI 同为 4 不是巧合——共享 4 个头与减半字节，在公式里是同一个乘法位置；但前者省 4× cache、后者省 2× cache，<b>AI 相同、cache 收益不同</b>，这正是要把四个旋钮分开看的原因。</p>
+
+<h3>1.3 口径注：单遍读取与既有账本的对齐</h3>
+
+<p>本页 KV 单遍读取的口径下，decode 的 PagedAttention / FlashDecoding 本来就是每页恰读一遍 → 数值精确（勾选 Q 后即姊妹篇式 1b 的 \(4S/((2S{+}1)b)\)）；prefill 的单遍是 L2 完美的<b>理想上界</b>（勾选 Q、不勾 O 即式 4），一阶 tile 口径的下界 \(B_r{\approx}128\)（式 2）不在本页公式里——真实 FA2 落在两者之间。MLA 的 242 与 V4-Pro 的 455 都是 KV 单遍口径的实例。</p>
+
+<h2 id="sec2">二、计算器：拧旋钮，出 AI</h2>
+
+<div class="calc">
+  <div class="preset">
+    <label for="preset">预设（选择后自动填充下方全部参数）</label>
+    <select id="preset">
+      <option value="mha_dec">MHA decode（bf16，Llama-2-7B 口径）→ AI ≈ 1</option>
+      <option value="gqa_dec">GQA-8 decode（Llama-3/2-70B 类）→ AI ≈ 4</option>
+      <option value="mqa_dec">MQA decode → AI ≈ 32</option>
+      <option value="mla_dec">MLA 吸收态 decode（DeepSeek-V2，bf16）→ AI ≈ 242</option>
+      <option value="mla_fp8">MLA 吸收态 decode（V3 口径，潜向量 FP8 + rope BF16）→ AI ≈ 435</option>
+      <option value="fp4_dec">MHA decode + FP4 KV → AI ≈ 4（与 GQA-8 同值，机制不同）</option>
+      <option value="nsa_dec">稀疏 decode（MHA，top-k=1024）→ AI ≈ 1（稀疏消掉！）</option>
+      <option value="spec_dec">MHA decode + 投机解码 τ=5 → AI ≈ 5</option>
+      <option value="mha_pre">MHA prefill（L=S=4096，非因果，式 4 口径）→ AI ≈ 2731</option>
+      <option value="mla_pre">MLA 吸收态 prefill（L=S=4096）</option>
+      <option value="custom">— 自定义 —</option>
+    </select>
+  </div>
+
+  <fieldset>
+    <legend>注意力结构</legend>
+    <div class="grid">
+      <div><label for="mode">模式</label>
+        <select id="mode"><option value="std">标准（K/V 分头）</option><option value="mla">MLA 吸收态</option></select></div>
+      <div><label for="mq">m_q · query/步/请求</label><input type="number" id="mq" value="1" min="1"></div>
+      <div><label for="Hh">H · query 头数</label><input type="number" id="Hh" value="32" min="1"></div>
+      <div id="std-fields"><label for="Hkv">H_kv · KV 头数</label><input type="number" id="Hkv" value="32" min="1"></div>
+      <div id="std-fields2"><label for="dh">d_h · 头维</label><input type="number" id="dh" value="128" min="1"></div>
+      <div id="mla-fields" style="display:none"><label for="dc">d_c · 潜向量维</label><input type="number" id="dc" value="512" min="1"></div>
+      <div id="mla-fields2" style="display:none"><label for="dr">d_r · rope 维</label><input type="number" id="dr" value="64" min="0"></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>KV 字节</legend>
+    <div class="grid">
+      <div id="std-fields3"><label for="bkv">b · 每元素字节</label>
+        <select id="bkv"><option value="2">BF16 = 2</option><option value="1">FP8/INT8 = 1</option><option value="0.5">INT4/FP4 = 0.5</option></select></div>
+      <div id="mla-fields3" style="display:none"><label for="bc">b_c · 潜向量字节</label>
+        <select id="bc"><option value="2">BF16 = 2</option><option value="1" selected>FP8 = 1</option><option value="0.5">FP4 = 0.5</option></select></div>
+      <div id="mla-fields4" style="display:none"><label for="br">b_r · rope 字节</label>
+        <select id="br"><option value="2" selected>BF16 = 2</option><option value="1">FP8 = 1</option></select></div>
+      <div><label for="sread">s_read · 每步读取 KV token 数</label><input type="number" id="sread" value="4096" min="1"></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>执行与硬件</legend>
+    <div class="grid">
+      <div><label for="batch">B · batch（不改变 AI）</label><input type="number" id="batch" value="1" min="1"></div>
+      <div><label for="Sctx">S · 存储上下文（算 cache 用）</label><input type="number" id="Sctx" value="4096" min="1"></div>
+      <div><label for="layers">层数（算全模型 cache）</label><input type="number" id="layers" value="32" min="1"></div>
+      <div><label for="hw">硬件（BF16 峰值口径）</label>
+        <select id="hw">
+          <option value="h800" selected>H800：989 T / 3.35 TB/s</option>
+          <option value="a100">A100：312 T / 2.04 TB/s</option>
+          <option value="h100">H100：989 T / 3.35 TB/s</option>
+          <option value="b200">B200：2250 T / 8.0 TB/s</option>
+          <option value="custom">自定义…</option>
+        </select></div>
+      <div id="custom-fields" style="display:none"><label for="peak">峰值 TFLOPS</label><input type="number" id="peak" value="989" min="1"></div>
+      <div id="custom-fields2" style="display:none"><label for="bw">带宽 TB/s</label><input type="number" id="bw" value="3.35" step="0.01" min="0.1"></div>
+    </div>
+    <div style="margin-top:8px">
+      <span class="chk"><input type="checkbox" id="inclQ"><label for="inclQ" style="display:inline">计入 Q 读取（decode 影响 ≈1/2S；prefill 是一阶项）</label></span>
+      <span class="chk"><input type="checkbox" id="inclO"><label for="inclO" style="display:inline">计入 O 写回</label></span>
+      <span class="chk"><input type="checkbox" id="causal"><label for="causal" style="display:inline">因果掩码（FLOPs ×(1−m_q/2s)；prefill 勾选、式 4 口径不勾）</label></span>
+    </div>
+  </fieldset>
+
+  <div class="out">
+    <div id="out-verdict" class="verdict v-bw">带宽受限</div>
+    <span style="margin-left:14px" class="ai-sub" id="out-ridge"></span>
+    <div class="ramp">
+      <div class="track"></div>
+      <div class="mark" style="left:1px;background:#5a6272"><span class="mlabel" style="left:20px">1</span></div>
+      <div class="mark" style="left:33.3%;background:#5a6272"><span class="mlabel" style="left:50%">10</span></div>
+      <div class="mark" style="left:66.7%;background:#5a6272"><span class="mlabel" style="left:50%">100</span></div>
+      <div class="mark" style="left:calc(100% - 1px);background:#5a6272"><span class="mlabel" style="left:auto;right:0">1k</span></div>
+      <div class="ai-dot" id="out-dot" style="left:1px"></div>
+    </div>
+    <p class="ai-sub" style="margin:2px 0 10px">横轴：log₁₀ AI（1 → 1k）；橙点 = 当前配置，灰线 = 数量级刻度</p>
+    <div class="ai-main" id="out-ai">AI = 1.00</div>
+    <p class="ai-sub" id="out-ai-kv"></p>
+    <table>
+      <tr><th style="width:34%">项目</th><th>数值</th><th>算式</th></tr>
+      <tr id="row-flops"><td>FLOPs / 请求 / 步 / 层</td><td class="num" id="out-flops"></td><td id="out-flops-f"></td></tr>
+      <tr><td>KV 字节 / 请求 / 步</td><td class="num" id="out-kv"></td><td id="out-kv-f"></td></tr>
+      <tr id="row-qo" style="display:none"><td>Q / O 流量 / 请求 / 步</td><td class="num" id="out-qo"></td><td id="out-qo-f"></td></tr>
+      <tr><td>AI（当前勾选口径）</td><td class="num" id="out-ai-exact"></td><td>FLOPs ÷ Bytes</td></tr>
+      <tr><td>注意力时间 / 层 / 步（batch B）</td><td class="num" id="out-time"></td><td>max(算力, 带宽) 两项取大</td></tr>
+      <tr><td>算力利用率</td><td class="num" id="out-util"></td><td>实达 TFLOPS ÷ 峰值</td></tr>
+      <tr><td>KV cache / 请求（S × 全层）</td><td class="num" id="out-cache"></td><td id="out-cache-f"></td></tr>
+    </table>
+    <p class="ai-sub" id="out-note" style="margin:10px 0 0"></p>
+  </div>
+</div>
+
+<p class="cap"><b>表 2</b>｜计算器字段速查。标准模式：entry = K+V 共 \(2d_h\) 个元素；MLA 模式：entry = \([c_{kv}\mid k_r]\) 单条潜向量、全头共享（\(h_{sh}=H\)）、K/V 同源双用。激活（Q/O）固定按 BF16 2 B 计。MLA prefill 提示：吸收态对 prefill 不划算（FLOPs ×4.5），真实系统会切回<b>不吸收</b>形态——那是「同一份压缩、两种执行形式」的执行选择，不改变本页 cache 口径的账。</p>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const HW = {
+    h800: { name: 'H800', peak: 989e12, bw: 3.35e12 },
+    a100: { name: 'A100', peak: 312e12, bw: 2.04e12 },
+    h100: { name: 'H100', peak: 989e12, bw: 3.35e12 },
+    b200: { name: 'B200', peak: 2250e12, bw: 8.0e12 }
+  };
+  const PRESETS = {
+    mha_dec:  { mode:'std', mq:1,    H:32,  Hkv:32, dh:128, bkv:'2',   sread:4096, Sctx:4096,  layers:32, batch:1, q:0, o:0, causal:0, hw:'h800' },
+    gqa_dec:  { mode:'std', mq:1,    H:32,  Hkv:8,  dh:128, bkv:'2',   sread:4096, Sctx:4096,  layers:32, batch:1, q:0, o:0, causal:0, hw:'h800' },
+    mqa_dec:  { mode:'std', mq:1,    H:32,  Hkv:1,  dh:128, bkv:'2',   sread:4096, Sctx:4096,  layers:32, batch:1, q:0, o:0, causal:0, hw:'h800' },
+    mla_dec:  { mode:'mla', mq:1,    H:128, dc:512, dr:64,  bc:'2', br:'2', sread:4096, Sctx:4096,  layers:60, batch:1, q:0, o:0, causal:0, hw:'h800' },
+    mla_fp8:  { mode:'mla', mq:1,    H:128, dc:512, dr:64,  bc:'1', br:'2', sread:4096, Sctx:4096,  layers:61, batch:1, q:0, o:0, causal:0, hw:'h800' },
+    fp4_dec:  { mode:'std', mq:1,    H:32,  Hkv:32, dh:128, bkv:'0.5', sread:4096, Sctx:4096,  layers:32, batch:1, q:0, o:0, causal:0, hw:'h800' },
+    nsa_dec:  { mode:'std', mq:1,    H:32,  Hkv:32, dh:128, bkv:'2',   sread:1024, Sctx:65536, layers:32, batch:1, q:0, o:0, causal:0, hw:'h800' },
+    spec_dec: { mode:'std', mq:5,    H:32,  Hkv:32, dh:128, bkv:'2',   sread:4096, Sctx:4096,  layers:32, batch:1, q:0, o:0, causal:0, hw:'h800' },
+    mha_pre:  { mode:'std', mq:4096, H:32,  Hkv:32, dh:128, bkv:'2',   sread:4096, Sctx:4096,  layers:32, batch:1, q:1, o:0, causal:0, hw:'h800' },
+    mla_pre:  { mode:'mla', mq:4096, H:128, dc:512, dr:64,  bc:'2', br:'2', sread:4096, Sctx:4096,  layers:60, batch:1, q:1, o:0, causal:0, hw:'h800' }
+  };
+
+  function fmtBytes(x) {
+    if (x >= 1e12) return (x / 1e12).toFixed(2) + ' TB';
+    if (x >= 1e9) return (x / 1e9).toFixed(2) + ' GB';
+    if (x >= 1e6) return (x / 1e6).toFixed(2) + ' MB';
+    if (x >= 1e3) return (x / 1e3).toFixed(1) + ' KB';
+    return x.toFixed(0) + ' B';
+  }
+  function fmtFlops(x) {
+    if (x >= 1e12) return (x / 1e12).toFixed(2) + ' T';
+    if (x >= 1e9) return (x / 1e9).toFixed(2) + ' G';
+    if (x >= 1e6) return (x / 1e6).toFixed(2) + ' M';
+    return (x / 1e3).toFixed(1) + ' K';
+  }
+  function fmtAI(x) {
+    if (x >= 1000) return Math.round(x).toLocaleString('en-US');
+    if (x >= 100) return x.toFixed(0);
+    if (x >= 10) return x.toFixed(1);
+    return x.toFixed(2);
+  }
+  function fmtTime(us) {
+    if (us >= 1000) return (us / 1000).toFixed(2) + ' ms';
+    if (us >= 1) return us.toFixed(1) + ' µs';
+    return (us * 1000).toFixed(0) + ' ns';
+  }
+
+  function syncMode() {
+    const mla = $('mode').value === 'mla';
+    ['std-fields', 'std-fields2', 'std-fields3'].forEach(id => $(id).style.display = mla ? 'none' : '');
+    ['mla-fields', 'mla-fields2', 'mla-fields3', 'mla-fields4'].forEach(id => $(id).style.display = mla ? '' : 'none');
+  }
+
+  function compute() {
+    const mode = $('mode').value;
+    const m = Math.max(1, +$('mq').value || 1);
+    const B = Math.max(1, +$('batch').value || 1);
+    const H = Math.max(1, +$('Hh').value || 1);
+    const s = Math.max(1, +$('sread').value || 1);
+    const S = Math.max(1, +$('Sctx').value || 1);
+    const L = Math.max(1, +$('layers').value || 1);
+
+    let hsh, dk, dv, nkv, ekv, kvf, kvheads;
+    if (mode === 'std') {
+      const Hkv = Math.max(1, +$('Hkv').value || 1);
+      const d = Math.max(1, +$('dh').value || 1);
+      const b = +$('bkv').value;
+      hsh = H / Hkv; dk = d; dv = d; nkv = 2 * d; ekv = 2 * d * b; kvheads = Hkv;
+      kvf = s + ' × ' + Hkv + ' × 2·' + d + ' × ' + b;
+    } else {
+      const dc = Math.max(1, +$('dc').value || 1);
+      const dr = Math.max(0, +$('dr').value || 0);
+      const bc = +$('bc').value, br = +$('br').value;
+      hsh = H; dk = dc + dr; dv = dc; nkv = dc + dr; ekv = dc * bc + dr * br; kvheads = 1;
+      kvf = s + ' × 1 × (' + dc + '×' + bc + ' + ' + dr + '×' + br + ')';
+    }
+    const r = (dk + dv) / nkv;
+
+    let F = 2 * m * H * s * (dk + dv);
+    let causalNote = '';
+    if ($('causal').checked) {
+      const f = Math.max(0.02, 1 - m / (2 * s));
+      F *= f; causalNote = ' ×' + f.toFixed(3) + '(因果)';
+    }
+    const Fq = m * H * dk * 2, Fo = m * H * dv * 2;
+    const Bkv = s * kvheads * ekv;
+    let Btot = Bkv;
+    if ($('inclQ').checked) Btot += Fq;
+    if ($('inclO').checked) Btot += Fo;
+    const aiKv = 2 * m * hsh * (dk + dv) / ekv;
+    const ai = F / Btot;
+
+    const hwv = $('hw').value;
+    const hw = hwv === 'custom'
+      ? { name: '自定义', peak: (+$('peak').value || 1) * 1e12, bw: (+$('bw').value || 1) * 1e12 }
+      : HW[hwv];
+    const ridge = hw.peak / hw.bw;
+    const Ft = F * B, Bt = Btot * B;
+    const t = Math.max(Ft / hw.peak, Bt / hw.bw) * 1e6;
+    const util = Ft / (t * 1e-6) / hw.peak * 100;
+    const cache = S * kvheads * ekv * L;
+
+    const vEl = $('out-verdict');
+    if (ai >= ridge) { vEl.textContent = '计算受限'; vEl.className = 'verdict v-cmp'; }
+    else { vEl.textContent = '带宽受限'; vEl.className = 'verdict v-bw'; }
+    $('out-ridge').textContent = hw.name + '：ridge = ' + Math.round(ridge) +
+      ' FLOP/Byte；AI/ridge = ' + (ai / ridge).toFixed(2) +
+      (ai >= ridge ? '（带宽富余）' : '，距 ridge 还有 ' + (ridge / ai).toFixed(0) + '×');
+
+    const pct = Math.max(0, Math.min(100, Math.log10(Math.max(ai, 0.01)) / 3 * 100));
+    $('out-dot').style.left = pct + '%';
+
+    $('out-ai').textContent = 'AI = ' + fmtAI(ai) + ' FLOP/Byte';
+    $('out-ai-kv').innerHTML = '统一公式（KV 单遍）：AI = (2·(d_k+d_v)/e_kv) × h_sh × m_q = (2×' +
+      (dk + dv) + '/' + ekv + ') × ' + (+hsh.toFixed(2)) + ' × ' + m + ' = <b>' + fmtAI(aiKv) + '</b>' +
+      (Math.abs(ai - aiKv) / aiKv > 0.005 ? '　→ 计入 Q/O 后 ' + fmtAI(ai) : '　（Q/O 未计，两者一致）');
+
+    $('out-flops').textContent = fmtFlops(F);
+    $('out-flops-f').textContent = '2·m_q·H·s·(d_k+d_v) = 2×' + m + '×' + H + '×' + s + '×' + (dk + dv) + causalNote;
+    $('out-kv').textContent = fmtBytes(Bkv);
+    $('out-kv-f').textContent = kvf + '；e_kv = ' + ekv + ' B/entry，r = ' + r.toFixed(2);
+    const qoRow = $('row-qo');
+    if ($('inclQ').checked || $('inclO').checked) {
+      qoRow.style.display = '';
+      $('out-qo').textContent = fmtBytes(($('inclQ').checked ? Fq : 0) + ($('inclO').checked ? Fo : 0));
+      $('out-qo-f').textContent = 'Q = ' + ($('inclQ').checked ? fmtBytes(Fq) : '未计') +
+        '（m_q·H·d_k·2B），O = ' + ($('inclO').checked ? fmtBytes(Fo) : '未计') + '（m_q·H·d_v·2B）';
+    } else qoRow.style.display = 'none';
+    $('out-ai-exact').textContent = fmtAI(ai) + (($('inclQ').checked || $('inclO').checked) ? '' : '（= KV 单遍）');
+    $('out-time').textContent = fmtTime(t) + ' /层/步';
+    $('out-util').textContent = util.toFixed(1) + '%（' + (Ft / (t * 1e-6) / 1e12).toFixed(1) + ' T 实达）';
+    $('out-cache').textContent = fmtBytes(cache) + (B > 1 ? '；×B 全 batch ' + fmtBytes(cache * B) : '');
+    $('out-cache-f').textContent = S + ' × ' + kvheads + ' × ' + ekv + ' B × ' + L + ' 层';
+
+    $('out-note').textContent = note(presetId());
+  }
+
+  function presetId() { return $('preset').value; }
+
+  function note(pid) {
+    const mla = $('mode').value === 'mla';
+    const m = +$('mq').value;
+    if (pid === 'nsa_dec') return 's_read 4096→1024：AI 纹丝不动、注意力时间 ÷4——稀疏注意力买的是时间，不是 AI（S 与 s_read 在式 A 里消掉）。';
+    if (pid === 'spec_dec') return 'm_q=1→5：同一份 KV 字节服务 5 个 query → AI×5、时间几乎不变。这正是「带宽受限时多算近乎免费」。';
+    if (pid === 'fp4_dec') return 'b 2→0.5：AI 翻倍到 4，cache 减半。对比 GQA-8（AI 同为 4 但 cache ÷4）：AI 相同、容量收益不同——两个旋钮要分开看。';
+    if (pid === 'mha_pre') return '式 4 口径（非因果、计 Q 不计 O）= 2731。勾选「因果掩码」→ 1365；不勾「计入 Q」→ 4096（KV 单遍渐近）。真实 FA2 的 DRAM AI 在 128（tile 下界）与此上界之间。';
+    if (pid === 'mla_pre' || (mla && m > 1)) return 'MLA 吸收态的 prefill：FLOPs 按 (2d_c+d_r) 计、比不吸收态贵 ≈4.5×——真实系统 prefill 会切回不吸收形态（物化 k/v 回标准 MHA 形状），cache 账不变。';
+    if (pid === 'mla_fp8') return 'V3 口径：潜向量 FP8（b_c=1）+ rope BF16（b_r=2），e_kv=640 B——比 bf16 的 1152 B 又抬 1.8× AI。K/V 同源（r≈1.89）与量化（b↓）两个旋钮同时生效。';
+    if (pid === 'mha_dec') return '起点：MHA decode AI=1，距 ridge 295×。勾选「计入 Q」可见式 1b 的 0.9999（Q 只差 1/2S）。后面每一个变种都在拧四个旋钮之一。';
+    return '旋钮现值：m_q=' + m + '、h_sh=' + (mla ? '+' + $('Hh').value : ($('Hh').value / $('Hkv').value).toFixed(2)) +
+      '、r=' + (mla ? ((2 * +$('dc').value + +$('dr').value) / (+$('dc').value + +$('dr').value)).toFixed(2) : '1') +
+      '、b=' + (mla ? $('bc').value + '/' + $('br').value : $('bkv').value) + '。';
+  }
+
+  function applyPreset(id) {
+    const p = PRESETS[id];
+    if (!p) { compute(); return; }
+    $('mode').value = p.mode;
+    $('mq').value = p.mq; $('Hh').value = p.H;
+    if (p.mode === 'std') { $('Hkv').value = p.Hkv; $('dh').value = p.dh; $('bkv').value = p.bkv; }
+    else { $('dc').value = p.dc; $('dr').value = p.dr; $('bc').value = p.bc; $('br').value = p.br; }
+    $('sread').value = p.sread; $('Sctx').value = p.Sctx; $('layers').value = p.layers; $('batch').value = p.batch;
+    $('inclQ').checked = !!p.q; $('inclO').checked = !!p.o; $('causal').checked = !!p.causal;
+    $('hw').value = p.hw;
+    syncMode(); compute();
+  }
+
+  $('preset').addEventListener('change', e => applyPreset(e.target.value));
+  $('mode').addEventListener('change', () => { $('preset').value = 'custom'; syncMode(); compute(); });
+  ['mq', 'Hh', 'Hkv', 'dh', 'dc', 'dr', 'sread', 'batch', 'Sctx', 'layers', 'peak', 'bw'].forEach(id =>
+    $(id).addEventListener('input', () => { $('preset').value = 'custom'; compute(); }));
+  ['bkv', 'bc', 'br'].forEach(id =>
+    $(id).addEventListener('change', () => { $('preset').value = 'custom'; compute(); }));
+  ['inclQ', 'inclO', 'causal'].forEach(id => $(id).addEventListener('change', compute));
+  $('hw').addEventListener('change', () => {
+    const custom = $('hw').value === 'custom';
+    $('custom-fields').style.display = custom ? '' : 'none';
+    $('custom-fields2').style.display = custom ? '' : 'none';
+    compute();
+  });
+
+  $('preset').value = 'mha_dec';
+  applyPreset('mha_dec');
+})();
+</script>
+
+<h2 id="sec3">三、预设对照表：一条公式下的全部变种</h2>
+
+<p>下表每一行都是统一公式的一次取值（计算器预设的口径），AI 按 H800（ridge = 295）判定。「计 Q」列为勾选计入 Q 读取后的精确值——decode 修正仅 1/2S 量级，prefill 是一阶项：</p>
+
+<table>
+  <tr><th>变种</th><th>旋钮 m_q · h_sh · r · b</th><th class="num">AI（KV 单遍）</th><th class="num">AI（计 Q）</th><th class="num">cache/token/层</th><th>备注</th></tr>
+  <tr><td>MHA decode</td><td><code>1 · 1 · 1 · 2</code></td><td class="num">1</td><td class="num">1.00</td><td class="num">16 KB</td><td>起点；带宽受限 295×</td></tr>
+  <tr><td>GQA-8 decode</td><td><code>1 · 4 · 1 · 2</code></td><td class="num">4</td><td class="num">4.00</td><td class="num">4 KB</td><td>uptraining 后质量 ≈ MHA</td></tr>
+  <tr><td>MQA decode</td><td><code>1 · 32 · 1 · 2</code></td><td class="num">32</td><td class="num">31.9</td><td class="num">512 B</td><td>质量退化明显（PaLM/Falcon 时代）</td></tr>
+  <tr><td>MLA 吸收 decode（V2 bf16）</td><td><code>1 · 128 · 1.89 · 2</code></td><td class="num">242</td><td class="num">234.5</td><td class="num">1.15 KB</td><td>与<a href="mha-prefill-decode.html">姊妹篇</a>图 3 / 表 2 逐位一致</td></tr>
+  <tr><td>MLA 吸收 decode（V3 FP8 潜向量）</td><td><code>1 · 128 · 1.89 · 1/2</code></td><td class="num">435</td><td class="num">412</td><td class="num">640 B</td><td>r 与 b 两个旋钮同时生效</td></tr>
+  <tr><td>FP4-KV MHA decode</td><td><code>1 · 1 · 1 · 0.5</code></td><td class="num">4</td><td class="num">4.00</td><td class="num">4 KB</td><td>AI 同 GQA-8，cache 收益只 2×（机制不同）</td></tr>
+  <tr><td>稀疏 decode（top-k=1024，存 64K）</td><td><code>1 · 1 · 1 · 2</code></td><td class="num">1</td><td class="num">1.00</td><td class="num">16 KB（全存）</td><td>AI 不变；注意力时间 ÷64——稀疏买时间不买 AI</td></tr>
+  <tr><td>投机解码 τ=5（MHA）</td><td><code>5 · 1 · 1 · 2</code></td><td class="num">5</td><td class="num">5.00</td><td class="num">16 KB</td><td>DSpark / EAGLE 同旋钮</td></tr>
+  <tr><td>MHA prefill（式 4 口径）</td><td><code>4096 · 1 · 1 · 2</code></td><td class="num">4096</td><td class="num">2731</td><td class="num">—</td><td>L2 完美上界；tile 下界 128；真实 FA2 居中</td></tr>
+  <tr><td>MLA 吸收 prefill</td><td><code>4096 · 128 · 1.89 · 2</code></td><td class="num">≈99 万</td><td class="num">7,678</td><td class="num">1.15 KB</td><td>FLOPs ×4.5 → 实际切回不吸收形态</td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜十个预设一览。前八行全部带宽受限（AI &lt; 295）；最后两行计算受限——prefill 从来不是这条 ramp 的受害者。GQA-8 与 FP4-KV 同为 AI=4、MQA 与「τ=4 的投机 MHA」也几乎同 AI，但 cache 收益各不相同：AI 只看带宽，容量要另看 \(H_{kv}\) 与 b。</p>
+
+<h2 id="sec4">四、三个「消掉」与一个「不消」</h2>
+
+<p>统一公式最反直觉的地方，是几个看起来很重要的量根本不在里面：</p>
+
+<ul>
+  <li><b>上下文 S 从不出现</b>：它只进 cache 容量账（§2 的「KV cache」行）。decode 每步的 AI 与聊了多长无关——变长的是每步时间（∝ s），不是每字节的效率。</li>
+  <li><b>s_read 在 KV 主导时消掉</b>：分子分母同乘 s → AI 不变。稀疏注意力（NSA/DSA）、滑窗、top-k 全部在此列：<b>它们买时间，不买 AI</b>——从 64K 里只读 1K，注意力时间 ÷64，但每字节效率纹丝不动。</li>
+  <li><b>B 恒消掉</b>：batch 是纯数据并行，各请求的 KV 独立。加 batch 只提高占用率、把带宽用满——这正是姊妹篇的结论「batch × head × split-KV 三维并行都是纯数据并行」的计算根源。</li>
+  <li><b>什么时候不消</b>：勾选 Q/O 且 \(m_q\) 相对 \(s\) 很大时（prefill × 稀疏的组合），Q 项在式 A 分母里占主导，AI 掉向 \(\approx 2\,s_{\text{read}}\)（与 \(m_q\) 无关）——比如 L=4096 的 prefill 只 top-k 读 1024 条，AI 从 4096 跌到 ≈1365。在计算器里勾上「计入 Q」就能看到这个塌陷。</li>
+</ul>
+
+<p>所以整条演进史在公式里的位置是：<b>kernel 工程</b>（FA/FlashDecoding/PagedAttention）决定「单遍读取」这个口径能否成立、把带宽用满；<b>模型架构</b>（GQA/MQA/MLA/稀疏/量化）拧四个旋钮把 AI 抬过 ridge；<b>投机解码与 PD 分离</b>拧 \(m_q\)。三层各管一段，互不越界。</p>
+
+<h2 id="refs">参考</h2>
+
+<ol class="refs">
+  <li>N. Shazeer. <i>Fast Transformer Decoding: One Write-Head is All You Need</i>（MQA）. arXiv:1911.02131.</li>
+  <li>J. Ainslie et al. <i>GQA: Training Generalized Multi-Query Attention... </i>. arXiv:2305.13245.</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V2</i>（MLA、吸收态、解耦 RoPE）. arXiv:2405.04434；<a href="https://github.com/deepseek-ai/FlashMLA">FlashMLA</a>.</li>
+  <li>DeepSeek-AI. <i>Native Sparse Attention</i> / DSA（arXiv:2502.11089）；<a href="https://arxiv.org/abs/2606.19348">DeepSeek-V4</a> CSA/HCA；<a href="https://arxiv.org/abs/2607.05147">DSpark</a>.</li>
+  <li>站内：<a href="mha-prefill-decode.html">MHA 的 Prefill 与 Decode 账本</a>（式 1b / 式 4 / B_r=128 的出处）、<a href="../deepseek-v4/v4pro-ridge-point.html">V4-Pro roofline 账本</a>（硬件 ridge 口径）、<a href="../quantization/quant-t5-kv-systems.html">KV Cache 量化</a>、<a href="../deepseek-v4/dspark-speculative-decoding.html">DSpark</a>.</li>
+</ol>
+
+<footer>
+  生成于 2026-10-19 · paper-research 工作流 · 统一公式为教学向一阶模型：KV 单遍读取口径，FLOPs 按乘加各计一次，不计 softmax / L2 复用 / kernel 效率；prefill 数值为 L2 完美上界（真实 FA2 在 B_r=128 与此之间）。全部数字可用计算器复现，与 <a href="mha-prefill-decode.html">姊妹篇</a> 逐项对齐。
+</footer>
+</main>
+</body>
+</html>

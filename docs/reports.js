@@ -349,5 +349,17 @@ var REPORTS = [
     "title": "Verilog 速成：半天写出能仿真的 RTL",
     "date": "2026-09-16",
     "group": "misc"
+  },
+  {
+    "slug": "misc/mha-prefill-decode",
+    "title": "MHA 的 Prefill 与 Decode 账本：并行维度、计算量、访存量——以及 MHA→GQA→MLA 的改善主线",
+    "date": "2026-10-16",
+    "group": "misc"
+  },
+  {
+    "slug": "misc/attention-ai-calculator",
+    "title": "Attention AI 计算器：一条统一公式算尽 MHA→GQA→MQA→MLA→稀疏→量化→投机解码（可调参数）",
+    "date": "2026-10-19",
+    "group": "misc"
   }
 ];

@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MHA 的 Prefill 与 Decode 账本：并行维度、计算量、访存量——以及 MHA→GQA→MLA 的改善主线</title>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.8em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.38em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.1em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.92em; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .ok { color: #2f9e63; font-weight: 600; }
+  .bad { color: #b0631e; font-weight: 600; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.5;
+    font-size: 0.82em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>MHA 的 Prefill 与 Decode 账本：并行维度、计算量、访存量——以及 MHA→GQA→MLA 的改善主线</h1>
+
+<div class="meta">
+  <b>分析对象</b>：单层 MHA attention 的两种执行形态（prefill 的 FlashAttention、decode 的 FlashDecoding / PagedAttention），以及 MQA / GQA / MLA 对它的改造<br>
+  <b>口径</b>：示例模型取 Llama-2-7B 形状的 MHA（32 层、H=32 头、\(d_h{=}128\)、bf16）；硬件参照 H800 SXM（3.35 TB/s、BF16 989 TFLOPS，ridge ≈ 295 FLOP/Byte），与站内 <a href="../deepseek-v4/v4pro-ridge-point.html">V4-Pro roofline 账本</a>同口径，数字可相互对账<br>
+  <b>关联报告</b>：<a href="../vllm/vllm-t3-kvcache.html">vLLM 第 3 讲：PagedAttention</a>、<a href="../deepseek-v4/dspark-speculative-decoding.html">DSpark</a>、<a href="../quantization/quant-t5-kv-systems.html">KV Cache 量化</a>、<a href="../deepseek-v4/deepseek-v4-attention.html">V4 注意力（CSA/HCA）</a>、<a href="../deepseek-v41/deepseek-v41-t2-csa2.html">V4.1 CSA2</a>、<a href="llm-arch-evolution.html">LLM 架构演进</a><br>
+  <b>生成日期</b>：2026-10-16
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：prefill 的 query 维有 \(L\) 个 token，天然并行度充足，FlashAttention 用 tile 复用把算术强度从 1 抬到 \(B_r{\approx}128\)（理想单遍上界 \(4S/3b{\approx}2731\)，式 4），贴近 ridge；decode 的 query 维塌缩为 1，MHA 下每字节 KV 只服务 1 个 query head，AI=1，离 ridge 差约 300 倍——kernel 层的 batch×head×split-KV 并行只能把带宽<b>用满</b>，一个字节也省不下来。</p>
+  <p><b>主线公式</b>：\(\mathrm{AI}_{\text{dec}} = m_q \times h_{sh}\)——每字节 KV 服务的 (query 数 × head 数)。GQA 把 \(h_{sh}\) 抬到 g、MQA 抬到 H、MLA 抬到 ≈2H 且字节本身更小；稀疏注意力直接少读、量化把字节变小、投机解码把 \(m_q\) 抬到 &gt;1。整条 MHA→GQA→MLA→… 的演进，就是在这两个旋钮上做文章。</p>
+  <p><b>两个世界的推论</b>：prefill 全线算力受限、decode 全线带宽受限，两者连 kernel 结构都不同（单 kernel online softmax vs 两阶段 split+combine）——PD 分离部署不是工程偏好，是算术必然。</p>
+</div>
+
+<h2 id="sec1">一、口径：一条主线公式与基准配置</h2>
+
+<p>attention 的一切性能问题都能归结为一个比值——<b>算术强度</b>（AI = FLOPs / HBM 字节）对照硬件 ridge point。为让后文所有数字可复算，先固定符号：</p>
+
+<table>
+  <tr><th>符号</th><th>含义</th><th>示例取值</th></tr>
+  <tr><td>\(B\)</td><td>batch 内请求数</td><td class="num">1（decode 单请求）/ 任意</td></tr>
+  <tr><td>\(H\) / \(H_{kv}\)</td><td>query 头数 / KV 头数；\(h_{sh}=H/H_{kv}\) 为共享比</td><td class="num">32 / 32（MHA）</td></tr>
+  <tr><td>\(g\)</td><td>GQA 组大小：一个 KV 头服务的 query 头数</td><td class="num">4（GQA-8 时）</td></tr>
+  <tr><td>\(L\) / \(S\)</td><td>query 长度（prefill）/ KV 长度（上下文）</td><td class="num">4096 / 4096</td></tr>
+  <tr><td>\(d\)</td><td>头维 head_dim</td><td class="num">128</td></tr>
+  <tr><td>\(B_r\), \(B_c\)</td><td>FlashAttention 的 query / KV 块大小（tile）</td><td class="num">128 / 128</td></tr>
+  <tr><td>\(m_q\)</td><td>一份 KV 字节被加载后服务的 query token 数</td><td class="num">decode=1；spec decode&gt;1</td></tr>
+  <tr><td>\(b\)</td><td>KV 每元素字节数</td><td class="num">2（bf16）</td></tr>
+</table>
+
+<p><b>decode 的 AI 有闭式解</b>。每个 KV 位置、每个 KV 头的 K 行与 V 行共 \(2d\) 个元素、\(2db\) 字节；每来一个 query（每头、每 token），对它做一次 \(QK^\top\)（\(2d\) FLOPs）和一次加权求和 \(AV\)（\(2d\) FLOPs）。若一份 KV 字节被 \(m_q\) 个 token、\(h_{sh}\) 个头共享，则：</p>
+
+<div class="fig formula">\[
+\mathrm{AI}_{\text{dec}}=\frac{4\,d\,(m_q\,h_{sh})}{2\,d\,b}=\frac{2\,m_q\,h_{sh}}{b}
+\ \xrightarrow{\ \text{bf16 }(b=2)\ }\ \boldsymbol{m_q\cdot h_{sh}}
+\tag{式 1}\]</div>
+
+<p class="cap">MHA 逐 token decode：\(m_q{=}1\)、\(h_{sh}{=}1\) → <b>AI = 1 FLOP/Byte</b>。这个数与 S、d、H 全都无关——分子分母同步消掉，正是 decode attention「怎么算都省不了字节」的代数表述。</p>
+
+<div class="fig formula">\[
+\mathrm{AI}_{\text{dec}}(S)=\frac{4\,S}{(2S+1)\,b}
+\ \xrightarrow{\ S\to\infty\ }\ \frac{2}{b}
+\tag{式 1b}\]</div>
+
+<p class="cap"><b>精确版</b>（把 Q 也计入）：分子 4S = QKᵀ 与 AV 各 2S；分母 (2S+1)·b = K、V 整条读一遍（2S 个元素）+ Q 读一遍（1 个 d 切片）。O 的写回若也计入则为 (2S+2)·b，S=4096 时与上式只差 0.02%，习惯上忽略。代回 bf16、S=4096：4×4096 / (8193×2) = <b>0.9999</b>——式 1 的「AI=1」在 4K 上下文已精确到万分之二；极限 2/b 同时解释了 KV 量化的收益（bpe 减半 → AI 物理值翻倍）。</p>
+
+<p><b>prefill 的 AI 由 tile 大小决定</b>。KV 从 HBM 读进 SRAM 后，tile 内 \(B_r\) 行 query 复用同一份，等效于 \(m_q = B_r\)：</p>
+
+<div class="fig formula">\[
+\mathrm{AI}_{\text{pre}}\approx \boldsymbol{B_r\cdot h_{sh}}\quad(B_r{=}128 \Rightarrow \mathrm{AI}{\approx}128)
+\tag{式 2}\]</div>
+
+<p><b>KV cache 占用</b>（它决定能并发多少请求、多长上下文）：</p>
+
+<div class="fig formula">\[
+C_{kv} = 2\,H_{kv}\,d\,b\ \ \text{Byte / token / 层}
+\tag{式 3}\]</div>
+
+<p>三个数放在一起，硬件判据只有一行：H800 BF16 的 ridge = 989 TFLOPS ÷ 3.35 TB/s ≈ <b>295 FLOP/Byte</b>。AI 高于它是计算受限，低于它是带宽受限。</p>
+
+<h2 id="sec2">二、Prefill：FlashAttention 的账本</h2>
+
+<p>prefill 一次处理整段输入：\(Q\,[L{\times}d]\) 对 \(K,V\,[S{\times}d]\) 做标准 attention。因果 mask 下可见长度平均为 \(S/2\)，单层计算量：</p>
+
+<div class="fig formula">\[
+F_{\text{pre}} = 2\underbrace{\left(2\,H\,L\,\tfrac{S}{2}\,d\right)}_{QK^\top}+2\underbrace{\left(2\,H\,L\,\tfrac{S}{2}\,d\right)}_{AV}\;=\;4\,H\,L\,S\,d\;/\,2\cdot 2
+\;\xrightarrow{\ L=S=4096\ }\;137.4\ \text{GFLOP/层}
+\]</div>
+
+<p class="cap">精确式：\(F_{pre} = 2 \cdot H \cdot L \cdot S_{avg} \cdot d \cdot 2 = 4 H L (S/2) d\)；代入 H=32、L=S=4096、d=128 得 137.4 GFLOP。</p>
+
+<p><b>并行维度</b>：grid = \((B,\ H,\ \lceil L/B_r\rceil)\)。三个维度全部「老天赏饭」——batch 之间独立、head 之间独立、Q 维切出 \(\lceil L/B_r\rceil=32\) 个 tile。L=S=4096、单请求时就有 1×32×32 = <b>1024 个 CTA</b>，远超 132 个 SM，不需要任何补占用的技巧。每个 CTA 内部，\(B_r{=}128\) 行 query 对 KV 块<b>顺序扫描</b>，用 online softmax（滚动维护 \(m, l\) 两个统计量）把 softmax 归并进循环，无需物化 \(L\times S\) 的分数矩阵：</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 548" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="fig1-m-blue" markerWidth="12" markerHeight="12" refX="3" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 L3,6 z" fill="#2456c4"/>
+    </marker>
+    <marker id="fig1-m-orange" markerWidth="12" markerHeight="12" refX="3" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 L3,6 z" fill="#e8862a"/>
+    </marker>
+  </defs>
+  <text x="40" y="42" font-size="13" font-weight="bold" fill="#1a1f2e">A. 并行网格：每个 (head, q-tile) 一个 CTA，Q 维天然切满</text>
+  <!-- causal grid -->
+  <text x="254" y="54" font-size="11" fill="#5a6272" text-anchor="middle">KV 块（⌈S/B_c⌉ 个）→</text>
+  <text x="100" y="150" font-size="11" fill="#5a6272" text-anchor="end">Q 块 ↓</text>
+  <text x="100" y="166" font-size="10" fill="#5a6272" text-anchor="end">⌈L/B_r⌉ 个</text>
+  <rect x="110" y="62" width="288" height="176" fill="#fafbfd" stroke="#c9d2e0"/>
+  <rect x="110" y="62" width="36" height="22" fill="#d7e4f7" stroke="#c9d2e0"/>
+  <rect x="110" y="84" width="72" height="22" fill="#d7e4f7" stroke="#c9d2e0"/>
+  <rect x="110" y="106" width="108" height="22" fill="#d7e4f7" stroke="#c9d2e0"/>
+  <rect x="110" y="128" width="144" height="22" fill="#d7e4f7" stroke="#c9d2e0"/>
+  <rect x="110" y="150" width="180" height="22" fill="#d7e4f7" stroke="#c9d2e0"/>
+  <rect x="110" y="172" width="216" height="22" fill="#d7e4f7" stroke="#c9d2e0"/>
+  <rect x="110" y="194" width="252" height="22" fill="#d7e4f7" stroke="#c9d2e0"/>
+  <rect x="110" y="216" width="288" height="22" fill="#d7e4f7" stroke="#c9d2e0"/>
+  <rect x="110" y="216" width="288" height="22" fill="none" stroke="#2456c4" stroke-width="2"/>
+  <line x1="112" y1="248" x2="296" y2="248" stroke="#e8862a" stroke-width="2" marker-end="url(#fig1-m-orange)"/>
+  <text x="110" y="264" font-size="10" fill="#b0631e">选中 q-tile：从左到右扫 KV 块（online softmax）</text>
+  <!-- side box -->
+  <rect x="470" y="62" width="370" height="176" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="486" y="88" font-size="12" font-weight="bold" fill="#1a1f2e">并行维度（grid，每格 = 1 个 CTA）</text>
+  <text x="486" y="114" font-size="11" fill="#1a1f2e">batch B —— 请求之间 KV 互不复用</text>
+  <text x="486" y="136" font-size="11" fill="#1a1f2e">head H —— MHA 下每头独立 KV，零共享</text>
+  <text x="486" y="158" font-size="11" fill="#1a1f2e">q-tile ⌈L/B_r⌉ —— Q 维天然并行，无需 split-KV</text>
+  <text x="486" y="196" font-size="11" fill="#2456c4">L=4096、B_r=128、H=32、B=1 → 1×32×32 = 1024 CTA ≫ 132 SM</text>
+  <text x="486" y="222" font-size="10" fill="#5a6272">prefill 不需要 combine：softmax 在 CTA 内 online 完成</text>
+  <!-- panel B -->
+  <text x="40" y="290" font-size="13" font-weight="bold" fill="#1a1f2e">B. 单个 CTA 内部：KV 块读入 SRAM，被 B_r 行 query 复用</text>
+  <rect x="48" y="352" width="118" height="56" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="107" y="376" font-size="12" font-weight="bold" fill="#163a86" text-anchor="middle">Q tile</text>
+  <text x="107" y="394" font-size="11" fill="#5a6272" text-anchor="middle">[B_r × 128]</text>
+  <rect x="250" y="352" width="104" height="56" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="302" y="376" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">S = QKᵀ</text>
+  <text x="302" y="394" font-size="11" fill="#5a6272" text-anchor="middle">[B_r × B_c]</text>
+  <rect x="404" y="352" width="128" height="56" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="468" y="374" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">online softmax</text>
+  <text x="468" y="392" font-size="11" fill="#5a6272" text-anchor="middle">(m, l) 滚动更新</text>
+  <rect x="590" y="352" width="118" height="56" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="649" y="376" font-size="12" font-weight="bold" fill="#163a86" text-anchor="middle">O 累加器</text>
+  <text x="649" y="394" font-size="11" fill="#5a6272" text-anchor="middle">[B_r × 128]</text>
+  <rect x="250" y="452" width="104" height="40" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="302" y="476" font-size="11" fill="#1a1f2e" text-anchor="middle">K 块 [B_c×128]</text>
+  <rect x="404" y="452" width="128" height="40" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="468" y="476" font-size="11" fill="#1a1f2e" text-anchor="middle">V 块 [B_c×128]</text>
+  <line x1="166" y1="380" x2="246" y2="380" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig1-m-blue)"/>
+  <line x1="354" y1="380" x2="400" y2="380" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig1-m-blue)"/>
+  <line x1="532" y1="380" x2="586" y2="380" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig1-m-blue)"/>
+  <polyline points="302,452 302,410" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig1-m-blue)"/>
+  <polyline points="468,452 468,436 640,436 640,410" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig1-m-blue)"/>
+  <polyline points="708,380 770,380 770,472 534,472" fill="none" stroke="#e8862a" stroke-width="1.5" marker-end="url(#fig1-m-orange)"/>
+  <text x="650" y="462" font-size="10" fill="#b0631e" text-anchor="middle">下一块 KV 从 HBM 读入（循环 ⌈S/B_c⌉ 次）</text>
+  <text x="48" y="518" font-size="11" fill="#2456c4">KV 每块读入 SRAM 后被 B_r=128 行 query 复用 → DRAM AI ≈ B_r = 128 FLOP/Byte（一阶口径，未计 L2 跨 tile 复用）</text>
+  <text x="48" y="536" font-size="10" fill="#5a6272">上三角因果区不读 KV，causal 摊销在分子分母同时出现、恰好抵消，AI 仍 ≈ B_r</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>｜prefill 的 FlashAttention。A：并行网格是对角的「阶梯」——(head, q-tile) 每个 CTA 只看自己可见的 KV 前缀；B：CTA 内部把 KV 块搬进 SRAM，\(B_r\) 行 query 全额复用。K、V 在循环里反复进出 SRAM，但 Q tile 与 O 累加器全程驻留。</p>
+
+<pre><code># FlashAttention forward（简化）—— grid: (B, H, ceil(L/B_r))，并行度天然充足
+m, l, acc = -inf, 0, 0                    # online softmax 统计量，CTA 内驻留
+for kv_block in range(ceil(S/B_c)):
+    K_i, V_i = load(K[kv_block], V[kv_block])      # HBM → SRAM，全 CTA 复用
+    s     = Q_tile @ K_i.T / sqrt(d)                # [B_r, B_c]
+    m_new = max(m, s.max(-1))
+    p     = exp(s - m_new)                          # 旧统计量按 exp(m-m_new) 重缩放
+    l     = exp(m - m_new) * l + p.sum(-1)
+    acc   = exp(m - m_new) * acc + p @ V_i          # [B_r, d]
+    m     = m_new
+O = acc / l</code></pre>
+
+<p><b>数字账本</b>（单层，L=S=4096，causal，\(B_r{=}128\)）：FLOPs = 137.4 G；KV 的 DRAM 读取（一阶，每 tile 重读可见前缀）≈ 1.07 GB；AI = 137.4G / 1.07G = <b>128</b>。时间 = max(137.4G ÷ 989T, 1.07G ÷ 3.35T) = max(139, 320 µs) = <b>320 µs</b>。一阶口径下它仍偏带宽侧（128 &lt; 295）——实际 FA2/FA3 靠两件事把它往上推：更大的有效 tile（对 GQA 把同组 \(g\) 个头堆进 query 维，等效 \(B_r \times g\)），以及 <b>L2 跨 tile 复用</b>（相邻 q-tile 调度上共享同一份 KV，DRAM 实读远小于一阶账）。那真实 AI 的天花板在哪？把 KV 的重读完全去掉、Q/K/V 各从 DRAM 恰好读一遍，就得到理想上界：</p>
+
+<div class="fig formula">\[
+\mathrm{AI}_{\text{pre}}=\frac{4\,L\,S}{(L+2S)\,b}
+\ \xrightarrow{\ L=S\ }\ \frac{4S}{3\,b}
+\ \xrightarrow{\ \text{bf16},\ S=4096\ }\ \mathbf{2731}
+\tag{式 4}\]</div>
+
+<p class="cap"><b>理想上界</b>：分子 4LS = QKᵀ 与 AV 各 2LS（非因果口径；causal 分子减半 → \(2S/3b\) ≈ 1365，且随 S 增长不封顶）；分母 \((L+2S)\cdot b\) = Q 读一遍 + K、V 各读一遍，与维度 \(d\) 无关（分子分母同含 \(d\)）。它假设 KV 零重读（L2 完美），故为上界——与式 2 的 <b>128</b>（每 tile 必重读一遍 KV 的下界）夹出真实值的活动区间：FA2 实测 60~75% MFU，反推有效 AI \(=\mu\cdot\text{ridge}/\beta \ge (0.6{\sim}0.75)\times 295\) ≈ <b>180~220</b>，正落其间、逼近 ridge。prefill attention 的优化空间就一句话：<b>把真实 AI 从 128 往 2731 推——让每份 KV 服务更多行 query</b>。</p>
+
+<h2 id="sec3">三、Decode：FlashDecoding / PagedAttention 的账本</h2>
+
+<p>decode 每步每请求只有 1 个新 token：\(Q\,[1{\times}d]\) 对整个 KV cache 做「GEMV」。单层计算量 \(F = 4\,H\,S\,d\)（无 causal 折扣，全部位置可见）= <b>67.1 MFLOP</b>——只有 prefill 的 1/2048。KV 必须整份读一遍：\(C = 2\,H_{kv}\,S\,d\,b\) = <b>67.1 MB</b>。两数相除，AI = <b>1</b>（式 1 的实例）。时间 ≈ 67.1 MB ÷ 3.35 TB/s = <b>20 µs/层</b>，全模型 32 层 ≈ 640 µs——而这 20 µs 里 GPU 算力的利用率是 67.1 MFLOP ÷ 20 µs ≈ 3.4 TFLOPS，只占峰值的 <b>0.3%</b>。</p>
+
+<p><b>并行维度</b>：Q 维塌缩为 1，只剩 batch × head × <b>KV 分块</b>。前两个在 MHA 下是纯数据并行（各请求、各头的 KV 互不复用，切多少份总字节不变）；第三个——<b>split-KV</b>——是 decode 特有的补充：把 KV 序列切成 n 段，每段一个 CTA 算出<b>局部</b> attention 结果 \((o_i, m_i, l_i)\)，再用一次 combine kernel 按 online-softmax 规则跨 CTA 归并。它<b>不减少任何字节</b>，唯一目的是凑够 CTA 数把带宽打满：</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 540" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="fig2-m-blue" markerWidth="12" markerHeight="12" refX="3" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 L3,6 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="40" y="58" font-size="13" font-weight="bold" fill="#1a1f2e">A. split-KV：每个 CTA 算一段 KV 的 partial attention，再 combine 归并</text>
+  <text x="60" y="80" font-size="11" fill="#5a6272">同一请求同一 head 的 KV cache（S=4096，按 split 切开，每段独立计算）</text>
+  <rect x="60" y="94" width="210" height="46" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="70" y="113" font-size="11" font-weight="bold" fill="#1a1f2e">CTA (h, split 0)</text>
+  <text x="70" y="130" font-size="10" fill="#5a6272">q_h × KV[0:1024] → (o_0, m_0, l_0)</text>
+  <rect x="60" y="148" width="210" height="46" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="70" y="167" font-size="11" font-weight="bold" fill="#1a1f2e">CTA (h, split 1)</text>
+  <text x="70" y="184" font-size="10" fill="#5a6272">q_h × KV[1024:2048] → (o_1, m_1, l_1)</text>
+  <rect x="60" y="202" width="210" height="46" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="70" y="221" font-size="11" font-weight="bold" fill="#1a1f2e">CTA (h, split 2)</text>
+  <text x="70" y="238" font-size="10" fill="#5a6272">q_h × KV[2048:3072] → (o_2, m_2, l_2)</text>
+  <rect x="60" y="256" width="210" height="46" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="70" y="275" font-size="11" font-weight="bold" fill="#1a1f2e">CTA (h, split 3)</text>
+  <text x="70" y="292" font-size="10" fill="#5a6272">q_h × KV[3072:4096] → (o_3, m_3, l_3)</text>
+  <rect x="560" y="140" width="210" height="110" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="665" y="170" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">combine 归并</text>
+  <text x="665" y="194" font-size="11" fill="#1a1f2e" text-anchor="middle">O = Σ w_i · o_i</text>
+  <text x="665" y="214" font-size="10" fill="#5a6272" text-anchor="middle">w_i ∝ e^(m_i − m) · l_i</text>
+  <text x="665" y="234" font-size="10" fill="#5a6272" text-anchor="middle">（多出的一次 kernel + 带宽）</text>
+  <line x1="270" y1="117" x2="558" y2="163" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig2-m-blue)"/>
+  <line x1="270" y1="171" x2="558" y2="183" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig2-m-blue)"/>
+  <line x1="270" y1="225" x2="558" y2="203" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig2-m-blue)"/>
+  <line x1="270" y1="279" x2="558" y2="223" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig2-m-blue)"/>
+  <text x="60" y="326" font-size="10" fill="#5a6272">完整 grid = (batch B, head H, split n) —— 图中只画一个 head；batch、head 之间 KV 互不复用（MHA）</text>
+  <text x="60" y="342" font-size="10" fill="#5a6272">Q 维长度 = 1：没有任何 query 并行度 —— 这是 decode 与 prefill 的根本差别</text>
+  <text x="40" y="374" font-size="13" font-weight="bold" fill="#1a1f2e">B. 为什么必须 split-KV：B=1 时并行度只有 H=32 个 CTA</text>
+  <rect x="60" y="396" width="720" height="30" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <rect x="60" y="396" width="174.5" height="30" fill="#d7e4f7"/>
+  <text x="54" y="415" font-size="10" fill="#5a6272" text-anchor="end">132 SM</text>
+  <text x="245" y="415" font-size="11" fill="#163a86">B=1 × H=32 → 32 个 CTA，占用率 24%</text>
+  <rect x="60" y="446" width="720" height="30" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <rect x="60" y="446" width="698" height="30" fill="#d7e4f7"/>
+  <text x="420" y="465" font-size="11" fill="#163a86" text-anchor="middle">×4 split → 128 个 CTA（FlashDecoding 的选择），占用率 97%</text>
+  <text x="60" y="498" font-size="10" fill="#5a6272">split 并非越多越好：partial 份数越多，combine 归并的开销越大</text>
+  <text x="60" y="514" font-size="10" fill="#5a6272">vLLM PagedAttention 固定 PARTITION_SIZE=512（S=4096 → 8 块/head）；FlashDecoding 按 SM 数动态选 split</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>｜decode 的 split-KV 与 combine。四个 CTA 各算 1/4 序列的局部 \((o_i, m_i, l_i)\)，combine 用 \(w_i \propto e^{m_i - m}\cdot l_i\) 加权归并——数学上与 online softmax 的块间归并完全同构。batch 与 head 两个维度在 MHA 下零数据复用，切分只改变「谁来读」，不改变「读多少」。</p>
+
+<pre><code># 阶段 1 —— grid: (B, H, n_split)，split-KV 补占用率
+for s in my_split_range:               # 本 CTA 只负责一段 KV
+    score = q @ K[s].T                 # [1, len_i] —— 这就是 GEMV
+    m_i, l_i = local_softmax_stats(score)
+    o_i = softmax(score) @ V[s]        # 局部输出 + 局部统计量
+    emit(o_i, m_i, l_i)
+
+# 阶段 2 —— combine kernel：跨 CTA 归并（decode 特有的额外一步）
+m = max(m_i for all splits)
+w_i = exp(m_i - m) * l_i
+O  = sum(w_i * o_i) / sum(w_i)</code></pre>
+
+<p><b>batch 的作用要说准</b>：B 个请求的 KV 互不相同，字节与 FLOPs 同乘 B，AI 纹丝不动还是 1。batch 带来的是<b>吞吐</b>——带宽饱和之前，单条延迟几乎不变、系统吞吐随 B 线性涨，这是 continuous batching 的全部秘密。batch 解决「带宽用没用满」，永远解决不了「读了多少」。</p>
+
+<p><b>权重与 KV 抢带宽</b>：7B 模型 bf16 权重 14 GB，每步都要整份流过（4.2 ms）；KV cache @4K 全模型 2.15 GB（0.64 ms）。短上下文时 decode 的带宽大头其实是权重；上下文拉到 32K（KV 17.2 GB）KV 才反超，64K（34.3 GB）占七成。<b>「decode 被 KV cache 卡死」是长上下文/大模型的命题</b>——上下文越长、batch 越大，KV 字节层优化越值钱。</p>
+
+<h2 id="sec4">四、并排对账：Prefill vs Decode</h2>
+
+<table>
+  <tr><th style="width:18%">维度</th><th>Prefill（FlashAttention）</th><th>Decode（FlashDecoding / PagedAttention）</th></tr>
+  <tr><td>计算形态</td><td>\([L{\times}d]\times[d{\times}S]\) 矩阵乘（GEMM）</td><td>\([1{\times}d]\cdot[d{\times}S]\) 向量乘（GEMV）</td></tr>
+  <tr><td>单层 FLOPs @S=4K</td><td class="num">137.4 G（causal 折半）</td><td class="num">67.1 M（差 2048×）</td></tr>
+  <tr><td>单层 KV 字节</td><td class="num">1.07 GB 一阶（每 tile 重读，L2 摊销后远低）</td><td class="num">67.1 MB（整份恰读一次，零复用）</td></tr>
+  <tr><td>算术强度</td><td class="num">128（式 2，DRAM tile）~ 2731（式 4，理想上界）</td><td class="num">= 1（式 1b 精确式，S=4096 时 0.9999）→ 永远带宽侧，差 ridge 约 300×</td></tr>
+  <tr><td>并行维度</td><td>batch × head × <b>q-tile</b>（Q 维 = L，充足）</td><td>batch × head × <b>KV-split</b>（Q 维 = 1，缺失）</td></tr>
+  <tr><td>kernel 结构</td><td>单 kernel，CTA 内 online softmax 一次完成</td><td>两阶段：split 算 partial + combine 归并</td></tr>
+  <tr><td>占用的焦虑</td><td>1024 CTA 塞满 132 SM，不焦虑</td><td>B=1 时 32 个 CTA，要 split-KV 凑数（图 2B）</td></tr>
+  <tr><td>时间模型</td><td>max(FLOPs/算力, bytes/带宽)，两者都要争</td><td>≈ KV 字节 ÷ 带宽，算力白送</td></tr>
+  <tr><td>kernel 层优化目标</td><td>增大 B_r / L2 复用 → 提高 AI</td><td>凑占用率 → 把带宽用满（AI 无解）</td></tr>
+  <tr><td>字节层出路</td><td>本来就不读几遍，改善有限</td><td><b>全部希望所在</b>：head 共享 / 压缩 / 稀疏 / 量化 / m_q&gt;1</td></tr>
+</table>
+<p class="cap"><b>表 1</b>｜同一层 attention 的两副面孔。注意一个反直觉：一阶口径下 prefill 的 DRAM 流量（1.07 GB）反而比 decode（67 MB）大——因为每个 tile 都重读 KV 前缀；但 prefill 每字节做了 128 倍的算术，最终赢在时间上。两阶段的 bound 类型不同，是 PD 分离部署（<a href="../deepseek-v4/v4pro-ridge-point.html">V4-Pro 账本 §六</a>）的算术根源。</p>
+
+<h2 id="sec5">五、演进 I：在 head 间共享 KV——MQA 与 GQA</h2>
+
+<p>式 1 指明了唯一的出路：\(m_q\) 被 decode 钉死为 1，那就动 \(h_{sh}\)——<b>让多个 query 头共用同一份 KV</b>。KV cache 字节数（式 3）与 AI（式 1）同时改善，一头省显存、一头省带宽：</p>
+
+<ul>
+  <li><b>MQA</b>（Shazeer, 2019，arXiv:1911.02131）：全部 \(H\) 个 query 头共享 <b>1 个</b> KV 头。cache ÷H、AI ×H（=32），走到了共享的极端；代价是所有头看同一份 K/V，表达力受损，质量退化明显（PaLM、Falcon 采用过）。</li>
+  <li><b>GQA</b>（Ainslie et al., 2023，arXiv:2305.13245）：折中——\(H_{kv}=8\) 个 KV 头，每组 \(g=H/H_{kv}=4\) 个 query 头共享一份。cache ÷4、AI ×4，质量用 <b>uptraining</b>（约 5% 原训练量，把 MHA 权重转换成 GQA 再续训）拉回 ≈MHA。Llama-2-70B、Llama-3、Mistral、Qwen 全线标配，是当代稠密模型的默认选择。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 880 470" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <g stroke="#eceff4" stroke-width="1">
+    <line x1="135.2" y1="40" x2="135.2" y2="400"/>
+    <line x1="351.7" y1="40" x2="351.7" y2="400"/>
+    <line x1="568.2" y1="40" x2="568.2" y2="400"/>
+    <line x1="784.7" y1="40" x2="784.7" y2="400"/>
+    <line x1="70" y1="130" x2="850" y2="130"/>
+    <line x1="70" y1="220" x2="850" y2="220"/>
+    <line x1="70" y1="310" x2="850" y2="310"/>
+  </g>
+  <rect x="70" y="40" width="780" height="360" fill="none" stroke="#c9d2e0"/>
+  <g fill="#5a6272" font-size="11">
+    <text x="62" y="404" text-anchor="end">0</text>
+    <text x="62" y="314" text-anchor="end">250</text>
+    <text x="62" y="224" text-anchor="end">500</text>
+    <text x="62" y="134" text-anchor="end">750</text>
+    <text x="62" y="44" text-anchor="end">1000</text>
+    <text x="135" y="418" text-anchor="middle">1</text>
+    <text x="352" y="418" text-anchor="middle">10</text>
+    <text x="568" y="418" text-anchor="middle">100</text>
+    <text x="785" y="418" text-anchor="middle">1000</text>
+  </g>
+  <text x="75" y="32" font-size="11" fill="#5a6272">可达算力（TFLOP/s，H800 BF16 口径）</text>
+  <text x="460" y="442" font-size="11" fill="#5a6272" text-anchor="middle">算术强度 AI（FLOP/Byte，log）</text>
+  <polyline points="70,399.4 200.3,397.6 330.6,390.4 461,361.4 591.5,245.6 669.9,44 850,44" fill="none" stroke="#2456c4" stroke-width="2"/>
+  <line x1="669.9" y1="44" x2="669.9" y2="400" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4"/>
+  <text x="663" y="356" font-size="11" fill="#5a6272" text-anchor="end">H800 BF16 ridge ≈ 295</text>
+  <line x1="85" y1="64" x2="115" y2="64" stroke="#2456c4" stroke-width="2.5"/>
+  <text x="122" y="68" font-size="11" fill="#1a1f2e">decode 四点：沿 ramp 爬坡，AI = 每字节 KV 服务的 (query × head) 数</text>
+  <line x1="85" y1="86" x2="115" y2="86" stroke="#2f9e63" stroke-width="2.5"/>
+  <text x="122" y="90" font-size="11" fill="#1a1f2e">prefill 对照：tile 摊销 × L2 复用</text>
+  <circle cx="135.2" cy="398.8" r="5" fill="#2456c4"/>
+  <text x="135" y="382" font-size="11" fill="#163a86" text-anchor="middle">MHA：AI = 1</text>
+  <circle cx="265.5" cy="395.2" r="5" fill="#2456c4"/>
+  <text x="265" y="378" font-size="11" fill="#163a86" text-anchor="middle">GQA-8：AI = 4</text>
+  <circle cx="461" cy="361.4" r="5" fill="#2456c4"/>
+  <text x="430" y="344" font-size="11" fill="#163a86" text-anchor="middle">MQA：AI = 32</text>
+  <circle cx="651.2" cy="108.1" r="5" fill="#2456c4"/>
+  <text x="643" y="100" font-size="11" fill="#163a86" text-anchor="end">MLA（吸收）：AI ≈ 242</text>
+  <rect x="586.5" y="240.6" width="10" height="10" fill="#2f9e63"/>
+  <line x1="587" y1="249" x2="561" y2="258" stroke="#94a3b8" stroke-width="1"/>
+  <text x="555" y="262" font-size="11" fill="#1e7a4a" text-anchor="end">prefill（一阶）：AI = B_r = 128</text>
+  <rect x="781.9" y="39" width="10" height="10" fill="#ffffff" stroke="#2f9e63" stroke-width="2"/>
+  <text x="845" y="68" font-size="11" fill="#1e7a4a" text-anchor="end">prefill 实测（L2 摊销）</text>
+  <text x="845" y="86" font-size="11" fill="#1e7a4a" text-anchor="end">贴住算力天花板</text>
+</svg>
+</div>
+<p class="cap"><b>图 3</b>｜decode 注意力在 roofline ramp 上的爬坡：MHA 1 → GQA-8 4（×4）→ MQA 32（×8）→ MLA ≈242（×7.6），步进倍数就是「共享 head 数」的增幅。MQA 虽然在 AI 上追平 MLA 量级，但质量代价大；MLA 的坐标来自 DeepSeek-V2 配置（H=128，\(d_c{=}512\)、\(d_r{=}64\)）。对照的 prefill 两点：一阶 tile 口径 128，实测凭 L2 摊销贴住天花板——prefill 从来不是这条 ramp 的受害者。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="40" y="36" font-size="13" font-weight="bold" fill="#1a1f2e">每 token 每层 KV cache 字节数（bf16，条长线性比例）</text>
+  <text x="40" y="56" font-size="10" fill="#5a6272">MHA / GQA / MQA 用 H=32、d=128（Llama-2-7B 口径）；MLA 用 DeepSeek-V2 配置（H=128，c_kv 512 + RoPE 64）</text>
+  <line x1="160" y1="72" x2="160" y2="262" stroke="#c9d2e0"/>
+  <text x="150" y="103" font-size="11" fill="#1a1f2e" text-anchor="end">MHA（基线）</text>
+  <rect x="160" y="84" width="700" height="30" fill="#2456c4"/>
+  <text x="845" y="103" font-size="11" font-weight="bold" fill="#cfe0f6" text-anchor="end">16384 B · decode AI = 1</text>
+  <text x="150" y="151" font-size="11" fill="#1a1f2e" text-anchor="end">GQA-8</text>
+  <rect x="160" y="132" width="175" height="30" fill="#4a76d0"/>
+  <text x="343" y="151" font-size="11" fill="#1a1f2e">4096 B · AI = 4</text>
+  <text x="150" y="199" font-size="11" fill="#1a1f2e" text-anchor="end">MQA</text>
+  <rect x="160" y="180" width="22" height="30" fill="#86a7e3"/>
+  <text x="190" y="199" font-size="11" fill="#1a1f2e">512 B · AI = 32（= H）</text>
+  <text x="150" y="247" font-size="11" fill="#1a1f2e" text-anchor="end">MLA</text>
+  <rect x="160" y="228" width="49" height="30" fill="#2f9e63"/>
+  <text x="217" y="247" font-size="11" fill="#1a1f2e">1152 B · AI ≈ 242（H=128、K/V 同源）</text>
+  <text x="40" y="282" font-size="10" fill="#5a6272">× S=4096 × 32 层 ≈ 每请求 KV 总量：MHA 2.15 GB / GQA-8 537 MB / MQA 67 MB；MLA 为 V2 60 层 ≈ 283 MB —— cache 容量决定并发 batch 与上下文上限</text>
+</svg>
+</div>
+<p class="cap"><b>图 4</b>｜KV cache 的坍缩。每 token 每层从 MHA 的 16 KB 压到 MLA 的 1.15 KB（且 MLA 是 128 头的大模型口径）；GQA-8 537 MB 的含义是「同样显存能并发 4× 请求或 4× 上下文」。<b>cache 容量与 decode AI 是同一枚硬币的两面</b>：两者都由 \(H_{kv}\)（共享比）决定。</p>
+
+<table>
+  <tr><th>方案</th><th>\(H_{kv}\)</th><th>cache/token/层（式 3）</th><th>@S=4K 全模型</th><th>decode AI（式 1）</th><th>attn 时间/层 @4K</th><th>质量</th></tr>
+  <tr><td>MHA</td><td class="num">32</td><td class="num">16 KB</td><td class="num">2.15 GB</td><td class="num">1</td><td class="num">20.0 µs</td><td>基线</td></tr>
+  <tr><td>GQA-8</td><td class="num">8</td><td class="num">4 KB</td><td class="num">537 MB</td><td class="num">4</td><td class="num">5.0 µs</td><td>uptraining 后 ≈ MHA</td></tr>
+  <tr><td>MQA</td><td class="num">1</td><td class="num">512 B</td><td class="num">67 MB</td><td class="num">32</td><td class="num">0.63 µs</td><td><span class="bad">明显退化</span></td></tr>
+  <tr><td>MLA（V2 配置）</td><td class="num">—</td><td class="num">1.15 KB</td><td class="num">≈283 MB（60 层）</td><td class="num">≈242</td><td class="num">1.4 µs</td><td><span class="ok">论文口径优于 MHA</span></td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜head 共享路线的账本（时间按 3.35 TB/s 理想带宽；MLA 行为 DeepSeek-V2 配置：H=128、\(d_c{=}512\)、\(d_r{=}64\)、60 层，故与前三行不同尺度）。GQA 的 AI=4 看似寒酸，但它是「质量几乎不掉」约束下的最优点；MQA 证明 AI 可以白拿，也证明了白拿有代价。</p>
+
+<h2 id="sec6">六、演进 II：MLA——低秩压缩、K/V 同源与「吸收」</h2>
+
+<p>GQA 仍在「砍头数」，MLA（DeepSeek-V2，2024，arXiv:2405.04434）换了思路：<b>把每个 token 的 K/V 压成一个低秩潜向量</b> \(c_{kv}\in\mathbb{R}^{512}\)（所有头共享），另配一个 64 维的解耦 RoPE 键 \(k_r\)（RoPE 的位置变换与低秩吸收不相容，必须单独存）。cache 里每 token 每层只有 \([c_{kv} \mid k_r]\) = 576 个元素 = 1152 B——比 MQA（512 B）略大，却保留了全部 \(H{=}128\) 个头的表达力。</p>
+
+<p><b>为什么 decode AI 能到 ≈2H</b>：吸收（absorbed）形式把 \(W_{UK}\) 折进 query 侧——\(\mathrm{score} = (W_{UK}^\top q_h)\cdot c_{kv} + q_r\cdot k_r\)。于是每条 1152 B 的 cache 条目同时充当 K（打分）与 V（加权和）两个角色、服务 128 个头：</p>
+
+<div class="fig formula">\[
+F = 2\,H\,(d_c{+}d_r) + 2\,H\,d_c = 278{,}528\ \text{FLOPs/位置/层},\quad
+B = (d_c{+}d_r)\times 2 = 1152\ \text{B} \;\Rightarrow\; \mathrm{AI}\approx \mathbf{242}
+\]</div>
+
+<p class="cap">即式 1 的 \(h_{sh}\approx 2H\)：一份潜向量被「K 用一次、V 用一次、128 个头共用」。代价是 score 维度从 128 涨到 576，每 token 注意力 FLOPs ×4.5——但 decode 带宽受限，<b>多余的 FLOPs 是免费的</b>。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 408" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="fig5-m-blue" markerWidth="12" markerHeight="12" refX="3" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 L3,6 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="225" y="36" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">prefill：不吸收 —— FLOPs 优先</text>
+  <text x="655" y="36" font-size="13" font-weight="bold" fill="#1e7a4a" text-anchor="middle">decode：吸收 —— 字节优先</text>
+  <line x1="440" y1="24" x2="440" y2="400" stroke="#e3e7ee"/>
+  <!-- left panel -->
+  <text x="26" y="84" font-size="10" fill="#5a6272">x</text>
+  <text x="26" y="144" font-size="10" fill="#5a6272">c_kv</text>
+  <text x="26" y="204" font-size="10" fill="#5a6272">c_kv</text>
+  <line x1="30" y1="90" x2="56" y2="90" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <line x1="30" y1="150" x2="56" y2="150" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <line x1="30" y1="210" x2="56" y2="210" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <rect x="60" y="70" width="110" height="40" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="115" y="94" font-size="12" font-weight="bold" fill="#163a86" text-anchor="middle">W_Q</text>
+  <rect x="60" y="130" width="110" height="40" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="115" y="154" font-size="11" fill="#1a1f2e" text-anchor="middle">W_UK（每头）</text>
+  <rect x="60" y="190" width="110" height="40" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="115" y="214" font-size="11" fill="#1a1f2e" text-anchor="middle">W_UV（每头）</text>
+  <text x="215" y="84" font-size="10" fill="#5a6272">q_h [128]</text>
+  <text x="245" y="144" font-size="10" fill="#5a6272">k_h [128] 物化</text>
+  <text x="245" y="204" font-size="10" fill="#5a6272">v_h [128] 物化</text>
+  <polyline points="170,90 320,90 320,248" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <polyline points="170,150 290,150 290,248" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <polyline points="170,210 260,210 260,248" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <rect x="90" y="250" width="240" height="56" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="210" y="274" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">softmax(QKᵀ/√d)·V</text>
+  <text x="210" y="292" font-size="10" fill="#5a6272" text-anchor="middle">标准 MHA 形式（d_h = 128）</text>
+  <line x1="210" y1="306" x2="210" y2="324" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <text x="220" y="330" font-size="11" fill="#1a1f2e">→ W_O → 输出</text>
+  <text x="40" y="372" font-size="11" fill="#2456c4">GEMM 维度 = d_h = 128：注意力 FLOPs = 4·H·L·S·d_h，全场最小</text>
+  <text x="40" y="390" font-size="10" fill="#5a6272">代价：k_h、v_h 每 token 物化写读（prefill 算力富余，承受得起）</text>
+  <!-- right panel -->
+  <text x="480" y="60" font-size="10" fill="#5a6272">q_h [128]</text>
+  <rect x="480" y="70" width="170" height="40" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="565" y="94" font-size="11" fill="#1a1f2e" text-anchor="middle">W_UKᵀ·q_h → q̃_h [512]</text>
+  <line x1="565" y1="110" x2="565" y2="126" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <rect x="480" y="130" width="170" height="48" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="565" y="150" font-size="11" fill="#1a1f2e" text-anchor="middle">score = q̃_h · c_kv</text>
+  <text x="565" y="168" font-size="10" fill="#5a6272" text-anchor="middle">+ q_rope · k_rope（各 64 维）</text>
+  <line x1="565" y1="178" x2="565" y2="194" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <rect x="480" y="198" width="170" height="48" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="565" y="218" font-size="11" fill="#1a1f2e" text-anchor="middle">权重 × c_kv（V 同源）</text>
+  <text x="565" y="236" font-size="10" fill="#5a6272" text-anchor="middle">Σ a_s · c_s → 加权潜向量</text>
+  <line x1="565" y1="246" x2="565" y2="262" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <rect x="480" y="266" width="170" height="40" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="565" y="290" font-size="11" fill="#163a86" text-anchor="middle">W_UV → o_h [128]</text>
+  <line x1="565" y1="306" x2="565" y2="324" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <text x="575" y="330" font-size="10" fill="#5a6272">→ W_O</text>
+  <rect x="690" y="140" width="160" height="65" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="770" y="158" font-size="11" font-weight="bold" fill="#1a1f2e" text-anchor="middle">KV cache 条目</text>
+  <text x="770" y="176" font-size="10" fill="#5a6272" text-anchor="middle">[c_kv 512 | k_rope 64]</text>
+  <text x="770" y="192" font-size="10" fill="#5a6272" text-anchor="middle">= 1152 B · 全头共享</text>
+  <line x1="690" y1="155" x2="652" y2="155" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <polyline points="690,190 670,190 670,222 652,222" fill="none" stroke="#2456c4" stroke-width="1.5" marker-end="url(#fig5-m-blue)"/>
+  <text x="460" y="372" font-size="11" fill="#1e7a4a">每字节 KV 服务 128 头 × K/V 双用 → AI ≈ 2H ≈ 242</text>
+  <text x="460" y="390" font-size="10" fill="#5a6272">代价：score 维度 576 vs 128，FLOPs ×4.5 —— decode 带宽受限，多算免费</text>
+</svg>
+</div>
+<p class="cap"><b>图 5</b>｜MLA 的两种执行形式。<b>不吸收</b>：把 \(W_{UK}\) 作用在 KV 侧、每 token 物化 128 维的 \(k_h/v_h\)，attention 回到标准 MHA 形状——score 维 128，FLOPs 省 4.5×，适合算力受限的 prefill。<b>吸收</b>：把 \(W_{UK}^\top\) 折进 query、cache 只留 1152 B 的潜向量——字节最小，适合带宽受限的 decode（FlashMLA 即此形式）。<b>同一份压缩，按 roofline 选执行形式</b>——这是 MLA 对 prefill/decode 不对称性最直接的回答，也是本文 §2/§3 两套账本的合流点。</p>
+
+<h2 id="sec7">七、演进 III：之后的四条路</h2>
+
+<p>MLA 把「head 间共享」走到了尽头，但主线公式 \(AI = m_q \times h_{sh}\) 与字节数还有别的旋钮可拧：</p>
+
+<table>
+  <tr><th>路线</th><th>代表</th><th>动的旋钮</th><th>效果与账本口径</th></tr>
+  <tr><td>稀疏选择</td><td>NSA / MoBA / DeepSeek-V3.2 DSA；V4 的 CSA/HCA</td><td>直接少读字节</td><td>decode 每步只读 top-k + 滑窗条目，bytes ÷ 数十倍而 AI 不变（V4-Pro 账本里 KV 只占 decode 带宽的 0.6%）</td></tr>
+  <tr><td>更小的字节</td><td>KV FP8 / INT4（KIVI 等）</td><td>每元素字节 \(b\)</td><td>bytes ÷2~÷4；物理 AI = FLOP/Byte 反而升高（式 1 分母缩小）</td></tr>
+  <tr><td>跨层共享</td><td>YOCO / CLA / V4.1 CSA2</td><td>层间复用</td><td>相邻层共享同一份 KV，cache 按共享因子再缩（式 3 × 层数的账）</td></tr>
+  <tr><td>多 query/步</td><td>投机解码（DSpark 等）、MTP</td><td>\(m_q\) &gt; 1</td><td>一次 verify τ 个 token，attention 变 GEMM，AI ×τ；GEMM 类核整体翻转（DSpark τ=5 的账见 <a href="../deepseek-v4/dspark-speculative-decoding.html">DSpark 解读</a>）</td></tr>
+  <tr><td>跨请求复用</td><td>prefix caching（vLLM APC）</td><td>batch 间共享前缀</td><td>batch 维上唯一真实的数据复用：公共前缀的 KV 块只读一次</td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜MLA 之后的演进地图。注意分工：head 共享与压缩改变「每字节服务几个 query」，稀疏与量化改变「字节本身」，投机解码改变 \(m_q\)——它们互相正交，可以叠加。</p>
+
+<div class="infer">
+站内账本的衔接：V4-Pro roofline 报告中注意力核 AI = 4·n_h·c ÷ 576 B = 455，正是本文框架在 MLA+FP8 条目上的实例——「每字节服务的 (query × head × K/V 双用) 数」再除以条目字节。MLA（242，bf16 1152 B）与 V4（455，FP8 576 B）是同一公式在不同字节口径下的两次取值。
+</div>
+
+<h2 id="sec8">八、总结：两个旋钮，两层优化</h2>
+
+<p>把全文收进一张表：</p>
+
+<table>
+  <tr><th>层</th><th>手段</th><th>改变什么</th><th>不改变什么</th></tr>
+  <tr><td rowspan="2"><b>kernel 层</b><br>（FA tiling、split-KV、PagedAttention）</td><td>prefill：Q 维切 tile，\(B_r\) 行复用</td><td>AI：1 → \(B_r\)（×128）</td><td rowspan="2">KV 总字节数一个不减；decode 的 AI 仍钉在 \(m_q \times h_{sh}\)</td></tr>
+  <tr><td>decode：batch × head × split-KV 凑占用率</td><td>带宽利用率（32 CTA → 128 CTA）</td></tr>
+  <tr><td rowspan="2"><b>字节层</b><br>（GQA / MLA / 稀疏 / 量化 / spec / prefix）</td><td>提高 \(h_{sh}\)（head 共享、低秩压缩）</td><td>AI 与 cache 同步改善</td><td rowspan="2">——这才是 decode 提速的来源；kernel 层写得再好也只是在带宽上限上打转</td></tr>
+  <tr><td>提高 \(m_q\)（投机解码）或直接减字节（稀疏、量化、prefix 共享）</td><td>AI ×\(m_q\) 或 bytes ÷k</td></tr>
+</table>
+<p class="cap"><b>表 4</b>｜两层优化框架。<b>主线公式 \(\mathrm{AI} = m_q \times h_{sh}\)</b>：prefill 靠 tile 把 \(m_q\) 做到 128 所以先天健康；decode 的 \(m_q{=}1\)，于是 MHA→GQA→MLA 的每一步都是在 \(h_{sh}\)（1 → g → ≈2H）上做乘法，之后的稀疏、量化、投机解码则分别在「字节」「字节」「\(m_q\)」上继续做文章。</p>
+
+<p>最后回到最初的问题——「decode 是不是只有 head 上的并行度」：<b>batch、head、KV-split 三者都是纯数据并行，切多少份就读多少字节</b>；它们负责把 3.35 TB/s 用满，而 GQA→MLA→稀疏这条演进线负责让流过带宽的字节变少。前者是 kernel 工程师的手艺，后者是模型架构师的手艺——decode 提速的历史，是后者不断给前者减负的历史。</p>
+
+<h2 id="refs">参考</h2>
+
+<ul class="refs">
+  <li>N. Shazeer. <i>Fast Transformer Decoding: One Write-Head is All You Need</i>（MQA）. arXiv:1911.02131, 2019.</li>
+  <li>J. Ainslie et al. <i>GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints</i>. arXiv:2305.13245, 2023.（GQA 与 uptraining）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model</i>. arXiv:2405.04434, 2024.（MLA、吸收形式、解耦 RoPE）</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V3 Technical Report</i>. arXiv:2412.19437, 2024；<a href="https://github.com/deepseek-ai/FlashMLA">FlashMLA</a>（吸收态 decode kernel）.</li>
+  <li>T. Dao et al. <i>FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness</i>. arXiv:2205.14135, 2022；Flash-Decoding（Dao, 2023，split-KV + combine）.</li>
+  <li>W. Kwon et al. <i>Efficient Memory Management for Large Language Model Serving with PagedAttention</i>. arXiv:2309.06180, 2023.（vLLM；PARTITION_SIZE 口径）</li>
+  <li>DeepSeek-AI. <i>Native Sparse Attention</i>（arXiv:2502.11089）；DeepSeek-V3.2-Exp DSA；<a href="https://arxiv.org/abs/2606.19348">DeepSeek-V4</a>（CSA/HCA）.</li>
+  <li>本站：<a href="../deepseek-v4/v4pro-ridge-point.html">V4-Pro roofline 账本</a>（ridge 口径出处）、<a href="../vllm/vllm-t3-kvcache.html">vLLM PagedAttention 源码走读</a>、<a href="../deepseek-v4/dspark-speculative-decoding.html">DSpark</a>、<a href="../quantization/quant-t5-kv-systems.html">KV Cache 量化</a>、<a href="../deepseek-v41/deepseek-v41-t2-csa2.html">V4.1 CSA2</a>、<a href="llm-arch-evolution.html">LLM 架构演进</a></li>
+</ul>
+
+<footer>
+  本报告为教学向的一阶 roofline 账本：FLOPs 按「乘加各计一次」，不计 softmax / L2 / kernel 实际效率与 TP 通信；时间按理想带宽换算，实际系统更低。全部数字可按 §1 的式 1/1b/2/3 与 §2 的式 4、以及 §2/§3 的代入过程复算。
+</footer>
+
+</main>
+</body>
+</html>
