@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlashAttention v1→v4 演进全解：从 online softmax 到 Blackwell 非对称流水线</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>FlashAttention v1→v4 演进全解：从 online softmax 到 Blackwell 非对称流水线</h1>
+
+<div class="meta">
+  <b>分析对象</b>：FlashAttention 四代精确注意力算法的演进，重点是<b>算法过程本身</b>（tiling、online softmax、循环交换、warp 划分、异步流水线、低精度），而非泛泛的跑分对比<br>
+  <b>论文</b>：
+  FA1 <a href="https://arxiv.org/abs/2205.14135">arXiv:2205.14135</a>（Dao, Fu, Ermon, Rudra, Ré, NeurIPS 2022）·
+  FA2 <a href="https://arxiv.org/abs/2307.08691">arXiv:2307.08691</a>（Tri Dao, 2023）·
+  FA3 <a href="https://arxiv.org/abs/2407.08608">arXiv:2407.08608</a>（Shah, Bikshandi, Zhang, Thakkar, Ramani, Dao, 2024）·
+  FA4 <a href="https://arxiv.org/abs/2603.05451">arXiv:2603.05451</a>（Zadouri, Hoehnerbach, Shah, Liu, Thakkar, Dao, 2026-03）<br>
+  <b>代码仓库</b>：<a href="https://github.com/Dao-AILab/flash-attention">Dao-AILab/flash-attention</a>，commit <code>e7a6402</code>（2026-10-19 浅克隆抓取，正文所有 <code>文件:行号</code> 均可追溯到该版本）<br>
+  <b>本地论文归档</b>：<code>paper/flash-attention-v1.pdf</code> · <code>paper/flash-attention-v2.pdf</code> · <code>paper/flash-attention-v3.pdf</code> · <code>paper/flash-attention-v4.pdf</code><br>
+  <b>关联报告</b>：<a href="mha-prefill-decode.html">MHA 的 Prefill 与 Decode 账本</a>、<a href="attention-ai-calculator.html">Attention AI 计算器</a>、<a href="../deepseek-v4/deepseek-v4-attention.html">DeepSeek-V4 Attention</a><br>
+  <b>生成日期</b>：2026-10-19
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：attention 在 GPU 上慢，不是因为 FLOPs 多，而是因为 \(N{\times}N\) 的 softmax 中间矩阵要在慢得多的 HBM 里反复读写。FlashAttention 用「分块 + online softmax」让 \(S\) 从不落盘（FA1），用「循环交换 + 减少非 matmul 指令」把利用率从 25–40% 抬到 50–73%（FA2），用「warp 专化 + GEMM/softmax 异步流水」追平 Hopper 异步硬件（FA3），最后在 Blackwell 上直面「tensor core 翻倍、SRAM 带宽与指数单元原地踏步」的非对称扩展，用 TMEM、2-CTA MMA、软件模拟指数和条件重缩放把非 matmul 瓶颈再压下去（FA4）。</p>
+  <p><b>四代的主线逻辑</b>：FA1 解决「<b>能不能</b>不存 \(N^2\)」（数学上可行：running max/sum + 输出重缩放）；FA2 解决「<b>怎么摆</b>才能吃满硬件」（并行度、寄存器、warp 分工）；FA3 解决「<b>怎么等</b>」（把同步算法改写成异步流水线）；FA4 解决「<b>等什么</b>」（瓶颈已从 matmul 移到 softmax 的 exp 与共享内存，算法要为非对称硬件改形）。</p>
+  <p><b>算法上最值得带走的一件事</b>：online softmax 的归纳不变式——处理完前 \(j\) 个 KV 块后，寄存器里的 \((m^{(j)}, \ell^{(j)}, \tilde O^{(j)})\) 恒等于「只看前 \(j\) 块时的全局 rowmax、rowsum 与未归一化输出 \(\mathrm{diag}(\ell)^{-1}\) 等价形式」。四个版本的工程演进，全部是在保持这个不变式的前提下重排计算与数据搬运。</p>
+</div>
+
+<h2 id="sec1">一、背景：标准 attention 为什么是访存受限</h2>
+
+<h3>1.1 单头 attention 与标准实现</h3>
+
+<p>给定 \(Q, K, V \in \mathbb{R}^{N \times d}\)（\(N\) 为序列长度、\(d\) 为 head_dim），单头 attention 计算三步（FA1 论文 §2.2）：</p>
+
+<div class="fig formula">\[
+S = QK^\top \in \mathbb{R}^{N\times N},\qquad
+P = \mathrm{softmax}(S) \in \mathbb{R}^{N\times N}\ \text{（按行）},\qquad
+O = PV \in \mathbb{R}^{N\times d}.
+\tag{式 1}\]</div>
+
+<p>标准实现（FA1 论文 Algorithm 0）把它拆成三个 GPU kernel：</p>
+
+<pre><code class="language-text">Algorithm 0  Standard Attention（FA1 论文 §2.2）
+1: 按块从 HBM 读 Q、K，计算 S = QKᵀ，把 S 写回 HBM。
+2: 从 HBM 读 S，计算 P = softmax(S)，把 P 写回 HBM。
+3: 从 HBM 读 P、V，计算 O = PV，把 O 写回 HBM。</code></pre>
+
+<p>问题在于 \(S, P \in \mathbb{R}^{N\times N}\)：以 GPT-2 为例 \(N{=}1024,\ d{=}64\)，\(N \gg d\)，这两个 \(N^2\) 矩阵的读写量 \(\Theta(N^2)\) 远超输入输出本身的 \(\Theta(Nd)\)。而其中的 softmax、mask、dropout 都是<b>逐元素/按行归约</b>操作——算术强度极低，是典型的访存受限（memory-bound）算子（FA1 §2.1）。</p>
+
+<h3>1.2 HBM vs SRAM：一个数量级的带宽差、三个数量级的容量差</h3>
+
+<p>FA1 论文 §2.1 给出的 A100 账本：</p>
+
+<table>
+  <tr><th>层级</th><th>容量</th><th>带宽</th><th>特点</th></tr>
+  <tr><td>HBM（显存）</td><td class="num">40–80 GB</td><td class="num">1.5–2.0 TB/s</td><td>全局可见，容量大但慢</td></tr>
+  <tr><td>SRAM（每 SM 片上）</td><td class="num">192 KB × 108 SM</td><td class="num">≈ 19 TB/s（估计）</td><td>快一个数量级，小三个数量级</td></tr>
+</table>
+
+<p>GPU 计算速度的增长长期快于访存速度的增长，所以多数 Transformer 算子都卡在 HBM 访问上。<b>kernel 融合</b>是常规药方——把 softmax、mask、matmul 融进一个 kernel，中间量不出 HBM；但训练场景下，为 backward 服务的中间量（\(S, P\)）仍然必须写进 HBM 存下来，朴素融合救不了 attention（FA1 §2.1 结尾）。FlashAttention 的答案是：让 \(N^2\) 的中间量<b>根本不存在</b>，backward 需要的信息用 \(O(N)\) 的统计量 + 重计算来替代。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 430" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="m1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="m1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b0631e"/>
+    </marker>
+    <marker id="m1c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <!-- 左面板：标准 attention -->
+  <rect x="20" y="16" width="416" height="398" rx="10" fill="#fdfdfe" stroke="#c9d2e0"/>
+  <text x="34" y="44" font-size="13" font-weight="bold" fill="#1a1f2e">标准 attention：3 个 kernel，S/P 落盘 HBM</text>
+  <rect x="46" y="62" width="180" height="34" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="136" y="84" font-size="12" text-anchor="middle" fill="#1a1f2e">① GEMM：S = QKᵀ</text>
+  <line x1="136" y1="96" x2="136" y2="116" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <rect x="46" y="118" width="180" height="56" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="136" y="140" font-size="12" text-anchor="middle" fill="#1a1f2e">S, P ∈ R^(N×N)</text>
+  <text x="136" y="160" font-size="12" text-anchor="middle" fill="#b0631e">先写 HBM 再读回</text>
+  <line x1="136" y1="174" x2="136" y2="194" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <rect x="46" y="196" width="180" height="34" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="136" y="218" font-size="12" text-anchor="middle" fill="#1a1f2e">② 逐元素：softmax</text>
+  <line x1="136" y1="230" x2="136" y2="250" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m1a)"/>
+  <rect x="46" y="252" width="180" height="34" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="136" y="274" font-size="12" text-anchor="middle" fill="#1a1f2e">③ GEMM：O = PV</text>
+  <text x="46" y="322" font-size="11" fill="#5a6272">S/P 每经过一次就整块读/写一遍</text>
+  <text x="46" y="340" font-size="11" fill="#5a6272">HBM 访存 Θ(Nd + N²)，额外显存 O(N²)</text>
+  <rect x="34" y="366" width="390" height="34" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="46" y="388" font-size="12" fill="#1a1f2e">HBM（A100：40–80 GB @ 1.5–2.0 TB/s）</text>
+  <!-- 右面板：FlashAttention -->
+  <rect x="452" y="16" width="408" height="398" rx="10" fill="#fdfdfe" stroke="#c9d2e0"/>
+  <text x="466" y="44" font-size="13" font-weight="bold" fill="#1a1f2e">FlashAttention：1 个 kernel，分块走 SRAM</text>
+  <rect x="466" y="62" width="220" height="34" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="576" y="84" font-size="12" text-anchor="middle" fill="#1a1f2e">Q_i：整块常驻 SRAM</text>
+  <line x1="576" y1="96" x2="576" y2="116" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m1c)"/>
+  <rect x="466" y="118" width="220" height="72" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="576" y="140" font-size="12" text-anchor="middle" fill="#1a1f2e">for j = 1..Tc：载入 K_j, V_j</text>
+  <text x="576" y="160" font-size="12" text-anchor="middle" fill="#1a1f2e">S_ij = Q_i K_jᵀ（B_r×B_c 小块）</text>
+  <text x="576" y="180" font-size="12" text-anchor="middle" fill="#2f9e63">S 从不离开片上</text>
+  <line x1="576" y1="190" x2="576" y2="210" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m1c)"/>
+  <rect x="466" y="212" width="220" height="52" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="576" y="233" font-size="12" text-anchor="middle" fill="#1a1f2e">Õ, m, ℓ 留在片上寄存器</text>
+  <text x="576" y="252" font-size="12" text-anchor="middle" fill="#1a1f2e">结束后 O = Õ/ℓ，只写回一次</text>
+  <path d="M 686 154 L 760 154 L 760 366 L 700 366" fill="none" stroke="#e8862a" stroke-width="1.5" marker-end="url(#m1b)"/>
+  <text x="770" y="270" font-size="11" fill="#b0631e">K_j,V_j</text>
+  <text x="770" y="286" font-size="11" fill="#b0631e">按块读</text>
+  <rect x="464" y="366" width="384" height="34" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="476" y="388" font-size="12" fill="#1a1f2e">HBM：Q,K,V,O 各过一遍，Θ(Nd) 级</text>
+  <text x="466" y="322" font-size="11" fill="#5a6272">额外显存 O(N)：只存统计量 m, ℓ</text>
+  <text x="466" y="340" font-size="11" fill="#5a6272">HBM 访存 Θ(N²d²/M)，M 为 SRAM 容量</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：标准 attention 与 FlashAttention 的数据流对比（对应 FA1 论文 Fig. 1）。左：三个 kernel，\(N^2\) 的 \(S,P\) 在 HBM 中落盘两份、读回两次；右：单个 kernel，\(S\) 的分块只在 SRAM 里生存，HBM 只承担 \(\Theta(Nd)\) 级的输入输出与 \(\Theta(N^2d^2/M)\) 级的块搬运（FA1 Theorem 2）。</p>
+
+<h3>1.3 roofline 视角：为什么「恰好注意力」可以既精确又快</h3>
+
+<p>算术强度 \(\mathrm{AI} = \mathrm{FLOPs}/\text{字节}\) 对照硬件 ridge point 决定了算子是算力受限还是带宽受限。标准 attention 的两头的 GEMM 本身是算力受限的，但夹在中间的 softmax（读 \(N^2\) 写 \(N^2\)）把整个链条拖入访存受限区——pipeline 里的每个 kernel 都要为 \(N^2\) 的中间量付带宽账。</p>
+
+<p>FlashAttention 的关键观察（FA1 §1、§3.1）：</p>
+<ul>
+  <li>softmax 虽然耦合了<b>整行</b>（每个输出位依赖整行分母），但耦合的只是「行内归一化常数」\(m\)（rowmax）与 \(\ell\)（rowsum）两个统计量——它们只有 \(O(N)\) 个数；</li>
+  <li>只要<b>增量地</b>维护 \((m, \ell)\) 并按比例重缩放已算好的部分输出 \(\tilde O\)，就可以一个 KV 块一个 KV 块地算，最终结果与全局 softmax <b>逐位数学等价</b>（不是近似）；</li>
+  <li>backward 需要的 \(P\) 可以从 \(Q,K\) 块 + 前向存的统计量<b>在片上重算</b>，用多花 1.25–2 倍 GEMM FLOPs 换掉 \(N^2\) 的读写——在访存受限区这笔交换稳赚。</li>
+</ul>
+
+<p>这就是「exact attention with IO-awareness」：FLOPs 略增、HBM 访存量从 \(\Theta(Nd + N^2)\) 降到 \(\Theta(N^2d^2/M)\)（\(M\) 为 SRAM 容量）。代入典型值 \(d{=}64{\sim}128\)、\(M{\approx}100\text{KB}\)，\(d^2 \ll M\)，访存量降数倍到一个数量级（FA1 Fig. 2：GPT-2 medium 前向+反向 HBM 读写 40.3 GB → 4.4 GB，运行时间 41.7 ms → 7.3 ms）。FA1 还证明了反向的下界：对任意 SRAM 大小 \(M\)，不存在 HBM 访问为 \(o(N^2d^2/M^{-1})\) 的精确注意力算法（FA1 Proposition 3）——也就是说在「精确计算」这个约束下，tiling 路线的 IO 账已经做到头了，<b>后续三代比拼的全是「片上怎么摆、怎么流水」</b>。</p>
+
+<h2 id="sec2">二、FA1：tiling + online softmax（arXiv:2205.14135）</h2>
+
+<h3>2.1 安全 softmax 与分块合并公式</h3>
+
+<p>softmax 直接算 \(e^{x_i}\) 会溢出，标准做法是先减行最大值。FA1 §3.1 定义向量 \(x \in \mathbb{R}^B\) 的三个量：</p>
+
+<div class="fig formula">\[
+m(x) := \max_i x_i,\qquad
+f(x) := \big[\,e^{x_1 - m(x)},\ \dots,\ e^{x_B - m(x)}\,\big],\qquad
+\ell(x) := \sum_i f(x)_i,\qquad
+\mathrm{softmax}(x) = \frac{f(x)}{\ell(x)}.
+\tag{式 2}\]</div>
+
+<p>核心引理：把行向量拼成 \(x = [x^{(1)}; x^{(2)}]\)，有（FA1 §3.1）</p>
+
+<div class="fig formula">\[
+m(x) = \max\big(m(x^{(1)}),\, m(x^{(2)})\big),\qquad
+\ell(x) = e^{m(x^{(1)}) - m(x)}\,\ell(x^{(1)}) + e^{m(x^{(2)}) - m(x)}\,\ell(x^{(2)}).
+\tag{式 3}\]</div>
+
+<p>也就是：<b>只要随身带着 \((m, \ell)\)，softmax 可以一块一块地合并</b>。对输出再加一条：已算出的部分输出 \(\tilde O\)（未除以 \(\ell\)）在最大值更新时整体乘一个 \(e^{m_{\text{old}} - m_{\text{new}}}\) 即可。这两条合起来就是 <b>online softmax</b>（该技巧源自 Milakov & Gimelshein 2018 的 online softmax 与 Rabe & Staats 2021 的 streaming attention，FA1 脚注 2 与 §B.5 讨论了与后者的区别：FA1 增量更新输出、只保留一份副本，而后者存下每块的临时输出最后合并）。</p>
+
+<h3>2.2 Forward Algorithm 1 逐行讲解</h3>
+
+<p>FA1 论文 Algorithm 1（§3.1，带 mask/dropout 的完整版是附录 B.3 的 Algorithm 2）。为可读性，下面用论文原符号复述（\(\tilde m_{ij}, \tilde P_{ij}, \tilde\ell_{ij}\) 表示「当前块局部」的统计量，\(m_i, \ell_i\) 表示 HBM 中的 running 统计量）：</p>
+
+<pre><code class="language-text">Algorithm 1  FlashAttention（FA1 论文 §3.1，输入 Q,K,V ∈ R^{N×d} 于 HBM，SRAM 容量 M）
+ 1: Bc = ⌈M/(4d)⌉          # KV 块大小：K_j,V_j,S_ij 都要塞进 SRAM
+ 2: Br = min(⌈M/(4d)⌉, d)  # Q 块大小
+ 3: 初始化 O = 0_{N×d}, ℓ = 0_N, m = -∞_N（都在 HBM）
+ 4: 把 Q 切成 T_r 块（每块 B_r×d），K,V 切成 T_c 块（每块 B_c×d）
+ 5: for j = 1 .. T_c do                    # ← 外层循环走 KV 块
+ 6:   把 K_j, V_j 从 HBM 载入 SRAM
+ 7:   for i = 1 .. T_r do                  # ← 内层循环走 Q 块
+ 8:     把 Q_i, O_i, ℓ_i, m_i 从 HBM 载入 SRAM
+ 9:     片上计算 S_ij = Q_i K_jᵀ ∈ R^{B_r×B_c}
+10:     片上计算 m̃_ij = rowmax(S_ij)，P̃_ij = exp(S_ij − m̃_ij)，ℓ̃_ij = rowsum(P̃_ij)
+11:     片上计算 m_new = max(m_i, m̃_ij)，
+          ℓ_new = e^{m_i − m_new} ℓ_i + e^{m̃_ij − m_new} ℓ̃_ij
+12:     写回 HBM：
+          O_i ← diag(ℓ_new)^{-1} ( diag(ℓ_i) · e^{m_i − m_new} · O_i
+                                   + e^{m̃_ij − m_new} · P̃_ij V_j )
+13:     写回 HBM：ℓ_i ← ℓ_new, m_i ← m_new
+14:   end for
+15: end for
+16: 返回 O</code></pre>
+
+<p class="cap">几处关键点的展开：</p>
+<ul>
+  <li><b>块大小怎么定（第 1–2 行）</b>：SRAM 里要同时容纳 \(K_j\)（\(B_c d\)）、\(V_j\)（\(B_c d\)）、\(S_{ij}\)（\(B_r B_c\)）以及 \(Q_i, O_i\)，所以 \(B_c = \lceil M/4d \rceil\)。块越大，HBM 重扫 \(Q/O\) 的遍数 \(T_c = \lceil N/B_c\rceil\) 越少——FA1 Fig. 2 中间图验证了块大小 64→256 时前向时间单调下降，之后被别的因素（算术本身）卡住。</li>
+  <li><b>第 12 行是整个算法的心脏</b>：旧输出 \(\mathrm{diag}(\ell_i) e^{m_i - m_{\text{new}}} O_i\) 表示「把旧输出从旧的 \((m_i,\ell_i)\) 归一化基准搬到新基准」，第二项 \(e^{\tilde m_{ij} - m_{\text{new}}} \tilde P_{ij} V_j\) 表示「新块从它的局部基准搬到新基准」，除以 \(\ell_{\text{new}}\) 后两者在同一基准下相加，正是式 3 的逐块合并。</li>
+  <li><b>注意 FA1 把 \(\ell\) 除在每一步里</b>（第 12 行的 \(\mathrm{diag}(\ell_{\text{new}})^{-1}\)）——每步都对 \(O\) 做两次逐元素向量乘 + 一次除法。FA2 的第一个改进就是砍这里的非 matmul FLOPs（§四）。</li>
+  <li><b>外层循环为什么走 KV（第 5 行）</b>：这样每块 \(K_j, V_j\) 只从 HBM 读一次，代价是 \(Q_i, O_i, \ell_i, m_i\) 每个外层迭代都要重读重写一遍（\(T_c\) 次）。FA1 选择的这个循环次序在 FA2 里被反转，原因见 §四.1。</li>
+</ul>
+
+<h4>正确性：归纳不变式</h4>
+
+<p>FA1 附录 C（Theorem 1 证明）对外层迭代次数 \(j\) 归纳：第 \(j\) 轮结束后，HBM 里的状态满足</p>
+
+<div class="fig formula">\[
+m^{(j)} = \mathrm{rowmax}\big(S_{:,1:jB_c}\big),\quad
+\ell^{(j)} = \mathrm{rowsum}\big(e^{S_{:,1:jB_c} - m^{(j)}}\big),\quad
+O^{(j)} = \mathrm{softmax}\big(S_{:,1:jB_c}\big)\, V_{1:jB_c}.
+\tag{式 4}\]</div>
+
+<p>即：<b>任何时刻，\((m, \ell, O)\) 都精确等于「只看前 \(j\) 个 KV 块」时的全局 softmax 结果</b>。式 4 的第三条正是第 12 行更新公式的展开（论文附录 C 完整推导了 \(\mathrm{diag}(\ell^{(j+1)})^{-1}[\,e^{-m^{(j+1)}} e^{S_{:,1:j}} V + e^{-m^{(j+1)}} e^{S_{:,j+1}} V_{j+1}\,] = \mathrm{softmax}(S_{:,1:j+1})V_{:,1:j+1}\)）。所以算法跑完 \(j = T_c\) 时输出逐位等于 \(\mathrm{softmax}(QK^\top)V\)——<b>online softmax 是重排而非近似</b>。数值上唯一的差别是浮点舍入顺序，FA3 §4.3 的实测表明在 FP16 下它甚至比标准实现更准（中间 softmax 统计量全程留在 FP32）。</p>
+
+<h3>2.3 Backward Algorithm 4：不存 \(N^2\) 矩阵，用 \(O\) 和统计量重算</h3>
+
+<p>标准 backward（FA1 Algorithm 3）按链式法则需要 \(P \in \mathbb{R}^{N\times N}\) 全程在手：</p>
+
+<div class="fig formula">\[
+\mathrm{d}V = P^\top \mathrm{d}O,\quad
+\mathrm{d}P = \mathrm{d}O V^\top,\quad
+\mathrm{d}S = P \circ (\mathrm{d}P - D_i),\quad
+\mathrm{d}Q = \mathrm{d}S K,\quad
+\mathrm{d}K = \mathrm{d}S^\top Q,
+\tag{式 5}\]</div>
+
+<p>其中行内 softmax 的梯度是 \(\mathrm{d}s = (\mathrm{diag}(p) - pp^\top)\,\mathrm{d}p\)，展开后出现 \(\mathrm{d}S_{ij} = P_{ij}(\mathrm{d}P_{ij} - D_i)\)，而那行内归约项</p>
+
+<div class="fig formula">\[
+D_i = \sum_j P_{ij}\, \mathrm{d}P_{ij}
+     = \sum_j \frac{e^{q_i^\top k_j}}{L_i}\, \mathrm{d}o_i^\top v_j
+     = \mathrm{d}o_i^\top \underbrace{\sum_j P_{ij} v_j}_{o_i} = \mathrm{d}o_i^\top o_i.
+\tag{式 6}\]</div>
+
+<p><b>式 6 是 FA1 backward 能省掉 \(N^2\) 存储的全部秘密</b>（附录 B.2 式 (4)）：行内对 \(N\) 个元素的大归约 \(P_{i:}^\top \mathrm{d}P_{i:}\)，恰好等于前向输出与输出梯度的一个 \(d\) 维点积 \(\mathrm{d}o_i^\top o_i\)——前向把 \(O\)（\(O(N)\) 大小）和 logsumexp 统计量存下来，backward 就能逐块重算 \(S, P\)、现场算梯度，全程不需要 \(P\) 离开 SRAM。FA1 论文称之为「selective gradient checkpointing 的一种形式」（§3.1），并明确对比了 Rabe & Staats：后者靠梯度检查点重算所有临时输出，FA1 只重算注意力矩阵本身，解析地消掉了其余重算（§B.5）。</p>
+
+<p>完整的 backward（FA1 附录 B.3/B.4，Algorithm 2 前向完整版 / Algorithm 4 反向）结构和前向同款双层循环：外层走 KV 块 \(j\)，内层走 Q 块 \(i\)；每块片上重算 \(S_{ij}, P_{ij}\)（用前向存的 \(\ell_i, m_i\) 恢复 \(P = \mathrm{diag}(\ell_i)^{-1} e^{S - m_i}\)）、dropout mask（重放伪随机数生成器状态，连 \(O(N^2)\) 的 dropout mask 也不用存）、再按式 5 累加 \(\mathrm{d}V_j, \mathrm{d}K_j\) 到 SRAM 累加器（外层块结束时写回一次），\(\mathrm{d}Q_i\) 逐块读写 HBM：</p>
+
+<pre><code class="language-text">Algorithm 4  FlashAttention Backward（FA1 论文附录 B.4，节选）
+ 6: for j = 1 .. T_c do
+ 7:   载入 K_j, V_j 到 SRAM
+ 8:   片上初始化 dK_j = 0, dV_j = 0（B_c×d，SRAM 累加器）
+ 9:   for i = 1 .. T_r do
+10:     载入 Q_i, O_i, dO_i, dQ_i, ℓ_i, m_i
+11-13:  片上重算 S_ij = τ Q_i K_jᵀ；P_ij = diag(ℓ_i)^{-1} exp(S_ij − m_i)
+14-15:  片上重放 dropout 掩码 Z_ij（由前向保存的 RNG 状态生成）
+16:     dV_j ← dV_j + (P_dropped_ij)ᵀ dO_i
+17-18:  dP_ij = dO_i V_jᵀ（再乘回 Z_ij）
+19:     D_i = rowsum(dO_i ∘ O_i)        ← 式 6：d 维点积，替代 N 维归约
+20:     dS_ij = P_ij ∘ (dP_ij − D_i)
+21:     dQ_i ← dQ_i + τ dS_ij K_j（写回 HBM）
+22:     dK_j ← dK_j + τ dS_ijᵀ Q_i
+23:   end for
+24:   写回 dK_j, dV_j
+25: end for</code></pre>
+
+<h3>2.4 记忆与 IO 的账：\(O(N)\) vs \(O(N^2)\)</h3>
+
+<table>
+  <tr><th>项目</th><th>标准 attention</th><th>FlashAttention</th></tr>
+  <tr><td>中间显存（S、P、dropout mask）</td><td class="num">\(O(N^2)\)，长序列直接 OOM</td><td class="num">\(O(N)\)：只存 \(O\)（本来就要存）、\(\ell, m\) 两个 \(N\) 维向量、RNG 状态</td></tr>
+  <tr><td>HBM 访存（前向）</td><td class="num">\(\Theta(Nd + N^2)\)</td><td class="num">\(\Theta(N^2 d^2/M)\)，典型配置下小 9 倍上下（FA1 Fig. 2）</td></tr>
+  <tr><td>FLOPs（前向）</td><td class="num">\(O(N^2 d)\)</td><td class="num">\(O(N^2 d)\)，与标准持平（Theorem 1）</td></tr>
+  <tr><td>效果</td><td class="num">—</td><td class="num">GPT-2 attention 7.6×；BERT-large 训练比 MLPerf 1.1 记录快 15%；长序列 16K 首次在 Path-X 上超过随机</td></tr>
+</table>
+
+<p>反直觉但重要的一点（FA1 Fig. 2 左）：FlashAttention 的 FLOPs（75.2 GFLOPs）<b>比标准实现（66.6 GFLOPs）还多</b>（backward 重算 \(S,P\)），但 HBM 读写从 40.3 GB 降到 4.4 GB，运行时间 41.7 ms → 7.3 ms——<b>在访存受限区，省字节比省 FLOPs 值钱</b>。这也是理解后面三代演进的钥匙：一旦访存账结清（FA1 完成），瓶颈就转移到片上的并行结构（FA2）和执行重叠（FA3/FA4）。</p>
+
+<h2 id="sec3">三、数值手算示例：看 online softmax 一步步收敛到全局 softmax</h2>
+
+<p>下面用一个小例子把式 3 的每一步算成具体数字（这是理解 FA1/FA2/FA3/FA4 所有 softmax 变体的共同地基）。取 \(d{=}1\)、4 个 query、6 个 key、<b>KV 分块大小 \(B_c{=}2\)</b>（3 个 KV 块）、\(V\) 取标量：</p>
+
+<pre><code class="language-text">Q = [1, -1, 2, 0]        （4 个 query）
+K = [2, -1 | 3, 0 | 4, 1] （6 个 key，| 表示块边界）
+V = [10, 20 | 30, 40 | 50, 60]
+softmax 缩放 τ = 1（略去 1/√d，便于口算）</code></pre>
+
+<p>于是 \(S = QK^\top\)（4×6）与全局 softmax（每行减行最大、取指数、除行和）为：</p>
+
+<table>
+  <tr><th>行</th><th>\(S_i = q_i K^\top\)</th><th>\(m = \mathrm{rowmax}\)</th><th>全局 \(\ell\)</th><th>全局 \(O_i = \sum_j P_{ij} v_j\)</th></tr>
+  <tr><td>\(i{=}1\)（\(q{=}1\)）</td><td class="num">[2, −1, 3, 0, 4, 1]</td><td class="num">4</td><td class="num">1.578055</td><td class="num">41.978466</td></tr>
+  <tr><td>\(i{=}2\)（\(q{=}{-}1\)）</td><td class="num">[−2, 1, −3, 0, −4, −1]</td><td class="num">1</td><td class="num">1.578055</td><td class="num">28.021534</td></tr>
+  <tr><td>\(i{=}3\)（\(q{=}2\)）</td><td class="num">[4, −2, 6, 0, 8, 2]</td><td class="num">8</td><td class="num">1.156511</td><td class="num">47.043468</td></tr>
+  <tr><td>\(i{=}4\)（\(q{=}0\)）</td><td class="num">[0, 0, 0, 0, 0, 0]</td><td class="num">0</td><td class="num">6.000000</td><td class="num">35.000000（= V 的均值）</td></tr>
+</table>
+
+<p><b>在线追踪第 1 行</b>（\(q_1{=}1\)，分数逐步变大，两次触发重缩放）。维护 \((m, \ell, \tilde O)\)，每来一个 KV 块执行式 3 与输出更新 \(\tilde O \leftarrow e^{m_{\text{old}} - m_{\text{new}}} \tilde O + \tilde P_j V_j\)：</p>
+
+<table>
+  <tr><th>步</th><th>块分数 \(S_j\)</th><th>\(m_{\text{new}}\)</th><th>\(e^{m_{\text{old}}-m_{\text{new}}}\)</th><th>\(\tilde P_j = e^{S_j - m_{\text{new}}}\)</th><th>\(\ell_{\text{new}}\)</th><th>\(\tilde O\)（未归一）</th><th>\(O = \tilde O/\ell\)</th></tr>
+  <tr><td>块1：\(k{=}2,{−}1\)，\(v{=}10,20\)</td><td class="num">[2, −1]</td><td class="num">2</td><td class="num">0（\(m\) 从 −∞ 起）</td><td class="num">[1, 0.049787]</td><td class="num">1.049787</td><td class="num">1×10 + 0.049787×20 = 10.995741</td><td class="num">10.474259</td></tr>
+  <tr><td>块2：\(k{=}3,0\)，\(v{=}30,40\)</td><td class="num">[3, 0]</td><td class="num">3</td><td class="num">\(e^{-1}=0.367879\)</td><td class="num">[1, 0.049787]</td><td class="num">0.367879×1.049787 + 1.049787 = <b>1.435982</b></td><td class="num">0.367879×10.995741 + 1×30 + 0.049787×40 = 36.036590</td><td class="num">25.095430</td></tr>
+  <tr><td>块3：\(k{=}4,1\)，\(v{=}50,60\)</td><td class="num">[4, 1]</td><td class="num">4</td><td class="num">\(e^{-1}=0.367879\)</td><td class="num">[1, 0.049787]</td><td class="num">0.367879×1.435982 + 1.049787 = <b>1.578055</b></td><td class="num">0.367879×36.036590 + 50 + 0.049787×60 = 66.244345</td><td class="num"><b>41.978466</b></td></tr>
+</table>
+
+<p>看第 2 步发生了什么：新块出现更大的分数（3 &gt; 2），行最大 \(m: 2\to3\)，于是<b>旧的一切都要乘 \(e^{-1}\) 搬到新基准</b>——旧的 \(\ell = 1.049787\) 缩成 0.386189，旧的 \(\tilde O = 10.995741\) 缩成 4.045170；新块在自己的局部最大值下贡献 \(\ell\) 增量 1.049787、\(\tilde O\) 增量 32.0（\(1{\times}30 + 0.049787{\times}40\)）。第 3 步同理。最终的 \(\ell = 1.578055\)、\(O = 41.978466\) <b>与上表的全局 softmax 完全一致</b>——中间每一步的 \(O\) 值（10.47 → 25.10 → 41.98）都在变，但它们始终是「截至当前块」的<b>精确</b> softmax 输出（式 4 的不变式），不是近似值的收敛。</p>
+
+<p><b>在线追踪第 2 行</b>（\(q_2{=}{-}1\)，分数从未超过初始最大，全程<b>零次重缩放</b>）：块 1 得 \(m{=}1\)；块 2 的局部最大是 0、块 3 的局部最大是 −1，都小于 \(m{=}1\)，所以 \(e^{m_{\text{old}}-m_{\text{new}}} = 1\)，旧的 \(\ell, \tilde O\) 原样保留，新块的 \(\tilde P = e^{S_j - 1}\) 直接往上加。最终 \(\ell = 1.578055\)、\(O = 28.021534\)，同样与全局一致。</p>
+
+<p>这个「第 2 行零重缩放」的情形正是 FA4 <b>条件重缩放</b>（§六.4）想推广到一般情况的目标：第 1 行那种 \(e^{-1}\) 量级的小幅重缩放，其实不重缩、最后统一修正也一样对——省掉的正是每次都发生在关键路径上的向量乘。</p>
+
+<div class="fig">
+<svg viewBox="0 0 860 320" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="m2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="m2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <rect x="24" y="240" width="300" height="40" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="38" y="265" font-size="12" fill="#1a1f2e">HBM：K_j, V_j 按块流过（FA1/FA2 同）</text>
+  <line x1="174" y1="240" x2="174" y2="182" stroke="#5a6272" stroke-width="1.5" marker-end="url(#m2a)"/>
+  <rect x="60" y="122" width="240" height="58" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="180" y="146" font-size="12" text-anchor="middle" fill="#1a1f2e">SRAM：S_j = Q K_jᵀ</text>
+  <text x="180" y="166" font-size="12" text-anchor="middle" fill="#1a1f2e">P̃_j = exp(S_j − m_new)</text>
+  <line x1="300" y1="151" x2="358" y2="151" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m2b)"/>
+  <rect x="360" y="96" width="270" height="110" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="495" y="118" font-size="12" font-weight="bold" text-anchor="middle" fill="#2456c4">寄存器：running 统计量</text>
+  <text x="374" y="142" font-size="11" fill="#1a1f2e">m ← max(m, rowmax(S_j))</text>
+  <text x="374" y="163" font-size="11" fill="#1a1f2e">ℓ ← e^(m−m_new)·ℓ + rowsum(P̃_j)</text>
+  <text x="374" y="184" font-size="11" fill="#1a1f2e">Õ ← e^(m−m_new)·Õ + P̃_j·V_j</text>
+  <line x1="630" y1="151" x2="678" y2="151" stroke="#2456c4" stroke-width="1.5" marker-end="url(#m2b)"/>
+  <rect x="680" y="110" width="156" height="82" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="758" y="136" font-size="12" text-anchor="middle" fill="#1a1f2e">循环结束后</text>
+  <text x="758" y="158" font-size="12" text-anchor="middle" fill="#1a1f2e">O = Õ / ℓ</text>
+  <text x="758" y="180" font-size="12" text-anchor="middle" fill="#1a1f2e">L = m + log ℓ</text>
+  <path d="M 495 206 L 495 226 L 180 226 L 180 184" fill="none" stroke="#2456c4" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#m2b)"/>
+  <text x="270" y="218" font-size="11" fill="#2456c4">下一个 KV 块 j+1</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：online softmax 的数据流（对应 FA1 论文 §3.1 式 (3)、Algorithm 1 第 10–13 行；FA2 论文 §2.3.1）。每个 KV 块只产生一次 \(S_j\) 的计算与一次三行状态的更新；\(m, \ell, \tilde O\) 在循环间保持「截至当前块的精确全局 softmax」不变式（式 4），因此结束后一次归一化即得最终结果。FA2 把右下角橙色框里的归一化移出循环（式 7），FA4 则把蓝色框第二行里的重缩放因子 \(e^{m-m_{\text{new}}}\) 条件化（式 8）。</p>
+
+<h2 id="sec4">四、FA2：循环交换、减非 matmul FLOPs、warp 划分（arXiv:2307.08691）</h2>
+
+<p>FA1 的算法是「IO 最优」了，但离硬件上限还远：FA2 论文开篇给出的诊断是<b>前向只跑到 A100 理论峰值的 25–40%（后向 25–35%），而优化过的 GEMM 能到 80–90%</b>（FA2 §1）。FA2 把原因归结为线程块与 warp 之间的<b>工作划分不当</b>，从算法层面做了三处改动（FA2 §1 三点总结）：</p>
+
+<h3>4.1 改动一：循环交换——Q 做外层，K/V 做内层</h3>
+
+<p>FA1 的循环次序是「外层 KV 块 \(j\)、内层 Q 块 \(i\)」，每个线程块负责一列 \(S\) 的 tile。这带来两个问题：</p>
+<ul>
+  <li><b>并行度太低</b>：FA1 的线程块网格是 \(\text{batch} \times \text{heads}\)（FA2 §3.2），一块 GPU 上通常只有几十上百个块。当序列很长时 batch 往往很小，A100 有 108 个 SM，\(B \times H &lt; 108\) 时大量 SM 闲置。长序列恰恰是 FlashAttention 最想赢的场景。</li>
+  <li><b>softmax 统计量被踢出片上</b>：外层走 KV 意味着「每换一个 KV 块，就要扫一遍所有 Q 行」——某一行 \(i\) 的 running 统计量 \((m_i, \ell_i)\) 在内层迭代之间无法保留，FA1 只好每步把它们连同 \(O_i\) 一起写回 HBM（Algorithm 1 第 8、12、13 行），下一轮再读回来。</li>
+</ul>
+
+<p>FA2 反转循环：外层走 Q 块 \(i\)、内层走 KV 块 \(j\)（FA2 Algorithm 1），一个线程块固定负责一个 \(B_r \times d\) 的 Q 行块，从头扫到尾扫完所有 KV。收益（FA2 §3.2）：</p>
+<ul>
+  <li><b>并行维度多了一个</b>：网格变成 \((\lceil N/B_r\rceil,\ \text{batch},\ \text{heads})\)，即使 \(B{=}1, H{=}1\)，长序列也能铺满 SM（「外层循环天然 embarrassingly parallel，线程块之间无需通信」）。官方代码里的网格就是这三个维度：</li>
+</ul>
+
+<pre><code class="language-cpp">// csrc/flash_attn/src/flash_fwd_launch_template.h:63-64（commit e7a6402）
+const int num_m_block = (params.seqlen_q + Kernel_traits::kBlockM - 1) / Kernel_traits::kBlockM;
+dim3 grid(num_m_block, params.b, params.h);</code></pre>
+
+<p class="cap">FA2 前向的线程块网格：第一维就是序列维的 Q 块数——FA2 §3.2 所说的「even for a single head, parallelize across different thread blocks」在代码里就是这一个 <code>grid.x</code>。（这一循环交换的思路最早由 Phil Tillet 在 Triton 教程的 fused attention 中实现，FA2 §3.2 脚注 3 给出了出处。）</p>
+
+<ul>
+  <li><b>softmax 统计量全程留在寄存器</b>：\(m_i, \ell_i\)（以及未归一化输出 \(\tilde O_i\)）跟着 Q 行块驻留，内层循环里只有 \(K_j, V_j\) 流进 SRAM、流出去，HBM 上的中间读写只剩最终的 \(O_i\) 与 \(L_i\)。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 880 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="m3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#e8862a"/>
+    </marker>
+    <marker id="m3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <!-- 左：FA1 -->
+  <text x="40" y="36" font-size="13" font-weight="bold" fill="#1a1f2e">FA1：外层 KV 列，线程块 = 一列</text>
+  <text x="40" y="56" font-size="11" fill="#5a6272">并行度 batch×heads，m/ℓ 每步写回 HBM</text>
+  <!-- tile grid 4 行 x 6 列, 起点 (100,90), cell 40x40 -->
+  <rect x="100" y="90" width="240" height="160" fill="none" stroke="#c9d2e0"/>
+  <rect x="140" y="90" width="40" height="160" fill="#fbe3cc"/>
+  <rect x="100" y="170" width="240" height="40" fill="#eef3fc"/>
+  <text x="120" y="115" font-size="11" text-anchor="middle" fill="#5a6272">S</text>
+  <text x="220" y="115" font-size="11" text-anchor="middle" fill="#5a6272">S</text>
+  <text x="300" y="115" font-size="11" text-anchor="middle" fill="#5a6272">S</text>
+  <text x="120" y="195" font-size="11" text-anchor="middle" fill="#5a6272">S</text>
+  <text x="220" y="195" font-size="11" text-anchor="middle" fill="#5a6272">S</text>
+  <text x="300" y="195" font-size="11" text-anchor="middle" fill="#5a6272">S</text>
+  <text x="160" y="82" font-size="11" text-anchor="middle" fill="#b0631e">KV 块 j（一个线程块）</text>
+  <text x="86" y="195" font-size="11" text-anchor="middle" fill="#2456c4">Q 块 i</text>
+  <line x1="160" y1="260" x2="160" y2="92" stroke="#e8862a" stroke-width="2" marker-end="url(#m3a)"/>
+  <text x="172" y="278" font-size="11" fill="#b0631e">外层：线程块沿列下扫，每步扫所有 Q 行</text>
+  <text x="100" y="316" font-size="11" fill="#b0631e">m_i, ℓ_i, O_i 每步在 HBM 中读旧/写新（FA1 Alg.1 L8/12/13）</text>
+  <text x="100" y="334" font-size="11" fill="#5a6272">b×h &lt; 108 个 SM 时，其余 SM 闲置</text>
+  <!-- 右：FA2 -->
+  <text x="500" y="36" font-size="13" font-weight="bold" fill="#1a1f2e">FA2：外层 Q 行，线程块 = 一行</text>
+  <text x="500" y="56" font-size="11" fill="#5a6272">并行度 batch×heads×seqlen_q/B_r</text>
+  <rect x="560" y="90" width="240" height="160" fill="none" stroke="#c9d2e0"/>
+  <rect x="560" y="170" width="240" height="40" fill="#eef3fc"/>
+  <rect x="640" y="90" width="40" height="160" fill="#fbe3cc"/>
+  <text x="580" y="115" font-size="11" text-anchor="middle" fill="#5a6272">S</text>
+  <text x="660" y="115" font-size="11" text-anchor="middle" fill="#5a6272">S</text>
+  <text x="740" y="115" font-size="11" text-anchor="middle" fill="#5a6272">S</text>
+  <text x="580" y="195" font-size="11" text-anchor="middle" fill="#2456c4">Q_i</text>
+  <text x="660" y="195" font-size="11" text-anchor="middle" fill="#5a6272">S</text>
+  <text x="740" y="195" font-size="11" text-anchor="middle" fill="#5a6272">S</text>
+  <text x="660" y="82" font-size="11" text-anchor="middle" fill="#b0631e">KV 块 j（内层流过）</text>
+  <text x="546" y="195" font-size="11" text-anchor="middle" fill="#2456c4">Q 块 i</text>
+  <line x1="660" y1="260" x2="660" y2="92" stroke="#e8862a" stroke-width="2" marker-end="url(#m3a)"/>
+  <text x="672" y="278" font-size="11" fill="#b0631e">内层：KV 块流过 SRAM，m/ℓ/Õ 留在寄存器</text>
+  <text x="560" y="316" font-size="11" fill="#2456c4">一个 Q 行块 = 一个线程块，块间零通信</text>
+  <text x="560" y="334" font-size="11" fill="#5a6272">grid=(N/B_r, b, h)，长序列小 batch 也能铺满 SM</text>
+</svg>
+</div>
+<p class="cap"><b>图 3</b>：FA1 → FA2 的循环交换（对应 FA2 论文 §3.2 与 Fig. 2）。左：FA1 一个线程块沿 KV 列扫，softmax 统计量每步绕道 HBM；右：FA2 一个线程块固定一行 Q 块、让 KV 从面前流过，running 统计量（\(m,\ell,\tilde O\)）驻留寄存器，序列维加入网格并行。causal 场景下 FA2 还能按行块直接跳过对角线以上的整列 KV 块（§3.1.1 因果掩码第 1 条），比无掩码快约 1.7–1.8×。</p>
+
+<h3>4.2 改动二：减少非 matmul FLOPs</h3>
+
+<p>FA2 §3.1 算了一笔单价账：A100 的 FP16 matmul 峰值 312 TFLOPs/s，非 matmul FP32 只有 19.5 TFLOPs/s——<b>一个非 matmul FLOP 的“价格”是 matmul FLOP 的 16 倍</b>。GPU 有专用的 tensor core 做 GEMM，而 softmax 的逐元素操作占着通用 FP32 单元，所以哪怕非 matmul FLOPs 只占总数的零头，也值得抠。两处改动：</p>
+
+<p><b>（1）输出重缩放改成「攒到最后除一次」。</b>FA1 Algorithm 1 第 12 行每步都做 \(\mathrm{diag}(\ell_{\text{new}})^{-1}(\cdots)\)，两项各乘一次行向量再除一次。FA2 §3.1.1 指出：没必要每步除，维护「未归一化」的 \(\tilde O\)、只乘 \(e^{m^{(j-1)}-m^{(j)}}\) 这一个因子，循环全部结束后再 \(\mathrm{diag}(\ell^{(T_c)})^{-1}\) 一次到位：</p>
+
+<div class="fig formula">\[
+\text{FA2 内层：}\quad
+\tilde O^{(j)} = \mathrm{diag}\big(e^{m^{(j-1)} - m^{(j)}}\big)^{-1}\, \tilde O^{(j-1)} + e^{S^{(j)} - m^{(j)}} V^{(j)},\qquad
+O = \mathrm{diag}\big(\ell^{(T_c)}\big)^{-1} \tilde O^{(T_c)}.
+\tag{式 7}\]</div>
+
+<p><b>（2）backward 与落盘只存一个 logsumexp。</b>backward 恢复 \(P\) 需要 \(e^{S - m}\) 和 \(1/\ell\) 两个量，但它们可以合成一个：\(P = e^{S - L}\)，其中 \(L = m + \log \ell\)（logsumexp）。FA2 存 \(L \in \mathbb{R}^N\) 代替 FA1 的 \(\ell, m\) 两个向量，backward 里 `P = exp(S − L)` 一步完成（FA2 Algorithm 2 第 11 行）。</p>
+
+<p><b>（3）exp 换成 exp2</b>：GPU 上 \(e^x\) 实际编译为 \(\mathrm{ex2.approx}(x\cdot\log_2 e)\)。FA2 把 \(\log_2 e\) 因子预乘进 softmax scale（`scale_softmax_log2`），让「乘 scale、减 max」合并成一次 FMA。官方实现注释写得很直白：</p>
+
+<pre><code class="language-cpp">// csrc/flash_attn/src/softmax.h:81-90（commit e7a6402）
+// Instead of computing exp(x - max), we compute exp2(x * log_2(e) -
+// max * log_2(e)) This allows the compiler to use the ffma
+// instruction instead of fadd and fmul separately.
+tensor(mi, ni) = exp2f(tensor(mi, ni) * scale - max_scaled);</code></pre>
+
+<h3>4.3 改动三：warp 级工作划分——从「split-K」到「split-Q」</h3>
+
+<p>再往下钻一层是 warp（32 线程）之间的分工（FA2 §3.3）。一个线程块通常 4 个 warp，一起算一个 \(B_r \times B_c\) 的 S tile：</p>
+<ul>
+  <li><b>FA1（split-K）</b>：把 \(K, V\) 按 4 个 warp 切开、\(Q\) 全体共享。每个 warp 得到 \(S\) 的一个列切片——但 softmax 要<b>整行</b>的 max 和 sum！于是每个 warp 算完自己的局部结果后，必须把中间结果写进 shared memory、同步、再横向相加才能拼出完整行。这些 smem 读写就是 FA1 前向慢的元凶之一。</li>
+  <li><b>FA2（split-Q）</b>：把 \(Q\) 切给 4 个 warp、\(K, V\) 全体共享。每个 warp 独占若干<b>完整的行</b>：自己算自己的 \(QK^\top\) 切片、自己做行归约、自己乘 \(V\) 得到自己那块输出——<b>行内归约完全在一个 warp 内闭合，warp 间零通信</b>（不需要 smem 中转，行 max 用 warp 内 shuffle 4 线程一组归约即可）。</li>
+  <li>backward 同理避开 split-K；块大小在 {64,128}×{64,128} 里按 head_dim 与 smem 容量手工调（FA2 §3.3）。</li>
+</ul>
+
+<h3>4.4 FA1 vs FA2 前向伪代码并排 diff</h3>
+
+<table>
+  <tr><th>维度</th><th>FA1 Algorithm 1</th><th>FA2 Algorithm 1</th></tr>
+  <tr><td>外层循环</td><td class="num"><code>for j (KV 块)</code> ——每块 KV 摊给所有 Q</td><td class="num"><code>for i (Q 块)</code> ——每块 Q 扫完所有 KV</td></tr>
+  <tr><td>内层循环</td><td class="num"><code>for i (Q 块)</code></td><td class="num"><code>for j (KV 块)</code></td></tr>
+  <tr><td>线程块网格</td><td class="num">(batch, heads)</td><td class="num">(N/B_r, batch, heads)（代码：<code>flash_fwd_launch_template.h:64</code>）</td></tr>
+  <tr><td>\(m, \ell, O\) 的 residence</td><td class="num">HBM；每步载入旧值、写回新值</td><td class="num">寄存器；循环结束才写 \(O_i, L_i\)</td></tr>
+  <tr><td>输出更新（每步）</td><td class="num">\(O_i \leftarrow \mathrm{diag}(\ell^{\text{new}})^{-1}[\mathrm{diag}(\ell)e^{m-m^{\text{new}}} O_i + e^{\tilde m - m^{\text{new}}} \tilde P V_j]\)</td><td class="num">\(\tilde O \leftarrow \mathrm{diag}(e^{m-m^{\text{new}}})^{-1}\tilde O + \tilde P V_j\)（不除 \(\ell\)）</td></tr>
+  <tr><td>最终归一化</td><td class="num">摊在每一步</td><td class="num">循环后一次：\(O_i = \mathrm{diag}(\ell)^{-1}\tilde O\)，落盘 \(L_i = m + \log\ell\)</td></tr>
+  <tr><td>backward 恢复 P</td><td class="num">用 \(\ell_i, m_i\) 两个统计量</td><td class="num">\(P = e^{S - L}\)，单统计量</td></tr>
+  <tr><td>warp 分工</td><td class="num">split-K：warp 间需 smem 通信拼行</td><td class="num">split-Q：行归约 warp 内闭合，零 smem 通信</td></tr>
+  <tr><td>效果（FA2 §1/§4）</td><td class="num">A100 前向 25–40% 峰值</td><td class="num">前向至 73%、后向至 63% 峰值；比 FA1 快 1.7–3.0×；GPT 训练 225 TFLOPs/s（72% MFU）</td></tr>
+</table>
+
+<h2 id="sec5">五、FA3：为 Hopper 的异步硬件重写流水线（arXiv:2407.08608）</h2>
+
+<p>FA2 在 H100 上只跑到 35% 利用率（FA3 §1），除了没吃上 Hopper 新指令，更根本的是：<b>FA2 的算法结构是同步的</b>——它默认「发出一条指令、等它做完、再发下一条」，而 Hopper 的硬件把两件最重的事变成了异步单元：TMA（Tensor Memory Accelerator，专管 GMEM↔SMEM 拷贝）和 WGMMA（warpgroup 级异步 tensor core 指令，可直接从 shared memory 取操作数，FA3 §2.2）。FA3 的三个技术（§1）：producer-consumer 异步、把 softmax 藏进异步 GEMM 的阴影里、FP8 低精度。逐一细看。</p>
+
+<h3>5.1 warp specialization：producer 与 consumer 分家</h3>
+
+<p>思想（FA3 §3.1）：与其让所有 warp 都「又搬数据又算数」，不如把一个 CTA 的 warpgroup 分成两种角色，各干各的、靠多级流水线同步：</p>
+<ul>
+  <li><b>producer warpgroup</b>：只发 TMA 搬运（Q、\(K_j\)、\(V_j\) 从 HBM 到 SMEM 的环形缓冲），发出即可走人，不等完成；</li>
+  <li><b>consumer warpgroup(s)</b>：只做计算——WGMMA GEMM + softmax + 更新 \(\tilde O\)。</li>
+  <li>配套 <code>setmaxnreg</code>：producer 只需要发指令，把它的寄存器份额<b>动态让渡</b>给 consumer（Hopper 特性，FA3 §2.2）。</li>
+  <li>SMEM 开成 \(s\) 段环形缓冲（pipeline），producer 填第 \((j \bmod s)\) 段的同时 consumer 吃第 \((j-s+1 \bmod s)\) 段。</li>
+</ul>
+
+<p>FA3 论文 Algorithm 1（§3.1，CTA 视角，无重叠版）的关键行：</p>
+
+<pre><code class="language-text">Algorithm 1  FA3 forward，CTA 视角（FA3 论文 §3.1）
+ 1: 初始化 s 段 SMEM 环形缓冲的 pipeline（barrier 同步用）
+ 2: if 本线程在 producer warpgroup then
+ 3:   setmaxnreg 释放寄存器
+ 5:   发 TMA：Q_i → SMEM，完成后通知 consumer
+ 6:   for j = 0 .. Tc-1 do
+ 7:     等环形缓冲第 (j mod s) 段被消费完
+ 8:     发 TMA：K_j, V_j → 第 (j mod s) 段        ← 发完即走，不等
+ 9:     完成后 commit 通知 consumer
+10:   end for
+11: else （consumer warpgroup）
+12:   setmaxnreg 申领更多寄存器
+13:   片上初始化 O_i = 0, ℓ_i = 0, m_i = -∞
+14:   等 Q_i 进 SMEM
+15:   for j = 0 .. Tc-1 do
+16-17:  等 K_j 就绪 → WGMMA：S_i^(j) = Q_i K_jᵀ（SS-GEMM）→ 等
+18-19:  m_i 更新，eP = exp(S − m)，ℓ_i 更新
+20-21:  等 V_j 就绪 → WGMMA：O_i = diag(e^{m_old−m})^{-1} O_i + eP V_j（RS-GEMM）
+22:     释放第 (j mod s) 段给 producer
+23:   end for
+24-25: 结束：O = O/ℓ，L = m + log ℓ，写 HBM
+26: end if</code></pre>
+
+<p>官方源码里这个分家清晰可见（<code>hopper/flash_fwd_kernel_sm90.h</code>，warp_group 0 当 producer、其余当 consumer，寄存器一减一增）：</p>
+
+<pre><code class="language-cpp">// hopper/flash_fwd_kernel_sm90.h:308-360（节选，commit e7a6402）
+if (warp_group_idx == 0) {  // Producer
+    cutlass::arch::warpgroup_reg_dealloc&lt;LoadRegisterRequirement&gt;();
+    ...
+    // Load Q, K, V
+    for (auto work_tile_info = ...; work_tile_info.is_valid(...); ...) {
+        ...
+        mainloop.load(params.mainloop, pipeline_k, pipeline_v, pipeline_vt,
+                      smem_pipe_write, shared_storage, scheduler_prefetch,
+                      seqlen_info, block_coord, work_idx);   // 只发 TMA
+    }
+} else {  // Consumer
+    cutlass::arch::warpgroup_reg_alloc&lt;MmaRegisterRequirement&gt;();
+    ...
+    mainloop.mma_init();
+    for (auto work_tile_info = ...; ...) { ... }  // 走 mma 主循环
+}</code></pre>
+
+<h3>5.2 pingpong 调度与两阶段 GEMM-softmax 流水</h3>
+
+<p>warp specialization 只把「搬数」藏起来了，「softmax」本身还是串在两个 GEMM 之间。FA3 §3.1 的引子账：H100 FP16 matmul 989 TFLOPS、指数类特殊函数只有约 3.9 TFLOPS（132 SM × 16 ops/clk × 1.83 GHz）；head_dim 128 时 matmul FLOPs 是 exp 的 512 倍，但 exp 吞吐低 256 倍——<b>softmax 的指数能吃掉多达一半的周期</b>。指数跑在独立的 MUFU 单元上，所以理想调度是：<b>WG1 算 softmax 时，让 WG2 的 tensor core 正忙着 GEMM</b>。</p>
+
+<p><b>pingpong 调度</b>（FA3 §3.1，Fig. 1）：用 <code>bar.sync</code> 强制 WG1 的 GEMM（本迭代的 PV + 下一迭代的 QKᵀ）排在 WG2 的 GEMM 之前，于是 WG1 的 softmax 恰好落在 WG2 的 GEMM 窗口里；下一轮角色互换，乒乓往复。实测把 FP16 前向（\(d{=}128, N{=}8192\)）从 570 提到 620–640 TFLOPS。</p>
+
+<p><b>两阶段（2-stage）GEMM-softmax 流水</b>（FA3 §3.2，Algorithm 2）：即使在一个 warpgroup 内部，也能把「本块的 softmax」和「下块的 GEMM」跨迭代重叠。依赖链的死结是：softmax 依赖 GEMM0 的输出 \(S\)，而 GEMM1 又吃 softmax 的输出 \(\tilde P\)。解法是寄存器里多养一份 \(S_{\text{next}}\)，把串行链拆成交替推进：</p>
+
+<pre><code class="language-text">Algorithm 2  FA3 consumer warpgroup 主循环（FA3 论文 §3.2）
+ 4: S_cur = Q_i K_0ᵀ（WGMMA，等完成）
+ 6: 由 S_cur 算出 m, P̃_cur, ℓ（第一次 softmax）
+ 7: for j = 1 .. Tc-1 do
+ 9:   S_next = Q_i K_jᵀ（WGMMA，只发不等）      ← 下块的 GEMM0
+11:   O_i = O_i + P̃_cur V_{j-1}（WGMMA，只发不等）← 上块的 GEMM1
+12:   等 S_next 的 WGMMA 完成
+13:   用 S_next 算 m, P̃_next, ℓ（本块 softmax）   ← 与 11 行的重叠是收益来源
+14:   等 P̃_cur V_{j-1} 完成，重缩放 O_i
+16:   S_next → S_cur
+17: end for
+19: 收尾：O_i += P̃_last V_last；epilogue 重缩放、归一、写 O 和 L</code></pre>
+
+<p class="cap">主循环里第 11 行（上一块的 \(\tilde P_{\text{cur}}V_{j-1}\) GEMM）与第 13 行（本块 softmax）同时进行——这就是 FA3 §1 所说的「softmax 在一个分数块上执行时，WGMMA 在异步代理里算下一块」。代价是寄存器要多存一份 \(S_{\text{next}}\)（\(B_r \times B_c \times 4\) 字节/CTA），与「加大 tile」构成权衡；还可再进一步到 3-stage（附录 B.3）。</p>
+
+<p>消融（FA3 Table 2，\(\{B{=}4, N{=}8448, H{=}16, d{=}128\}\) 非因果）：全开 661 TFLOPs/s；去掉 GEMM-softmax 流水 582；去掉 warp specialization 570——<b>两项算法级改动合计 +16%</b>。加上整体工程（更大 tile、persistent kernel 等），FP16 前向最终到 740 TFLOPs/s（H100 峰值的 75%），比 FA2 快 1.5–2.0×；FP8 前向接近 1.2 PFLOPs/s。</p>
+
+<p>当前仓库的 FA3 consumer 主循环（<code>hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp</code>）把论文 Algorithm 2 的骨架写成一个 <code>fwd_step</code> lambda，还能看到 FA4 论文提到的「两个 softmax warpgroup 互斥进入指数临界区」的屏障：</p>
+
+<pre><code class="language-cpp">// hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp:1175-1183、1205（节选，commit e7a6402）
+auto fwd_step = [&amp;](int const n_block, auto mask_fn, auto check_inf_type) {
+    ...
+    flash::gemm&lt;/*zero_init=*/true, /*wg_wait=*/-1&gt;(tiled_mma_qk, tSrQ, tSrK(...), tSrS);  // GEMM0
+    flash::gemm&lt;/*zero_init=*/false, /*wg_wait=*/-1&gt;(tiled_mma_pv, tOsP, tOrV(...), tOrO); // GEMM1
+    warp_scheduler_barrier_arrive();
+    ...
+    softmax.template online_softmax&lt;/*Is_first=*/false, Check_inf&gt;(tSrS);   // softmax
+    ...
+    if constexpr (!RescaleOBeforeGemm) { softmax.rescale_o(tOrO, scores_scale); }
+};</code></pre>
+
+<div class="fig">
+<svg viewBox="0 0 880 330" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="m4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <!-- 时间轴刻度 -->
+  <text x="180" y="40" font-size="12" font-weight="bold" fill="#1a1f2e">FA3 前向流水线：producer + 双 consumer warpgroup（pingpong）</text>
+  <line x1="180" y1="56" x2="860" y2="56" stroke="#c9d2e0" stroke-width="1"/>
+  <text x="60" y="98" font-size="12" fill="#1a1f2e">producer WG</text>
+  <text x="60" y="116" font-size="10" fill="#5a6272">（TMA 搬运）</text>
+  <rect x="180" y="82" width="130" height="30" rx="5" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="245" y="101" font-size="10" text-anchor="middle" fill="#1a1f2e">TMA: K0,V0</text>
+  <rect x="322" y="82" width="130" height="30" rx="5" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="387" y="101" font-size="10" text-anchor="middle" fill="#1a1f2e">TMA: K1,V1</text>
+  <rect x="464" y="82" width="130" height="30" rx="5" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="529" y="101" font-size="10" text-anchor="middle" fill="#1a1f2e">TMA: K2,V2</text>
+  <rect x="606" y="82" width="130" height="30" rx="5" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="671" y="101" font-size="10" text-anchor="middle" fill="#1a1f2e">TMA: K3,V3</text>
+  <rect x="748" y="82" width="100" height="30" rx="5" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="798" y="101" font-size="10" text-anchor="middle" fill="#1a1f2e">TMA: K4,V4</text>
+  <!-- consumer WG0 -->
+  <text x="60" y="158" font-size="12" fill="#1a1f2e">consumer WG0</text>
+  <text x="60" y="176" font-size="10" fill="#5a6272">（GEMM+softmax）</text>
+  <rect x="180" y="142" width="110" height="30" rx="5" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="235" y="161" font-size="10" text-anchor="middle" fill="#1a1f2e">GEMM S0</text>
+  <rect x="292" y="142" width="110" height="30" rx="5" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="347" y="161" font-size="10" text-anchor="middle" fill="#1a1f2e">softmax 0</text>
+  <rect x="404" y="142" width="110" height="30" rx="5" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="459" y="161" font-size="10" text-anchor="middle" fill="#1a1f2e">GEMM O0+S1</text>
+  <rect x="516" y="142" width="110" height="30" rx="5" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="571" y="161" font-size="10" text-anchor="middle" fill="#1a1f2e">softmax 1</text>
+  <rect x="628" y="142" width="110" height="30" rx="5" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="683" y="161" font-size="10" text-anchor="middle" fill="#1a1f2e">GEMM O1+S2</text>
+  <rect x="740" y="142" width="108" height="30" rx="5" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="794" y="161" font-size="10" text-anchor="middle" fill="#1a1f2e">softmax 2</text>
+  <!-- consumer WG1 -->
+  <text x="60" y="218" font-size="12" fill="#1a1f2e">consumer WG1</text>
+  <text x="60" y="236" font-size="10" fill="#5a6272">（pingpong 错相）</text>
+  <rect x="292" y="202" width="110" height="30" rx="5" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="347" y="221" font-size="10" text-anchor="middle" fill="#1a1f2e">GEMM S0'</text>
+  <rect x="404" y="202" width="110" height="30" rx="5" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="459" y="221" font-size="10" text-anchor="middle" fill="#1a1f2e">softmax 0'</text>
+  <rect x="516" y="202" width="110" height="30" rx="5" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="571" y="221" font-size="10" text-anchor="middle" fill="#1a1f2e">GEMM O0'+S1'</text>
+  <rect x="628" y="202" width="110" height="30" rx="5" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="683" y="221" font-size="10" text-anchor="middle" fill="#1a1f2e">softmax 1'</text>
+  <rect x="740" y="202" width="108" height="30" rx="5" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="794" y="221" font-size="10" text-anchor="middle" fill="#1a1f2e">GEMM O1'+S2'</text>
+  <!-- 对齐虚线 -->
+  <line x1="404" y1="120" x2="404" y2="244" stroke="#5a6272" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#m4a)"/>
+  <text x="560" y="266" font-size="11" fill="#2f9e63">绿 = MUFU 指数（softmax），蓝 = tensor core（WGMMA）</text>
+  <text x="560" y="284" font-size="11" fill="#2f9e63">WG0 的 softmax 落在 WG1 的 GEMM 窗口里，反之亦然</text>
+  <text x="60" y="300" font-size="10" fill="#5a6272">注：同一 warpgroup 内部还有 2-stage 流水（论文 Algorithm 2），把本块 softmax 与上块 PV-GEMM 重叠；</text>
+  <text x="60" y="316" font-size="10" fill="#5a6272">bar.sync 强制两个 softmax WG 不重叠进入指数临界区（FA4 论文 §3.1.2 亦沿用）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 4</b>：FA3 的 producer-consumer + pingpong 调度示意（对应 FA3 论文 §3.1 Fig. 1、§3.2 Fig. 2）。producer 只发 TMA；两个 consumer warpgroup 相位错开半个迭代，使绿色（softmax/MUFU）与蓝色（WGMMA）始终互补——这是把 989:3.9 TFLOPS 的 matmul:exp 吞吐比（FA3 §3.1）摊到时间轴上的唯一办法。</p>
+
+<h3>5.3 FP8：布局约束、block quantization 与 incoherent processing</h3>
+
+<p>FP8 让 tensor core 吞吐翻倍，但 FA3 §2.2/§3.3 指出两道坎：</p>
+<ul>
+  <li><b>布局约束</b>：FP8 WGMMA 的操作数只接受 k-major（沿 \(K\) 维连续），而 attention 的 \(V\) 天然沿 head_dim 连续，第二个 GEMM 要求 \(V\) tile 沿序列维连续。TMA 不能顺手转置，于是 FA3 在 kernel 内用 LDSM/STSM 指令做 tile 级转置，并安排它跑在 producer warpgroup 里、藏在前两次 WGMMA 的阴影中；FP32 累加器与 FP8 操作数 A 的寄存器布局不一致，再用 byte permute 把累加器重排成 FP8 A 布局（FA3 §3.3，Fig. 3/4）。</li>
+  <li><b>精度</b>：e4m3 只有 3 位尾数，LLM 激活又有 outlier。FA3 两招（§3.3）：
+    <ul>
+      <li><b>block quantization</b>：per-tensor scaling（每个张量一个 scale）改为每个 \(B_r\times d\) / \(B_c \times d\) 块一个 scale；FA3 的算法天然按块算，把 \(S\) 的块级缩放融合进去零开销；</li>
+      <li><b>incoherent processing</b>：给 \(Q, K\) 都右乘一个随机正交阵 \(M\) 再量化。因为 \(MM^\top = I\)，\((QM)(KM)^\top = QK^\top\)，输出数学上不变，但 outlier 被「摊匀」到整个矩阵。实操中 \(M\) 取「随机 ±1 对角阵 × Hadamard 阵」，乘法复杂度 \(O(d\log d)\)，还能融合进 rotary embedding 不花额外时间。</li>
+    </ul></li>
+</ul>
+
+<p>效果（FA3 §4.3 Table 3）：构造 \(N(0,1) + N(0,100)\cdot\mathrm{Bernoulli}(0.001)\) 的重尾激活，FP8 基线（per-tensor）RMSE \(2.4\times10^{-2}\)，FA3 FP8（两招全开）\(9.1\times10^{-3}\)——<b>2.6× 更准</b>；消融显示去掉 incoherent processing 就退化到基线水平。另注意 FP16 的 FA2/FA3 RMSE 都是 \(1.9\times10^{-4}\)，比标准实现（\(3.2\times10^{-4}\)）还低 1.7×，因为中间 softmax 全程 FP32。</p>
+
+<h2 id="sec6">六、FA4：为 Blackwell 的非对称扩展改形（arXiv:2603.05451）</h2>
+
+<p class="infer">FA4 的正式论文发布于 2026-03-05（Zadouri, Hoehnerbach, Shah, Liu, Thakkar, Dao，《FlashAttention-4: Algorithm and Kernel Pipelining Co-Design for Asymmetric Hardware Scaling》），本章内容全部来自该论文（本地 <code>paper/flash-attention-v4.pdf</code>）、官方 CuTe-DSL 源码（<code>flash_attn/cute/</code>）与 Tri Dao 博客（tridao.me/blog/2026/flash4，2026-03-05），检索日期 2026-10-19。此前（2025-08）曾有过面向 Blackwell/cuDNN 的 FA4 预告材料，细节以 2026 年论文为准。</p>
+
+<h3>6.1 病灶变了：tensor core 翻倍，别的原地踏步</h3>
+
+<p>Blackwell B200 的 BF16 tensor core 吞吐是 H100 的两倍（2.25 vs 1.0 PFLOPS），但 SRAM 读带宽（128 B/clk/SM）与指数单元 MUFU（16 ops/clk/SM）<b>没变</b>（FA4 §2.2）。FA4 论文 §3.1.1 用「feeds and speeds」把每个 SM 每迭代的周期账算了一遍。设 tile 为 \(M{\times}N\)、head_dim 为 \(d\)：</p>
+
+<div class="fig formula">\[
+T_{\text{MMA}} = \frac{4MNd}{8192}\ \text{cycles}\quad(式 1),\qquad
+T_{\text{smem}} = \frac{3MNd}{8192}\ \text{cycles}\quad(式 2),\qquad
+T_{\text{exp}} = \frac{MN}{16}\ \text{cycles}\quad(式 3)
+\]</div>
+
+<p>（其中 \(T_{\text{smem}}\) 算上了 \(QK^\top\) 是 shared-shared MMA、\(PV\) 是 tensor-shared MMA、操作数被多次读取的效应。）代入两种 tile 配置（FA4 Table 1）：</p>
+
+<table>
+  <tr><th>资源（周期数）</th><th>M=128, N=d=128</th><th>M=256, N=d=128</th></tr>
+  <tr><td>MMA 计算</td><td class="num">1024</td><td class="num">2048</td></tr>
+  <tr><td>shared memory</td><td class="num">768</td><td class="num">1536</td></tr>
+  <tr><td>指数单元</td><td class="num">1024</td><td class="num">2048</td></tr>
+</table>
+
+<p>结论反直觉：<b>在 Blackwell 上，attention 的瓶颈已经是「exp 指数 + smem 流量」，与 MMA 计算打平甚至超出 25–60%</b>（FA4 §1）。FA3 那套「softmax 藏进 GEMM 阴影」的流水在 Hopper 上把 exp 完全藏住了；但在 Blackwell 上 exp 自己就是一堵与 MMA 等高的墙——藏不住，只能<b>拆墙</b>：要么让 exp 更快（软件仿真，§6.3），要么少做（条件重缩放，§6.4）。此外 Blackwell 的硬件也给流水线开了新空间：MM<b>A</b> 完全异步且把累加器直接写进新增的 256 KB <b>tensor memory（TMEM）</b>而不是寄存器，单条 MMA tile 从 Hopper 的 64×128 翻到 <b>128×128</b>，还有 <b>2-CTA MMA 模式</b>（CTA 对协同执行一条 MMA，B 操作数各存一半，FA4 §2.2）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 360" xmlns="http://www.w3.org/2000/svg">
+  <text x="30" y="34" font-size="13" font-weight="bold" fill="#1a1f2e">Blackwell 上的周期账（M=256, N=d=128 tile，FA4 Table 1）与 warp 角色</text>
+  <!-- bars: scale 2048 cycles = 560px -->
+  <text x="30" y="70" font-size="12" fill="#1a1f2e">MMA 计算</text>
+  <rect x="180" y="56" width="560" height="22" rx="4" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="748" y="72" font-size="11" fill="#2456c4">2048</text>
+  <text x="30" y="102" font-size="12" fill="#1a1f2e">指数单元 exp</text>
+  <rect x="180" y="88" width="560" height="22" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="748" y="104" font-size="11" fill="#2f9e63">2048</text>
+  <text x="30" y="134" font-size="12" fill="#1a1f2e">SMEM 流量</text>
+  <rect x="180" y="120" width="420" height="22" rx="4" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="608" y="136" font-size="11" fill="#b0631e">1536</text>
+  <text x="30" y="166" font-size="11" fill="#5a6272">MMA 8192 ops/clk/SM（Hopper 的 2 倍）vs MUFU 16 ops/clk/SM（不变）、SMEM 128 B/clk/SM（不变）</text>
+  <text x="30" y="184" font-size="11" fill="#5a6272">exp 与 MMA 一样高 ⇒ 光靠重叠已不够，要给 exp 提速并少做重缩放（FA4 §3.1.1）</text>
+  <!-- warp roles -->
+  <text x="30" y="228" font-size="12" font-weight="bold" fill="#1a1f2e">FA4 前向 CTA 的 16 个 warp 分工（flash_fwd_sm100.py:313-320）</text>
+  <rect x="30" y="242" width="180" height="36" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="120" y="264" font-size="11" text-anchor="middle" fill="#1a1f2e">softmax0 WG（warp 0-3）</text>
+  <rect x="222" y="242" width="180" height="36" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="312" y="264" font-size="11" text-anchor="middle" fill="#1a1f2e">softmax1 WG（warp 4-7）</text>
+  <rect x="414" y="242" width="180" height="36" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="504" y="264" font-size="11" text-anchor="middle" fill="#1a1f2e">correction WG（warp 8-11）</text>
+  <rect x="606" y="242" width="60" height="36" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="636" y="264" font-size="11" text-anchor="middle" fill="#1a1f2e">MMA 12</text>
+  <rect x="678" y="242" width="80" height="36" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="718" y="264" font-size="11" text-anchor="middle" fill="#1a1f2e">epi 13</text>
+  <rect x="770" y="242" width="80" height="36" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="810" y="264" font-size="11" text-anchor="middle" fill="#1a1f2e">load 14</text>
+  <text x="30" y="312" font-size="11" fill="#5a6272">两个 softmax WG 分别吃一块 128 行的 Q tile（high/low），指数临界区互斥；correction WG 专职重缩放 O，</text>
+  <text x="30" y="330" font-size="11" fill="#5a6272">把 FA2/FA3 中串在 GEMM 之后的 O-rescale 从关键路径上摘下来（FA4 §3.1.2，P 经 TMEM 传递使这成为可能）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 5</b>：上：Blackwell 前向的三资源周期账（FA4 Table 1，M=256 tile）——指数单元已与 MMA 同高；下：FA4 前向 CTA 内 16 个 warp 的角色划分（源码 <code>flash_attn/cute/flash_fwd_sm100.py:313-320</code>），比 FA3 多出一个专职 correction warpgroup。</p>
+
+<h3>6.2 流水线：双 Q tile ping-pong + 独立 correction warpgroup</h3>
+
+<p>FA4 前向沿用 FA3 式的 ping-pong：每个 CTA 同时算两个 Q tile（high/low，各 128 行 query），一个 tile 跑 MMA 时另一个跑 softmax。三处 Blackwell 特有的结构变化（FA4 §3.1.2）：</p>
+<ul>
+  <li><b>累加器住 TMEM，一个线程管一整行</b>：Hopper WGMMA 的累加器在寄存器里、每行由 4 个线程交错持有，行 max 需要 warp 内 shuffle；Blackwell MMA 把 128×128 累加器写进 TMEM，于是两个 softmax warpgroup（各 128 线程）可以<b>一个线程独占一行</b>——行 max 不再需要 shuffle，统计量也不再是「每线程多份」。softmax 流程变成：整行读进寄存器 → 求行 max → 减 max/缩放/指数/转输入精度 → 行 sum。</li>
+  <li><b>correction 独立成 warpgroup</b>：Hopper 上 \(\tilde O\) 的重缩放必须在 consumer 自己的寄存器里做，串在 GEMM 之后；Blackwell 的 \(P\) 经 TMEM 交给 MMA，重缩放可以交给专门的 correction WG 异步完成，「从关键路径上摘下来」。TMEM 分配上，\(S\) 与 \(P\) 重叠共享（两份 \(S\) / 四份 \(P\) 的容量），既省 256 KB 的紧张空间，又让流水线一上来就能同时算两个 \(S\) tile。</li>
+  <li><b>寄存器极限运营</b>：一个线程要整行持 128 个元素（BF16 输入 128 个寄存器起步），配置表按 (因果性, head_dim) 给出 exp 仿真频率与各 WG 的寄存器配额（源码 <code>flash_fwd_sm100.py:104-113</code>，如 causal+d128：`num_regs_softmax=184, num_regs_correction=80`）。</li>
+</ul>
+
+<h3>6.3 软件模拟指数：让 FMA 单元替 MUFU 打工</h3>
+
+<p>MUFU 的 exp2 只有 16 ops/clk/SM，而 FMA 单元宽得多。FA4 §3.1.3 用经典手法把 \(2^x\) 搬到 FMA 上算：</p>
+
+<div class="fig formula">\[
+2^x = 2^{\lfloor x \rfloor} \cdot 2^{x - \lfloor x \rfloor},\qquad
+2^{x_{\text{frac}}} \approx \sum_{i=0}^{n} p_i\, x_{\text{frac}}^i\quad (x_{\text{frac}} \in [0,1))
+\tag{式 4（FA4 式 4–5）}\]</div>
+
+<p>整数部分 \(2^{\lfloor x\rfloor}\) 用 IEEE 754 位操作（把 \(\lfloor x \rfloor\) 加进指数域）拼出；小数部分用 Sollya 求系数的多项式、Horner 法逐次 FMA 展开。精度账（FA4 Table 2）：3 次多项式在 FP32 下最大相对误差 \(8.8\times10^{-5}\)（比硬件 MUFU 差约 600×），但<b>舍入到 BF16 后与硬件输出几乎不可区分</b>（BF16 量化误差 \(3.9\times10^{-3}\) 主导，3 次多项式在 99% 输入上与硬件相差 &lt;1 ULP）——反正 softmax 的下游就是 BF16 tensor core，这笔精度花得值。实际不全部替换：「partial emulation」只对每行 10–25% 的元素走仿真路径（其余仍走 MUFU.EX2），因为仿真要额外寄存器、会把寄存器压力推向 spill 的悬崖；比例按 MMA:exp 吞吐比逐配置调，源码里的配置键就叫 <code>ex2_emu_freq</code>：</p>
+
+<pre><code class="language-python"># flash_attn/cute/flash_fwd_sm100.py:104-107（commit e7a6402）
+(True,  False, 128, False): {"ex2_emu_freq": 10, "ex2_emu_start_frg": 1, "num_regs_softmax": 184, "num_regs_correction": 80},
+(False, True,  128, False): {"ex2_emu_freq": 16, "ex2_emu_start_frg": 1, "num_regs_softmax": 192, "num_regs_correction": 72},
+(True,  False, 192, False): {"ex2_emu_freq": 16, "ex2_emu_start_frg": 0, "num_regs_softmax": 184, "num_regs_correction": 80},
+(False, True,  192, False): {"ex2_emu_freq": 32, "ex2_emu_start_frg": 1, "num_regs_softmax": 192, "num_regs_correction": 72},</code></pre>
+
+<p class="cap">键为 (causal, local, head_dim, …)，值里 <code>ex2_emu_freq: 10</code> 即「每 10 个 fragment 有 1 个走软件仿真」。数值内核按论文的 5 步算法逐条实现：</p>
+
+<pre><code class="language-python"># flash_attn/cute/utils.py:803-817（ex2_emulation_2，commit e7a6402，一次处理两个 float）
+def ex2_emulation_2(x, y, *, poly_degree=3, loc=None, ip=None):
+    # We assume x <= 127.0 and y <= 127.0
+    fp32_round_int = float(2**23 + 2**22)
+    xy_clamped = (cute.arch.fmax(x, -127.0), cute.arch.fmax(y, -127.0))   # ① clamp 防 underflow
+    # We want to round down here, so that the fractional part is in [0, 1)
+    xy_rounded = cute.arch.add_packed_f32x2(xy_clamped, (fp32_round_int,)*2, rnd="rm")  # ② 魔数取整得 ⌊x⌋
+    xy_rounded_back = cute.arch.sub_packed_f32x2(xy_rounded, (fp32_round_int,)*2)
+    xy_frac = cute.arch.sub_packed_f32x2(xy_clamped, xy_rounded_back)     # ③ 小数部分
+    xy_frac_ex2 = evaluate_polynomial_2(*xy_frac, POLY_EX2[poly_degree])  # ④ 多项式（Horner）
+    x_out = combine_int_frac_ex2(xy_rounded[0], xy_frac_ex2[0])           # ⑤ 整数部分拼指数域
+    y_out = combine_int_frac_ex2(xy_rounded[1], xy_frac_ex2[1])
+    return x_out, y_out</code></pre>
+
+<h3>6.4 条件重缩放（conditional rescaling）：把「每次都做」变成「攒够了再做」</h3>
+
+<p>online softmax 每步都要用 \(e^{m_{j-1}-m_j}\) 重缩放旧输出——一个行向量乘法，落在关键路径上。FA4 §3.1.4 的观察：<b>重缩放只在出现「显著更大」的新 max 时才有必要</b>。设阈值 \(\tau\)（取 \(\log_2 256 = 8.0\)，即允许累积 256 倍的「松弛」），更新规则改为：</p>
+
+<div class="fig formula">\[
+O_j = \begin{cases}
+e^{m_{j-1}-m_j}\, O_{j-1} + e^{S_j - m_j} V_j, & m_j - m_{j-1} &gt; \tau\\[4pt]
+O_{j-1} + e^{S_j - m_{j-1}} V_j, & m_j - m_{j-1} \le \tau \quad(\text{跳过重缩放，且不更新 } m)
+\end{cases}
+\tag{式 8（FA4 式 6）}\]</div>
+
+<p>正确性论证很朴素：只要最后用<b>真实</b>的 \(m_{\text{final}}\) 与最终归一化因子 \(\ell_{\text{final}}\) 收尾（\(\text{Output} = O_{\text{final}}/\ell_{\text{final}}\)），中间欠下的所有缩放一次性补齐——\(m\) 允许「落后」最多 \(\tau\) 个 log2 单位，指数值最多到 \(2^{\text{max\_offset} + \tau}\) 仍不溢出（源码注释：<code>flash_fwd_sm100.py:91-92</code>）。这正是 §三 手算示例第 1 行那种 \(e^{-1}\) 级别小重缩放的推广：与其每块都乘一遍，不如让 \(m\) 落后着，最后统一修正。工程细节：为避免 warp 分歧，只要 warp 内任一线程需要重缩放就整 warp 一起重缩放（FA4 §3.1.4）。代码里是 <code>softmax.py</code> 的三行分支：</p>
+
+<pre><code class="language-python"># flash_attn/cute/softmax.py:381-388（SoftmaxSm100.update_row_max，commit e7a6402）
+acc_scale_ = (row_max_old - row_max_safe) * self.scale_log2
+acc_scale = cute.math.exp2(acc_scale_, fastmath=True)
+if cutlass.const_expr(self.rescale_threshold &gt; 0.0):
+    if acc_scale_ &gt;= -self.rescale_threshold:   # 新 max 领先不足 τ ⇒ 不值得缩放
+        row_max_new = row_max_old
+        row_max_safe = row_max_old
+        acc_scale = 1.0                          # 因子恒 1，O 与 ℓ 原样保留</code></pre>
+
+<h3>6.5 backward：TMEM 减 smem 流量、2-CTA + DSMEM 重构 dQ</h3>
+
+<p>backward 的账（FA4 §3.2.1，式 7–10）显示 smem 是头号瓶颈：5 个 GEMM 的 MMA 计算 \(T_{\text{MMA}} = 10MNd/8192 = 2560\) 周期，而 smem 总流量 3328 周期——<b>超出 MMA 约 30%</b>。FA4 三板斧：</p>
+<ul>
+  <li><b>TMEM 存中间量</b>：FA3 的累加器在寄存器里，寄存器稀缺强加了 \(\text{S}, \mathrm{dP}, \mathrm{dV}, \mathrm{dQ}, \mathrm{dK}\) 近乎串行的排序；FA4 把 \(S/P\) 共享 TMEM offset 0、\(\mathrm{dP}/\mathrm{dS}/\mathrm{dQ}\) 共享另一块，流水线得以让「本迭代的 softmax」与「上一迭代的 dQ/dK MMA」并发（FA4 §3.2.2）。</li>
+  <li><b>2-CTA MMA</b>：MMA tile 变成 M=256，CTA 对各存一半 B 操作数，B 侧 smem 流量约减半（Table 3：总 smem 3328 → 2688 周期，超 MMA 幅度从 30% 降到 ~5%）。dQ 的归约轴恰好在 CTA 对之间被切开，FA4 用 <b>DSMEM</b>（分布式共享内存）在 CTA 对内交换一半 \(\mathrm{dS}\) tile，把 dQ MMA 变成 \((M/2, 2N)(2N, d)\) 的双归约形状（FA4 §3.2.3，Fig. 3）。</li>
+  <li><b>原子加减半 + 确定性模式</b>：dQ 靠全局 atomic 累加（每内层迭代一次），2-CTA 拆分后每个 CTA 只写自己那一半，<b>全局原子归约次数减半</b>。要可复现（RL 训练调试）时，用信号量锁串行化归约，并配合 CTA swizzle 与「最短作业优先」（SPT：causal 下 KV 块降序发射、Q 块从对角线升序、dQ 归约按 Q 块降序排队）调度，确定性 backward 达到非确定性版的 75% 速度（FA4 §3.2.4）。</li>
+  <li><b>LPT 调度</b>：causal/varlen 天然负载不均，FA4 用经典 longest-processing-time-first 排布 tile（batch 最外层、head 分段 swizzle 保 L2 命中），H200 上 BF16 d128 实测 MHA +4–8%、MQA-8 +7–14% FLOPS（FA4 §3.3）。</li>
+</ul>
+
+<h3>6.6 实现语言：CuTe-DSL</h3>
+
+<p>FA4 全部用 NVIDIA CuTe-DSL（Python 内嵌 DSL）写成、零 CUDA C++，JIT 编译单 kernel 用时 2.5 s（前向）/1.4 s（反向），对比 FA3 的 C++ 模板 55 s/45 s，<b>快 20–30×</b>（FA4 Table 4）。FlexAttention 与 block-sparse 变体已被社区在此基础上不改核心框架地实现（FA4 §4）。代码入口：<a href="https://github.com/Dao-AILab/flash-attention/tree/main/flash_attn/cute">flash_attn/cute/</a>。</p>
+
+<h3>6.7 效果汇总</h3>
+
+<table>
+  <tr><th>指标（B200，BF16）</th><th>FA4</th><th>对照</th></tr>
+  <tr><td>前向峰值</td><td class="num">最高 1613 TFLOPs/s（≈ 71% 理论峰值 2250）</td><td class="num">比 cuDNN 9.13 快 1.1–1.3×，比 Triton 快 2.1–2.7×</td></tr>
+  <tr><td>后向</td><td class="num">2-CTA 版全程领先</td><td class="num">确定性模式达非确定性 1-CTA 的 75%</td></tr>
+  <tr><td>兼容性</td><td class="num" colspan="2">FA3 内核不能跑在 B200 上（Hopper MMA 指令无前向兼容），FA4 是 Blackwell 上的完全重写（FA4 §5 脚注 1）</td></tr>
+</table>
+
+<p class="infer">一点横向观察（本报告推断，非论文原文）：FA4 论文附录 A.1 提到，从 cuDNN 9.13/9.14 起 NVIDIA 已把 FA4 的部分技术吸收进 cuDNN，最新 cuDNN 9.19 与 FA4 性能接近——「算法论文 → 厂商库」的传导周期已经缩到一两个月内；工程上近期不必为了用上这些技术而强依赖 FA4 前向内核。</p>
+
+<h2 id="sec7">七、四代横向对比</h2>
+
+<div class="fig">
+<svg viewBox="0 0 880 250" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="m6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <line x1="40" y1="200" x2="840" y2="200" stroke="#5a6272" stroke-width="2" marker-end="url(#m6a)"/>
+  <circle cx="100" cy="200" r="6" fill="#2456c4"/>
+  <circle cx="330" cy="200" r="6" fill="#2456c4"/>
+  <circle cx="560" cy="200" r="6" fill="#2456c4"/>
+  <circle cx="790" cy="200" r="6" fill="#2456c4"/>
+  <text x="100" y="64" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">FA1 · 2022-05</text>
+  <text x="100" y="84" font-size="11" text-anchor="middle" fill="#5a6272">arXiv:2205.14135</text>
+  <text x="100" y="104" font-size="11" text-anchor="middle" fill="#1a1f2e">tiling + online softmax</text>
+  <text x="100" y="122" font-size="11" text-anchor="middle" fill="#1a1f2e">不存 N²，HBM 访存 O(N²d²/M)</text>
+  <text x="100" y="140" font-size="11" text-anchor="middle" fill="#2f9e63">A100 · 前向 ~3× PyTorch</text>
+  <line x1="100" y1="150" x2="100" y2="192" stroke="#c9d2e0" stroke-width="1.5"/>
+  <text x="330" y="64" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">FA2 · 2023-07</text>
+  <text x="330" y="84" font-size="11" text-anchor="middle" fill="#5a6272">arXiv:2307.08691</text>
+  <text x="330" y="104" font-size="11" text-anchor="middle" fill="#1a1f2e">Q 外层循环交换 · 减非 matmul</text>
+  <text x="330" y="122" font-size="11" text-anchor="middle" fill="#1a1f2e">split-Q warp 划分 · logsumexp</text>
+  <text x="330" y="140" font-size="11" text-anchor="middle" fill="#2f9e63">A100 · 73% 峰值，2× FA1</text>
+  <line x1="330" y1="150" x2="330" y2="192" stroke="#c9d2e0" stroke-width="1.5"/>
+  <text x="560" y="64" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">FA3 · 2024-07</text>
+  <text x="560" y="84" font-size="11" text-anchor="middle" fill="#5a6272">arXiv:2407.08608</text>
+  <text x="560" y="104" font-size="11" text-anchor="middle" fill="#1a1f2e">warp specialization · pingpong</text>
+  <text x="560" y="122" font-size="11" text-anchor="middle" fill="#1a1f2e">2-stage GEMM-softmax · FP8</text>
+  <text x="560" y="140" font-size="11" text-anchor="middle" fill="#2f9e63">H100 · 740 TFLOPs/s 75%，FP8 1.2P</text>
+  <line x1="560" y1="150" x2="560" y2="192" stroke="#c9d2e0" stroke-width="1.5"/>
+  <text x="790" y="64" font-size="12" font-weight="bold" text-anchor="middle" fill="#1a1f2e">FA4 · 2026-03</text>
+  <text x="790" y="84" font-size="11" text-anchor="middle" fill="#5a6272">arXiv:2603.05451</text>
+  <text x="790" y="104" font-size="11" text-anchor="middle" fill="#1a1f2e">TMEM + 2-CTA · 软件模拟 exp</text>
+  <text x="790" y="122" font-size="11" text-anchor="middle" fill="#1a1f2e">条件重缩放 · correction WG · LPT</text>
+  <text x="790" y="140" font-size="11" text-anchor="middle" fill="#2f9e63">B200 · 1613 TFLOPs/s 71%</text>
+  <line x1="790" y1="150" x2="790" y2="192" stroke="#c9d2e0" stroke-width="1.5"/>
+  <text x="40" y="224" font-size="10" fill="#5a6272">主线：解决「能不能不存 N²」→「怎么摆满硬件」→「怎么等（异步）」→「等什么（非对称瓶颈）」</text>
+</svg>
+</div>
+<p class="cap"><b>图 6</b>：FlashAttention 四代演进时间线（发布时间以 arXiv v1 为准；FA4 成绩为 B200 BF16 前向）。</p>
+
+<table>
+  <tr><th>维度</th><th>FA1（2205.14135）</th><th>FA2（2307.08691）</th><th>FA3（2407.08608）</th><th>FA4（2603.05451）</th></tr>
+  <tr><td>目标硬件</td><td>Ampere A100</td><td>Ampere A100</td><td>Hopper H100</td><td>Blackwell B200/GB200</td></tr>
+  <tr><td>并行维度（前向网格）</td><td>batch × heads</td><td>batch × heads × Q 块（seqlen）</td><td>同 FA2（CTA 级）+ persistent kernel</td><td>同 FA2 + LPT/SPT 调度器（causal/varlen 负载均衡）</td></tr>
+  <tr><td>循环结构</td><td>外层 KV 块 \(j\)，内层 Q 块 \(i\)</td><td>外层 Q 块 \(i\)，内层 KV 块 \(j\)</td><td>同 FA2，但内层展开为 producer/consumer 流水</td><td>同 FA2；每 CTA 两个 Q tile 乒乓（high/low）</td></tr>
+  <tr><td>softmax 统计量位置</td><td>HBM：\(m,\ell\) 每步读旧写新</td><td>寄存器；只落盘 \(L=m+\log\ell\)</td><td>寄存器 + \(s\) 段 SMEM 环形缓冲协调</td><td>每线程整行寄存器（无 shuffle）；\(S/P\) 走 TMEM；correction WG 托管重缩放</td></tr>
+  <tr><td>关键流水</td><td>单 kernel，同步 cp.async 预取</td><td>单 kernel，同步；重点在 warp 分工</td><td>producer/consumer warp 专化 + pingpong + 2-stage GEMM-softmax</td><td>全异步 UMMA + 双 softmax WG 乒乓 + 独立 correction WG + 条件重缩放 + 软件模拟 exp（10–25% 部分仿真）</td></tr>
+  <tr><td>精度支持</td><td>FP16/BF16（中间量 FP32）</td><td>FP16/BF16</td><td>+ FP8：block quantization + incoherent processing（Hadamard），FP8 误差降 2.6×</td><td>BF16 为主；软件 exp3 次多项式在 BF16 层面与硬件等价（±1 ULP 内 99%）；backward 确定性模式</td></tr>
+  <tr><td>backward 特点</td><td>重算 \(S,P\)；\(D_i = \mathrm{d}o_i^\top o_i\) 技巧省掉 \(N^2\) 存储</td><td>同 FA1，单 logsumexp；原子加 dQ</td><td>1.5–1.75× 于 FA2</td><td>5 GEMM 全流水；TMEM 减 smem 流量；2-CTA+DSMEM 重构 dQ，原子加减半</td></tr>
+  <tr><td>峰值利用 / 相对提升</td><td>访存降 9× 级；GPT-2 attention 7.6×；BERT 训练快 15%</td><td>前向 73%、后向 63% A100 峰值；1.7–3.0× FA1；训练 225 TFLOPs/s</td><td>740 TFLOPs/s（75% H100）；1.5–2.0× FA2；FP8 ≈1.2 PFLOPs/s</td><td>1613 TFLOPs/s（71% B200）；1.1–1.3× cuDNN 9.13，2.1–2.7× Triton</td></tr>
+  <tr><td>额外显存</td><td>\(O(N)\)（\(O,\ell,m\)）</td><td>\(O(N)\)（\(O,L\)）</td><td>\(O(N)\)（\(O,L\)）</td><td>\(O(N)\)（\(O,L\)）</td></tr>
+</table>
+
+<h2 id="sec8">八、事实与推断的边界</h2>
+
+<ul>
+  <li><b>论文/源码证实的事实</b>：四篇论文的 Algorithm 编号、公式、Table/Fig 数字，以及克隆仓库（commit <code>e7a6402</code>，2026-10-19）中标注 <code>文件:行号</code> 的代码片段，均为一手证据。注意 <code>csrc/</code>（FA2）与 <code>hopper/</code>（FA3）目录在 main 分支上持续演进，本文引用的是当前版本；FA1 的原始 CUDA 实现已不在现仓库中（现仓库的 <code>csrc/</code> 即 FA2 起的实现），FA1 部分仅引用论文伪代码。</li>
+  <li><b>标注为「推断」的内容</b>：§六.7 末尾关于 cuDNN 吸收速度的横向观察；§三 手算示例中「第 2 行零重缩放 ⇔ FA4 条件重缩放」的类比（FA4 论文未用此例，但式 8 的机制覆盖该情形）。</li>
+  <li><b>简化说明</b>：图 4/图 5 的流水线甘特图是<b>示意</b>——论文与源码中的相位由 barrier/信号量动态决定，并非固定周期；周期账（式 1–3）是 FA4 论文自述的简化 roofline（不含 FP32 运算、寄存器带宽、L2 等资源）。</li>
+  <li><b>FA4 时效性</b>：FA4 论文为 2026-03 的 v1，实现仍在快速迭代（论文发表时 cuDNN 9.19 已追平部分场景）；阅读时建议以仓库 main 分支的 <code>flash_attn/cute/</code> 为最新事实来源。</li>
+</ul>
+
+<h2 id="refs">参考来源</h2>
+
+<ol class="refs">
+  <li>Tri Dao, Daniel Y. Fu, Stefano Ermon, Atri Rudra, Christopher Ré. <i>FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness</i>. NeurIPS 2022. <a href="https://arxiv.org/abs/2205.14135">arXiv:2205.14135</a>（本地 <code>paper/flash-attention-v1.pdf</code>）</li>
+  <li>Tri Dao. <i>FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning</i>. 2023. <a href="https://arxiv.org/abs/2307.08691">arXiv:2307.08691</a>（本地 <code>paper/flash-attention-v2.pdf</code>）</li>
+  <li>Jay Shah, Ganesh Bikshandi, Ying Zhang, Vijay Thakkar, Pradeep Ramani, Tri Dao. <i>FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision</i>. NeurIPS 2024. <a href="https://arxiv.org/abs/2407.08608">arXiv:2407.08608</a>（本地 <code>paper/flash-attention-v3.pdf</code>）</li>
+  <li>Ted Zadouri, Markus Hoehnerbach, Jay Shah, Timmy Liu, Vijay Thakkar, Tri Dao. <i>FlashAttention-4: Algorithm and Kernel Pipelining Co-Design for Asymmetric Hardware Scaling</i>. 2026. <a href="https://arxiv.org/abs/2603.05451">arXiv:2603.05451</a>（本地 <code>paper/flash-attention-v4.pdf</code>）</li>
+  <li>Tri Dao. <i>FlashAttention-4: Algorithm and Kernel Pipelining Co-Design for Asymmetric Hardware Scaling</i>（作者博客）. <a href="https://tridao.me/blog/2026/flash4/">tridao.me/blog/2026/flash4</a>，2026-03-05.</li>
+  <li>Dao-AILab/flash-attention 官方仓库，commit <code>e7a6402</code>，2026-10-19 抓取。引用文件：<code>csrc/flash_attn/src/softmax.h</code>、<code>csrc/flash_attn/src/flash_fwd_kernel.h</code>、<code>csrc/flash_attn/src/flash_fwd_launch_template.h</code>、<code>hopper/flash_fwd_kernel_sm90.h</code>、<code>hopper/mainloop_fwd_sm90_tma_gmma_ws.hpp</code>、<code>flash_attn/cute/flash_fwd_sm100.py</code>、<code>flash_attn/cute/softmax.py</code>、<code>flash_attn/cute/utils.py</code>. <a href="https://github.com/Dao-AILab/flash-attention">github.com/Dao-AILab/flash-attention</a></li>
+  <li>Milakov & Gimelshein. <i>Online normalizer calculation for softmax</i>（online softmax 起源，FA1 引文 [51]）；Rabe & Staats. <i>Self-attention Does Not Need O(n²) Memory</i>（FA1 引文 [66]，FA1 §B.5 对比）。</li>
+</ol>
+
+<footer>生成于 2026-10-19 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+</body>
+</html>

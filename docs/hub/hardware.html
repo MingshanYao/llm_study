@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>硬件与底层 · 阅读路线 — LLM 论文研究报告</title>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.7; font-size: 16px;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+  .back { font-size: 0.9em; margin-bottom: 20px; }
+  .back a { color: var(--accent); text-decoration: none; }
+  .back a:hover { text-decoration: underline; }
+  h1 { font-size: 1.7em; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 30px; font-size: 0.95em; }
+  h2.series {
+    font-size: 1.15em; margin: 36px 0 4px; padding-bottom: 6px; border-bottom: 2px solid var(--line);
+  }
+  .step {
+    display: flex; gap: 16px; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 22px; margin: 14px 0;
+  }
+  .step .no {
+    flex: none; width: 30px; height: 30px; border-radius: 999px; background: var(--accent-soft);
+    color: var(--accent); font-weight: 700; font-size: 0.95em;
+    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .step h3 { font-size: 1.02em; margin: 0 0 6px; font-weight: 600; }
+  .step h3 a { color: var(--accent); text-decoration: none; }
+  .step h3 a:hover { text-decoration: underline; }
+  .step p { margin: 4px 0; color: var(--muted); font-size: 0.9em; }
+  ul.extend { padding-left: 22px; margin: 14px 0; }
+  ul.extend li { margin: 8px 0; font-size: 0.93em; color: #2a3040; }
+  ul.extend a { color: var(--accent); text-decoration: none; }
+  ul.extend a:hover { text-decoration: underline; }
+  .tag { color: var(--muted); font-size: 0.85em; }
+</style>
+</head>
+<body>
+<main>
+  <p class="back"><a href="../index.html">← 返回全部主题</a></p>
+  <h1>硬件与底层</h1>
+  <p class="sub">面向硬件的 kernel 算法与 RTL 入门</p>
+
+  <h2 class="series">推荐阅读路线</h2>
+  <div class="step">
+    <span class="no">1</span>
+    <div>
+      <h3><a href="../misc/flash-attention-v1-to-v4.html">FlashAttention v1→v4 演进全解</a></h3>
+      <p>从 online softmax 到 tiling、流水线，再到 Blackwell 的非对称流水线，算法过程逐版详解。理解「为什么 attention 要这样写 kernel」的必读篇。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">2</span>
+    <div>
+      <h3><a href="../misc/verilog-crash-course.html">Verilog 速成</a></h3>
+      <p>半天写出能仿真的 RTL，面向想理解硬件底层的软件背景读者。</p>
+    </div>
+  </div>
+
+  <h2 class="series">跨主题延伸</h2>
+  <ul class="extend">
+    <li>逐算子的算术强度与 roofline 方法：<a href="../deepseek-v4/v4pro-ridge-point.html">V4-Pro 账本</a>（<a href="inference.html">推理与系统</a>）。</li>
+    <li>推理框架如何接入一个新算子：<a href="../vllm/vllm-t9-ops.html">vLLM 第 9 讲</a>（<a href="inference.html">推理与系统</a>）。</li>
+  </ul>
+</main>
+</body>
+</html>

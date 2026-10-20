@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>推理与系统 · 阅读路线 — LLM 论文研究报告</title>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.7; font-size: 16px;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+  .back { font-size: 0.9em; margin-bottom: 20px; }
+  .back a { color: var(--accent); text-decoration: none; }
+  .back a:hover { text-decoration: underline; }
+  h1 { font-size: 1.7em; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 30px; font-size: 0.95em; }
+  h2.series {
+    font-size: 1.15em; margin: 36px 0 4px; padding-bottom: 6px; border-bottom: 2px solid var(--line);
+  }
+  .step {
+    display: flex; gap: 16px; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 22px; margin: 14px 0;
+  }
+  .step .no {
+    flex: none; width: 30px; height: 30px; border-radius: 999px; background: var(--accent-soft);
+    color: var(--accent); font-weight: 700; font-size: 0.95em;
+    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .step h3 { font-size: 1.02em; margin: 0 0 6px; font-weight: 600; }
+  .step h3 a { color: var(--accent); text-decoration: none; }
+  .step h3 a:hover { text-decoration: underline; }
+  .step p { margin: 4px 0; color: var(--muted); font-size: 0.9em; }
+  .step ol { margin: 6px 0 2px; padding-left: 22px; color: var(--muted); font-size: 0.9em; }
+  .step ol li { margin: 3px 0; }
+  .step ol a { color: var(--accent); text-decoration: none; }
+  .step ol a:hover { text-decoration: underline; }
+  ul.extend { padding-left: 22px; margin: 14px 0; }
+  ul.extend li { margin: 8px 0; font-size: 0.93em; color: #2a3040; }
+  ul.extend a { color: var(--accent); text-decoration: none; }
+  ul.extend a:hover { text-decoration: underline; }
+  .tag { color: var(--muted); font-size: 0.85em; }
+</style>
+</head>
+<body>
+<main>
+  <p class="back"><a href="../index.html">← 返回全部主题</a></p>
+  <h1>推理与系统</h1>
+  <p class="sub">推理引擎源码走读 · prefill/decode 成本账本 · 可以动手调参的计算器</p>
+
+  <h2 class="series">推荐阅读路线</h2>
+  <div class="step">
+    <span class="no">1</span>
+    <div>
+      <h3><a href="../misc/mha-prefill-decode.html">MHA 的 Prefill 与 Decode 账本</a> <span class="tag">（先算账）</span></h3>
+      <p>并行维度、计算量、访存量怎么算，以及 MHA→GQA→MLA 的改善主线。这是后面一切系统设计的成本语言。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">2</span>
+    <div>
+      <h3><a href="../misc/attention-ai-calculator.html">Attention AI 计算器</a> <span class="tag">（动手玩）</span></h3>
+      <p>一条统一公式覆盖 MHA→GQA→MQA→MLA→稀疏→量化→投机解码，参数可调，改一个配置立刻看到显存与算力的变化。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">3</span>
+    <div>
+      <h3><a href="../vllm/vllm-t0-overview.html">vLLM 源码解析十讲</a> <span class="tag">（主线，t0 → t9 按序）</span></h3>
+      <p>t0 整体架构与请求生命周期 → t1 Engine 与进程模型 → t2 Scheduler → t3 KV Cache 与 PagedAttention → t4 GPUModelRunner → t5 分布式并行 → t6 投机解码与结构化输出 → t7 模型加载与量化 → t8 多模态与 LoRA → t9 算子支持。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">4</span>
+    <div>
+      <h3><a href="../deepseek-v4/v4pro-ridge-point.html">DeepSeek-V4-Pro 算术强度账本</a> <span class="tag">（实战算账）</span></h3>
+      <p>用生产 config 逐算子算 prefill 与 decode 的 roofline，把第 1 步的账本方法落到真实模型上。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">5</span>
+    <div>
+      <h3><a href="../deepseek-v4/dspark-speculative-decoding.html">DSpark 投机解码</a> <span class="tag">（单点深读）</span></h3>
+      <p>DeepSeek 生产级置信度调度投机解码，与 vLLM 第 6 讲的 draft-verify 框架互为印证。</p>
+    </div>
+  </div>
+
+  <h2 class="series">跨主题延伸</h2>
+  <ul class="extend">
+    <li>KV Cache 的模型侧设计：<a href="../deepseek-v4/deepseek-v4-kvcache.html">DeepSeek-V4 KV Cache 组织</a>（<a href="architecture.html">架构专题</a>）。</li>
+    <li>KV Cache 量化与 GGUF 选型：<a href="../quantization/quant-t5-kv-systems.html">量化第 5 讲</a>（<a href="foundations.html">基础入门</a>）。</li>
+    <li>kernel 视角：<a href="../misc/flash-attention-v1-to-v4.html">FlashAttention v1→v4</a>（<a href="hardware.html">硬件与底层</a>）。</li>
+  </ul>
+</main>
+</body>
+</html>

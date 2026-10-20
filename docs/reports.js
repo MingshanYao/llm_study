@@ -361,5 +361,91 @@ var REPORTS = [
     "title": "Attention AI 计算器：一条统一公式算尽 MHA→GQA→MQA→MLA→稀疏→量化→投机解码（可调参数）",
     "date": "2026-10-19",
     "group": "misc"
+  },
+  {
+    "slug": "misc/flash-attention-v1-to-v4",
+    "title": "FlashAttention v1→v4 演进全解：从 online softmax 到 Blackwell 非对称流水线（算法过程详解）",
+    "date": "2026-10-19",
+    "paper": "FlashAttention v1-v4（arXiv:2205.14135 / 2307.08691 / 2407.08608 / 2603.05451，本地 paper/flash-attention-v1~v4.pdf）",
+    "arxiv": "https://arxiv.org/abs/2603.05451",
+    "repo": "https://github.com/Dao-AILab/flash-attention（main@e7a6402，2026-10-19 抓取）",
+    "group": "misc"
+  }
+];
+
+// 导航层次：主题域(TOPICS) → 系列/专题(collections) → 报告(REPORTS)，由 docs/index.html 渲染，
+// 每个主题域的推荐阅读路线在 docs/hub/<id>.html。
+// collection 两种写法：{ group } 引用 REPORTS 里整组（按数组顺序），{ slugs } 显式列出跨组/单篇集合。
+// 新增报告时：先在 REPORTS 追加条目，再把 slug 挂进对应 collection；没挂的会落进 index 的「其他」。
+var TOPICS = [
+  {
+    "id": "foundations",
+    "name": "基础入门",
+    "desc": "零基础系列，不要求读过论文，从直觉、公式到代码逐讲递进，建议作为全站入口",
+    "hub": "hub/foundations.html",
+    "collections": [
+      { "name": "MoE 零基础五讲", "group": "moe" },
+      { "name": "大模型量化零基础七讲", "group": "quantization" }
+    ]
+  },
+  {
+    "id": "architecture",
+    "name": "架构专题",
+    "desc": "Attention / MoE / 长上下文的模型设计深读，以 DeepSeek V4 与 V4.1 为主线",
+    "hub": "hub/architecture.html",
+    "collections": [
+      { "name": "LLM 架构演进综述", "slugs": ["misc/llm-arch-evolution"] },
+      { "name": "DeepSeek-V4.1 零基础七讲", "group": "deepseek-v41" },
+      {
+        "name": "DeepSeek-V4 专题深读",
+        "note": "本系列的 DSpark 投机解码与 V4-Pro roofline 账本两篇归入「推理与系统」主题",
+        "slugs": [
+          "deepseek-v4/deepseek-v4-architecture",
+          "deepseek-v4/deepseek-v4-attention",
+          "deepseek-v4/csa-compression",
+          "deepseek-v4/deepseek-v4-lightning-indexer",
+          "deepseek-v4/deepseek-v4-kvcache",
+          "deepseek-v4/deepseek-mhc",
+          "deepseek-v4/deepseek-moe"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "inference",
+    "name": "推理与系统",
+    "desc": "推理引擎源码走读、prefill/decode 成本账本，以及可以动手调参的计算器",
+    "hub": "hub/inference.html",
+    "collections": [
+      { "name": "vLLM 源码解析十讲", "group": "vllm" },
+      {
+        "name": "成本账本与计算器",
+        "slugs": [
+          "misc/mha-prefill-decode",
+          "misc/attention-ai-calculator",
+          "deepseek-v4/v4pro-ridge-point"
+        ]
+      },
+      { "name": "投机解码", "slugs": ["deepseek-v4/dspark-speculative-decoding"] }
+    ]
+  },
+  {
+    "id": "training",
+    "name": "训练",
+    "desc": "后训练与 RL 工程化的零基础主线",
+    "hub": "hub/training.html",
+    "collections": [
+      { "name": "RL 训练工程师零基础七讲（含番外）", "group": "rl" }
+    ]
+  },
+  {
+    "id": "hardware",
+    "name": "硬件与底层",
+    "desc": "面向硬件的 kernel 算法与 RTL 入门",
+    "hub": "hub/hardware.html",
+    "collections": [
+      { "name": "FlashAttention v1→v4 演进", "slugs": ["misc/flash-attention-v1-to-v4"] },
+      { "name": "Verilog 速成", "slugs": ["misc/verilog-crash-course"] }
+    ]
   }
 ];

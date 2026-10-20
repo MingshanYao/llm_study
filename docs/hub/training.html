@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>训练 · 阅读路线 — LLM 论文研究报告</title>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.7; font-size: 16px;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+  .back { font-size: 0.9em; margin-bottom: 20px; }
+  .back a { color: var(--accent); text-decoration: none; }
+  .back a:hover { text-decoration: underline; }
+  h1 { font-size: 1.7em; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 30px; font-size: 0.95em; }
+  h2.series {
+    font-size: 1.15em; margin: 36px 0 4px; padding-bottom: 6px; border-bottom: 2px solid var(--line);
+  }
+  .step {
+    display: flex; gap: 16px; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 22px; margin: 14px 0;
+  }
+  .step .no {
+    flex: none; width: 30px; height: 30px; border-radius: 999px; background: var(--accent-soft);
+    color: var(--accent); font-weight: 700; font-size: 0.95em;
+    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .step h3 { font-size: 1.02em; margin: 0 0 6px; font-weight: 600; }
+  .step h3 a { color: var(--accent); text-decoration: none; }
+  .step h3 a:hover { text-decoration: underline; }
+  .step p { margin: 4px 0; color: var(--muted); font-size: 0.9em; }
+  ul.extend { padding-left: 22px; margin: 14px 0; }
+  ul.extend li { margin: 8px 0; font-size: 0.93em; color: #2a3040; }
+  ul.extend a { color: var(--accent); text-decoration: none; }
+  ul.extend a:hover { text-decoration: underline; }
+  .tag { color: var(--muted); font-size: 0.85em; }
+</style>
+</head>
+<body>
+<main>
+  <p class="back"><a href="../index.html">← 返回全部主题</a></p>
+  <h1>训练</h1>
+  <p class="sub">后训练与 RL 工程化 · 零基础主线 + 生产级调参番外</p>
+
+  <h2 class="series">推荐阅读路线</h2>
+  <div class="step">
+    <span class="no">1</span>
+    <div>
+      <h3><a href="../rl/rl-t0-foundation.html">RL 训练工程师零基础七讲</a> <span class="tag">（t0 → t6 按序）</span></h3>
+      <p>t0 全景图（后训练流程、RL 循环、术语表）→ t1 策略梯度（softmax 策略、REINFORCE、baseline）→ t2 把 LLM 接上 RL（token 即动作、KL 约束）→ t3 PPO（clip、GAE、四模型架构）→ t4 RLHF 与 DPO → t5 RLVR 与 GRPO → t6 系统与实战（rollout 引擎、显存账本、调试手册）。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">2</span>
+    <div>
+      <h3><a href="../rl/rl-t7-score-centering.html">番外：Score Centering 精读</a> <span class="tag">（学完主线再读）</span></h3>
+      <p>TIM 漂移的成因、一行修复，以及与重要性采样的对比——训练不稳时的实战药方。</p>
+    </div>
+  </div>
+
+  <h2 class="series">跨主题延伸</h2>
+  <ul class="extend">
+    <li>预训练与后训练基础设施的模型侧视角：<a href="../deepseek-v41/deepseek-v41-t5-pretraining.html">V4.1 七讲第 5 讲</a>、<a href="../deepseek-v41/deepseek-v41-t6-posttraining.html">第 6 讲</a>（<a href="architecture.html">架构专题</a>）。</li>
+    <li>QAT 与量化 scaling law：<a href="../quantization/quant-t6-qat-roadmap.html">量化第 6 讲</a>（<a href="foundations.html">基础入门</a>）。</li>
+  </ul>
+</main>
+</body>
+</html>

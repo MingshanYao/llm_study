@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>架构专题 · 阅读路线 — LLM 论文研究报告</title>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.7; font-size: 16px;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+  .back { font-size: 0.9em; margin-bottom: 20px; }
+  .back a { color: var(--accent); text-decoration: none; }
+  .back a:hover { text-decoration: underline; }
+  h1 { font-size: 1.7em; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 30px; font-size: 0.95em; }
+  h2.series {
+    font-size: 1.15em; margin: 36px 0 4px; padding-bottom: 6px; border-bottom: 2px solid var(--line);
+  }
+  .step {
+    display: flex; gap: 16px; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 22px; margin: 14px 0;
+  }
+  .step .no {
+    flex: none; width: 30px; height: 30px; border-radius: 999px; background: var(--accent-soft);
+    color: var(--accent); font-weight: 700; font-size: 0.95em;
+    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .step h3 { font-size: 1.02em; margin: 0 0 6px; font-weight: 600; }
+  .step h3 a { color: var(--accent); text-decoration: none; }
+  .step h3 a:hover { text-decoration: underline; }
+  .step p { margin: 4px 0; color: var(--muted); font-size: 0.9em; }
+  .step ol { margin: 6px 0 2px; padding-left: 22px; color: var(--muted); font-size: 0.9em; }
+  .step ol li { margin: 3px 0; }
+  .step ol a { color: var(--accent); text-decoration: none; }
+  .step ol a:hover { text-decoration: underline; }
+  ul.extend { padding-left: 22px; margin: 14px 0; }
+  ul.extend li { margin: 8px 0; font-size: 0.93em; color: #2a3040; }
+  ul.extend a { color: var(--accent); text-decoration: none; }
+  ul.extend a:hover { text-decoration: underline; }
+  .tag { color: var(--muted); font-size: 0.85em; }
+</style>
+</head>
+<body>
+<main>
+  <p class="back"><a href="../index.html">← 返回全部主题</a></p>
+  <h1>架构专题</h1>
+  <p class="sub">Attention / MoE / 长上下文的模型设计深读 · 以 DeepSeek V4 与 V4.1 为主线</p>
+
+  <h2 class="series">推荐阅读路线</h2>
+  <div class="step">
+    <span class="no">1</span>
+    <div>
+      <h3><a href="../misc/llm-arch-evolution.html">LLM 架构演进技术报告</a> <span class="tag">（先立全景）</span></h3>
+      <p>2022–2026 年 FFN 与 Attention 的降算/降存主线，用「短板迁移」视角串起各代架构改动。先读它，后面每个单点设计都知道自己处在主线什么位置。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">2</span>
+    <div>
+      <h3><a href="../deepseek-v41/deepseek-v41-t0-overview.html">DeepSeek-V4.1 零基础七讲</a> <span class="tag">（轻量主线，t0 → t6 按序）</span></h3>
+      <p>零基础可读的完整入门：t0 总览 → t1 CED 架构 → t2 CSA2 注意力 → t3 架构扩展 → t4 基础设施 → t5 预训练 → t6 后训练。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">3</span>
+    <div>
+      <h3><a href="../deepseek-v4/deepseek-v4-architecture.html">DeepSeek-V4 专题深读</a> <span class="tag">（进阶，7 篇）</span></h3>
+      <p>推荐顺序：</p>
+      <ol>
+        <li><a href="../deepseek-v4/deepseek-v4-architecture.html">总体架构</a>（CSA/HCA 混合注意力 + mHC + Muon）</li>
+        <li><a href="../deepseek-v4/deepseek-v4-attention.html">Attention 设计</a>（CSA 与 HCA）</li>
+        <li><a href="../deepseek-v4/csa-compression.html">CSA 压缩过程</a>（序列维压缩细讲）</li>
+        <li><a href="../deepseek-v4/deepseek-v4-lightning-indexer.html">Lightning Indexer</a>（可学习稀疏索引器）</li>
+        <li><a href="../deepseek-v4/deepseek-v4-kvcache.html">KV Cache 组织</a>（异构条目、双缓存与盘上存储）</li>
+        <li><a href="../deepseek-v4/deepseek-mhc.html">mHC</a>（流形约束超连接）</li>
+        <li><a href="../deepseek-v4/deepseek-moe.html">MoE 进化史</a>（细粒度专家、无损均衡与 MegaMoE）</li>
+      </ol>
+      <p>本系列的 DSpark 投机解码与 V4-Pro roofline 账本两篇归在<a href="inference.html">推理与系统</a>主题。</p>
+    </div>
+  </div>
+
+  <h2 class="series">跨主题延伸</h2>
+  <ul class="extend">
+    <li>MoE 的前置推导与代码走读见<a href="foundations.html">基础入门</a>的 <a href="../moe/moe-t0-foundation.html">MoE 零基础五讲</a>。</li>
+    <li>KV Cache 的引擎侧落地见<a href="inference.html">推理与系统</a>的 <a href="../vllm/vllm-t3-kvcache.html">vLLM 第 3 讲</a>。</li>
+    <li>注意力 kernel 的硬件实现视角见<a href="hardware.html">硬件与底层</a>的 <a href="../misc/flash-attention-v1-to-v4.html">FlashAttention v1→v4</a>。</li>
+  </ul>
+</main>
+</body>
+</html>

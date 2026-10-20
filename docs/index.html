@@ -17,20 +17,40 @@
   }
   main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
   h1 { font-size: 1.7em; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 32px; font-size: 0.95em; }
-  h2.series {
-    font-size: 1.15em; margin: 36px 0 4px; color: var(--ink);
-    padding-bottom: 6px; border-bottom: 2px solid var(--line);
+  .sub { color: var(--muted); margin: 0 0 8px; font-size: 0.95em; }
+  details.topic { margin: 26px 0; }
+  details.topic > summary { list-style: none; cursor: pointer; }
+  details.topic > summary::-webkit-details-marker { display: none; }
+  details.topic > summary::before {
+    content: "▸"; display: inline-block; color: var(--muted);
+    margin-right: 8px; transition: transform .15s;
   }
-  h2.series:first-of-type { margin-top: 0; }
-  .series .count { color: var(--muted); font-size: 0.8em; font-weight: 400; margin-left: 8px; }
+  details.topic[open] > summary::before { transform: rotate(90deg); }
+  .topic-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  .topic-name { font-size: 1.15em; font-weight: 600; }
+  .topic-head .count { color: var(--muted); font-size: 0.8em; font-weight: 400; }
+  .topic-head .hub { font-size: 0.82em; color: var(--accent); text-decoration: none; }
+  .topic-head .hub:hover { text-decoration: underline; }
+  .topic-desc { color: var(--muted); font-size: 0.88em; margin: 10px 2px 2px; }
+  .peek {
+    display: block; color: var(--muted); font-size: 0.82em;
+    margin: 6px 0 0 26px;
+  }
+  details[open] .peek { display: none; }
+  h3.collection {
+    font-size: 0.98em; font-weight: 600; color: var(--ink);
+    margin: 26px 0 0; padding-left: 18px;
+  }
+  h3.collection .count { color: var(--muted); font-size: 0.78em; font-weight: 400; margin-left: 8px; }
+  .coll-note { color: var(--muted); font-size: 0.82em; margin: 2px 0 0 18px; }
   .card {
     display: block; background: #fff; border: 1px solid var(--line); border-radius: 12px;
-    padding: 18px 22px; margin: 14px 0; text-decoration: none; color: inherit;
+    padding: 18px 22px; margin: 14px 0 14px 18px; text-decoration: none; color: inherit;
     transition: border-color .15s, box-shadow .15s;
   }
   .card:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(36,86,196,.08); text-decoration: none; }
-  .card h3 { font-size: 1.02em; margin: 0 0 6px; color: var(--accent); font-weight: 600; }
+  .card h4 { font-size: 1em; margin: 0 0 6px; color: var(--accent); font-weight: 600; }
   .card p { margin: 2px 0; color: var(--muted); font-size: 0.88em; }
   .card .tags { margin-top: 8px; }
   .pill {
@@ -43,23 +63,14 @@
 <body>
 <main>
   <h1>LLM 论文研究报告</h1>
-  <p class="sub">按系列分组 · 报告为自包含单文件 HTML，公式用 MathJax 渲染</p>
+  <p class="sub">按「主题域 → 系列/专题 → 报告」三层组织 · 每个主题附推荐阅读路线 · 报告为自包含单文件 HTML，公式用 MathJax 渲染</p>
   <div id="list"><p id="err">正在加载报告索引 …</p></div>
 </main>
 <script src="reports.js"></script>
 <script>
-const GROUPS = [
-  ['deepseek-v4',    'DeepSeek V4 专题解读'],
-  ['deepseek-v41',   'DeepSeek-V4.1 零基础七讲'],
-  ['moe',            'MoE 零基础五讲'],
-  ['quantization',   '大模型量化零基础七讲'],
-  ['rl',             'RL 训练工程师零基础七讲'],
-  ['vllm',           'vLLM 源码解析十讲'],
-  ['misc',           '综述与其他'],
-];
 const card = it =>
   '<a class="card" href="' + it.slug + '.html">' +
-    '<h3>' + it.title + '</h3>' +
+    '<h4>' + it.title + '</h4>' +
     '<p>' + it.date + (it.paper ? ' · ' + it.paper : '') + '</p>' +
     '<div class="tags">' +
       (it.arxiv ? '<span class="pill">arXiv</span>' : '') +
@@ -67,24 +78,53 @@ const card = it =>
     '</div>' +
   '</a>';
 
-if (typeof REPORTS === 'undefined') {
+const renderTopic = (t, body, count) =>
+  '<details class="topic"><summary>' +
+    '<span class="topic-head"><span class="topic-name">' + t.name + '</span>' +
+    '<span class="count">' + count + ' 篇</span>' +
+    '<a class="hub" href="' + t.hub + '">阅读路线 →</a></span>' +
+    '<span class="peek">' + t.collections.map(c => c.name).join(' · ') + '</span>' +
+  '</summary>' +
+  '<p class="topic-desc">' + t.desc + '</p>' + body + '</details>';
+
+if (typeof REPORTS === 'undefined' || typeof TOPICS === 'undefined') {
   document.getElementById('err').textContent = '报告索引 reports.js 加载失败，请确认它与 index.html 在同一目录。';
 } else {
-  const byGroup = {};
-  for (const it of REPORTS) (byGroup[it.group] = byGroup[it.group] || []).push(it);
-  let html = '';
-  for (const [id, label] of GROUPS) {
-    const list = byGroup[id] || [];
-    if (!list.length) continue;
-    html += '<h2 class="series">' + label +
-            '<span class="count">' + list.length + ' 篇</span></h2>' +
-            list.map(card).join('');
-    delete byGroup[id];
+  const byGroup = {}, bySlug = {};
+  for (const it of REPORTS) {
+    (byGroup[it.group] = byGroup[it.group] || []).push(it);
+    bySlug[it.slug] = it;
   }
-  const rest = Object.values(byGroup).flat();
+  const usedSlugs = new Set(), usedGroups = new Set();
+  let html = '';
+  for (const t of TOPICS) {
+    let body = '', count = 0;
+    for (const c of t.collections) {
+      let items = [];
+      if (c.group) {
+        usedGroups.add(c.group);
+        items = (byGroup[c.group] || []).filter(it => !usedSlugs.has(it.slug));
+        items.forEach(it => usedSlugs.add(it.slug));
+      } else {
+        items = (c.slugs || []).map(s => bySlug[s]).filter(it => it && !usedSlugs.has(it.slug));
+        items.forEach(it => usedSlugs.add(it.slug));
+      }
+      if (!items.length) continue;
+      count += items.length;
+      body += '<h3 class="collection">' + c.name +
+              '<span class="count">' + items.length + ' 篇</span></h3>' +
+              (c.note ? '<p class="coll-note">' + c.note + '</p>' : '') +
+              items.map(card).join('');
+    }
+    if (count) html += renderTopic(t, body, count);
+  }
+  const rest = REPORTS.filter(it => !usedSlugs.has(it.slug) && !usedGroups.has(it.group));
   if (rest.length)
-    html += '<h2 class="series">其他<span class="count">' + rest.length + ' 篇</span></h2>' +
-            rest.map(card).join('');
+    html += '<details class="topic"><summary>' +
+            '<span class="topic-head"><span class="topic-name">其他</span>' +
+            '<span class="count">' + rest.length + ' 篇</span></span></summary>' +
+            '<p class="topic-desc">尚未挂进 TOPICS 主题层的报告，请在 reports.js 的 TOPICS 里给它们安个家。</p>' +
+            rest.map(card).join('') + '</details>';
   document.getElementById('list').innerHTML = html;
 }
 </script>
