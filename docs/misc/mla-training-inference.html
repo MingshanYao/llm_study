@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<!-- paper-research 报告模板：复制本文件，替换 {{TITLE}} / {{DATE}} / {{CONTENT}} 三个占位符后写入 docs/<系列子目录>/<slug>.html
+     （系列子目录：deepseek-v4 / deepseek-v41 / moe / quantization / rl / misc，单篇专题解读放 deepseek-v4，无法归系列的放 misc）。
+     head 中的内联 CSS 与钉死版本 + SRI 的 CDN 引用必须原样保留，不得更换 CDN、升级版本或去掉 integrity/crossorigin。 -->
+<!-- 跨报告链接写相对路径：同系列直接文件名，跨系列用 ../<目录>/<文件>.html；新增报告需同步 docs/reports.js。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MLA 训练与推理全解：低秩压缩、解耦 RoPE、weight absorption 与 FlashMLA kernel</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>MLA 训练与推理全解：低秩压缩、解耦 RoPE、weight absorption 与 FlashMLA kernel</h1>
+
+<div class="meta">
+  <b>生成日期</b>：2026-10-19<br>
+  <b>论文</b>：DeepSeek-V2（arXiv:<a href="https://arxiv.org/abs/2405.04434">2405.04434</a>，本地 <code>paper/deepseek_v2.pdf</code>，MLA 见 §2.1.2–2.1.4 与附录 C/D）· DeepSeek-V3（arXiv:<a href="https://arxiv.org/abs/2412.19437">2412.19437</a>，本地 <code>paper/deepseek_v3.pdf</code>，沿用 MLA，超参以 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V3/blob/main/config.json">官方 config.json</a> 为准）<br>
+  <b>代码仓库</b>：
+  <a href="https://github.com/deepseek-ai/FlashMLA">deepseek-ai/FlashMLA</a>（main@<code>0f11e17</code>，2026-10-20 抓取；sm90 dense decode kernel 快照 <code>ba89a34</code>，2026-09-15 抓取）·
+  <a href="https://github.com/vllm-project/vllm">vllm-project/vllm</a>（main@<code>fa75d34</code>，2026-10-15 抓取）·
+  <a href="https://github.com/sgl-project/sglang">sgl-project/sglang</a>（main@<code>5b683d6b72f8</code>，2026-10-20 抓取）<br>
+  <b>范围声明</b>：本文聚焦 DeepSeek-V2/V3 一脉的 MLA（不含 V3.2 的 DSA 稀疏化与 V4 的 CSA/HCA，只在第 7 节作衔接）。除注明「推断」的内容外，所有论断均出自上述论文与指定 commit 的源码。
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：MLA 用「KV 联合低秩压缩 + 解耦 RoPE」把 KV cache 从每 token 每层 \(2 n_h d_h\) 个元素压到 \((d_c + d^R_h) = 576\) 个元素（DeepSeek-V3 规格，仅为 MHA 的 1.76%，等效 GQA 2.25 组），再靠 <b>weight absorption</b> 把上投影矩阵 \(W_{UK}\)、\(W_{UV}\) 分别吸收进 query 侧与输出侧，使 decode 变成 K/V 同源的 <b>MQA</b>——缓存里永远只存 576 维 latent。</p>
+  <p><b>训练</b>就是按论文公式 (37)–(47) 的朴素形式走标准线性层 + FlashAttention（head_dim 192/128 的 MHA），反向传播无特殊处理；<b>推理 decode</b> 走 absorbed MQA（省访存），<b>prefill</b> 走非吸收的 MHA 形式（省算力），vLLM/SGLang 都按这个分界调度。FlashMLA kernel 用页表 + 64×576 KV tile + 「seesaw」双 warpgroup 调度在 H800 上跑到 3000 GB/s / 660 TFLOPS。</p>
+</div>
+
+<h2>1. 动机与谱系：KV cache 是怎么成为瓶颈的</h2>
+
+<p>自回归 decode 每生成一个 token，都要把全部前缀 token 的 K、V 读一遍。MHA 下每 token 每层要缓存 \(2 n_h d_h\) 个元素（K 和 V 各 \(n_h d_h\)）：DeepSeek-V3 规格下 \(n_h=128,\ d_h=128\)，即每 token 每层 32768 个元素、61 层合计约 4 MB/token。这直接封顶了 batch size 和序列长度——<b>decode 是访存瓶颈，KV cache 就是访存的大头</b>。这条账本的完整推导见<a href="mha-prefill-decode.html">《MHA 的 Prefill 与 Decode 账本》</a>，可调参数的交互计算见<a href="attention-ai-calculator.html">《Attention AI 计算器》</a>，此处不重复。</p>
+
+<p>压缩 KV cache 的谱系是一条「在 K/V 头之间做共享」的路：</p>
+
+<table>
+  <tr><th>方法</th><th>KV cache / token / 层</th><th>做法</th><th>代价</th></tr>
+  <tr><td>MHA</td><td>\(2 n_h d_h\)</td><td>每头独立 K/V</td><td>缓存最大</td></tr>
+  <tr><td>MQA（2019）</td><td>\(2 d_h\)</td><td>所有头共享 1 组 K/V</td><td>质量损失明显</td></tr>
+  <tr><td>GQA（2023）</td><td>\(2 n_g d_h\)</td><td>折中：\(n_g\) 组共享</td><td>仍有损失（V2 论文附录 D.1 的 7B 消融：MMLU 45.2 vs GQA-8 41.2 vs MQA 37.9）</td></tr>
+  <tr><td><b>MLA</b>（V2）</td><td>\((d_c + d^R_h)\approx \frac{9}{2} d_h\)</td><td>不做头间共享，改做 <b>K/V 联合低秩压缩</b>：只缓存 latent \(c^{KV}_t\)，多头 K/V 从中恢复</td><td>等效 GQA 2.25 组的缓存，但 V2 论文附录 D.2 消融显示<b>强于 MHA</b>（250B 级 MoE：MMLU 59.0 vs MHA 57.5）</td></tr>
+</table>
+<p class="cap"><b>表 1</b>｜四种机制的 KV cache 与质量取舍（V2 论文 Table 1 与附录 D）。MLA 的关键洞察：GQA 牺牲表达力换缓存，MLA 换个自由度——<b>在 head 维度压缩（信息损失），不如在 feature 维度低秩压缩（几乎无损）</b>。V2 论文设 \(d_c = 4 d_h,\ d^R_h = d_h/2\)（Table 1 说明），故 \((512+64)/(2\times128)=2.25\) 个 GQA 组的缓存量。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 400" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="40" y="36" font-size="14" font-weight="bold" fill="#1a1f2e">KV cache 每 token 每层元素量（DeepSeek-V3 规格：n_h=128，d_h=128，d_c=512，d_R=64）</text>
+  <text x="40" y="58" font-size="11" fill="#5a6272">横条为对数刻度；数字为元素数（论文 Table 1 口径，不区分存储精度）与 bf16 字节数</text>
+  <!-- MHA -->
+  <text x="40" y="104" font-size="12" fill="#1a1f2e" font-weight="bold">MHA</text>
+  <rect x="130" y="88" width="640" height="26" fill="#d7e4f7" stroke="#c9d2e0"/>
+  <text x="300" y="106" font-size="12" fill="#1a1f2e">2·n_h·d_h = 32768 元素 = 64 KiB</text>
+  <text x="140" y="132" font-size="10" fill="#5a6272">128 头 × (128 K + 128 V)，61 层 ≈ 4.0 MB/token</text>
+  <!-- GQA-8 -->
+  <text x="40" y="176" font-size="12" fill="#1a1f2e" font-weight="bold">GQA-8</text>
+  <rect x="130" y="160" width="320" height="26" fill="#dcead9" stroke="#c9d2e0"/>
+  <text x="200" y="178" font-size="12" fill="#1a1f2e">2·8·d_h = 2048 元素 = 4 KiB</text>
+  <text x="140" y="204" font-size="10" fill="#5a6272">8 组共享，61 层 ≈ 244 KiB/token</text>
+  <!-- MQA -->
+  <text x="40" y="248" font-size="12" fill="#1a1f2e" font-weight="bold">MQA</text>
+  <rect x="130" y="232" width="80" height="26" fill="#f3e3d3" stroke="#c9d2e0"/>
+  <text x="218" y="250" font-size="12" fill="#1a1f2e">2·d_h = 256 元素 = 512 B</text>
+  <text x="140" y="276" font-size="10" fill="#5a6272">1 组共享，质量损失最大</text>
+  <!-- MLA -->
+  <text x="40" y="320" font-size="12" fill="#2456c4" font-weight="bold">MLA</text>
+  <rect x="130" y="304" width="173" height="26" fill="#2456c4" opacity="0.85"/>
+  <text x="312" y="322" font-size="12" fill="#1a1f2e">d_c + d_R = 512 + 64 = 576 元素 = 1152 B（MHA 的 1.76%）</text>
+  <text x="140" y="348" font-size="10" fill="#2456c4">等效 GQA 2.25 组，但 V2 消融中强于 MHA；61 层 ≈ 68.6 KiB/token</text>
+  <line x1="130" y1="76" x2="130" y2="366" stroke="#c9d2e0"/>
+  <text x="40" y="386" font-size="10" fill="#5a6272">数据来源：DeepSeek-V3 官方 config.json（n_h=128, kv_lora_rank=512, qk_rope_head_dim=64）与 V2 论文 Table 1</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>｜四种注意力机制的 KV cache 量化对比（对应 V2 论文 Table 1，第 2.1.4 节）。</p>
+
+<h2>2. 结构逐矩阵拆解</h2>
+
+<h3>2.1 完整前向公式（V2 论文附录 C，式 37–47）</h3>
+
+<p>MLA 的所有细节都在这 11 条式子里。记号沿用论文：\(d\) 为 hidden size，\(n_h\) 为头数，\(d_h\) 为每头维度（= \(d^{nope}_h\)），\(d^R_h\) 为解耦 RoPE 通道的每头维度，\(d_c\) 为 KV 压缩维度，\(d'_c\) 为 Q 压缩维度：</p>
+
+<div class="fig formula">
+<p>Q 侧（低秩压缩，为省<b>训练 activation</b>，不省 KV cache）：</p>
+\[ c^Q_t = W_{DQ} h_t \tag{37} \]
+\[ [q^C_{t,1};\dots;q^C_{t,n_h}] = q^C_t = W_{UQ}\, c^Q_t \tag{38} \]
+\[ [q^R_{t,1};\dots;q^R_{t,n_h}] = q^R_t = \mathrm{RoPE}(W_{QR}\, c^Q_t) \tag{39} \]
+<p>KV 侧（<b>联合</b>低秩压缩，K 与 V 共享同一个 latent）：</p>
+\[ c^{KV}_t = W_{DKV} h_t \tag{41} \]
+\[ [k^C_{t,1};\dots;k^C_{t,n_h}] = k^C_t = W_{UK}\, c^{KV}_t \tag{42} \]
+\[ k^R_t = \mathrm{RoPE}(W_{KR}\, h_t) \tag{43} \]
+\[ v^C_t = W_{UV}\, c^{KV}_t \tag{45} \]
+<p>拼接与注意力（每头 concat 位置无关部分与 RoPE 部分）：</p>
+\[ q_{t,i} = [q^C_{t,i};\, q^R_{t,i}],\qquad k_{t,i} = [k^C_{t,i};\, k^R_t] \tag{40, 44} \]
+\[ o_{t,i} = \sum_j \mathrm{Softmax}_j\!\left(\frac{q^T_{t,i} k_{j,i}}{\sqrt{d_h + d^R_h}}\right) v^C_{j,i} \tag{46} \]
+\[ u_t = W_O [o_{t,1};\dots;o_{t,n_h}] \tag{47} \]
+</div>
+<p class="cap"><b>式 (37)–(47)</b>｜MLA 完整公式（DeepSeek-V2 论文附录 C 原文照录；式 41 之前的式 40 与式 44 是 concat 定义，已合并展示）。蓝色的 \(c^{KV}_t\) 与 \(k^R_t\) 是推理时需要缓存的量。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 560" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="f2a" markerWidth="10" markerHeight="10" refX="3" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5 L0,10 L2.5,5 z" fill="#5a6272"/>
+    </marker>
+    <marker id="f2b" markerWidth="10" markerHeight="10" refX="3" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5 L0,10 L2.5,5 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="30" y="30" font-size="13" font-weight="bold" fill="#1a1f2e">MLA 前向数据流（式 37–47）：实线 = 逐 token 计算；蓝色虚线框 = 推理时进 KV cache 的张量</text>
+
+  <!-- input -->
+  <rect x="30" y="250" width="90" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="75" y="275" font-size="12" text-anchor="middle" fill="#1a1f2e">h_t（d=7168）</text>
+
+  <!-- Q branch -->
+  <rect x="170" y="60" width="150" height="34" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="245" y="82" font-size="12" text-anchor="middle" fill="#2456c4">W_DQ（7168→1536）式37</text>
+  <rect x="360" y="30" width="150" height="34" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="435" y="52" font-size="12" text-anchor="middle" fill="#2456c4">W_UQ → q^C（128头×128）</text>
+  <rect x="360" y="90" width="150" height="34" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="435" y="112" font-size="12" text-anchor="middle" fill="#2456c4">W_QR + RoPE → q^R（128头×64）</text>
+  <line x1="120" y1="260" x2="165" y2="90" stroke="#5a6272" marker-end="url(#f2a)"/>
+  <line x1="320" y1="77" x2="356" y2="50" stroke="#5a6272" marker-end="url(#f2a)"/>
+  <line x1="320" y1="90" x2="356" y2="105" stroke="#5a6272" marker-end="url(#f2a)"/>
+
+  <!-- KV branch -->
+  <rect x="170" y="240" width="150" height="40" rx="6" fill="#2456c4" opacity="0.12" stroke="#2456c4" stroke-dasharray="5,3"/>
+  <rect x="170" y="240" width="150" height="40" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="245" y="265" font-size="12" text-anchor="middle" fill="#2456c4">W_DKV（7168→512）式41</text>
+  <rect x="400" y="200" width="120" height="34" rx="6" fill="#2456c4"/>
+  <text x="460" y="222" font-size="12" text-anchor="middle" fill="#fff">c_KV（512）缓存</text>
+  <rect x="400" y="250" width="150" height="34" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="475" y="272" font-size="12" text-anchor="middle" fill="#2456c4">W_UK → k^C（128头×128）</text>
+  <rect x="400" y="300" width="150" height="34" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="475" y="322" font-size="12" text-anchor="middle" fill="#2456c4">W_UV → v^C（128头×128）</text>
+  <line x1="120" y1="262" x2="166" y2="260" stroke="#5a6272" marker-end="url(#f2a)"/>
+  <line x1="320" y1="258" x2="396" y2="219" stroke="#5a6272" marker-end="url(#f2a)"/>
+  <line x1="320" y1="264" x2="396" y2="265" stroke="#5a6272" marker-end="url(#f2a)"/>
+  <line x1="320" y1="272" x2="396" y2="315" stroke="#5a6272" marker-end="url(#f2a)"/>
+
+  <!-- RoPE shared key -->
+  <rect x="170" y="400" width="150" height="34" rx="6" fill="#e8862a" opacity="0.15" stroke="#e8862a"/>
+  <text x="245" y="422" font-size="12" text-anchor="middle" fill="#b0631e">W_KR（7168→64）式43</text>
+  <rect x="400" y="400" width="120" height="34" rx="6" fill="#e8862a"/>
+  <text x="460" y="422" font-size="12" text-anchor="middle" fill="#fff">k_R（64）缓存</text>
+  <text x="530" y="422" font-size="11" fill="#b0631e">RoPE 只走这条小通道，所有头共享</text>
+  <line x1="120" y1="278" x2="165" y2="410" stroke="#5a6272" marker-end="url(#f2a)"/>
+  <line x1="320" y1="417" x2="396" y2="417" stroke="#5a6272" marker-end="url(#f2a)"/>
+
+  <!-- attention -->
+  <rect x="620" y="220" width="160" height="60" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="700" y="245" font-size="12" text-anchor="middle" fill="#1a1f2e">多头注意力 式46</text>
+  <text x="700" y="265" font-size="11" text-anchor="middle" fill="#5a6272">每头 q=[q^C; q^R]，k=[k^C; k_R]</text>
+  <text x="700" y="282" font-size="11" text-anchor="middle" fill="#5a6272">softmax 内核尺寸 √(128+64)=√192</text>
+  <line x1="510" y1="47" x2="640" y2="216" stroke="#5a6272" marker-end="url(#f2a)"/>
+  <line x1="510" y1="107" x2="655" y2="220" stroke="#5a6272" marker-end="url(#f2a)"/>
+  <line x1="550" y1="267" x2="616" y2="250" stroke="#5a6272" marker-end="url(#f2a)"/>
+  <line x1="550" y1="317" x2="616" y2="262" stroke="#5a6272" marker-end="url(#f2a)"/>
+  <line x1="520" y1="417" x2="640" y2="284" stroke="#5a6272" marker-end="url(#f2a)"/>
+
+  <!-- output -->
+  <rect x="620" y="320" width="160" height="34" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="700" y="342" font-size="12" text-anchor="middle" fill="#2456c4">W_O（16384→7168）式47</text>
+  <rect x="620" y="380" width="160" height="34" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="700" y="402" font-size="12" text-anchor="middle" fill="#1a1f2e">u_t → 下一层</text>
+  <line x1="700" y1="280" x2="700" y2="316" stroke="#5a6272" marker-end="url(#f2a)"/>
+  <line x1="700" y1="354" x2="700" y2="376" stroke="#5a6272" marker-end="url(#f2a)"/>
+
+  <!-- KV cache box -->
+  <rect x="392" y="186" width="360" height="262" rx="10" fill="none" stroke="#2456c4" stroke-dasharray="7,5" opacity="0.7"/>
+  <text x="392" y="466" font-size="11" fill="#2456c4">推理 KV cache：每 token 只存 c_KV(512) + k_R(64) = 576 个元素（式 41、43 的输出）</text>
+  <text x="392" y="486" font-size="11" fill="#5a6272">W_UK / W_UV / W_KR / W_O 是权重，不随 token 增长；q^C、q^R、k^C、v^C 都可从缓存 + 权重恢复</text>
+  <text x="30" y="540" font-size="11" fill="#5a6272">维度以 DeepSeek-V3 config.json 为准：d=7168，n_h=128，qk_nope=128，qk_rope=64（d_R），kv_lora_rank=512（d_c），q_lora_rank=1536（d'_c），v_head_dim=128</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>｜MLA 前向数据流与缓存对象（对应 V2 论文图 2/图 3 与附录 C）。注意 K 与 V <b>共享</b>同一个 latent \(c^{KV}\)——这是「联合压缩」区别于分别压缩 K、V 的关键，也是 absorption 能成立的前提。</p>
+
+<h3>2.2 各矩阵形状与参数量（DeepSeek-V3 实际值）</h3>
+
+<p>以下超参逐项取自 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V3/blob/main/config.json">deepseek-ai/DeepSeek-V3 的 config.json</a>（2026-10-20 抓取）：<code>hidden_size=7168</code>、<code>num_attention_heads=128</code>、<code>q_lora_rank=1536</code>、<code>kv_lora_rank=512</code>、<code>qk_nope_head_dim=128</code>、<code>qk_rope_head_dim=64</code>、<code>v_head_dim=128</code>、<code>num_hidden_layers=61</code>。</p>
+
+<table>
+  <tr><th>矩阵（论文记号）</th><th>HF 权重名</th><th>形状</th><th>参数量/层</th><th>作用</th></tr>
+  <tr><td>\(W_{DQ}\)</td><td><code>q_a_proj</code></td><td>7168×1536</td><td>11.0M</td><td>h→Q latent（式 37）</td></tr>
+  <tr><td>\(W_{UQ}\)</td><td><code>q_b_proj</code> 前 128×128/头</td><td>1536×16384</td><td>25.2M</td><td>Q latent→q^C（式 38）</td></tr>
+  <tr><td>\(W_{QR}\)</td><td><code>q_b_proj</code> 后 64/头</td><td>1536×8192</td><td>12.6M</td><td>Q latent→q^R + RoPE（式 39）</td></tr>
+  <tr><td>\(W_{DKV}\)</td><td><code>kv_a_proj_with_mqa</code> 前 512 列</td><td>7168×512</td><td>3.7M</td><td>h→KV latent（式 41）</td></tr>
+  <tr><td>\(W_{KR}\)</td><td><code>kv_a_proj_with_mqa</code> 后 64 列</td><td>7168×64</td><td>0.46M</td><td>h→k^R + RoPE（式 43）</td></tr>
+  <tr><td>\(W_{UK}\)</td><td><code>kv_b_proj</code> 前 128/头</td><td>512×16384</td><td>8.4M</td><td>latent→k^C（式 42）</td></tr>
+  <tr><td>\(W_{UV}\)</td><td><code>kv_b_proj</code> 后 128/头</td><td>512×16384</td><td>8.4M</td><td>latent→v^C（式 45）</td></tr>
+  <tr><td>\(W_O\)</td><td><code>o_proj</code></td><td>16384×7168</td><td>117.4M</td><td>输出投影（式 47）</td></tr>
+  <tr><td>合计</td><td></td><td></td><td>≈187M × 61 层 ≈ 11.4B</td><td></td></tr>
+</table>
+<p class="cap"><b>表 2</b>｜MLA 投影矩阵对照。注意两个工程事实：<code>q_b_proj = [W_UQ; W_QR]</code> 按 head 拼、<code>kv_a_proj_with_mqa = [W_DKV; W_KR]</code> 按 feature 拼、<code>kv_b_proj = [W_UK; W_UV]</code> 按 head 拼——vLLM 的 <code>mla_attention.py</code> 文档注释（第 88–95 行）明确写了这三个对应关系。另注意 \(v^C\) 的每头维度 128 = \(d_h\)，absorbed 形式里它会被 latent 的 512 维替代（见第 4 节）。</p>
+
+<h3>2.3 为什么 RoPE 与低秩压缩不兼容（数学原因）</h3>
+
+<p>RoPE 对 q 施加位置 \(t\) 的旋转 \(R_t\)、对 k 施加位置 \(j\) 的旋转 \(R_j\)，注意力分里的相对旋转 \(R^T_t R_j = R_{j-t}\) 只依赖相对位置。本节从「absorption 想要什么形式」出发，逐条推演把 RoPE 塞进压缩通道的两种方式为何都失败，最后落到解耦设计的必然性。</p>
+
+<h4>2.3.1 吸收的目标形式：缓存向量左边只许有常数</h4>
+
+<p>decode 每步只有 1 个 query，却要扫全部缓存 token \(j\)，瓶颈是读缓存的字节数。因此希望把每步注意力整理成：</p>
+
+\[ s_{t,j} = \tilde q_t^{\,T}\, \hat c_j, \qquad o_t = \tilde W \Big( \sum\nolimits_j \alpha_{t,j}\, \hat c_j \Big) \]
+
+<p>其中 \(\hat c_j\) 是缓存向量，\(\tilde q_t\)、\(\tilde W\) 只依赖 \(t\)、每步算一次；<b>per-\(j\) 的全部工作只是与缓存向量做点积 / 加权累加</b>。判据由此而来：<b>缓存向量左边只允许出现与 \(j\) 无关的常数矩阵</b>——常数可以沿点积搬到 query 侧或输出侧，任何随 \(j\) 变化的因子都不许夹在中间。</p>
+
+<h4>2.3.2 内容通道为什么畅通：常数矩阵可以自由搬家</h4>
+
+\[ s^{C}_{t,i,j} = (q^C_{t,i})^T\, W_{UK}[i]\, c^{KV}_j = \big( W_{UK}[i]^T q^C_{t,i} \big)^T c^{KV}_j \]
+
+\[ o_{t,i} = \sum\nolimits_j \alpha_{t,j}\, W_{UV}[i]\, c^{KV}_j = W_{UV}[i] \Big( \sum\nolimits_j \alpha_{t,j}\, c^{KV}_j \Big) \]
+
+<p>key 链路上除了常数矩阵 \(W_{UK}[i]\) 与缓存向量 \(c^{KV}_j\) 别无他物，纯用结合律即可把矩阵搬到 query 侧；\(W_{UV}[i]\) 同理搬到输出侧（还可进一步并进 \(W_O\)，见 4.2 节）。<b>「学到的矩阵 = 常数 ⇒ 可搬运」是 absorption 成立的全部原因</b>。RoPE 的旋转矩阵不是常数——下面两小节推演把它塞进压缩通道的两种方式。</p>
+
+<h4>2.3.3 变体一：先上投影、再旋转——保住相对位置就保不住 absorption</h4>
+
+<p>要让内容 key 带位置，合规写法是旋转作为 key 链路的最后一步：</p>
+
+\[ s^{C}_{t,i,j} = (R_t\, q^C_{t,i})^T \big( R_j\, W_{UK}[i]\, c^{KV}_j \big) = (q^C_{t,i})^T\, R_{j-t}\, W_{UK}[i]\, c^{KV}_j \]
+
+<p>数学上这是完全合法的 RoPE 注意力（只出现 \(j-t\)，相对位置性质 ✓）。但按 2.3.1 的判据做 absorption 时，\(c^{KV}_j\) 左边的前缀是 \(W_{UK}[i]^T R_{j-t}^T q^C_{t,i}\)——<b>含 \(R_{j-t}\)、随 \(j\) 变化</b>，每来一个 key 位置都要重算一次 \(d_h \times d_c\) 的 GEMV，代价与现场物化 \(k^C_{j,i}\) 完全相同。V2 论文 §2.1.3 对同一事实的表述是（把式子从 \(c^Q\) 侧写起，\(W_{UQ}^T\) 与 \(W_{UK}\) 之间正好落着一个旋转矩阵）：「a RoPE matrix related to the currently generating token will lie between \(W_{UQ}\) and \(W_{UK}\) and matrix multiplication does not obey a commutative law」。于是只剩两条路，各牺牲一样东西：</p>
+<ul>
+  <li>把 \(W_{UK}[i] R_j c^{KV}_j\)（= 带 RoPE 的 \(k^C_{j,i}\)）<b>整体缓存</b>——那就是每 token \(n_h \times d_h\) 个元素，压缩白做；</li>
+  <li>decode 每步对<b>全部前缀 token 重算</b>上投影——每步 \(O(L)\) 个 GEMM，推理效率崩塌。</li>
+</ul>
+
+<h4>2.3.4 变体二：把 RoPE 直接做在 latent 上——缓存里不能存「旋转后的 latent」</h4>
+
+<p>更激进的想法：既然 \(k^C = W_{UK}\, c^{KV}\)，不如缓存时就旋转，存 \(\tilde c_j = R_j\, c^{KV}_j\)（512 维、各头共享），顺便省掉解耦通道的 64 维开销。注意这把顺序<b>锁死</b>了：缓存里已是旋转后的向量，上投影只能发生在旋转之后，\(k^C_{j,i} = W_{UK}[i]\, R_j\, c^{KV}_j\)。query 侧只有三种配法，逐一推演：</p>
+
+<ol>
+  <li><b>query 不旋转</b>：\(s = (q^C_{t,i})^T W_{UK}[i] R_j c^{KV}_j = \big( W_{UK}[i]^T q^C_{t,i} \big)^T \tilde c_j\)——计算形式恰好是「吸收后的 query × 缓存向量」的理想 MQA 形态，但 score 只依赖 \(j\)、与 \(t-j\) 无关，RoPE 退化成绝对位置编码，外推性质全丢。✗</li>
+  <li><b>最终 query 旋转</b>（\(d_h\) 维的 \(\hat R_t\)，即旋转放在 query 上投影之后）：\(s = (c^Q_t)^T W_{UQ}[i]^T \hat R_t^T\, W_{UK}[i]\, R_j\, c^{KV}_j\)——两个旋转作用在不同维度的坐标系上（\(d_h=128\) 维 vs \(d_c=512\) 维），中间隔着 \(W_{UK}[i]\)，连 \(j-t\) 的形式都凑不出来。✗</li>
+  <li><b>query 的 latent 也旋转</b>（\(d'_c\) 维的 \(R'_t\)，再上投影）：\(s = (c^Q_t)^T R'^{T}_t \big( W_{UQ}[i]^T W_{UK}[i] \big) R_j\, c^{KV}_j\)——学到的矩阵 \(W_{UQ}[i]^T W_{UK}[i]\) 又夹回两个旋转中间，回到变体一的困境。✗</li>
+</ol>
+
+<p>症结在于：旋转发生在缓存时刻 ⇒ 上投影必然在旋转之后 ⇒ 「相对位置性质」与「缓存向量左边只有常数」不可兼得。反过来，唯一保相对性质的顺序（先投影、后旋转）又把旋转逼进 kernel 内部——那正是变体一，同样堵死 absorption。两条路合起来给出一个干净的结论：<b>位置信息不能流经压缩通道</b>。</p>
+
+<div class="infer">变体二的三种 query 侧配法与「两条路合起来」的论证是本文的展开，论文未逐一讨论；结论与论文一致（位置不可流经压缩通道）。</div>
+
+<h4>2.3.5 解耦 RoPE：位置信息走一条「无矩阵」旁路</h4>
+
+<p>从上面的失败里提炼两条硬约束：① 缓存通道要能 absorption ⇒ \(c^{KV}\) 左边只能有常数矩阵，内容通道不许出现 \(R_j\)；② RoPE 要保相对性质 ⇒ \(R_t\) 与 \(R_j\) 之间不许有任何矩阵，旋转必须是 q、k 各自链路的最后一步。内容通道的最后一步必须留给常数矩阵 \(W_{UK}\)（否则吸收不了），它注定当不了位置载体——所以位置只能单独开一对向量，各自用小投影、最后一步旋转：\(q^R_{t,i}\in\mathbb{R}^{d^R_h}\)（每头一份）与 \(k^R_t\in\mathbb{R}^{d^R_h}\)（<b>所有头共享一份</b>，天然就是 MQA 形态）专司 RoPE，且 \(k^R_t = \mathrm{RoPE}(W_{KR}\, h_t)\) 直接从原始 \(h_t\) 取、绕过压缩通道。完整注意力分拆成两项，各自都满足 2.3.1 的目标形式：</p>
+
+\[ s_{t,i,j} = \big( W_{UK}[i]^T q^C_{t,i} \big)^T c^{KV}_j \;+\; \big( R_t^T q^R_{t,i} \big)^T k^R_j \]
+
+<p>第一项：常数矩阵已全部吸收，与 512 维 latent 做点积；第二项：两个旋转之间无任何矩阵，相对位置性质成立，\(k^R_j\) 旋转后可直接缓存（kernel 内连旋转都省了，只对 \(q^R\) 做一次 \(R_t^T\)）。缓存 = \(c^{KV}(512) + k^R(64) = 576\) 维，softmax 内积维度从 \(d_h\) 变 \(d_h + d^R_h\)（式 46 的 \(\sqrt{d_h+d^R_h}\) 缩放）。64 维（+12.5%）就是「位置绝不流经压缩通道」这条约束的定价。</p>
+
+<p><b>一句话判据</b>：在 \(q^T(\cdot)k\) 的双线性形式里，<b>常数矩阵可以搬到任何一边（absorption 没问题）；旋转矩阵只有当它是两条链路各自的最后一步、且中间无矩阵时才合法</b>。压缩通道的末步必须留给常数矩阵 \(W_{UK}\)，所以旋转只能自带旁路——解耦 RoPE（式 39、43）是必然设计，而非可选项。</p>
+
+<div class="infer">「\(R_t\) 与 \(W_{UK}^T\) 不可交换」的具体论证（对偶旋转矩阵与稠密矩阵乘法交换的失败）是本文的展开，论文原文只给了「矩阵乘法不满足交换律」这一句结论性陈述；结论一致。</div>
+
+<h2>3. 训练侧：朴素形式怎么算</h2>
+
+<h3>3.1 前向完整流程</h3>
+
+<p>训练时 MLA 就是式 (37)–(47) 的朴素实现：先按 head 切出 \(q_{t,i}, k_{t,i}, v^C_{t,i}\)（每头 \(128+64=192\) 维 QK、128 维 V），然后跑一个<b>标准的因果 MHA</b>——head_dim 192/128 的形状可直接用 FlashAttention。下面是可跑的参考实现（float32、缩比维度；完整脚本第 5 节有真实数值验证）：</p>
+
+<pre><code class="language-python">import torch
+# 训练形式（论文式 37–47 的朴素实现）
+def mla_forward_train(h, pos, W):            # h: [B, T, d]
+    c_Q  = h @ W['DQ']                                     # 式37  [B,T,d'_c]
+    q_C  = (c_Q @ W['UQ']).view(B, T, n_h, d_h)            # 式38
+    q_R  = rope((c_Q @ W['QR']).view(B, T, n_h, d_Rh), pos) # 式39
+    c_KV = h @ W['DKV']                                    # 式41  [B,T,d_c]
+    k_C  = (c_KV @ W['UK']).view(B, T, n_h, d_h)           # 式42
+    k_R  = rope(h @ W['KR'], pos)                          # 式43  [B,T,d_Rh]，所有头共享
+    v_C  = (c_KV @ W['UV']).view(B, T, n_h, d_v)           # 式45
+    q = torch.cat([q_C, q_R], -1)                          # 式40  [B,T,n_h,d_h+d_Rh]
+    k = torch.cat([k_C, k_R[:, :, None].expand(-1,-1,n_h,-1)], -1)  # 式44
+    s = torch.einsum('bqhd,bkhd-&gt;bhqk', q, k) / (d_h + d_Rh) ** 0.5   # 式46
+    p = s.masked_fill(~causal_mask, float('-inf')).softmax(-1)
+    o = torch.einsum('bhqk,bkhd-&gt;bqhd', p, v_C)            # 式46
+    return (o.reshape(B, T, n_h * d_v) @ W['O'])           # 式47</code></pre>
+<p class="cap"><b>代码 1</b>｜训练形式参考实现。与第 5 节验证脚本同构（脚本已验证与 absorbed 形式数值等价，相对误差 4.9e-7）。</p>
+
+<p>生产实现里，\(\mathrm{RoPE}\) 用高效的 interleaved/half 实现（V3 config 的 YaRN 缩放 <code>factor=40, original_max_position_embeddings=4096</code>），\(q,k\) concat 后喂给支持 head_dim 192/128 的 attention kernel；V3 全程用 FP8 混合精度训练（V3 论文 §3.3），MLA 的各投影都是普通 GEMM，照常量化。</p>
+
+<h3>3.2 反向传播</h3>
+
+<p><b>没有特殊处理</b>。MLA 的全部新东西（\(W_{DKV}, W_{UK}, W_{UV}, W_{KR}, W_{DQ}, W_{UQ}, W_{QR}\)）在训练前向里都是普通线性层，\(c^{KV}\) 是普通中间激活，autograd 照常求导；「absorption」是推理期的权重重参数化视角，训练里根本不发生。唯一值得注意的是压缩让反向的多头 attention 不再是最大的 activation 消耗点之一。</p>
+
+<div class="infer">「反向无特殊处理」是从论文（附录 C 只给前向公式、正文无 backward 描述）与官方实现（FlashMLA 训练侧只有 dense prefill fwd/bwd 的标准 CUTLASS FMHA，见 <code>csrc/cuda_kernels/sm100/prefill/dense/fmha_cutlass_bwd_sm100.cu</code>，main@0f11e17）共同推出的结论，非论文明文陈述。</div>
+
+<h3>3.3 训练显存账：activation 与 KV</h3>
+
+<ul>
+  <li><b>KV cache 不存在</b>：训练是全序列一次前向，\(c^{KV}\) 只当一层中间激活，反向算完就丢，不做跨层缓存——MLA 的 KV cache 收益是<b>纯推理收益</b>。</li>
+  <li><b>Q 侧低秩压缩省 activation</b>：论文 §2.1.2 末尾明说「in order to reduce the activation memory during training, we also perform low-rank compression for the queries」。省的量是 \(W_{UQ}\) 输入端：不压缩时该处 activation 为 \(T \times d \times n_h d_h \times 2\) 字节量级，压缩后为 \(T \times d'_c\)（1536）中间量 + 上投影输出。按式 (12)–(13) 的两段式，Q 通道的中间激活从 \(n_h d_h = 16384\) 维降到 \(d'_c = 1536\) 维，约 \(\times 10\)。</li>
+  <li><b>代价</b>：MLA 每层比 MHA 多出 \(W_{UK}+W_{UV}+W_{DKV}+W_{KR}\approx 21\)M 的投影 FLOPs/层/token，在 V2/V3 的 21B/37B 激活参数里占比很小。</li>
+</ul>
+
+<h3>3.4 与 MoE 主干的配合（简述）</h3>
+
+<p>MLA 与 DeepSeekMoE 是正交的两件事：MLA 管注意力的<b>推理效率</b>（KV cache 与 decode 访存），DeepSeekMoE 管 FFN 的<b>参数效率</b>（细粒度专家 + 共享专家隔离）。V2 摘要给出的组合收益：相对 DeepSeek 67B（MHA + 稠密 FFN），训练成本省 42.5%、KV cache 减 <b>93.3%</b>、最大生成吞吐 <b>5.76×</b>（V2 论文 §1）。MoE 细节见<a href="../moe/moe-t0-foundation.html">MoE 零基础系列</a>。</p>
+
+<h2>4. 推理侧：缓存什么、怎么吸收、kernel 怎么写</h2>
+
+<h3>4.1 KV cache 里实际存什么（具体账）</h3>
+
+<p>每 token 每层只存两个向量，直接 concat 成一个 576 维条目：</p>
+
+<table>
+  <tr><th>缓存内容</th><th>维度</th><th>来源</th><th>说明</th></tr>
+  <tr><td>\(c^{KV}_t\)（latent）</td><td>\(d_c = 512\)</td><td>式 41</td><td>K 和 V 的共同压缩表示；是 absorbed 形式里<b>同时充当 K 的 nope 部分和 V</b> 的那个向量</td></tr>
+  <tr><td>\(k^R_t\)（解耦 RoPE key）</td><td>\(d^R_h = 64\)</td><td>式 43</td><td>已过 RoPE；所有 128 个 q 头共享</td></tr>
+</table>
+
+<p>DeepSeek-V3（61 层，bf16）的账：</p>
+
+<table>
+  <tr><th>机制</th><th>元素/token/层</th><th>字节/token/层</th><th>全模型字节/token</th><th>相对 MHA</th></tr>
+  <tr><td>MHA（128 头）</td><td>\(2\times128\times128 = 32768\)</td><td>64 KiB</td><td>≈ 4.0 MB</td><td>100%</td></tr>
+  <tr><td>GQA-8</td><td>\(2\times8\times128 = 2048\)</td><td>4 KiB</td><td>≈ 244 KiB</td><td>6.25%</td></tr>
+  <tr><td>MQA</td><td>\(2\times128 = 256\)</td><td>512 B</td><td>≈ 30.5 KiB</td><td>0.78%</td></tr>
+  <tr><td><b>MLA</b></td><td>\(512+64 = 576\)</td><td><b>1152 B</b></td><td><b>≈ 68.6 KiB</b></td><td><b>1.76%</b></td></tr>
+</table>
+<p class="cap"><b>表 3</b>｜DeepSeek-V3 规格下的 KV cache 账（bf16 = 2 B/元素；61 层）。MLA 缓存量 = GQA 2.25 组。换算成部署视角：batch 32 × 8192 上下文，MHA 需 ≈ 0.96 TiB，MLA 仅 ≈ 16.8 GiB。</p>
+
+<p>两点工程补充：(1) vLLM 的缓存条目尺寸就是 <code>head_size = kv_lora_rank + qk_rope_head_dim</code>（<code>vllm/model_executor/layers/attention/mla_attention.py:480</code>，main@fa75d34），SGLang 同样写 <code>kv_cache_dim = kv_lora_rank + qk_rope_head_dim</code>（<code>flashmla_backend.py:93</code>，main@5b683d6b72f8）。(2) FlashMLA 的 FP8 模式把 512 维 latent 量化为 e4m3 + 4 个 fp32 scale、64 维 RoPE 保持 bf16，每 token 656 B（FlashMLA <code>flash_mla_interface.py:92-99</code>，sm90 快照 ba89a34），再省 43%。</p>
+
+<h3>4.2 Weight absorption 完整推导</h3>
+
+<p>naive 形式 decode 时，对每个新 query 都要先把全部前缀的 \(c^{KV}\) 上投影成 \(k^C, v^C\)——这部分计算与 \(n_h\) 和 \(L\) 成正比，且是纯粹的开销。利用矩阵乘法结合律可以把投影挪到另一侧，让缓存条目「存的是什么就用什么算」：</p>
+
+<p><b>第一步：\(W_{UK}\) 吸收进 query 侧。</b>naive 形式的 nope 打分（式 38×42）：</p>
+
+\[ s^C_{t,i,j} = (q^C_{t,i})^T k^C_{j,i} = \big(W_{UQ}[i]\,c^Q_t\big)^T \big(W_{UK}[i]\,c^{KV}_j\big) = \big(\underbrace{W_{UK}[i]^T\, q^C_{t,i}}_{\textstyle q^{\mathrm{lat}}_{t,i}\in\mathbb{R}^{d_c}}\big)^T c^{KV}_j \]
+
+<p>\(q^{\mathrm{lat}}_{t,i}\) 是 512 维的「latent 空间 query」。K 不再需要上投影：<b>缓存里的 \(c^{KV}_j\) 直接当 K 用</b>。注意被吸收的是 \(q^C\)（\(W_{UQ}\) 的输出）之后那段；\(W_{UQ}\) 本身留在 q_b_proj 里不显式合并（见 4.5 节源码）。</p>
+
+<p><b>第二步：RoPE 通道天然是 MQA。</b>\(s^R_{t,i,j} = (q^R_{t,i})^T k^R_j\) 中 \(k^R_j\) 本来就与头无关。把两路打分拼起来：</p>
+
+\[ s_{t,i,j} = \big[q^{\mathrm{lat}}_{t,i};\, q^R_{t,i}\big]^T \big[c^{KV}_j;\, k^R_j\big],\qquad \text{除以 } \sqrt{d_h + d^R_h} \tag{46'} \]
+
+<p>这就是一个 <b>MQA</b>：每头 576 维 query 对同一份 576 维共享 KV。</p>
+
+<p><b>第三步：\(W_{UV}\) 吸收进输出侧。</b>naive 的加权求和（式 45×46）：\(o_{t,i} = \sum_j p_{t,j}\, W_{UV}[i]\, c^{KV}_j\)。把求和与投影交换：</p>
+
+\[ o_{t,i} = W_{UV}[i]\, \underbrace{\sum_j p_{t,j}\, c^{KV}_j}_{\textstyle \hat{c}_{t,i}\in\mathbb{R}^{d_c}},\qquad u_t = W_O\big[W_{UV}[1]\hat{c}_{t,1};\dots;W_{UV}[n_h]\hat{c}_{t,n_h}\big] \]
+
+<p><b>V 也不需要上投影：缓存的 \(c^{KV}_j\) 直接当 V 用</b>，MQA 输出是每头一个 512 维的「latent 空间加权和」\(\hat c_{t,i}\)，再经每头独立的 \(W_{UV}[i]\)（512→128）回到 \(d_v\) 维。三步之后，decode 的 attention 主体变成：</p>
+
+<pre><code class="language-python"># absorbed 推理形式：KV cache 每条目 = [c_KV(512) ; k_R(64)]，全头共享
+q_lat = torch.einsum('bqhd,hde-&gt;bqhe', q_C, W_UK_h)        # W_UK 吸收进 query
+q_mqa = torch.cat([q_lat, q_R], -1)                        # [B,Sq,n_h,576]
+k_mqa = torch.cat([c_KV, k_R], -1).expand heads            # [B,T,576] 共享
+p2   = softmax(q_mqa @ k_mqa.T / sqrt(d_h+d_Rh))           # MQA attention
+chat = p2 @ c_KV                                           # V=c_KV，输出 latent 和
+o    = torch.einsum('bhql,hel-&gt;bqhe', chat, W_UV_h)        # W_UV 吸收进输出
+u    = o.reshape(B, Sq, n_h * d_v) @ W_O</code></pre>
+<p class="cap"><b>代码 2</b>｜absorbed 形式骨架（可运行完整版见第 5 节代码 5，与代码 1 的训练形式数值等价）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 470" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="f3a" markerWidth="10" markerHeight="10" refX="3" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5 L0,10 L2.5,5 z" fill="#2456c4"/>
+    </marker>
+    <marker id="f3o" markerWidth="10" markerHeight="10" refX="3" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5 L0,10 L2.5,5 z" fill="#e8862a"/>
+    </marker>
+  </defs>
+  <text x="30" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">Weight absorption：把上投影从「缓存条目」一侧挪到「query/输出」一侧</text>
+
+  <!-- left: naive -->
+  <text x="40" y="60" font-size="12" font-weight="bold" fill="#5a6272">naive（prefill 形式，式 42/45）</text>
+  <rect x="40" y="80" width="180" height="40" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="130" y="98" font-size="11" text-anchor="middle" fill="#1a1f2e">缓存条目 c_KV（512）</text>
+  <text x="130" y="113" font-size="10" text-anchor="middle" fill="#5a6272">读出来不能直接用</text>
+  <text x="235" y="115" font-size="11" fill="#2456c4">→W_UK→ k^C（128头×128）</text>
+  <line x1="222" y1="96" x2="290" y2="82" stroke="#5a6272"/>
+  <text x="235" y="152" font-size="11" fill="#2456c4">→W_UV→ v^C（128头×128）</text>
+  <line x1="222" y1="110" x2="290" y2="145" stroke="#5a6272"/>
+  <rect x="290" y="180" width="200" height="44" rx="6" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="390" y="198" font-size="11" text-anchor="middle" fill="#7a621c">每步要对全部前缀 L 个 token</text>
+  <text x="390" y="214" font-size="11" text-anchor="middle" fill="#7a621c">做 2n_h 个 512×128 的上投影 GEMM</text>
+
+  <!-- arrow -->
+  <line x1="540" y1="180" x2="620" y2="180" stroke="#2456c4" stroke-width="2.5" marker-end="url(#f3a)"/>
+  <text x="580" y="168" font-size="12" text-anchor="middle" fill="#2456c4" font-weight="bold">吸收</text>
+
+  <!-- right: absorbed -->
+  <text x="640" y="60" font-size="12" font-weight="bold" fill="#2456c4">absorbed（decode 形式，式 46'）</text>
+  <rect x="640" y="80" width="200" height="56" rx="6" fill="#2456c4" opacity="0.9"/>
+  <text x="740" y="102" font-size="11" text-anchor="middle" fill="#fff">缓存条目 [c_KV(512); k_R(64)]</text>
+  <text x="740" y="122" font-size="11" text-anchor="middle" fill="#dbe6f9">读出来直接当 K 和 V 用（MQA）</text>
+  <rect x="640" y="170" width="200" height="36" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="740" y="193" font-size="11" text-anchor="middle" fill="#2456c4">q侧: W_UK^T 作用在 q^C 上（每头 bmm）</text>
+  <rect x="640" y="220" width="200" height="36" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="740" y="243" font-size="11" text-anchor="middle" fill="#2456c4">输出侧: W_UV 作用在注意力输出上</text>
+
+  <!-- bottom: traffic comparison -->
+  <text x="40" y="300" font-size="12" font-weight="bold" fill="#1a1f2e">decode（Sq=1）的 KV 读取流量（每层，读一遍前缀）</text>
+  <text x="40" y="330" font-size="11" fill="#5a6272">naive：n_h 头 × (d_h + d_v) 维 = 128 × 256 = 32768 元素/token，且上投影 FLOPs ∝ n_h·L</text>
+  <rect x="40" y="340" width="640" height="22" fill="#d7e4f7" stroke="#c9d2e0"/>
+  <text x="690" y="356" font-size="11" fill="#1a1f2e">32768 元素</text>
+  <text x="40" y="392" font-size="11" fill="#5a6272">absorbed：576 维共享 = 576 元素/token（省 56×），FLOPs 变成每步 n_h 个 128×512 的小 bmm（与 L 无关）</text>
+  <rect x="40" y="402" width="12" height="22" fill="#2456c4"/>
+  <text x="60" y="418" font-size="11" fill="#1a1f2e">576 元素（56.9× 更少的 KV 读取）</text>
+  <text x="40" y="452" font-size="10" fill="#5a6272">这就是 vLLM 文档注释里「data-movement friendly（decode）vs compute friendly（prefill）」的定量含义（vllm mla_attention.py:12-16）</text>
+</svg>
+</div>
+<p class="cap"><b>图 3</b>｜weight absorption 两步变换与 decode 访存收益（推导见正文；访存账按式 42/45 与式 46' 的张量形状逐项算出）。</p>
+
+<h3>4.3 数值等价验证：训练形式 = 吸收形式</h3>
+
+<p>absorption 只用了矩阵乘法结合律，输出必须逐元素一致。下面是实际运行过的完整验证脚本（CPU、float32、缩比维度 \(d=256, n_h=8, d_h=32, d^R_h=16, d_c=64, d'_c=96\)；缩放因子与 RoPE 同 V3 口径）：</p>
+
+<pre><code class="language-python">import torch; torch.manual_seed(0)
+# 维度（缩比版 V3 口径）：d=256, n_h=8, d_h=32(P), d_Rh=16(R), d_c=64, d_cq=96, d_v=32
+B, Sq = 2, 10
+scale = 1.0 / ((d_h + d_Rh) ** 0.5)
+# ... 权重 W_DQ/W_UQ/W_QR/W_DKV/W_UK/W_UV/W_KR/W_O 随机初始化（见附注脚本） ...
+
+# ---------- 训练 / naive 形式（式 37-47） ----------
+c_Q  = h @ W_DQ;  q_C = (c_Q @ W_UQ).view(B,Sq,n_h,d_h)
+q_R  = rope((c_Q @ W_QR).view(B,Sq,n_h,d_Rh), pos)
+c_KV = h @ W_DKV; k_C = (c_KV @ W_UK).view(B,Sq,n_h,d_h)
+k_R  = rope(h @ W_KR, pos)                    # 全头共享
+v_C  = (c_KV @ W_UV).view(B,Sq,n_h,d_v)
+s = torch.einsum('bqhd,bkhd-&gt;bhqk',
+        torch.cat([q_C,q_R],-1),
+        torch.cat([k_C, k_R[:,:,None].expand(-1,-1,n_h,-1)],-1)) * scale
+p  = s.masked_fill(~mask, float('-inf')).softmax(-1)
+o  = torch.einsum('bhqk,bkhd-&gt;bqhd', p, v_C)
+u_naive = o.reshape(B,Sq,n_h*d_v) @ W_O
+
+# ---------- absorbed 推理形式 ----------
+W_UK_h = W_UK.view(d_c,n_h,d_h).permute(1,2,0)     # 每头 W_UK[i]^T: (n_h,d_h,d_c)
+W_UV_h = W_UV.view(d_c,n_h,d_v).permute(1,2,0)     # 每头 W_UV[i]^T: (n_h,d_v,d_c)
+q_lat  = torch.einsum('bqhd,hde-&gt;bqhe', q_C, W_UK_h)          # 吸收1: W_UK 进 query
+q_mqa  = torch.cat([q_lat, q_R], -1)                          # [B,Sq,n_h,d_c+d_Rh]
+k_mqa  = torch.cat([c_KV[:,:,None,:].expand(-1,-1,n_h,-1),
+                    k_R[:,:,None,:].expand(-1,-1,n_h,-1)],-1) # 共享 KV
+p2  = torch.einsum('bqhd,bkhd-&gt;bhqk', q_mqa, k_mqa).mul(scale).masked_fill(~mask, float('-inf')).softmax(-1)
+chat = torch.einsum('bhqk,bkl-&gt;bhql', p2, c_KV)               # V=c_KV（latent 空间加权和）
+o_abs = torch.einsum('bhql,hel-&gt;bqhe', chat, W_UV_h)          # 吸收2: W_UV 进输出
+u_abs = o_abs.reshape(B,Sq,n_h*d_v) @ W_O
+
+diff = (u_naive - u_abs).abs().max()
+print(f"max|naive-absorbed| = {diff:.3e}, rel = {(diff/u_naive.abs().max()):.3e}")
+# 实测输出：max|naive-absorbed| = 2.980e-06   rel = 4.913e-07   → PASS (&lt; 1e-4)</code></pre>
+<p class="cap"><b>代码 3</b>｜数值等价验证（本机 Python 3.9 + PyTorch 2.8.0 CPU 实跑，2026-10-19）。float32 下 1e-6 量级的差异来自 einsum 的归约顺序不同，属数值噪声；softmax 与 concat 的位置都核对过：\(q^R/k^R\) 在 absorbed 形式里不经过任何投影，直接拼接。</p>
+
+<p>同一脚本顺带给出 prefill FLOPs 账：每 (head, q, k) 对的 attention 内积+加权和 FLOPs，naive 形式 \(2[(128+64)+128]=640\)，absorbed 形式 \(2[(512+64)+512]=2176\)，<b>3.4×</b>——这就是 prefill 不用吸收形式的原因，见下节。</p>
+
+<h3>4.4 为什么 decode 用 absorbed、prefill 往往不用</h3>
+
+<p>两种形式是「访存友好 vs 算力友好」的取舍（vLLM <code>mla_attention.py:12-16</code> 的文档注释原话：compute friendly for prefill（\(S_q/S_{kv}\) 接近 1），data-movement friendly for decode（\(S_q/S_{kv}\) 接近 0））：</p>
+
+<table>
+  <tr><th></th><th>decode（\(S_q=1\)）</th><th>prefill（\(S_q\approx S_{kv}\)）</th></tr>
+  <tr><td>瓶颈</td><td>访存：每步要把前缀 KV 从 HBM 读一遍</td><td>算力：\(O(S_q S_{kv})\) 的 attention 矩阵乘是大头</td></tr>
+  <tr><td>absorbed 的影响</td><td>KV 读取从 \(n_h(d_h+d_v)=32768\) 元素/token 降到 576/token（56.9×）；上投影 GEMM 与 \(L\) 解耦</td><td>QK^T 在 576 维上做、PV 在 512 维上做，每对 FLOPs 3.4×；\(\hat c\) 的 \(W_{UV}\) 后处理从「每 token 一次」变成「每 (token, head) 一次」，乘上 \(S_q\)</td></tr>
+  <tr><td>结论</td><td><b>用 absorbed</b>：MLA 的 MQA 形态 = 免费拿到 MQA 的访存优势而无损质量</td><td><b>不用 absorbed</b>：先用 <code>kv_b_proj</code> 把 latent 上投影成标准 MHA（QK 192 维 / V 128 维），喂 FlashAttention 等高效 kernel</td></tr>
+</table>
+<p class="cap"><b>表 4</b>｜两条路径的取舍。另有一个算力视角的佐证：FlashMLA 官方 deep-dive（<code>docs/20250422-new-kernel-deep-dive.md:9-15</code>，ba89a34）算出 absorbed decode 的 FLOPs/byte ≈ \(2 h_q s_q\)，H800 上 \(h_q s_q \ge 128\) 就进入 compute-bound 区——DeepSeek decode 部署 \(h_q=128\)（decode 实例不做 TP），恰好压线，所以 decode kernel 也要按 compute-bound 优化（见 4.5 节）。MTP/投机解码把 \(s_q\) 抬到 &gt;1，进一步推向 compute-bound。</p>
+
+<div class="infer">「prefill 用 non-absorbed 是因为 3.4× 的 FLOPs 差与 \(W_{UV}\) 后处理复杂度」中，3.4× 是本文按张量形状算的账（代码 3 尾部），论文未给此数；「\(S_q/S_{kv}\) 分界由调度器的 prefill/decode 标签决定、尚可调优」是 vLLM 文档注释（mla_attention.py:18-19）的原文陈述。</div>
+
+<h3>4.5 FlashMLA 的 kernel 设计要点（以仓库源码为准）</h3>
+
+<p>FlashMLA（deepseek-ai/FlashMLA）是 DeepSeek 官方的注意力 kernel 库，承载 V3/V3.2 的推理。其 <b>dense MLA decode kernel</b>（Hopper sm90，经典 MLA 形态）实现要点：</p>
+
+<p><b>(1) 输入就是 absorbed MQA + 页表。</b>Python 接口声明 Q 为 576 维、V 输出 512 维、KV cache 形如 <code>(num_blocks, page_block_size, num_heads_k, head_dim)</code> 且 <code>num_heads_k must be 1</code>（<code>flash_mla/flash_mla_interface.py:73-95</code>，快照 ba89a34）——「只有 MQA」正是吸收后的形态。内核常量钉死形状（<code>csrc/kernels/sm90/decode/dense/config.h:5-11</code>）：</p>
+
+<pre><code class="language-cpp">namespace Config {
+static constexpr int BLOCK_SIZE_M   = 64;    // 每 CTA 处理 64 个 q（多请求 q 打包）
+static constexpr int PAGE_BLOCK_SIZE = 64;   // KV 页大小（与 PagedAttention 对齐）
+static constexpr int HEAD_DIM_K = 576;       // = 512 c_KV + 64 k_RoPE
+static constexpr int HEAD_DIM_V = 512;       // 输出 = latent 空间加权和
+}</code></pre>
+<p class="cap"><b>代码 4</b>｜FlashMLA decode 内核的形状常量。K、V 在这里<b>同源</b>：前 512 维读进来既参与 QK^T（配 \(q^{lat}\)）又当 V（式 46'）——官方 deep-dive 原话「in MLA, K and V are the same with different names」。</p>
+
+<p><b>(2) 一个 KV tile 服务所有 128 个 q 头。</b>kernel 网格是 <code>(num_m_blocks, h_k, num_sm_parts)</code>，其中 \(h_k=1\)（MQA），每个 q 头只是 Q 打包维里的一行（<code>splitkv_mla.cuh:962-967</code> 的网格注释）。TMA 一次搬 64×576 的 KV 页（拆成 9 个 64×64 tile，见下），128 个头的 QK^T/ItPV 全部复用这一份 shared memory 数据——这是「shared KV」的硬件意义，也是 MHA kernel 做不到的。</p>
+
+<p><b>(3) 「seesaw」调度：一份输出寄存器文件上的双 warpgroup 乒乓。</b>64×512 的输出累加器占 32768 个 32-bit 寄存器，一个 SM 只有 65536 个，无法像 FA3 那样双缓冲两份输出做 ping-pong。FlashMLA 的解法是把输出竖切成 \(O_L/O_R\) 两个 64×256 分属两个 warpgroup，拿两个 KV 块 \(K_0,K_1\) 按固定 11 步交错：一个 warpgroup 在 Tensor Core 上算 GEMM 时，另一个在 CUDA Core 上做 online softmax 的 max/exp/缩放，同时 TM&A 搬下一块（deep-dive 文档 <code>docs/20250422-new-kernel-deep-dive.md:19-42</code>，称为「mathematically equivalent to FlashAttention's online softmax」的 seesaw scheduling）。源码里对应 <code>wg0_subroutine</code>/<code>wg1_subroutine</code> 的成对编排与 <code>NamedBarrier</code> 同步（<code>splitkv_mla.cuh:742-945</code>）。</p>
+
+<p><b>(4) 细粒度 TMA 流水与 L2 提示。</b>每块 64×576 的 K 拆成 9 个 64×64 的 TMA 拷贝，「GEMM 等一个 tile 到一个」，并给 TMA 加 <code>EVICT_FIRST</code> 缓存提示提升 L2 命中（deep-dive :54-55；源码 <code>launch_kv_tiles_copy_tma</code>，<code>splitkv_mla.cuh:36-52</code>）。</p>
+
+<p><b>(5) split-KV + combine + PDL。</b>长序列时 KV 维切给多个 SM part 各算部分（<code>oaccum</code> 路径，<code>splitkv_mla.cuh:1240-1261</code>），由独立 combine kernel 按/log-sum-exp 合并（<code>csrc/cuda_kernels/smxx/decode/combine/combine.cu</code>，main@0f11e17）；两个 kernel 之间用 Programmatic Dependent Launch 重叠启动（<code>splitkv_mla.cuh:1226</code> 的 <code>cudaTriggerProgrammaticLaunchCompletion</code> 与 :1340-1351 的 <code>cudaLaunchAttributeProgrammaticStreamSerialization</code>）。tile scheduler（<code>get_decoding_sched_meta</code>）负责把 (请求, 块) 均衡分配到 SM。Q tile 也按 64×576 进 shared memory（:708 的 <code>arrive_and_expect_tx(64*576*2)</code>）。</p>
+
+<p><b>性能口径</b>：dense decode kernel 在 H800 SXM5 + CUDA 12.8 上，memory-bound 配置最高 <b>3000 GB/s</b>、compute-bound 配置最高 <b>660 TFLOPS</b>（README.md:36，ba89a34）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 430" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="f4a" markerWidth="10" markerHeight="10" refX="3" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5 L0,10 L2.5,5 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="30" y="28" font-size="13" font-weight="bold" fill="#1a1f2e">FlashMLA dense decode kernel（sm90）：一次 TMA 加载服务全部 128 个 q 头</text>
+
+  <!-- grid -->
+  <text x="40" y="58" font-size="11" fill="#5a6272">grid = (⌈Sq·h_q/64⌉ m-blocks, h_k=1, num_sm_parts)　｜　每个 CTA：64 个 q × 64-token KV 页</text>
+  <rect x="40" y="70" width="240" height="120" fill="#fafbfd" stroke="#c9d2e0"/>
+  <rect x="48" y="78" width="100" height="20" fill="#d7e4f7" stroke="#c9d2e0"/>
+  <text x="98" y="92" font-size="10" text-anchor="middle" fill="#1a1f2e">Q 64×576 (sM 0..63 行)</text>
+  <rect x="48" y="106" width="224" height="20" fill="#dcead9" stroke="#c9d2e0"/>
+  <text x="160" y="120" font-size="10" text-anchor="middle" fill="#1a1f2e">Q 64×576 (sM 64..127 行) — q 打包，多请求混批</text>
+  <rect x="48" y="140" width="224" height="20" fill="#2456c4" opacity="0.85"/>
+  <text x="160" y="154" font-size="10" text-anchor="middle" fill="#fff">KV 页 64×576（一次 TMA，全头共享）</text>
+  <text x="48" y="180" font-size="10" fill="#5a6272">h_k=1：128 个 q 头的 QK^T/PV 复用同一份 KV tile</text>
+
+  <!-- TMA pipeline -->
+  <rect x="330" y="70" width="250" height="120" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="345" y="92" font-size="11" font-weight="bold" fill="#1a1f2e">TMA 流水（页 → shared memory）</text>
+  <rect x="345" y="102" width="34" height="20" fill="#dcead9" stroke="#c9d2e0"/>
+  <rect x="383" y="102" width="34" height="20" fill="#dcead9" stroke="#c9d2e0"/>
+  <rect x="421" y="102" width="34" height="20" fill="#dcead9" stroke="#c9d2e0"/>
+  <rect x="459" y="102" width="34" height="20" fill="#dcead9" stroke="#c9d2e0"/>
+  <rect x="497" y="102" width="34" height="20" fill="#dcead9" stroke="#c9d2e0"/>
+  <text x="345" y="140" font-size="10" fill="#5a6272">64×576 拆 9 个 64×64 tile：</text>
+  <text x="345" y="156" font-size="10" fill="#5a6272">到一个 tile 起一个 GEMM，EVICT_FIRST 提示</text>
+  <text x="345" y="172" font-size="10" fill="#5a6272">barrier: arrive_and_expect_tx(64×64×2)</text>
+
+  <!-- seesaw -->
+  <rect x="620" y="70" width="230" height="120" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="635" y="92" font-size="11" font-weight="bold" fill="#2456c4">seesaw 调度（2 warpgroup）</text>
+  <text x="635" y="114" font-size="10" fill="#1a1f2e">O 切 O_L(64×256)+O_R(64×256)</text>
+  <text x="635" y="132" font-size="10" fill="#1a1f2e">wg0: p0=QK_0^T → softmax → O_L+=p0V_0L</text>
+  <text x="635" y="150" font-size="10" fill="#1a1f2e">wg1: p1=QK_1^T → softmax → O_R+=p1V_1R</text>
+  <text x="635" y="168" font-size="10" fill="#1a1f2e">GEMM(TC) 与 softmax(CUDA core) 交错</text>
+  <text x="635" y="184" font-size="10" fill="#5a6272">寄存器预算：32768/65536 每份输出</text>
+
+  <!-- split KV -->
+  <rect x="40" y="220" width="810" height="150" rx="8" fill="#fafbfd" stroke="#c9d2e0"/>
+  <text x="60" y="246" font-size="11" font-weight="bold" fill="#1a1f2e">split-KV（长序列时 KV 维切分）+ PDL</text>
+  <rect x="60" y="260" width="180" height="26" fill="#dcead9" stroke="#c9d2e0"/>
+  <text x="150" y="277" font-size="10" text-anchor="middle" fill="#1a1f2e">SM part 0：块 0..k</text>
+  <rect x="260" y="260" width="180" height="26" fill="#dcead9" stroke="#c9d2e0"/>
+  <text x="350" y="277" font-size="10" text-anchor="middle" fill="#1a1f2e">SM part 1：块 k+1..2k</text>
+  <rect x="460" y="260" width="180" height="26" fill="#dcead9" stroke="#c9d2e0"/>
+  <text x="550" y="277" font-size="10" text-anchor="middle" fill="#1a1f2e">SM part p：块 …，输出 OAccum</text>
+  <rect x="660" y="260" width="170" height="26" fill="#f3e3d3" stroke="#c9d2e0"/>
+  <text x="745" y="277" font-size="10" text-anchor="middle" fill="#1a1f2e">tile scheduler 均衡负载</text>
+  <line x1="150" y1="286" x2="330" y2="322" stroke="#2456c4" marker-end="url(#f4a)"/>
+  <line x1="550" y1="286" x2="390" y2="322" stroke="#2456c4" marker-end="url(#f4a)"/>
+  <rect x="240" y="324" width="260" height="30" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="370" y="344" font-size="11" text-anchor="middle" fill="#2456c4">combine kernel：按 LSE 合并 partial 输出</text>
+  <text x="520" y="344" font-size="10" fill="#5a6272">两 kernel 用 PDL 重叠启动（cudaTriggerProgrammaticLaunchCompletion）</text>
+  <text x="60" y="366" font-size="10" fill="#5a6272">无 split 时（is_no_split）直接写 bf16 输出 + LSE；性能：H800 3000 GB/s / 660 TFLOPS（README.md:36）</text>
+  <text x="30" y="408" font-size="10" fill="#5a6272">来源：FlashMLA 快照 ba89a34 csrc/kernels/sm90/decode/dense/{config.h, splitkv_mla.cuh} 与 docs/20250422-new-kernel-deep-dive.md</text>
+</svg>
+</div>
+<p class="cap"><b>图 4</b>｜FlashMLA decode kernel 结构总览（对应仓库 <code>splitkv_mla.cuh</code> 与官方 deep-dive 文档）。</p>
+
+<h3>4.6 vLLM 中的 MLA： absorbed 与 non-absorbed 两条路径的实现</h3>
+
+<p>vLLM 把 MLA 统一收口在 <code>vllm/model_executor/layers/attention/mla_attention.py</code>（main@fa75d34）：<code>MLAAttention</code> 持有分解好的 \(W_{UK}, W_{UV}\)（<code>split_kv_b_proj</code>，:408-425，把 <code>kv_b_proj</code> 权重按 128/128 切成 <code>W_UK [L,N,P]</code> 与 <code>W_UV [L,N,V]</code>），并在 <code>forward_impl</code> 里按调度器打上的标签分流（:972-977）：</p>
+
+<pre><code class="language-python"># vllm/model_executor/layers/attention/mla_attention.py（main@fa75d34，节选）
+num_mqa_tokens = attn_metadata.num_decode_tokens      # decode token 走 MQA/absorbed
+num_mha_tokens = q.size(0) - num_mqa_tokens           # 其余（prefill）走 MHA
+...
+if num_mha_tokens &gt; 0:
+    self.impl.forward_mha(q[num_mqa_tokens:], ...)     # 非吸收：MHA 形式（prefill 后端）
+if num_mqa_tokens &gt; 0:
+    mqa_q_nope, mqa_q_pe = mqa_q.split([...], dim=-1)  # 128 / 64 切分
+    mqa_q_nope = mqa_q_nope.transpose(0, 1)            # (B,N,P) -&gt; (N,B,P)
+    ...
+    # W_UK 吸收：每头 bmm (N,B,P)×(N,P,L) -&gt; (N,B,L)
+    torch.bmm(mqa_q_nope, W_UK_T, out=mqa_ql_nope.transpose(0, 1))   # :1094 附近
+    ...
+    attn_out, lse = self.impl.forward_mqa(mqa_q, kv_cache, attn_metadata, self)  # MQA kernel
+    ...
+    self._v_up_proj(attn_out, out=mqa_output_slice)    # W_UV 吸收：output 侧上投影</code></pre>
+<p class="cap"><b>代码 5</b>｜vLLM 的 absorbed decode 主干（:1078-1133、:1160 行附近；省略 FP8/DCP/投机解码分支）。文件头文档注释（:12-30、:96-121）用与本文 4.2 节一致的记号给出两条路径的伪代码：<code>ql_nope = einsum("snh,lnh-&gt;snl", q_nope, W_UK)</code> 与 <code>o = einsum("snl,lnv-&gt;snv", sdpa_o, W_UV)</code>。</p>
+
+<p>decode 后端可插拔：FlashMLA 后端把 576 维 Q 与 <code>(num_blocks, block_size, 1, 576)</code> 的缓存直接交给 <code>flash_mla_with_kvcache</code>（<code>vllm/v1/attention/backends/mla/flashmla.py:260-335</code>）；FA3 后端（<code>flashattn_mla.py</code>）用 FA3 的 MQA 路径算同样的 576/512 形状。prefill 侧 vLLM 另有 MHA 后端族（<code>mla/prefill/</code>），并做了 chunked context 工作区（文档注释 :122-141：<code>k_nope = kv_c @ W_UK</code> 的中间量随 \(S_{kv}\) 膨胀，必须分块）。</p>
+
+<h3>4.7 SGLang 中的 MLA 路径</h3>
+
+<p>SGLang（main@5b683d6b72f8）的分流逻辑在 <code>python/sglang/srt/models/deepseek_common/attention_backend_handler.py</code> 的 <code>_handle_attention_backend</code>（:108-141）：<b>extend（prefill）且前缀较短</b>（<code>sum_extend_prefix_lens == 0</code> 或超过 chunked 阈值且后端支持）→ <code>MHA_ONE_SHOT</code>/<code>MHA_CHUNKED_KV</code>（非吸收）；<b>decode、长前缀 extend、CUDA graph 捕获期</b> → <code>MLA</code>（absorbed）。absorbed 路径的核心在 <code>attention_forward_methods/forward_mla.py</code>：</p>
+
+<pre><code class="language-python"># sglang .../attention_forward_methods/forward_mla.py（main@5b683d6b72f8，节选）
+# forward_absorb_prepare（:295 起）里：
+q_nope_out = torch.bmm(q_nope.transpose(0, 1), self.w_kc)   # :576  W_UK^T 每头 bmm（吸收进 query）
+
+# forward_absorb_core（:684 起）里：
+attn_output = self.attn_mqa(
+    q_nope_out,   # (B, N, kv_lora_rank) —— 已吸收的 latent 空间 query
+    k_nope,       # 这里传的就是 latent c_KV：K 与 V 同一个张量（式 46'）
+    k_nope, ...,
+    q_rope=q_pe, k_rope=k_pe, ...)                        # :744 附近 MQA 调用
+...
+torch.bmm(attn_output.transpose(0, 1), self.w_vc, ...)    # :880-897  W_UV 输出侧吸收</code></pre>
+<p class="cap"><b>代码 6</b>｜SGLang absorbed 路径。三个细节与理论一一对应：<code>w_kc</code>/<code>w_vc</code> 就是切开的 \(W_{UK}^T/W_{UV}\)（FP8 时带 scale 反量化，:190、:858）；<code>attn_mqa(q, k, v)</code> 的 k 与 v 传<b>同一个</b> latent 张量（K/V 同源）；FlashMLA decode 后端（<code>flashmla_backend.py</code>）以 <code>kv_cache_dim=576</code>、页大小 64 的页表接给 <code>flash_mla_with_kvcache</code>（:431-510）。</p>
+
+<div class="infer">两框架的工程注意点总结（从源码读出）：absorbed 路径在 FP8 下要额外维护 \(W_{UK}\) 的量化 bmm（vLLM 的 fp8/aiter/amx 分支、SGLang 的 <code>bmm_fp8</code>），这是 MLA 相比 MHA 多出来的算子链条；投机解码/目标验证时 \(s_q&gt;1\)，vLLM 有 <code>reshape_query_for_spec_decode</code>（flashmla.py:277 附近）把多 token q 打平成 MQA 的额外 q 维。</div>
+
+<h2>5. 数值验证汇总</h2>
+
+<table>
+  <tr><th>验证项</th><th>方法</th><th>结果</th></tr>
+  <tr><td>训练形式 vs absorbed 形式数值等价</td><td>代码 3 全量跑（PyTorch 2.8.0 CPU，float32，缩比维度 + 真实缩放因子 √192 与 RoPE）</td><td>max |Δ| = 2.98e-6，rel = 4.9e-7 → <b>PASS</b>（远小于 1e-4 阈值；差异为浮点归约顺序噪声）</td></tr>
+  <tr><td>KV cache 账（V3）</td><td>表 3 逐项按 config.json 维度手算</td><td>MLA/MHA = 576/32768 = 1.758%；与 V2 论文 Table 9 的比例口径一致（250B 级：34.6K/860.2K = 4.0%，因 V2 大模型 \(n_h d_h\) 更大而 \(d_c,d^R_h\) 相同）</td></tr>
+  <tr><td>prefill FLOPs 比</td><td>每 (head,q,k) 对：640 vs 2176</td><td>absorbed = 3.4× naive（本推断账，见 4.4 节标注）</td></tr>
+  <tr><td>absorbed decode 访存比</td><td>32768 vs 576 元素/token</td><td>56.9× 削减（图 3）</td></tr>
+</table>
+<p class="cap"><b>表 5</b>｜数值验证清单。V2 论文 Table 9 的原始数字：Small MoE（15.7B）MHA 110.6K vs MLA 15.6K 元素/token（14.1%）；Large MoE（247.4B）860.2K vs 34.6K（4.0%），同时 MLA 在 BBH/MMLU/C-Eval/CMMLU 上全面占优。</p>
+
+<h2>6. 事实与推断的边界</h2>
+
+<p><b>论文/官方源码证实的事实</b>：全部公式 (37)–(47) 与 Table 1/Table 8/Table 9 数字（V2 论文）；V3 超参（官方 config.json）；缓存内容 576 维、MQA-only 接口与 576/512 形状常量（FlashMLA 接口文档与 config.h）；seesaw/TMA/PDL/tile scheduler 与 3000 GB/s、660 TFLOPS（FlashMLA README 与 deep-dive）；vLLM/SGLang 的双路径分流与 absorption 算子位置（上述源码行号）；数值等价（本文实测）。</p>
+
+<p><b>推断（均已在上文就地标注）</b>：① 反向传播无特殊处理（论文未述 + FlashMLA 只有标准 FMHA bwd）；② RoPE 与 \(W_{UK}^T\) 不可交换的逐条论证（论文只给结论句）；③ prefill absorbed 3.4× FLOPs 账（自算）；④ \(W_{UQ}\) 在生产实现中不显式吸收、只吸收 \(q^C\) 之后的 \(W_{UK}\)（由 vLLM/SGLang 源码归纳的实现惯例）。</p>
+
+<h2>7. 局限与后续演进</h2>
+
+<ul>
+  <li><b>双路径工程税</b>：absorbed（decode）/non-absorbed（prefill）两套实现、两套 FP8 量化路径要同时维护（vLLM/SGLang 里大量分支代码的来源），prefill 下 \(W_{UK}\) 上投影的中间量还逼出 chunked context 机制。</li>
+  <li><b>head_dim 576 超出生态假设</b>：主流 flash kernel 面向 128/256 维设计，MLA 需要 FA3 的 MLA 分支或 FlashMLA 专用 kernel；页大小、布局也有专属约束（FlashMLA 要求页表连续有效、MQA-only）。</li>
+  <li><b>缓存仍随序列长度线性</b>：576 元素/token/层是常数下界，长上下文下绝对量仍在涨；且 absorbed 形式要求缓存「压缩即用」的完整 latent，无法再对 entry 内部做无损再压缩。</li>
+  <li><b>算子链条更长</b>：decode 每步多出 \(W_{UK}\)、\(W_{UV}\) 两个 bmm，在极小 batch 时占比可观；这也是 MLA 部署对 kernel 融合（如 FP8 bmm、Q 拼接量化）敏感的原因。</li>
+  <li><b>演进</b>：V3.2 在 MLA 之上加 Lightning Indexer + top-k 稀疏（DSA），缓存元素量不变、省算力；V4 转向 CSA/HCA——把「缓存即所需」推到极致，免去 decode 时的上投影与双路径，并首次压缩序列维。<a href="../deepseek-v4/deepseek-v4-attention.html">《DeepSeek-V4 Attention 设计解读（CSA/HCA）》</a>有完整对比，其中的三维框架（entry 大小 / KV 头数 / 序列长度）正好把本文的 MLA 定位在「只压 entry」这一格。</li>
+</ul>
+
+<h2>8. 参考来源</h2>
+
+<ol class="refs">
+  <li>DeepSeek-AI. <i>DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model</i>. arXiv:2405.04434. MLA：§2.1.2–2.1.4、附录 C（完整公式）、附录 D（消融）。本地 <code>paper/deepseek_v2.pdf</code>。</li>
+  <li>DeepSeek-AI. <i>DeepSeek-V3 Technical Report</i>. arXiv:2412.19437. §1（沿用 MLA 的声明）、§3.3（FP8 训练）。本地 <code>paper/deepseek_v3.pdf</code>；超参 <a href="https://huggingface.co/deepseek-ai/DeepSeek-V3/blob/main/config.json">config.json</a>。</li>
+  <li>deepseek-ai/<a href="https://github.com/deepseek-ai/FlashMLA">FlashMLA</a>. main@<code>0f11e17</code>（2026-10-20 抓取）；sm90 dense decode kernel 快照 <code>ba89a34</code>（2026-09-15 抓取）：<code>csrc/kernels/sm90/decode/dense/config.h</code>、<code>splitkv_mla.cuh</code>、<code>flash_mla/flash_mla_interface.py</code>、<code>docs/20250422-new-kernel-deep-dive.md</code>。</li>
+  <li>vllm-project/<a href="https://github.com/vllm-project/vllm">vllm</a>. main@<code>fa75d34</code>（2026-10-15 抓取）：<code>vllm/model_executor/layers/attention/mla_attention.py</code>、<code>vllm/v1/attention/backends/mla/flashmla.py</code>、<code>vllm/v1/attention/backends/mla/flashattn_mla.py</code>、<code>vllm/model_executor/models/deepseek_v2.py</code>。</li>
+  <li>sgl-project/<a href="https://github.com/sgl-project/sglang">sglang</a>. main@<code>5b683d6b72f8</code>（2026-10-20 抓取，raw 文件核对）：<code>python/sglang/srt/models/deepseek_common/attention_backend_handler.py</code>、<code>.../attention_forward_methods/forward_mla.py</code>、<code>python/sglang/srt/layers/attention/flashmla_backend.py</code>、<code>python/sglang/srt/models/deepseek_v2.py</code>。</li>
+  <li>本站关联报告：<a href="mha-prefill-decode.html">MHA 的 Prefill 与 Decode 账本</a> · <a href="attention-ai-calculator.html">Attention AI 计算器</a> · <a href="../deepseek-v4/deepseek-v4-attention.html">DeepSeek-V4 CSA/HCA 设计解读</a> · <a href="flash-attention-v1-to-v4.html">FlashAttention v1→v4 演进</a>（kernel 背景）。</li>
+</ol>
+
+<footer>生成于 2026-10-19 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

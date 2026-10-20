@@ -363,6 +363,15 @@ var REPORTS = [
     "group": "misc"
   },
   {
+    "slug": "misc/mla-training-inference",
+    "title": "MLA 训练与推理全解：低秩压缩、解耦 RoPE、weight absorption 与 FlashMLA kernel",
+    "date": "2026-10-19",
+    "paper": "DeepSeek-V2 (arXiv:2405.04434, paper/deepseek_v2.pdf) · DeepSeek-V3 (arXiv:2412.19437, paper/deepseek_v3.pdf)",
+    "arxiv": "https://arxiv.org/abs/2405.04434",
+    "repo": "https://github.com/deepseek-ai/FlashMLA（main@0f11e17 / sm90 快照 ba89a34）· vLLM（main@fa75d34）· SGLang（main@5b683d6b72f8）",
+    "group": "misc"
+  },
+  {
     "slug": "misc/flash-attention-v1-to-v4",
     "title": "FlashAttention v1→v4 演进全解：从 online softmax 到 Blackwell 非对称流水线（算法过程详解）",
     "date": "2026-10-19",
@@ -395,6 +404,7 @@ var TOPICS = [
     "hub": "hub/architecture.html",
     "collections": [
       { "name": "LLM 架构演进综述", "slugs": ["misc/llm-arch-evolution"] },
+      { "name": "MLA 训练与推理深读", "slugs": ["misc/mla-training-inference"] },
       { "name": "DeepSeek-V4.1 零基础七讲", "group": "deepseek-v41" },
       {
         "name": "DeepSeek-V4 专题深读",
