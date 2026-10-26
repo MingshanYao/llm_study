@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>具身智能与 VLA 零基础七讲 · 第 3 讲：OpenVLA——开源 7B VLA 的架构解剖与微调实操</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>具身智能与 VLA 零基础七讲 · 第 3 讲：OpenVLA——开源 7B VLA 的架构解剖与微调实操</h1>
+
+<div class="series-nav">
+  <a href="vla-t0-overview.html">0 全景地图</a>
+  <a href="vla-t1-robot-learning.html">1 机器人学习</a>
+  <a href="vla-t2-rt1-rt2.html">2 RT-1·RT-2</a>
+  <a class="here">3 OpenVLA</a>
+  <a href="vla-t4-diffusion-pi0.html">4 Diffusion·π0</a>
+  <a href="vla-t5-frontier.html">5 前沿全景</a>
+  <a href="vla-t6-roadmap.html">6 实战路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>具身智能与 VLA 零基础七讲（本篇为第 3 讲。第 1 讲讲过动作空间、模仿学习与 OXE 数据集背景，第 2 讲讲过 RT-2 的动作 tokenization 与 co-fine-tuning，本讲直接引用这些概念，聚焦 OpenVLA 自己的设计与微调实操）</p>
+  <p style="margin:4px 0"><b>读者假设：</b>知道 Llama、VLM、LoRA、tokenizer、量化大概是什么（不需要会用）；不需要任何机器人背景。所有行话第一次出现都会解释。</p>
+  <p style="margin:4px 0"><b>本讲目标：</b>解剖最有影响力的开源 VLA——OpenVLA：它长什么样、吃了什么数据、考了多少分、怎么用一张卡微调；读完你应该建立「怎么微调一个 VLA」的完整心智模型，并知道去哪下权重、要准备多少显存。</p>
+</div>
+
+<div class="tldr">
+<p><b>TL;DR：</b>OpenVLA（2024 年 6 月，斯坦福 / 伯克利 / Toyota Research Institute / 华盛顿大学等，arXiv:2406.09246）是第一个「开放权重 + 达到 RT-2-X 级性能」的 7B 参数 VLA：<b>Llama 2 7B 主干 + DINOv2/SigLIP 双视觉编码器融合</b>，在 Open X-Embodiment（OXE）数据集的 <b>970k 条真实机器人轨迹</b>上训练。在跨 2 个机器人平台共 29 个任务的评测中，它以 7 倍更少的参数把 55B 的闭源 RT-2-X 的绝对成功率高出 <b>16.5 个百分点</b>；用 LoRA 可以在<b>单张 A100（最低约 27GB 显存）</b>上微调出新任务策略。它把 VLA 从大厂专利变成社区公器——此后几乎所有学术开源 VLA（OFT、TinyVLA、RoboVLMs……）都拿它当基座或基线，至今仍是微调入门的事实标准。2025 年 2 月的 OpenVLA-OFT 进一步证明：把「离散动作 token + 自回归解码」换成「连续动作 + 并行解码 + 动作分块」，同一个基座在 LIBERO 仿真基准上能从 76.5% 提到 97.1%，推理吞吐提高 26 倍。</p>
+</div>
+
+<h2>1. 为什么开源是关键一步：RT-2 跑不起，Octo 不够强</h2>
+
+<p><a href="vla-t2-rt1-rt2.html">第 2 讲</a>里我们见过 RT-2：Google DeepMind 把 55B 的 VLM 微调成机器人策略，效果惊艳——但它<b>闭源</b>。你拿不到权重、看不到训练代码和数据配方，只能通过内部 API 调用（OpenVLA 团队做对比实验时，用的还是 DeepMind 给的「alpha 访问」权限）。对一个想在自己机器人上做研究的实验室来说，这意味着：不能微调、不能魔改、不能复现。</p>
+
+<p>2024 年 5 月，伯克利牵头的 <b>Octo</b>（arXiv:2405.12213）迈出了开源第一步：一个 <b>93M 参数</b>的 Transformer 策略（约 ViT-Base 规模的主干，语言指令用 T5-base 编码），配一个<b>扩散动作头</b>（diffusion action head——不预测离散 token，而是像去噪一样「画」出连续动作，<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>细讲），在 OXE 的 800k 轨迹上训练（TPU v4-128 集群 14 小时），单张 24GB 的 A5000 消费级显卡就能微调。但 Octo 的问题是<b>太小</b>：它没有互联网规模的 VLM 主干，视觉和语言理解都从头学，缺少 RT-2 那种「见过世面」的语义泛化。在 OpenVLA 论文的同一套评测里，Octo 在 BridgeData V2 上零样本（zero-shot，不微调直接用）成功率只有 <b>20.0%</b>，很多任务里机械臂甚至「漫无目的地挥舞」。</p>
+
+<table>
+  <tr><th style="width:16%"></th><th>RT-2-X（2023.12）</th><th>Octo（2024.05）</th><th>OpenVLA（2024.06）</th></tr>
+  <tr><td><b>参数规模</b></td><td>55B</td><td>93M（主干）</td><td>7B（模型卡按 BF16 权重计约 8B）</td></tr>
+  <tr><td><b>主干来源</b></td><td>PaLI-X / PaLM-E（闭源 VLM）</td><td>从头训练的 Transformer</td><td>Prismatic VLM = Llama 2 7B + 双视觉编码器（开放权重）</td></tr>
+  <tr><td><b>权重 / 代码 / 数据</b></td><td>全部闭源，仅 API</td><td>全部开源</td><td>全部开源（MIT 协议），训练数据配方公开</td></tr>
+  <tr><td><b>可微调性</b></td><td>不支持</td><td>支持，单张 24GB 消费卡</td><td>支持全参（8×A100）与 LoRA（单卡最低约 27GB）</td></tr>
+  <tr><td><b>机器人数据</b></td><td>OXE 约 350k 轨迹</td><td>OXE 800k 轨迹</td><td>OXE 970k 轨迹</td></tr>
+</table>
+<div class="cap"><b>表 3-1</b>｜2024 年年中三个代表性通用策略的可及性对比。参数与数据来源：OpenVLA 论文 §5.1 与 HF 模型卡；Octo 数据来自 Octo 论文。</div>
+
+<p>于是社区处在一个尴尬的空档里：<b>强的不开源，开源的不够强</b>。OpenVLA 的定位正是填这个空档——「够强（继承互联网规模 VLM 先验）+ 可微调（单卡 LoRA）+ 可部署（量化后 7GB 显存）」三者兼得。它还第一次系统研究了「VLA 到底该怎么微调」这个此前没人认真回答的问题，这也是本讲把一半篇幅留给微调实操的原因。</p>
+
+<div class="infer">「开源是 VLA 领域 2024–2025 年爆发的主催化剂」是我们基于生态时间线的判断：OpenVLA 发布后一年内，OFT、TinyVLA、RoboVLMs、FAST 等衍生工作几乎全部以它为基座或基线（见第 7 节生态表）。论文本身没有做这个因果声明。</div>
+
+<h2>2. 架构精读：从像素到动作 token 的全链路</h2>
+
+<p>OpenVLA 的骨架是一个标准的现代 VLM（视觉语言模型）：视觉编码器 → 投影层 → 语言模型。它的聪明之处在于<b>什么都不新造</b>——直接拿现成的 Prismatic-7B VLM（斯坦福/TRI 的 VLM 设计空间研究，arXiv:2402.07865）当底座，把「输出文字」改成「输出动作 token」。先看全链路：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 620" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; } .bt { font-size: 13px; font-weight: bold; fill: #1e293b; } .bs { font-size: 12px; fill: #5a6272; } .tt { font-size: 16px; font-weight: bold; fill: #1e293b; }</style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="450" y="26" text-anchor="middle" class="tt">OpenVLA 全链路：一张图 + 一句话 → 7 个动作 token → 连续动作</text>
+
+  <!-- vision path -->
+  <rect x="24" y="72" width="128" height="88" rx="10" fill="#fff" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="88" y="106" text-anchor="middle" class="bt">相机图像</text>
+  <text x="88" y="126" text-anchor="middle" class="bs">224 × 224 px</text>
+  <text x="88" y="144" text-anchor="middle" class="bs">单视角（第三人称）</text>
+
+  <line x1="152" y1="96" x2="196" y2="76" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="152" y1="136" x2="196" y2="158" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <rect x="200" y="50" width="196" height="58" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="298" y="73" text-anchor="middle" class="bt">DINOv2 ViT-L/14</text>
+  <text x="298" y="93" text-anchor="middle" class="bs">16×16 = 256 patch × 1024 维</text>
+
+  <rect x="200" y="128" width="196" height="58" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="298" y="151" text-anchor="middle" class="bt">SigLIP ViT-SO400M/14</text>
+  <text x="298" y="171" text-anchor="middle" class="bs">16×16 = 256 patch × 1152 维</text>
+
+  <text x="298" y="206" text-anchor="middle" class="bs">两个编码器特征都取倒数第二层；同一张图各切各的 patch</text>
+
+  <line x1="396" y1="79" x2="440" y2="102" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="396" y1="157" x2="440" y2="132" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <rect x="444" y="86" width="176" height="62" rx="10" fill="#fff" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="532" y="110" text-anchor="middle" class="bt">逐 token 通道拼接</text>
+  <text x="532" y="130" text-anchor="middle" class="bs">256 token × 2176 维（序列不变长）</text>
+
+  <line x1="620" y1="117" x2="664" y2="117" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <rect x="668" y="86" width="200" height="62" rx="10" fill="#fff" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="768" y="110" text-anchor="middle" class="bt">MLP 投影层（3 层 + GELU）</text>
+  <text x="768" y="130" text-anchor="middle" class="bs">2176 → 8704 → 4096 → 4096</text>
+
+  <text x="768" y="170" text-anchor="middle" class="bs">输出：256 个「视觉 token」，维度对齐 Llama 2 的词向量</text>
+
+  <!-- text path -->
+  <rect x="24" y="252" width="128" height="76" rx="10" fill="#fff" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="88" y="282" text-anchor="middle" class="bt">语言指令</text>
+  <text x="88" y="302" text-anchor="middle" class="bs">"wipe the table"</text>
+
+  <line x1="152" y1="290" x2="196" y2="290" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <rect x="200" y="248" width="330" height="84" rx="10" fill="#fff" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="365" y="274" text-anchor="middle" class="bt">固定提示模板 + Llama tokenizer</text>
+  <text x="365" y="296" text-anchor="middle" class="bs">"In: What action should the robot take to</text>
+  <text x="365" y="314" text-anchor="middle" class="bs">{instruction}?  Out:"  → 约 20 个文本 token</text>
+
+  <!-- LLM -->
+  <line x1="768" y1="178" x2="768" y2="356" stroke="#2456c4" stroke-width="1.6"/>
+  <line x1="768" y1="356" x2="700" y2="356" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="530" y1="290" x2="608" y2="290" stroke="#2456c4" stroke-width="1.6"/>
+  <line x1="608" y1="290" x2="608" y2="330" stroke="#2456c4" stroke-width="1.6"/>
+  <line x1="608" y1="330" x2="608" y2="344" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <rect x="380" y="348" width="316" height="92" rx="12" fill="#2456c4" stroke="#1e3f8f" stroke-width="1.5"/>
+  <text x="538" y="382" text-anchor="middle" class="bt" fill="#ffffff">Llama 2 7B（32 层 Transformer）</text>
+  <text x="538" y="404" text-anchor="middle" class="bs" fill="#dbe6fb">视觉 token 插在开头 BOS 之后；</text>
+  <text x="538" y="422" text-anchor="middle" class="bs" fill="#dbe6fb">训练时损失只算在动作 token 上（其余位置 label = -100）</text>
+
+  <!-- action path -->
+  <line x1="538" y1="440" x2="538" y2="474" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <rect x="404" y="478" width="268" height="60" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="538" y="502" text-anchor="middle" class="bt">自回归生成 7 个动作 token</text>
+  <text x="538" y="522" text-anchor="middle" class="bs">每维一个 token，贪心解码（do_sample=False）</text>
+
+  <line x1="404" y1="508" x2="330" y2="508" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <rect x="120" y="478" width="206" height="60" rx="10" fill="#fff" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="223" y="502" text-anchor="middle" class="bt">动作 De-tokenizer</text>
+  <text x="223" y="522" text-anchor="middle" class="bs">token id → 256 bin 中心值 ∈ [−1, 1]</text>
+
+  <line x1="223" y1="538" x2="223" y2="566" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <rect x="60" y="570" width="780" height="40" rx="10" fill="#f4f7fd" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="450" y="595" text-anchor="middle" class="bt">按数据集统计量反归一化 → 7 维 delta 末端执行器动作：Δx  Δy  Δz  Δroll  Δpitch  Δyaw  gripper</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-1</b>｜OpenVLA 全链路（对应论文 Fig. 2 与 §3.1–3.2，各模块维度经 openvla/openvla 仓库源码与 HF 模型卡核实，commit <code>c8f03f4</code>）。整条链路里没有任何机器人专用结构——就是一个 VLM，把「下一个词」换成了「下一个动作 bin」。</p>
+
+<h3>2.1 视觉：双编码器融合，语义 + 空间细节都要</h3>
+
+<p>OpenVLA 的视觉部分同时用两个预训练 ViT（Vision Transformer，把图像切成小方块 patch、每块当一个 token 处理的架构）：</p>
+
+<ul>
+  <li><b>DINOv2 ViT-L/14</b>：Meta 的自监督视觉模型（不用文字标注，靠图像自身结构学习），特征是出了名的<b>空间/几何细节</b>好——物体边界、相对位置这类机器人最需要的低层信息；</li>
+  <li><b>SigLIP ViT-SO400M/14</b>：Google 的图文对比学习模型（和 CLIP 同族，「SO400M」是它的形状优化版，约 4 亿参数），特征是<b>语义与语言对齐</b>好——知道「这是茄子」并且和文字「eggplant」挂钩。</li>
+</ul>
+
+<p>注意两个细节（都来自源码，二手资料常写错）：<b>其一</b>，SigLIP 用的是 patch 14 的 SO400M 版本，不是常见的 ViT-L/16；<b>其二</b>，两个编码器对同一张 224×224 的图各自切出 16×16=256 个 patch 特征，然后<b>在通道维度逐 token 拼接</b>（1024 维 + 1152 维 = 2176 维），序列长度仍是 256，不会翻倍。拼接后的 256 个视觉 token 经过一个 3 层 MLP 投影到 Llama 2 的 4096 维词向量空间。</p>
+
+<div class="box">
+<span class="bt">易错点</span>不少博客把 OpenVLA 的视觉前端描述成「2×2 相邻 token 空间合并后得到 256 个视觉 token」。<b>这不对</b>：256 是 224÷14=16、16×16=256 的直接结果，OpenVLA 的检查点里根本没有空间合并（spatial merge）模块——我们在 openvla 仓库与 HF 版 <code>modeling_prismatic.py</code> 里全文搜索均无此代码（融合就是 <code>torch.cat([dino_patches, siglip_patches], dim=2)</code>，见 <code>prismatic/models/backbones/vision/dinosiglip_vit.py:142-147</code>）。「2×2 合并省 4 倍序列长度」是 Prismatic VLM 系列给<b>更高分辨率</b>模型准备的可选组件，与 OpenVLA-7B 无关。当然，「控制视觉 token 数量以省算力」这个思想本身是真实的：论文 §3.4 比较过 224px 与 384px 输入，性能无差别而后者训练时间 ×3，所以最终选了 224px。
+</div>
+
+<p><b>为什么要两个编码器？</b>Prismatic VLM 论文（arXiv:2402.07865）在 VLM 基准上系统比较过：DINOv2+SigLIP 融合在定位类、空间推理类任务上比单编码器高 5–10%。OpenVLA 论文自己也做了消融（附录 D.2，表 9）：在 BridgeData V2 的 8 个任务上，把 DINOv2 拿掉只留 SigLIP，平均成功率从 45.6% 掉到 40.6%——有用，但不算决定性；同一张表里，把 OXE 多机器人预训练拿掉（只用 Bridge 数据训），成功率从 76.3% 暴跌到 45.6%。<b>结论：数据多样性 &gt; 视觉编码器花活</b>。</p>
+
+<h3>2.2 主干：Llama 2 7B 原封不动当「动作解码器」</h3>
+
+<p>语言主干是 <b>Llama 2 7B 的 base 版</b>（不是指令微调的 chat 版——Prismatic 的实验发现 instruct 模型更啰嗦、更容易幻觉，base 模型反而干净）。整个 VLM 底座来自 Prismatic-7B：先在约 100 万条图文/纯文本数据（LLaVA 1.5 数据配方）上把视觉-语言对齐训好，OpenVLA 再在这个 VLM 上用机器人数据微调。</p>
+
+<p>训练目标就一句话：<b>下一个 token 预测 + 交叉熵，但只对 7 个动作 token 计损失</b>。提示文本和 256 个视觉 token 的位置 label 全部设为 -100（PyTorch 交叉熵的「忽略」标记），模型不需要学会复述指令，只需要在看完图和指令后接出正确的动作。HF 版实现里可以清楚看到视觉 token 的 label 被填充为 <code>IGNORE_INDEX</code>（<code>modeling_prismatic.py:393-401</code>，openvla-7b 模型仓库）。</p>
+
+<h3>2.3 动作表示：7 维 delta 动作 → 256 个 bin → 词表末尾 256 个冷门 token</h3>
+
+<p><a href="vla-t2-rt1-rt2.html">第 2 讲</a>讲过 RT-2 的核心发明：把连续动作离散成 bin，每个 bin 占用词表里一个几乎没人用的 token，让 LLM「把动作当词说出来」。OpenVLA 沿用同一思路，但有两个工程改进：</p>
+
+<ul>
+  <li><b>动作定义</b>：7 维 <b>delta 末端执行器（EE）动作</b>——末端执行器（end-effector）就是机械臂手腕末端的工具（通常是夹爪）；delta 指每一步输出的是「相对当前位姿的增量」：\((\Delta x, \Delta y, \Delta z, \Delta roll, \Delta pitch, \Delta yaw, \text{gripper})\)，前 3 维是位置增量，中间 3 维是姿态（旋转）增量，最后 1 维是夹爪开合。这是<a href="vla-t1-robot-learning.html">第 1 讲</a>说过的最常用动作空间。</li>
+  <li><b>归一化用分位数而非 min-max</b>：每一维动作先用训练集里该维的 <b>1% / 99% 分位数（q01 / q99）</b>线性映射到 \([-1, 1]\)（RT-2 用的是最小/最大值）。好处是几个离谱的离群动作不会把整个区间撑大、让 256 个 bin 的分辨率被浪费。</li>
+</ul>
+
+<div class="formula">
+\[ \hat{a}_j = \mathrm{clip}\!\left( \frac{2\,(a_j - q_{01,j})}{q_{99,j} - q_{01,j}} - 1,\; -1,\; 1 \right), \qquad a_j = \tfrac{1}{2}\,(\hat{a}_j + 1)\,(q_{99,j} - q_{01,j}) + q_{01,j} \]
+</div>
+<p class="cap"><b>公式 3-1</b>｜左：训练时把真实动作 \(a_j\) 归一化到 \([-1,1]\)（源码 <code>prismatic/vla/datasets/rlds/utils/data_utils.py:53,76-90</code> 的 <code>BOUNDS_Q99</code> 方案）；右：推理时反归一化（<code>modeling_prismatic.py:527-535</code>）。每个数据集有自己的 q01/q99 统计量，存在模型配置里，用 <code>unnorm_key</code> 选取——这是微调时最容易踩的坑之一（见 §5.3）。</p>
+
+<p>归一化后的每一维被均匀切成 <b>256 个 bin</b>，bin 编号映射到 Llama 词表<b>末尾的 256 个 token</b>（BPE 类分词器的词表按使用频率排序，末尾是最冷门的 token，直接覆盖它们的含义即可，不用扩词表——Llama tokenizer 只给微调预留了 100 个新 token 位，不够 256 个用，所以选择「改写」而不是「新增」）。一个时间步的动作 = 7 个 token，自回归逐个吐出。下面是训练侧动作 tokenizer 的真实源码（把连续动作变成 token）：</p>
+
+<pre><code class="language-python"># openvla/openvla @ c8f03f4 — prismatic/vla/action_tokenizer.py:38-47
+def __call__(self, action: np.ndarray) -&gt; Union[str, List[str]]:
+    """Clip &amp; bin actions to *the last `n_bins` tokens* of the vocabulary."""
+    action = np.clip(action, a_min=float(self.min_action), a_max=float(self.max_action))
+    discretized_action = np.digitize(action, self.bins)   # 连续值 → bin 编号
+
+    # bin 编号 i → token id = vocab_size − i（词表末尾 256 个位置）
+    if len(discretized_action.shape) == 1:
+        return self.tokenizer.decode(list(self.tokenizer.vocab_size - discretized_action))
+    else:
+        return self.tokenizer.batch_decode((self.tokenizer.vocab_size - discretized_action).tolist())</code></pre>
+
+<p>推理侧则反过来：生成 7 个 token → 换算回 bin 编号 → 取 bin 中心值作为归一化动作 → 用该数据集的 q01/q99 反归一化。HF 模型卡上的 <code>predict_action()</code> 把这一切包成了一个函数（源码 <code>modeling_prismatic.py:506-536</code>，节选）：</p>
+
+<pre><code class="language-python"># openvla/openvla-7b (HF) — modeling_prismatic.py:518-536（节选）
+generated_ids = self.generate(input_ids, max_new_tokens=self.get_action_dim(unnorm_key), **kwargs)
+
+# token id → bin 编号 → bin 中心值（∈ [-1,1] 的归一化动作）
+predicted_action_token_ids = generated_ids[0, -self.get_action_dim(unnorm_key):].cpu().numpy()
+discretized_actions = self.vocab_size - predicted_action_token_ids
+discretized_actions = np.clip(discretized_actions - 1, a_min=0, a_max=self.bin_centers.shape[0] - 1)
+normalized_actions = self.bin_centers[discretized_actions]
+
+# 用数据集统计量反归一化（mask 标记哪些维度参与，比如夹爪常是 0/1 直通）
+action_norm_stats = self.get_action_stats(unnorm_key)
+action_high, action_low = np.array(action_norm_stats["q99"]), np.array(action_norm_stats["q01"])
+actions = np.where(mask, 0.5 * (normalized_actions + 1) * (action_high - action_low) + action_low,
+                   normalized_actions)
+return actions</code></pre>
+
+<div class="box">
+<span class="bt">与 RT-2 的两点不同</span>① RT-2 训练时<b>混入图文数据 co-fine-tuning</b> 以保住语言能力，OpenVLA 只用机器人数据纯微调——代价是「语义泛化」（认互联网上新概念）这一类任务上 OpenVLA 略输 RT-2-X（Bridge 评测里唯一输的类别），其余类别全部持平或胜出；② 归一化统计从 min-max 换成 q01/q99 分位数。动作 tokenization 机制本身的完整来历见<a href="vla-t2-rt1-rt2.html">第 2 讲</a>。
+</div>
+
+<h3>2.4 训练配方：五个被消融验证过的决定</h3>
+
+<p>OpenVLA 论文 §3.4–3.5 罕见地把「踩坑记录」全写了出来（他们先在 BridgeData V2 上做小规模实验再定最终配方）：</p>
+
+<table>
+  <tr><th style="width:22%">决定</th><th>选择</th><th>证据</th></tr>
+  <tr><td><b>VLM 底座</b></td><td>Prismatic（DINOv2+SigLIP 融合）</td><td>比 LLaVA 高约 10pp、比 IDEFICS-1 高更多（BridgeData 多物体语言定位任务）；论文归因于融合视觉特征的空间推理优势</td></tr>
+  <tr><td><b>图像分辨率</b></td><td>224×224</td><td>与 384×384 性能无差，但后者训练时间 ×3</td></tr>
+  <tr><td><b>视觉编码器冻不冻</b></td><td><b>不冻，全程微调</b></td><td>与 VLM 界惯例相反！消融（表 10）：微调视觉编码器平均 80.0% vs 冻结 46.7%。机器人需要精细空间特征，互联网预训练的视觉特征不够用</td></tr>
+  <tr><td><b>训练轮数</b></td><td>27 个 epoch</td><td>LLM 预训练通常只过 1–2 遍数据；VLA 要反复过——真机成功率持续上升直到训练集动作 token 准确率超过 95%</td></tr>
+  <tr><td><b>学习率</b></td><td>2e-5 恒定，无 warmup</td><td>扫了多个数量级；与 Prismatic VLM 预训练相同</td></tr>
+</table>
+<div class="cap"><b>表 3-2</b>｜OpenVLA 的关键设计决定（论文 §3.4、附录 D.3）。「epoch」= 把整个训练集完整过一遍。</div>
+
+<p>最终训练规模：<b>64 张 A100 训 14 天</b>（合计 21,500 A100 小时），batch size 2048。推理侧：bfloat16 加载约 <b>15GB 显存</b>，单张 RTX 4090 上约 <b>6Hz</b>（未用编译/投机解码等加速）；A100 上 OFT 论文实测每步动作延迟 0.24 秒，约 <b>4.2Hz</b>。对 5Hz 左右的机械臂控制回路刚好够用，但离 ALOHA 那类 25–50Hz 双臂平台还差一个数量级——这个矛盾是 §6 OFT 故事的引子。</p>
+
+<div class="box">
+<span class="bt">澄清</span>OpenVLA <b>不输入本体感知状态</b>（proprioceptive state，即机器人自己的关节角/夹爪状态等低维读数），输入只有一张图 + 一句指令。但注意：论文<b>并没有</b>做过「加本体感知有没有用」的消融——它只是在 Limitations（§6）里把「支持多图、本体感知与观测历史」列为未来工作，OFT 后来才把机器人状态作为可选输入加了回来。网上流传的「消融显示本体感知帮助有限」在 OpenVLA 论文里找不到出处。
+</div>
+
+<h2>3. 训练数据配方：OXE 的 970k 条轨迹怎么挑</h2>
+
+<p><a href="vla-t1-robot-learning.html">第 1 讲</a>介绍过 OXE（Open X-Embodiment）：60+ 机构把各自机器人数据汇成的「机器人数据联合国」，原始规模 70+ 个数据集、200 万+ 轨迹。但不能全用——OpenVLA 的筛选分三步：</p>
+
+<ol>
+  <li><b>硬性过滤（统一输入输出空间）</b>：只留操作类（manipulation）数据集；必须至少有一个<b>第三人称相机</b>（固定在桌面上拍全局视角的相机，区别于装在手腕上的腕部相机）；必须是<b>单臂末端执行器控制</b>。动作空间不兼容的（比如关节角控制、双臂）一律去掉——因为整个模型只认「7 维 delta EE 动作」这一种输出格式。</li>
+  <li><b>按 Octo 的配方加权采样</b>：通过过滤的数据集不是等比例混合，而是沿用 Octo 论文调好的混合权重——<b>大而单调的数据集降权</b>（防止 Kuka 抓取这类海量单一场景数据主导训练），<b>任务/场景多样性高的数据集升权</b>。采样时按权重从各数据集抽取 transition（单步「图像-指令-动作」样本）。</li>
+  <li><b>针对性清洗与调整</b>：BridgeData V2 里每条演示的第一步都记录了一个全零（no-op）动作，不清洗的话模型会学会「动不动就僵住」——OpenVLA 直接删掉每条演示的第一个 transition（附录 C 说这是它在 Bridge 评测上大幅超越 RT-2-X 的原因之一，RT-2-X 没做这个清洗）。新增的 DROID 数据集（76k 条高质量 Franka 数据）以 10% 权重加入，但训练全程其动作 token 准确率都上不去，<b>最后 1/3 训练阶段干脆移除</b>，权重重新分配给其他数据集。</li>
+</ol>
+
+<div class="fig">
+<svg viewBox="0 0 900 430" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; } .lb { font-size: 12.5px; fill: #1e293b; } .vl { font-size: 12px; font-weight: bold; fill: #1e293b; } .tt { font-size: 16px; font-weight: bold; fill: #1e293b; } .nt { font-size: 12px; fill: #5a6272; }</style>
+  <text x="450" y="28" text-anchor="middle" class="tt">OpenVLA 训练数据混合（OXE 子集，权重前 10）</text>
+  <text x="450" y="50" text-anchor="middle" class="nt">条宽 = 采样权重（%）；数据来自论文附录 A 表 3，共 27 个数据集</text>
+
+  <!-- bars: x0=250, scale 42px per % -->
+  <text x="240" y="86" text-anchor="end" class="lb">Bridge / BridgeData V2</text>
+  <rect x="250" y="72" width="559" height="20" rx="3" fill="#2456c4"/><text x="816" y="87" class="vl">13.3%</text>
+
+  <text x="240" y="118" text-anchor="end" class="lb">Fractal（RT-1 Google Robot）</text>
+  <rect x="250" y="104" width="533" height="20" rx="3" fill="#2456c4"/><text x="790" y="119" class="vl">12.7%</text>
+
+  <text x="240" y="150" text-anchor="end" class="lb">Kuka（QT-Opt 抓取）</text>
+  <rect x="250" y="136" width="533" height="20" rx="3" fill="#2456c4"/><text x="790" y="151" class="vl">12.7%</text>
+
+  <text x="240" y="182" text-anchor="end" class="lb">DROID（Franka）*</text>
+  <rect x="250" y="168" width="420" height="20" rx="3" fill="#94a3b8"/><text x="677" y="183" class="vl">10.0%*</text>
+
+  <text x="240" y="214" text-anchor="end" class="lb">BC-Z（语言条件抓取）</text>
+  <rect x="250" y="200" width="315" height="20" rx="3" fill="#2456c4"/><text x="572" y="215" class="vl">7.5%</text>
+
+  <text x="240" y="246" text-anchor="end" class="lb">FMB（功能装配）</text>
+  <rect x="250" y="232" width="298" height="20" rx="3" fill="#2456c4"/><text x="555" y="247" class="vl">7.1%</text>
+
+  <text x="240" y="278" text-anchor="end" class="lb">Language Table（推物块）</text>
+  <rect x="250" y="264" width="185" height="20" rx="3" fill="#2456c4"/><text x="442" y="279" class="vl">4.4%</text>
+
+  <text x="240" y="310" text-anchor="end" class="lb">Stanford Hydra（混合动作）</text>
+  <rect x="250" y="296" width="185" height="20" rx="3" fill="#2456c4"/><text x="442" y="311" class="vl">4.4%</text>
+
+  <text x="240" y="342" text-anchor="end" class="lb">Taco Play（游戏式操作）</text>
+  <rect x="250" y="328" width="126" height="20" rx="3" fill="#2456c4"/><text x="383" y="343" class="vl">3.0%</text>
+
+  <text x="240" y="374" text-anchor="end" class="lb">Furniture Bench（家具装配）</text>
+  <rect x="250" y="360" width="101" height="20" rx="3" fill="#2456c4"/><text x="358" y="375" class="vl">2.4%</text>
+
+  <text x="250" y="408" class="nt">其余 17 个数据集各 ≤2.3%（Jaco Play、Roboturk、Toto、Austin 系列、CMU Stretch 等），合计约 22.5%。</text>
+  <text x="250" y="426" class="nt">* DROID 以 10% 权重加入，但因动作 token 准确率长期偏低，训练最后 1/3 阶段被移除、权重重分（论文 §3.3）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-2</b>｜OXE 数据混合（论文附录 A 表 3）。前四大来源各占 10%+ 但没有一家独大——「降权大集、升权多样集」的采样策略让 Bridge、RT-1、Kuka 三种完全不同机器人平台的数据都能被充分学到。</p>
+
+<p><b>关于「只用成功轨迹」</b>：需要澄清口径——OpenVLA <b>预训练</b>阶段没有报告 success-only 过滤的消融（OXE 各数据集本身多为演示数据）；「过滤失败演示」出现在它的 <b>LIBERO 仿真微调</b>实验里：每个任务套件的 500 条演示中分别删掉 68 / 46 / 72 / 121 条未完成任务的轨迹后再微调。OFT 论文的表 I 提供了一个间接量化：同样的 OFT 配方，用「过滤失败演示 + 剔除近零幅值动作」的清洗版数据得 97.1%，用原始未过滤数据得 94.5%——约 +2.6pp，但该清洗同时包含两种操作，不能全部归功于 success-only。</p>
+
+<div class="infer">数据清洗（去 no-op、去失败轨迹）对 VLA 的收益被论文证据低估了：Bridge 全零动作清洗让 OpenVLA 免于「僵住」这种灾难性失败模式，量级远大于 +2.6pp 这种平均分差异。对微调实践者来说，「先清洗数据再谈模型」应该是默认动作。</div>
+
+<h2>4. 评测与结果：7B 打赢 55B</h2>
+
+<p>评测口径先说清楚（不然数字容易读歪）：所有对比都是 <b>A/B 评测</b>——不同模型在完全相同的任务、相同的初始物体摆放下轮流上场。零样本评测跨 <b>2 个机器人平台共 29 个任务</b>：WidowX 机械臂（BridgeData V2 水槽场景，17 任务 × 10 次 = 170 rollouts）和 Google Robot（RT-1/RT-2 用的移动操作机器人，12 任务 × 5 次 = 60 rollouts）。每次 rollout 记成功 1 / 失败 0（部分任务允许 0.5 的部分成功分）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; } .lb { font-size: 12.5px; fill: #1e293b; } .vl { font-size: 12.5px; font-weight: bold; fill: #1e293b; } .tt { font-size: 16px; font-weight: bold; fill: #1e293b; } .nt { font-size: 12px; fill: #5a6272; } .pn { font-size: 13.5px; font-weight: bold; fill: #2456c4; }</style>
+  <text x="450" y="28" text-anchor="middle" class="tt">零样本跨平台评测：平均成功率（%）</text>
+
+  <!-- legend -->
+  <rect x="240" y="44" width="14" height="14" fill="#cbd5e1"/><text x="260" y="56" class="nt">RT-1-X (35M)</text>
+  <rect x="360" y="44" width="14" height="14" fill="#f59e0b"/><text x="380" y="56" class="nt">Octo (93M)</text>
+  <rect x="470" y="44" width="14" height="14" fill="#64748b"/><text x="490" y="56" class="nt">RT-2-X (55B, 闭源)</text>
+  <rect x="630" y="44" width="14" height="14" fill="#2456c4"/><text x="650" y="56" class="nt">OpenVLA (7B)</text>
+
+  <!-- baseline y=330, scale 2.4px per % -->
+  <line x1="50" y1="330" x2="850" y2="330" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="60" y="86" class="pn">A. WidowX / BridgeData V2（17 任务，170 rollouts）</text>
+
+  <!-- panel A bars x=90,170,250,330 width 56 -->
+  <rect x="90"  y="285.6" width="56" height="44.4" fill="#cbd5e1"/><text x="118" y="278" text-anchor="middle" class="vl">18.5</text><text x="118" y="352" text-anchor="middle" class="lb">RT-1-X</text>
+  <rect x="170" y="282" width="56" height="48" fill="#f59e0b"/><text x="198" y="274" text-anchor="middle" class="vl">20.0</text><text x="198" y="352" text-anchor="middle" class="lb">Octo</text>
+  <rect x="250" y="208.6" width="56" height="121.4" fill="#64748b"/><text x="278" y="201" text-anchor="middle" class="vl">50.6</text><text x="278" y="352" text-anchor="middle" class="lb">RT-2-X</text>
+  <rect x="330" y="160.6" width="56" height="169.4" fill="#2456c4"/><text x="358" y="153" text-anchor="middle" class="vl">70.6</text><text x="358" y="352" text-anchor="middle" class="lb">OpenVLA</text>
+
+  <text x="60" y="200" class="pn">B. Google Robot（12 任务，60 rollouts）</text>
+
+  <!-- panel B bars x=520,600,680,760 -->
+  <rect x="520" y="250.1" width="56" height="79.9" fill="#cbd5e1"/><text x="548" y="242" text-anchor="middle" class="vl">33.3</text><text x="548" y="352" text-anchor="middle" class="lb">RT-1-X</text>
+  <rect x="600" y="265.9" width="56" height="64.1" fill="#f59e0b"/><text x="628" y="258" text-anchor="middle" class="vl">26.7</text><text x="628" y="352" text-anchor="middle" class="lb">Octo</text>
+  <rect x="680" y="142.1" width="56" height="187.9" fill="#64748b"/><text x="708" y="134" text-anchor="middle" class="vl">78.3</text><text x="708" y="352" text-anchor="middle" class="lb">RT-2-X</text>
+  <rect x="760" y="126" width="56" height="204" fill="#2456c4"/><text x="788" y="118" text-anchor="middle" class="vl">85.0</text><text x="788" y="352" text-anchor="middle" class="lb">OpenVLA</text>
+
+  <text x="50" y="386" class="nt">29 任务总口径（按 rollout 数加权，230 次/模型）：OpenVLA 74.4% vs RT-2-X 57.8%（+16.5pp，即论文摘要数字）、</text>
+  <text x="50" y="406" class="nt">vs Octo 21.7%（+52.6pp）。数据来源：论文表 4、表 6 及摘要；加权计算为本讲按论文口径复算。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-3</b>｜零样本评测结果（论文 Fig. 3、Fig. 4 与表 4、表 6）。OpenVLA 以 7 倍更少的参数在两个平台上全面领先；唯一输给 RT-2-X 的子类是 Bridge 上的「语义泛化」（认互联网新概念），论文归因于 RT-2-X 的 co-fine-tuning 保住了更多互联网知识、且其 VLM 预训练规模更大。</p>
+
+<p>几个值得展开的读数：</p>
+
+<ul>
+  <li><b>泛化是分维度的</b>：评测覆盖视觉泛化（新背景/干扰物）、运动泛化（新位置/朝向）、物理泛化（新尺寸/形状）、语义泛化（新物体/新指令/互联网概念）与语言定位（多物体场景下操作指令指定的那个）。OpenVLA 除语义泛化外全部第一。</li>
+  <li><b>OXE 预训练是命根子</b>：消融（附录 D.1）显示只在 Bridge 单数据集上训的同架构模型，8 任务平均从 76.3% 掉到 45.6%。微调实验里，跳过 OXE 预训练直接拿 Prismatic VLM 微调（OpenVLA-scratch）也全面落后（Franka-Tabletop 平均 43.4% vs 67.2%）。</li>
+  <li><b>微调后打赢从头训练的 SOTA</b>：在 Franka 平台的 7 个新任务上（每任务 10–150 条演示），微调 OpenVLA 平均 67.2%（Franka-DROID 擦桌任务 58.3%），比从头训练的 Diffusion Policy 高 20.4pp（摘要口径），比微调 Octo 高约 24pp。它是唯一在所有任务上都 ≥50% 的方法。</li>
+</ul>
+
+<h3>推理效率与量化：int4 免费午餐，int8 是陷阱</h3>
+
+<p>7B 模型部署到机器人端，显存和频率是两道坎。OpenVLA 论文 §5.4 用 LLM 社区的标准玩法（bitsandbytes 量化，<a href="../quantization/quant-t0-foundation.html">量化系列第 0 讲</a>有零基础入门）测了三种精度：</p>
+
+<table>
+  <tr><th>推理精度</th><th>显存占用</th><th>Bridge 8 任务成功率</th><th>备注</th></tr>
+  <tr><td>bfloat16（默认）</td><td>16.8 GB</td><td>71.3 ± 4.8%</td><td>RTX 4090 约 6Hz</td></tr>
+  <tr><td>int8</td><td>10.2 GB</td><td><b>58.1 ± 5.1%</b></td><td>量化算子开销拖慢推理，A5000 上只有 1.2Hz</td></tr>
+  <tr><td>int4</td><td><b>7.0 GB</b></td><td>71.9 ± 4.7%</td><td>显存减半、性能不掉，A5000 上 3Hz</td></tr>
+</table>
+<div class="cap"><b>表 3-3</b>｜量化推理（论文表 2；注意这组实验用的是 SigLIP 单编码器的小变体，见论文脚注 4，绝对显存略高于正式版 15GB）。</div>
+
+<p>int8 掉分的真相很有教学意义：论文的补充实验（附录 D.4）把控制方式改成「阻塞式」（机器人执行完当前动作再问下一个，消除推理速度差异）后，int8 恢复到 74.4%、与 bfloat16 无差。<b>掉分不是量化损失了精度，而是推理太慢改变了系统动力学</b>——5Hz 采集的演示数据配 1.2Hz 的控制回路，机器人动作节奏全乱。这提醒我们：VLA 评测里「模型质量」和「推理速度」是耦合的，频率不匹配本身就是性能杀手。</p>
+
+<h2>5. 微调实操：怎么把 OpenVLA 变成「你的机器人」的策略</h2>
+
+<p>这是本讲的重头戏。OpenVLA 团队把微调拆成两类场景，心智模型完全不同：</p>
+
+<ul>
+  <li><b>场景 A：新任务 / 新场景，本体不变或相近</b>（比如同一类 Franka 机械臂学擦桌子）→ 只需少量演示 + <b>LoRA 微调</b>，单卡搞定；</li>
+  <li><b>场景 B：新本体</b>（换机器人、换动作空间、加相机）→ 要动<b>动作 tokenizer 的归一化统计</b>、重算 bin、改数据管线，工程量大得多。</li>
+</ul>
+
+<h3>5.1 场景 A：LoRA 微调，单卡 10–15 小时</h3>
+
+<p><b>LoRA</b>（Low-Rank Adaptation）对 LLM 读者是老朋友：冻结原权重 \(W_0\)，只训练一个低秩增量 \(\Delta W = BA\)（\(B \in \mathbb{R}^{d \times r}\)、\(A \in \mathbb{R}^{r \times k}\)，秩 \(r\) 远小于 \(d, k\)），推理时可合并回原矩阵、零额外延迟。OpenVLA 论文是<b>第一个</b>把 LoRA 和量化系统性用在 VLA 微调上的工作。它对比了五种微调策略（Franka-Tabletop 任务，batch 16）：</p>
+
+<table>
+  <tr><th>策略</th><th>成功率</th><th>可训参数</th><th>训练显存（batch 16）</th><th>说明</th></tr>
+  <tr><td>全参微调（Full FT）</td><td>69.7 ± 7.2%</td><td>7188.1M（100%）</td><td>163.3 GB*</td><td>论文实测需 8×A100（FSDP 分片），每任务 5–15 小时</td></tr>
+  <tr><td>只调最后一层</td><td>30.3 ± 6.1%</td><td>465.1M</td><td>51.4 GB</td><td>基本不可用</td></tr>
+  <tr><td>冻结视觉编码器</td><td>47.0 ± 6.9%</td><td>6760.4M</td><td>156.2 GB*</td><td>大幅掉分——视觉适配对新场景至关重要</td></tr>
+  <tr><td>Sandwich（首尾夹心）</td><td>62.1 ± 7.9%</td><td>914.2M</td><td>64.0 GB</td><td>只调视觉编码器 + 词嵌入 + 最后一层</td></tr>
+  <tr><td><b>LoRA，r=32，全部线性层</b></td><td><b>68.2 ± 7.5%</b></td><td><b>97.6M（1.4%）</b></td><td><b>59.7 GB</b></td><td>≈全参效果；r=64 无额外收益，官方默认 r=32</td></tr>
+</table>
+<div class="cap"><b>表 3-4</b>｜五种微调策略（论文表 1，* 号为 FSDP 分片到 2 张 GPU 的合计显存；该实验用 SigLIP 单编码器小变体，正式版数字见下文 README 口径）。</div>
+
+<div class="fig">
+<svg viewBox="0 0 900 330" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; } .lb { font-size: 12.5px; fill: #1e293b; } .vl { font-size: 12px; font-weight: bold; fill: #1e293b; } .tt { font-size: 16px; font-weight: bold; fill: #1e293b; } .nt { font-size: 12px; fill: #5a6272; } .pn { font-size: 13px; font-weight: bold; fill: #2456c4; }</style>
+  <text x="450" y="28" text-anchor="middle" class="tt">全参微调 vs LoRA（r=32）：三笔账</text>
+  <rect x="600" y="44" width="14" height="14" fill="#64748b"/><text x="620" y="56" class="nt">全参微调</text>
+  <rect x="710" y="44" width="14" height="14" fill="#2456c4"/><text x="730" y="56" class="nt">LoRA r=32</text>
+
+  <text x="60" y="94" class="pn">可训练参数（百万）</text>
+  <rect x="240" y="76" width="500" height="18" rx="3" fill="#64748b"/><text x="748" y="90" class="vl">7188M (100%)</text>
+  <rect x="240" y="98" width="7" height="18" rx="2" fill="#2456c4"/><text x="255" y="112" class="vl">97.6M (1.4%)</text>
+
+  <text x="60" y="164" class="pn">训练显存 @ batch 16（GB）</text>
+  <rect x="240" y="146" width="500" height="18" rx="3" fill="#64748b"/><text x="748" y="160" class="vl">163.3（2 卡 FSDP 分片）</text>
+  <rect x="240" y="168" width="183" height="18" rx="3" fill="#2456c4"/><text x="431" y="182" class="vl">59.7（单卡）</text>
+
+  <text x="60" y="234" class="pn">微调后成功率（%）</text>
+  <rect x="240" y="216" width="349" height="18" rx="3" fill="#64748b"/><text x="597" y="230" class="vl">69.7 ± 7.2</text>
+  <rect x="240" y="238" width="341" height="18" rx="3" fill="#2456c4"/><text x="589" y="252" class="vl">68.2 ± 7.5</text>
+
+  <text x="240" y="292" class="nt">LoRA 用 1.4% 的可训参数、约 1/3 的显存拿到几乎相同的成功率；</text>
+  <text x="240" y="310" class="nt">官方脚本口径：正式版 openvla-7b + LoRA，batch 16 约需 72GB，最小约 27GB（减小 batch + 梯度累积）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-4</b>｜全参 vs LoRA 三笔账（论文表 1 + openvla README「Fine-Tuning OpenVLA via LoRA」小节，commit <code>c8f03f4</code>）。</p>
+
+<p>官方微调脚本 <code>vla-scripts/finetune.py</code> 里的 LoRA 配置就 8 行，值得逐行看懂——<code>target_modules="all-linear"</code> 表示挂到<b>所有线性层</b>（视觉编码器、投影层、Llama 的注意力与 MLP 全都挂，而不像 LLM 常规操作只挂注意力投影）：</p>
+
+<pre><code class="language-python"># openvla/openvla @ c8f03f4 — vla-scripts/finetune.py:172-181
+# [LoRA] Wrap Model w/ PEFT `LoraConfig` =>&gt; by default we set `target_modules=all-linear`
+if cfg.use_lora:
+    lora_config = LoraConfig(
+        r=cfg.lora_rank,                        # 默认 32
+        lora_alpha=min(cfg.lora_rank, 16),      # 缩放系数
+        lora_dropout=cfg.lora_dropout,          # 默认 0.0
+        target_modules="all-linear",            # 挂到全部线性层（含视觉编码器）
+        init_lora_weights="gaussian",
+    )
+    vla = get_peft_model(vla, lora_config)</code></pre>
+
+<p>启动命令（README 原文，BridgeData V2 数据集为例）：</p>
+
+<pre><code class="language-bash"># openvla/openvla README（微调数据需先转成 RLDS 格式，124GB 的 Bridge V2 有现成下载）
+torchrun --standalone --nnodes 1 --nproc-per-node 1 vla-scripts/finetune.py \
+  --vla_path "openvla/openvla-7b" \
+  --data_root_dir &lt;数据集根目录&gt; \
+  --dataset_name bridge_orig \
+  --run_root_dir &lt;日志/权重目录&gt; \
+  --adapter_tmp_dir &lt;LoRA 权重临时目录&gt; \
+  --lora_rank 32 \
+  --batch_size 16 \                # 约需 72GB 显存；小卡减 batch、加 grad_accumulation_steps
+  --grad_accumulation_steps 1 \
+  --learning_rate 5e-4 \           # 注意：比预训练的 2e-5 大 25 倍，LoRA 常规操作
+  --image_aug &lt;True or False&gt; \
+  --wandb_project &lt;PROJECT&gt; --wandb_entity &lt;ENTITY&gt; --save_steps 5000</code></pre>
+
+<p><b>硬件账本</b>（README 官方口径）：单张 A100 80GB 跑 batch 16 约 72GB 显存、10–15 小时；<b>最低约 27GB</b>（减小 batch size + 梯度累积保持等效批量，一张 32GB 的 V100/5090 级别卡即可）；脚本还支持 <code>--use_quantization</code>（4-bit 量化底座 + LoRA，即 QLoRA 思路）进一步压显存。数据量方面，论文任务用 10–150 条演示，README 建议目标域准备<b>约 100 条</b>演示。全参微调则需要一整节点 8×A100（FSDP），仅当目标分布与预训练分布差异极大时才值得。</p>
+
+<h3>5.2 场景 B：换新本体，要动的是「动作的语言」</h3>
+
+<p>换机器人（不同动作维度、不同量纲、不同相机）时，模型结构不用改——改的是<b>动作与 token 之间的翻译规则</b>：</p>
+
+<ol>
+  <li><b>定义动作空间</b>：确定维度（7 维 delta EE 之外的本体需要自定义，比如双臂 14 维）与每一维的物理含义；</li>
+  <li><b>重算归一化统计量</b>：对你的新数据集逐维计算 q01/q99（和 min/max/mean/std），训练脚本会自动完成并随检查点保存：</li>
+</ol>
+
+<pre><code class="language-python"># openvla/openvla @ c8f03f4 — prismatic/vla/datasets/rlds/utils/data_utils.py:247-248（节选）
+metadata = {
+    "action": {
+        ...
+        "q01": np.quantile(actions, 0.01, axis=0).tolist(),   # 每个动作维度单独统计
+        "q99": np.quantile(actions, 0.99, axis=0).tolist(),
+    },
+    "proprio": { ... 同样统计 ... },   # 本体感知统计也会算好存下，供 OFT 等使用
+}</code></pre>
+
+<ol start="3">
+  <li><b>bin 划分本身不用重训</b>：256 个 bin 均匀铺在归一化后的 \([-1,1]\) 上，与具体机器人无关——<b>换本体改变的是 q01/q99，不是 bin</b>。推理时用新数据集名当 <code>unnorm_key</code> 取回新统计量即可；</li>
+  <li><b>数据转 RLDS 格式</b>：官方管线吃 RLDS（TensorFlow 的机器人数据格式，OXE 全家都用它）；自定义数据用 <code>rlds_dataset_builder</code> 转换，再在 <code>oxe/configs.py</code> 与 <code>oxe/transforms.py</code> 注册数据集配置与变换函数；</li>
+  <li><b>相机数目</b>：原版 OpenVLA 只吃<b>一张</b>第三人称图像（论文 §6 明确的限制）；想用腕部相机 + 第三人称双视角，请直接用 OpenVLA-OFT（§6），它的输入管线原生支持多图 + 机器人状态。</li>
+</ol>
+
+<h3>5.3 HuggingFace 生态：10 行代码跑起来</h3>
+
+<p>权重下载：<code>huggingface.co/openvla/openvla-7b</code>（MIT 协议，BF16 safetensors 约 15GB），加载走 <code>transformers</code> 的 <code>AutoModelForVision2Seq</code>（模型卡要求 <code>trust_remote_code=True</code>，因为架构是仓库自带的 <code>modeling_prismatic.py</code>）。README 的官方推理示例：</p>
+
+<pre><code class="language-python"># openvla/openvla README「Getting Started」（真实代码）
+from transformers import AutoModelForVision2Seq, AutoProcessor
+import torch
+
+processor = AutoProcessor.from_pretrained("openvla/openvla-7b", trust_remote_code=True)
+vla = AutoModelForVision2Seq.from_pretrained(
+    "openvla/openvla-7b",
+    attn_implementation="flash_attention_2",   # 可选，需装 flash_attn
+    torch_dtype=torch.bfloat16,
+    low_cpu_mem_usage=True,
+    trust_remote_code=True,
+).to("cuda:0")
+
+image = get_from_camera(...)                    # PIL Image，来自第三人称相机
+prompt = "In: What action should the robot take to {&lt;INSTRUCTION&gt;}?\nOut:"
+inputs = processor(prompt, image).to("cuda:0", dtype=torch.bfloat16)
+
+# 一步出 7 维动作（内部完成：生成 7 token → 反 tokenize → 按 unnorm_key 反归一化）
+action = vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False)
+robot.act(action, ...)                          # 交给机器人控制器执行</code></pre>
+
+<p>OFT 微调过的检查点在 <code>moojink/openvla-7b-oft-finetuned-libero-*</code>（LIBERO 四个套件各一个），代码在 <code>moojink/openvla-oft</code>。</p>
+
+<h3>5.4 常见坑清单（每一条都有官方出处）</h3>
+
+<ul>
+  <li><b>Prompt 必须一字不差</b>：训练时模型只见过 <code>"In: What action should the robot take to {...}?\nOut:"</code> 这一种模板（部署代码里还有个细节：冒号后要补一个空 token id 29871，<code>predict_action()</code> 会自动处理，自己写推理循环的人常漏掉）；</li>
+  <li><b>图像预处理必须与预训练一致</b>：224×224、resize-naive 策略、DINOv2 与 SigLIP 各有各的归一化均值/方差（processor 会把两个编码器所需的 6 通道拼在一起）——自己手写 transform 几乎必错；</li>
+  <li><b><code>unnorm_key</code> 用错 = 动作全错</b>：反归一化统计量按数据集存取，选错数据集名，动作幅度直接错一个量级；微调后要用<b>新数据集</b>的统计量（训练脚本会自动保存进检查点）；</li>
+  <li><b>控制频率要匹配</b>：README 故障排查一节明确建议数据采集与控制都在 <b>5–10Hz</b>；50Hz 的高频数据要先降采样到 5Hz 再微调，否则模型学不会（原版无动作分块，见 §6）；</li>
+  <li><b>演示里别停顿</b>：数据里若有大量「几乎不动」的时间步，模型推理时会卡死在 no-op 上（和 Bridge 全零动作是同一类病）；采集时保持连续缓慢运动；</li>
+  <li><b>先做两个 sanity check 再怪模型</b>：① 回放演示动作，确认机器人能靠回放完成任务（数据管线没问题）；② 把微调集图像喂给推理管线，确认能复现训练时的 token 准确率 / L1 误差（推理管线没问题）。训练时日志里的 <code>action_accuracy</code>（预测 token 与真值 bin 一致的比例）是最有用的健康指标；</li>
+  <li><b>解码用贪心</b>：官方示例 <code>do_sample=False</code>；采样解码会给动作注入随机性，对控制回路通常有害。</li>
+</ul>
+
+<div class="infer">从 GitHub Issues 与 README 专门增设故障排查章节（2024-10-15 更新）来看，「预处理/归一化统计/控制频率」三类问题是社区微调失败的主因——这也符合我们的经验判断：VLA 微调的坑大多在数据管线，而不在训练超参。</div>
+
+<h2>6. OpenVLA-OFT：同一个基座，换掉「动作怎么出来」</h2>
+
+<p>OpenVLA 最大的遗留问题是<b>慢</b>：自回归解码 7 个 token 要做 7 次串行前向，A100 上一步动作 0.24 秒（4.2Hz）。这带来两个连锁伤害：① 无法做<b>动作分块</b>（action chunking——一次预测未来 K 步动作、开环执行完再重新规划，这是 Diffusion Policy/ACT 证明过的提成功率利器），因为 K 步 × 7 维 = 7K 次串行前向，延迟不可接受；② 上不了 25–50Hz 的高频平台（ALOHA 双臂）。2025 年 2 月，OpenVLA 一作 Moo Jin Kim 等人发布 <b>OpenVLA-OFT</b>（Optimized Fine-Tuning，arXiv:2502.19645），用一组受控实验回答「微调 VLA 时，动作到底该怎么出来」，三个改动：</p>
+
+<ul>
+  <li><b>并行解码（parallel decoding）</b>：在输入序列末尾追加 K×D 个「空动作 embedding」，把因果注意力掩码换成<b>双向注意力</b>，一次前向同时输出整块动作——7 次串行变 1 次；</li>
+  <li><b>连续动作 + L1 回归</b>：抛弃 256-bin 离散化，在 LLM 顶层加一个小 MLP 动作头直接回归连续值，损失就是预测与真值的 L1 距离（对比扩散目标训练，见 <a href="vla-t4-diffusion-pi0.html">第 4 讲</a>）；</li>
+  <li><b>动作分块</b>：并行解码让分块变得可行，LIBERO 实验用 K=8，ALOHA 真机用 K=25；执行完整块再重新规划。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; } .lb { font-size: 12.5px; fill: #1e293b; } .vl { font-size: 12px; fill: #5a6272; } .tt { font-size: 16px; font-weight: bold; fill: #1e293b; } .nt { font-size: 12px; fill: #5a6272; } .pn { font-size: 13.5px; font-weight: bold; fill: #2456c4; } .tk { font-size: 12px; font-weight: bold; fill: #ffffff; }</style>
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="450" y="28" text-anchor="middle" class="tt">动作生成方式：自回归逐 token vs OFT 并行整块</text>
+
+  <!-- top: autoregressive -->
+  <text x="40" y="72" class="pn">原版 OpenVLA：自回归（每步动作 7 次串行前向）</text>
+  <rect x="40" y="86" width="150" height="40" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="115" y="111" text-anchor="middle" class="lb">图 + 指令</text>
+  <rect x="230" y="86" width="52" height="40" rx="8" fill="#2456c4"/><text x="256" y="111" text-anchor="middle" class="tk">t1</text>
+  <rect x="300" y="86" width="52" height="40" rx="8" fill="#2456c4"/><text x="326" y="111" text-anchor="middle" class="tk">t2</text>
+  <rect x="370" y="86" width="52" height="40" rx="8" fill="#2456c4"/><text x="396" y="111" text-anchor="middle" class="tk">t3</text>
+  <rect x="440" y="86" width="52" height="40" rx="8" fill="#2456c4"/><text x="466" y="111" text-anchor="middle" class="tk">t4</text>
+  <rect x="510" y="86" width="52" height="40" rx="8" fill="#2456c4"/><text x="536" y="111" text-anchor="middle" class="tk">t5</text>
+  <rect x="580" y="86" width="52" height="40" rx="8" fill="#2456c4"/><text x="606" y="111" text-anchor="middle" class="tk">t6</text>
+  <rect x="650" y="86" width="52" height="40" rx="8" fill="#2456c4"/><text x="676" y="111" text-anchor="middle" class="tk">t7</text>
+  <line x1="190" y1="106" x2="226" y2="106" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <line x1="282" y1="106" x2="296" y2="106" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <line x1="352" y1="106" x2="366" y2="106" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <line x1="422" y1="106" x2="436" y2="106" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <line x1="492" y1="106" x2="506" y2="106" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <line x1="562" y1="106" x2="576" y2="106" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <line x1="632" y1="106" x2="646" y2="106" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <rect x="730" y="86" width="140" height="40" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="800" y="105" text-anchor="middle" class="lb">1 步动作</text>
+  <text x="800" y="121" text-anchor="middle" class="vl">4.2 Hz（A100）</text>
+  <line x1="702" y1="106" x2="726" y2="106" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <text x="40" y="150" class="nt">每个 token 都要等前一个生成完（因果注意力），延迟 ×7；想分块 K 步则延迟 ×7K，不可行。</text>
+
+  <!-- bottom: parallel -->
+  <text x="40" y="204" class="pn">OpenVLA-OFT：并行解码 + 动作分块（一次前向出整块）</text>
+  <rect x="40" y="218" width="150" height="40" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="115" y="237" text-anchor="middle" class="lb">图(可多张) + 状态</text>
+  <text x="115" y="253" text-anchor="middle" class="vl">+ 指令</text>
+  <rect x="230" y="218" width="472" height="40" rx="8" fill="#f4f7fd" stroke="#2456c4" stroke-dasharray="5 3"/>
+  <text x="466" y="237" text-anchor="middle" class="lb">K×7 个空动作 embedding（双向注意力，可互相看见）</text>
+  <text x="466" y="253" text-anchor="middle" class="vl">K=8（LIBERO）/ K=25（ALOHA）</text>
+  <line x1="190" y1="238" x2="226" y2="238" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <rect x="730" y="218" width="140" height="40" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="800" y="237" text-anchor="middle" class="lb">K 步动作块</text>
+  <text x="800" y="253" text-anchor="middle" class="vl">109.7 Hz（K=8, A100）</text>
+  <line x1="702" y1="238" x2="726" y2="238" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <text x="40" y="282" class="nt">连续动作由 LLM 顶层新加的 MLP 头直接回归（L1 损失），不再经过词表 softmax。</text>
+
+  <!-- numbers -->
+  <rect x="40" y="304" width="830" height="56" rx="10" fill="#eef3fc" stroke="#e3e7ee"/>
+  <text x="60" y="328" class="lb">LIBERO 四套件平均成功率：原版微调 76.5% → +并行解码&amp;分块 90.2% → +连续动作 L1（= OFT）95.3% → 加多图/状态输入 97.1%</text>
+  <text x="60" y="348" class="lb">吞吐：4.2 → 109.7 Hz（26×，K=8）；ALOHA 真机 25 Hz 控制、K=25 时 43× 吞吐；同场对比 π0 微调 94.2%。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-5</b>｜自回归 vs 并行解码（OFT 论文 Fig. 2、表 I、表 II）。数字全部来自 OFT 论文在 A100 上的实测。</p>
+
+<p>三个改动的贡献可以分开看（论文表 I，LIBERO 四套件平均）：仅「并行解码 + 分块」就把 76.5% 拉到 90.2%（<b>+13.7pp</b>）——分块本身就能减少累积误差、让轨迹更平滑，这和 Diffusion Policy 的经验一致；再换成连续动作 + L1 回归，又 +5.1pp 到 95.3%（离散 bin 的分辨率损失被消除）；有意思的是 <b>L1 回归与扩散目标打平</b>（95.3% vs 95.4%），但 L1 训练收敛更快、推理不用 50 步去噪。加上腕部相机与机器人状态输入、以及针对 ALOHA 的 FiLM 语言增强（把语言 embedding 调制进视觉特征，治「看图不看指令」的毛病）后，最终 97.1%，超过 π0 微调的 94.2%；真机 ALOHA 双臂任务上比 π0/RDT-1B/Diffusion Policy/ACT 最高领先 15pp。</p>
+
+<p>OFT 的工程门槛也不高：推理 16GB 显存（LIBERO）/ 18GB（ALOHA），训练 1–8 张 27–80GB 的卡，仍走 LoRA（500 条演示量级）。</p>
+
+<div class="box">
+<span class="bt">承上启下</span>OFT 证明了「离散 bin + 自回归」不是 VLA 的唯一答案：<b>连续动作 + 并行解码才是高频控制的方向</b>。而连续动作头的两条技术路线——L1 回归与扩散/流匹配——各有何长短、数学上怎么工作，正是<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>的主题（π0 用的流匹配就属于这一族）。本讲只需记住结论：OFT 用简单的 L1 就追平了扩散，说明「动作头怎么训」比「动作头多花哨」更关键。
+</div>
+
+<h2>7. 开源 VLA 生态一览：OpenVLA 系与学术开源系</h2>
+
+<table>
+  <tr><th style="width:15%">项目</th><th style="width:10%">时间 / 机构</th><th>定位与关键事实</th><th style="width:17%">与 OpenVLA 的关系</th></tr>
+  <tr><td><b>OpenVLA</b><br>arXiv:2406.09246</td><td>2024.06<br>斯坦福/伯克利/TRI 等</td><td>7B，Llama 2 + DINOv2/SigLIP，OXE 970k；离散动作 token、自回归；MIT 协议，权重+训练代码+数据配方全开</td><td>本体</td></tr>
+  <tr><td><b>OpenVLA-OFT</b><br>arXiv:2502.19645</td><td>2025.02<br>斯坦福</td><td>并行解码 + 连续动作 L1 + 分块（+FiLM）；LIBERO 97.1%、26× 吞吐、ALOHA 25Hz</td><td>同一基座的官方微调配方升级</td></tr>
+  <tr><td><b>Octo</b><br>arXiv:2405.12213</td><td>2024.05<br>伯克利等</td><td>93M 从头训练的 Transformer + 扩散动作头，OXE 800k；支持语言/目标图两种任务指定、腕部相机与本体感知</td><td>前代开源标杆；数据混合权重被 OpenVLA 沿用</td></tr>
+  <tr><td><b>TinyVLA</b><br>arXiv:2409.12514</td><td>2024.09（RA-L 2025.02）<br>华东师大/美的等</td><td>0.42B / 0.74B / 1.3B 三档小 VLA：小型 VLM 底座 + 扩散解码头；VLM 用 LoRA、扩散头全参训练；TinyVLA-H 真机 5 任务平均 94.0%，比 OpenVLA 高 25.7pp、参数少 5.5×、推理快约 20×</td><td>「小型化 + 扩散头」路线的直接对标</td></tr>
+  <tr><td><b>RoboVLMs</b><br>arXiv:2412.14058</td><td>2024.12<br>清华/字节</td><td>系统性回答「建 VLA 该做什么选择」：8 种 VLM 底座 × 离散/连续动作 × 单帧/历史观测的网格实验；结论倾向历史观测 + 连续动作 + policy head；附字节真机基准</td><td>把 OpenVLA 式的设计空间研究推广到更多底座</td></tr>
+  <tr><td><b>FAST 动作 tokenizer</b></td><td>2025.01<br>Physical Intelligence</td><td>用 DCT 压缩把动作块编码成更少 token，让自回归 VLA 提速至多 15×（openvla README 官方推荐集成）；代价是块间延迟仍高（约 750ms）</td><td>「保留离散自回归」路线的续命方案，与 OFT 的「抛弃自回归」形成对照</td></tr>
+</table>
+<div class="cap"><b>表 3-5</b>｜OpenVLA 系 / 学术开源系生态。π0（openpi）、GR00T N1、WALL-OSS、GO-1 等工业界开源模型属<a href="vla-t5-frontier.html">第 5 讲</a>范围，此处不展开。</div>
+
+<p>社区基础设施方面一句带过：HuggingFace 的 <b>LeRobot</b> 提供了从数据集、训练到真机部署的开源全家桶（其自带的 SmolVLA、π0 移植与 OpenVLA 系互补），RoboTwin 2.0 等统一评测框架也已接入 OpenVLA-OFT；完整的工具链与动手路线见<a href="vla-t6-roadmap.html">第 6 讲</a>。</p>
+
+<h2>8. 总结：四代模型一张表</h2>
+
+<table>
+  <tr><th style="width:15%"></th><th>RT-2（-X）</th><th>Octo</th><th>OpenVLA</th><th>OpenVLA-OFT</th></tr>
+  <tr><td><b>主干</b></td><td>PaLI-X / PaLM-E（闭源 VLM）</td><td>从头训练的 Transformer（约 ViT-B）+ T5-base 语言编码</td><td>Prismatic VLM：Llama 2 7B base</td><td>同 OpenVLA（微调配方不同）</td></tr>
+  <tr><td><b>参数</b></td><td>55B（另有 12B 版）</td><td>93M（另有 27M 版）</td><td>7B（权重计约 8B）</td><td>7B + 小 MLP 动作头</td></tr>
+  <tr><td><b>视觉编码器</b></td><td>随 VLM（ViT，闭源细节）</td><td>浅层 CNN + patch 化</td><td>DINOv2 ViT-L/14 + SigLIP SO400M/14 融合</td><td>同左（支持多相机）</td></tr>
+  <tr><td><b>动作表示</b></td><td>离散 bin（min-max 归一化）</td><td>连续（扩散头）</td><td>离散 256 bin（q01/q99 归一化）</td><td>连续（MLP 头 + L1 回归，或扩散）</td></tr>
+  <tr><td><b>解码方式</b></td><td>自回归逐 token</td><td>单次前向 + 头内去噪，出动作块</td><td>自回归 7 token / 步</td><td>并行解码，一次出 K 步块</td></tr>
+  <tr><td><b>典型频率</b></td><td>1–5Hz（估）</td><td>可达 10Hz 级</td><td>4.2Hz（A100）/ ~6Hz（4090）</td><td>109.7Hz 吞吐（K=8）；真机 25Hz 控制</td></tr>
+  <tr><td><b>机器人数据</b></td><td>OXE 约 350k + 图文 co-fine-tuning</td><td>OXE 800k</td><td>OXE 970k</td><td>微调：LIBERO 500 演示/套件、ALOHA 演示</td></tr>
+  <tr><td><b>开源</b></td><td>✗（仅 API）</td><td>✓</td><td>✓（MIT，权重+代码+数据配方）</td><td>✓（代码+检查点）</td></tr>
+</table>
+<div class="cap"><b>表 3-6</b>｜四代对比。RT-2 频率为文献常见估计口径，其余数字均出自各论文实测（RT-2-X 见 OXE 论文；Octo/OpenVLA/OFT 见各自论文）。RT-2 细节见<a href="vla-t2-rt1-rt2.html">第 2 讲</a>。</div>
+
+<div class="box">
+<span class="bt">本讲要点</span>① OpenVLA 成为入门事实标准的原因是「<b>开放权重 + 单卡 LoRA 可微调</b>」这个组合：性能对得起 55B 闭源前辈（+16.5pp），门槛却降到一张 27GB 显存的卡 + 约 100 条演示；② 「<b>离散 vs 连续动作头</b>」是贯穿本系列的主线分歧——RT-2/OpenVLA 选离散（复用 LLM 词表与训练基建），Octo/Diffusion Policy/OFT/π0 选连续（精度与并行解码友好），OFT 的受控实验证明连续 + 并行在速度和成功率上双赢，这正是第 4 讲展开的方向。
+</div>
+
+<div class="box">
+<span class="bt">下一讲</span><a href="vla-t4-diffusion-pi0.html">第 4 讲：扩散与流匹配动作头——π0</a>。本讲两次提到「扩散动作头」都只给了一句话直觉（Octo 的头、OFT 的对照实验），下一讲把数学补齐：去噪扩散怎么把高斯噪声变成动作、流匹配又为何更快，以及 Physical Intelligence 的 π0 如何用它做 50Hz 双臂灵巧操作。
+</div>
+
+<h2>参考来源</h2>
+
+<ol class="refs">
+  <li>Kim, Pertsch, Karamcheti et al. <b>OpenVLA: An Open-Source Vision-Language-Action Model</b>. arXiv:2406.09246（v3, 2024-09）。<a href="https://arxiv.org/abs/2406.09246">arxiv.org/abs/2406.09246</a>；本地归档 <code>paper/openvla.pdf</code>。本讲架构、训练配方、评测、微调消融数字的主来源。</li>
+  <li>Kim, Finn, Liang. <b>Fine-Tuning Vision-Language-Action Models: Optimizing Speed and Success（OpenVLA-OFT）</b>. arXiv:2502.19645（v2, 2025-04）。<a href="https://arxiv.org/abs/2502.19645">arxiv.org/abs/2502.19645</a>；本地归档 <code>paper/openvla-oft.pdf</code>。</li>
+  <li>Octo Model Team. <b>Octo: An Open-Source Generalist Robot Policy</b>. arXiv:2405.12213。<a href="https://arxiv.org/abs/2405.12213">arxiv.org/abs/2405.12213</a>；本地归档 <code>paper/octo.pdf</code>。</li>
+  <li>Karamcheti et al. <b>Prismatic VLMs: Investigating the Design Space of Visually-Conditioned Language Models</b>. arXiv:2402.07865。<a href="https://arxiv.org/abs/2402.07865">arxiv.org/abs/2402.07865</a>；本地归档 <code>paper/prismatic-vlm.pdf</code>。</li>
+  <li>Wen et al. <b>TinyVLA: Towards Fast, Data-Efficient Vision-Language-Action Models for Robotic Manipulation</b>. arXiv:2409.12514（RA-L 2025）。<a href="https://arxiv.org/abs/2409.12514">arxiv.org/abs/2409.12514</a>；本地归档 <code>paper/tinyvla.pdf</code>。</li>
+  <li>RoboVLMs 团队（清华/字节）。<b>Towards Generalist Robot Policies: What Matters in Building Vision-Language-Action Models</b>. arXiv:2412.14058。<a href="https://arxiv.org/abs/2412.14058">arxiv.org/abs/2412.14058</a>；项目页 <a href="https://robovlms.github.io/">robovlms.github.io</a>。</li>
+  <li>官方代码：<a href="https://github.com/openvla/openvla">github.com/openvla/openvla</a>（commit <code>c8f03f4</code>，2026-10-21 抓取）——本讲引用的 <code>action_tokenizer.py</code>、<code>dinosiglip_vit.py</code>、<code>finetune.py</code>、<code>data_utils.py</code>、README 行号均以此版本为准；<a href="https://github.com/moojink/openvla-oft">github.com/moojink/openvla-oft</a>（commit <code>e4287e9</code>，2026-10-21 抓取）。</li>
+  <li>HF 模型卡与远程代码：<a href="https://huggingface.co/openvla/openvla-7b">huggingface.co/openvla/openvla-7b</a>（<code>modeling_prismatic.py</code>、<code>config.json</code>，2026-10-21 抓取）；OFT 检查点 <a href="https://huggingface.co/moojink/openvla-7b-oft-finetuned-libero-goal">moojink/openvla-7b-oft-finetuned-libero-*</a>。</li>
+  <li>项目主页：<a href="https://openvla.github.io/">openvla.github.io</a> · <a href="https://openvla-oft.github.io/">openvla-oft.github.io</a> · <a href="https://octo-models.github.io/">octo-models.github.io</a> · <a href="https://tiny-vla.github.io/">tiny-vla.github.io</a>。</li>
+  <li>背景文献：RT-2（arXiv:2307.15818，本系列<a href="vla-t2-rt1-rt2.html">第 2 讲</a>）；Open X-Embodiment（arXiv:2310.08864，<a href="vla-t1-robot-learning.html">第 1 讲</a>）；LoRA（arXiv:2106.09685）；Llama 2（arXiv:2307.09288）；DINOv2（arXiv:2304.07193）；SigLIP（arXiv:2303.15343）；BridgeData V2（arXiv:2308.12952）；LIBERO（arXiv:2306.03310）；Diffusion Policy（arXiv:2303.04137）。</li>
+</ol>
+
+<footer>生成于 2026-10-21 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

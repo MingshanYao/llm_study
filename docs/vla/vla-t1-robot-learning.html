@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>具身智能与 VLA 零基础七讲 · 第 1 讲：机器人学习基础——动作空间、模仿与强化学习、ACT 与数据金字塔</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>具身智能与 VLA 零基础七讲 · 第 1 讲：机器人学习基础——动作空间、模仿与强化学习、ACT 与数据金字塔</h1>
+
+<div class="series-nav">
+  <a href="vla-t0-overview.html">0 全景地图</a>
+  <a class="here">1 机器人学习</a>
+  <a href="vla-t2-rt1-rt2.html">2 RT-1·RT-2</a>
+  <a href="vla-t3-openvla.html">3 OpenVLA</a>
+  <a href="vla-t4-diffusion-pi0.html">4 Diffusion·π0</a>
+  <a href="vla-t5-frontier.html">5 前沿全景</a>
+  <a href="vla-t6-roadmap.html">6 实战路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>具身智能与 VLA 零基础七讲（本篇为第 1 讲，<b>前置知识讲</b>：补齐机器人学习的地基，后面每一讲的论文都踩在这些概念上）</p>
+  <p style="margin:4px 0"><b>读者假设：</b>知道 Transformer、token、自回归、微调、监督学习大概是什么（LLM 水平即可）；<b>不需要任何机器人背景</b>。所有机器人行话第一次出现都会解释，并尽量用 LLM 训练来类比。</p>
+  <p style="margin:4px 0"><b>系列目标：</b>读完七讲，你能看懂 RT-2、OpenVLA、π0 这些主流 VLA 论文与代码，明白机器人策略的数据从哪来、模型怎么训、动作怎么表示，并能规划自己的具身智能入门路线。</p>
+</div>
+
+<div class="tldr">
+<p><b>本讲回答三个问题：</b>① 机器人怎么被「表示」——它看到什么（观测空间）、它被下达什么指令（动作空间），为什么同一个「把杯子拿起来」可以写成 7 个关节角，也可以写成「末端往前 3 厘米、夹爪闭合」；② 机器人怎么「学会」——训练方式其实只有两大族：<b>模仿学习</b>（监督学习，看着专家演示学）和<b>强化学习</b>（奖励驱动，试错中学），今天操作领域的主流是前者，我们会讲清模仿学习的两大魔头（分布偏移与误差复合）；③ 数据从哪来——真机遥操作、仿真合成、互联网数据构成的<b>数据金字塔</b>，它是整个具身智能领域最稀缺的资源。作为架构主菜，我们逐段精读第一个「现代模仿学习架构」<b>ACT</b>（ALOHA 论文的 Action Chunking with Transformers），它的三个设计——动作分块、CVAE 潜变量、时间集成——在后面每一讲的 VLA 里都还活着。</p>
+</div>
+
+<h2>1. 机器人本体速成：关节、夹爪、自由度，以及机器人「看到」什么</h2>
+
+<p>LLM 的世界里只有一个抽象接口：输入 token 序列，输出 token 序列。机器人没有这么幸运——它的「身体」（术语叫<b>本体，embodiment</b>）千差万别，而 VLA 里的 E（Embodied，具身）说的正是这件事：模型必须接上具体的身体。所以学 VLA 之前，先花五分钟认识这个身体。</p>
+
+<h3>1.1 机械臂的三个基本词</h3>
+
+<ul>
+  <li><b>关节（joint）</b>：机械臂上每个能转动的「胳膊肘」。常见工业/科研臂由 6 或 7 个旋转关节串成，每个关节里有一个电机和一个<b>编码器</b>（encoder，测角度的传感器，注意别和 Transformer 的 encoder 混淆——完全是两回事）。</li>
+  <li><b>末端执行器（end-effector，缩写 EE）</b>：手臂最前端干活的那个部件。操作（manipulation，指抓、放、拧、插这类用手完成的任务）研究里 95% 是<b>平行夹爪</b>（parallel gripper，两个手指平行开合，像简化版的手）；灵巧手（多指、几十个小电机）存在但贵且难维护，本系列基本不涉及。</li>
+  <li><b>自由度（DOF, degrees of freedom）</b>：能独立控制的关节数。一条典型科研臂是 6-DOF 或 7-DOF，加上夹爪开合算「6+1」「7+1」。ALOHA 双臂平台是 2 ×（6 关节 + 1 夹爪）= <b>14 维</b>动作；人形机器人全身几十个 DOF（腿、腰、臂、手指加起来）——本系列聚焦<b>操作</b>（桌面机械臂场景），locomotion（行走跑跳）只在第 5 节提一嘴。</li>
+</ul>
+
+<h3>1.2 典型本体，混个脸熟</h3>
+
+<table>
+  <tr><th style="width:26%">本体</th><th style="width:22%">规模</th><th>你会在哪见到它</th></tr>
+  <tr><td><b>Franka Panda</b>（Franka Robotics）</td><td>7-DOF 单臂 + 夹爪</td><td>学术界出镜率最高的臂，Open X-Embodiment 里数据集最多的本体</td></tr>
+  <tr><td><b>UR 系列</b>（Universal Robots）</td><td>6-DOF 单臂</td><td>工业协作臂的代表，UMI 论文的部署平台之一</td></tr>
+  <tr><td><b>xArm</b>（UFACTORY）</td><td>6/7-DOF 单臂</td><td>性价比高，OXE 里贡献轨迹最多的本体之一</td></tr>
+  <tr><td><b>WidowX / ViperX</b>（Trossen）</td><td>6-DOF 小臂</td><td>ALOHA 双臂平台的主角（第 6 节）；Bridge 数据集用的也是 WidowX</td></tr>
+  <tr><td><b>ALOHA</b></td><td>双臂 14-DOF</td><td>斯坦福低成本双臂遥操作平台，ACT 与 Mobile ALOHA 的数据都从这来</td></tr>
+  <tr><td><b>Google Robot</b></td><td>移动底盘 + 单臂</td><td>RT-1/RT-2 的御用本体（第 2 讲）</td></tr>
+  <tr><td><b>人形机器人</b>（Optimus、G1、Figure 等）</td><td>全身几十 DOF</td><td>行走靠 RL、操作靠模仿 + VLA，本系列只在<a href="vla-t5-frontier.html">第 5 讲</a>扫一眼</td></tr>
+</table>
+
+<h3>1.3 观测从哪来：机器人的「眼睛」和「本体感」</h3>
+
+<p>策略（policy，机器人的大脑，第 3 节正式定义）每一步拿到的观测（observation）通常是三样东西的组合：</p>
+
+<ul>
+  <li><b>多台 RGB 相机</b>：一个第三视角（架在桌子对面或顶上，看全局）+ 一或两个<b>腕部相机</b>（wrist camera，装在手腕上，凑近看夹爪和物体）。ALOHA 用 4 台 640×480 相机：顶部、前方、双腕各一台。多相机是为了消除遮挡——精密操作里物体经常藏在手指后面。</li>
+  <li><b>关节编码器读数</b>：当前每个关节的角度（有时还有速度/力矩）。这个「知道自己身体摆成什么姿势」的信号有个行话叫<b>本体感知（proprioception）</b>。它是低维、精确、免视觉的——闭着眼你也知道自己手在哪，机器人同理。</li>
+  <li><b>语言指令</b>：「把可乐罐放进抽屉」。单任务策略可以不要它；多任务/VLA 必须有它——这正是 LLM 基因进入机器人领域的接口（第 2、3 讲的主角）。</li>
+</ul>
+
+<div class="box">
+<span class="bt">类比 LLM</span>把机器人策略想成一个多模态模型：观测 = 输入（图像 token + 本体感向量 + 语言指令），动作 = 输出。和 LLM 最大的区别是：<b>输出是连续向量而不是离散 token</b>，而且<b>输出的后果是物理的</b>——说错一个词可以重说，撞坏一个杯子不能撤销。这个「不可逆」贯穿本讲后面所有设计决策。
+</div>
+
+<h2>2. 动作空间：给电机下命令的两种「写法」</h2>
+
+<p><b>动作空间（action space）</b>就是「策略每一步输出的那个向量长什么样」。同一个物理动作有两种主流写法，读任何机器人论文之前必须先搞清楚它用的是哪种，否则维度都对不上。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 620" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="450" y="28" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">一条 6 关节机械臂，和给它下命令的两种写法</text>
+
+  <!-- ===== left: arm ===== -->
+  <!-- third-person camera on tripod -->
+  <line x1="60" y1="520" x2="60" y2="302" stroke="#94a3b8" stroke-width="4"/>
+  <rect x="46" y="282" width="32" height="20" rx="3" fill="#fff8e8" stroke="#e6c96a" stroke-width="2"/>
+  <line x1="78" y1="292" x2="418" y2="178" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <text x="86" y="272" font-size="12" fill="#5a6272">第三视角 RGB 相机</text>
+
+  <!-- ground -->
+  <line x1="40" y1="520" x2="450" y2="520" stroke="#e3e7ee" stroke-width="2"/>
+
+  <!-- base -->
+  <rect x="100" y="478" width="92" height="42" rx="4" fill="#1e293b"/>
+  <text x="146" y="546" font-size="12" fill="#5a6272" text-anchor="middle">底座（θ1 在此旋转）</text>
+
+  <!-- links -->
+  <line x1="146" y1="468" x2="176" y2="360" stroke="#2456c4" stroke-width="14" stroke-linecap="round"/>
+  <line x1="177" y1="352" x2="268" y2="262" stroke="#2456c4" stroke-width="14" stroke-linecap="round"/>
+  <line x1="272" y1="258" x2="338" y2="214" stroke="#2456c4" stroke-width="12" stroke-linecap="round"/>
+  <line x1="342" y1="211" x2="382" y2="192" stroke="#2456c4" stroke-width="10" stroke-linecap="round"/>
+  <line x1="404" y1="181" x2="418" y2="174" stroke="#2456c4" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- joints -->
+  <circle cx="146" cy="468" r="11" fill="#fff" stroke="#2456c4" stroke-width="3"/>
+  <circle cx="177" cy="352" r="11" fill="#fff" stroke="#2456c4" stroke-width="3"/>
+  <circle cx="272" cy="258" r="11" fill="#fff" stroke="#2456c4" stroke-width="3"/>
+  <circle cx="342" cy="211" r="9" fill="#fff" stroke="#2456c4" stroke-width="3"/>
+  <circle cx="386" cy="190" r="8" fill="#fff" stroke="#2456c4" stroke-width="3"/>
+  <circle cx="404" cy="181" r="8" fill="#fff" stroke="#2456c4" stroke-width="3"/>
+  <text x="132" y="472" font-size="12" fill="#2456c4" text-anchor="end">θ1</text>
+  <text x="160" y="348" font-size="12" fill="#2456c4" text-anchor="end">θ2</text>
+  <text x="258" y="246" font-size="12" fill="#2456c4" text-anchor="end">θ3</text>
+  <text x="336" y="196" font-size="12" fill="#2456c4" text-anchor="end">θ4·θ5·θ6</text>
+
+  <!-- gripper -->
+  <line x1="418" y1="174" x2="446" y2="156" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+  <line x1="418" y1="174" x2="446" y2="192" stroke="#1e293b" stroke-width="6" stroke-linecap="round"/>
+  <text x="446" y="112" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="end">末端执行器 EE</text>
+  <text x="446" y="130" font-size="12" fill="#5a6272" text-anchor="end">（平行夹爪）</text>
+  <line x1="440" y1="136" x2="440" y2="152" stroke="#94a3b8" stroke-width="1.5"/>
+
+  <!-- wrist camera -->
+  <rect x="360" y="200" width="26" height="16" rx="3" fill="#fff8e8" stroke="#e6c96a" stroke-width="2"/>
+  <line x1="372" y1="216" x2="330" y2="286" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="326" y="302" font-size="12" fill="#5a6272" text-anchor="end">腕部相机</text>
+
+  <!-- joint callout -->
+  <text x="295" y="412" font-size="12" fill="#5a6272">每个圆圈 = 一个旋转关节，</text>
+  <text x="295" y="434" font-size="12" fill="#5a6272">编码器角度 = 本体感知</text>
+
+  <text x="245" y="580" font-size="12" fill="#1e293b" text-anchor="middle">6 个关节 + 1 个夹爪 = 单臂 7 维动作；ALOHA 双臂 = 14 维</text>
+  <text x="245" y="602" font-size="12" fill="#5a6272" text-anchor="middle">（二维侧视图，部分关节的转轴垂直于纸面）</text>
+
+  <!-- ===== right: two action representations ===== -->
+  <!-- Box A: joint space -->
+  <rect x="470" y="60" width="410" height="235" rx="10" fill="#fff" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="490" y="90" font-size="14" font-weight="bold" fill="#2456c4">写法 ①：关节空间（joint space）</text>
+  <g>
+    <rect x="490" y="106" width="48" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="514" y="128" font-size="12" fill="#1e293b" text-anchor="middle">θ1</text>
+    <rect x="542" y="106" width="48" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="566" y="128" font-size="12" fill="#1e293b" text-anchor="middle">θ2</text>
+    <rect x="594" y="106" width="48" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="618" y="128" font-size="12" fill="#1e293b" text-anchor="middle">θ3</text>
+    <rect x="646" y="106" width="48" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="670" y="128" font-size="12" fill="#1e293b" text-anchor="middle">θ4</text>
+    <rect x="698" y="106" width="48" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="722" y="128" font-size="12" fill="#1e293b" text-anchor="middle">θ5</text>
+    <rect x="750" y="106" width="48" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="774" y="128" font-size="12" fill="#1e293b" text-anchor="middle">θ6</text>
+    <rect x="802" y="106" width="58" height="34" rx="4" fill="#fff8e8" stroke="#e6c96a"/><text x="831" y="128" font-size="12" fill="#1e293b" text-anchor="middle">夹爪</text>
+  </g>
+  <text x="490" y="170" font-size="12" fill="#2a3040">直接命令每个关节的目标角度：绝对角 θ，</text>
+  <text x="490" y="190" font-size="12" fill="#2a3040">或相对当前角度的增量 Δθ。</text>
+  <text x="490" y="216" font-size="12" fill="#2a3040">用户：ALOHA / ACT —— 单臂 7 维，双臂 14 维。</text>
+  <text x="490" y="242" font-size="12" fill="#2a3040">优点：不需要逆运动学，直接、精确、高频友好；</text>
+  <text x="490" y="262" font-size="12" fill="#2a3040">缺点：换一个机器人本体，整个动作空间作废。</text>
+  <text x="490" y="286" font-size="12" fill="#5a6272">（ACT 论文实测：绝对关节角优于 Δθ 关节角）</text>
+
+  <!-- Box B: task space -->
+  <rect x="470" y="325" width="410" height="240" rx="10" fill="#fff" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="490" y="355" font-size="14" font-weight="bold" fill="#2456c4">写法 ②：任务空间 / 笛卡尔增量（delta EE）</text>
+  <g>
+    <rect x="486" y="371" width="52" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="512" y="393" font-size="12" fill="#1e293b" text-anchor="middle">Δx</text>
+    <rect x="542" y="371" width="52" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="568" y="393" font-size="12" fill="#1e293b" text-anchor="middle">Δy</text>
+    <rect x="598" y="371" width="52" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="624" y="393" font-size="12" fill="#1e293b" text-anchor="middle">Δz</text>
+    <rect x="654" y="371" width="52" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="680" y="393" font-size="12" fill="#1e293b" text-anchor="middle">Δroll</text>
+    <rect x="710" y="371" width="52" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="736" y="393" font-size="12" fill="#1e293b" text-anchor="middle">Δpitch</text>
+    <rect x="766" y="371" width="52" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/><text x="792" y="393" font-size="12" fill="#1e293b" text-anchor="middle">Δyaw</text>
+    <rect x="822" y="371" width="46" height="34" rx="4" fill="#fff8e8" stroke="#e6c96a"/><text x="845" y="393" font-size="12" fill="#1e293b" text-anchor="middle">夹爪</text>
+  </g>
+  <text x="490" y="434" font-size="12" fill="#2a3040">命令「末端执行器位姿挪多少」：平移 Δx Δy Δz、</text>
+  <text x="490" y="454" font-size="12" fill="#2a3040">绕三轴旋转 Δroll Δpitch Δyaw，再加夹爪开合，共 7 维。</text>
+  <text x="490" y="476" font-size="12" fill="#2a3040">机器人内置的逆运动学（IK）负责换算成关节命令。</text>
+  <text x="490" y="502" font-size="12" fill="#2a3040">用户：RT-1、Open X-Embodiment、绝大多数 VLA。</text>
+  <text x="490" y="528" font-size="12" fill="#2a3040">优点：与具体关节结构解耦，跨本体可迁移；</text>
+  <text x="490" y="548" font-size="12" fill="#2a3040">缺点：依赖 IK 求解，奇异位形附近会失灵。</text>
+</svg>
+</div>
+<p class="cap"><b>图 1-1</b>｜左：一条 6 关节机械臂的组成（关节、末端执行器、两类相机与本体感知）。右上：关节空间动作——ALOHA/ACT 的写法（论文第 III 节，动作即 leader 臂的 14 维关节角）。右下：任务空间 delta EE 动作——RT-1 与 Open X-Embodiment 的写法（RT-1 论文第 4 节把它离散成 256 个 bin，见第 8 节）。</p>
+
+<table>
+  <tr><th style="width:20%">对比维度</th><th style="width:40%">关节空间（joint space）</th><th>任务空间（task space / delta EE）</th></tr>
+  <tr><td>命令对象</td><td>每个关节电机的目标角度</td><td>末端执行器的位姿变化量 + 夹爪</td></tr>
+  <tr><td>典型维度</td><td>单臂 7 维（6 关节 + 夹爪）；ALOHA 双臂 14 维</td><td>7 维（Δx Δy Δz Δroll Δpitch Δyaw + 夹爪）</td></tr>
+  <tr><td>要不要 IK</td><td>不要，命令直达电机</td><td>要，机器人自己解逆运动学</td></tr>
+  <tr><td>跨本体迁移</td><td>差：关节数不同即不兼容</td><td>好：几乎所有臂的末端都是 6 维位姿</td></tr>
+  <tr><td>精细控制</td><td>强（高频、无求解误差），ALOHA 用它做毫米级任务</td><td>受 IK 与奇异位形限制</td></tr>
+  <tr><td>代表用户</td><td>ACT / ALOHA、多数双臂灵巧操作工作</td><td>RT-1、RT-2、OXE、OpenVLA 等大多数 VLA</td></tr>
+</table>
+
+<div class="cap"><b>表 1-1</b>｜两种动作表示对比。经验法则：<b>要极致精度选关节空间，要跨本体通用选 delta EE</b>——VLA 的卖点是通用，所以你看到的 VLA 论文大多选 delta EE（个别系统对特定本体也用关节位置/速度，如 π0 对部分平台）。</div>
+
+<h3>2.1 控制频率：策略为什么不需要每毫秒输出一次</h3>
+
+<p>新手常见疑惑：电机明明要 1000 Hz 的命令，神经网络一秒才推理几十次，怎么够？答案是<b>控制是分层的</b>：</p>
+
+<table>
+  <tr><th style="width:24%">层级</th><th style="width:20%">典型频率</th><th>干什么</th></tr>
+  <tr><td>底层伺服 / PID 回路</td><td>500–1000 Hz</td><td>电机驱动器紧盯「当前角 vs 目标角」，毫秒级纠偏。目标角变一点，它自己追</td></tr>
+  <tr><td>策略（神经网络）</td><td>3–50 Hz</td><td>RT-1 以 3 Hz 输出 delta EE 动作；ACT 以 50 Hz 输出目标关节角。策略只需不断「更新目标」</td></tr>
+  <tr><td>任务级规划 / LLM</td><td>秒级或更慢</td><td>「先拿杯子再开门」这类子目标切换，说一句话的时间尺度</td></tr>
+</table>
+
+<p>关键直觉：底层伺服是「肌肉记忆」，给它一个目标它会自己平滑地追上去；策略是「大脑」，只需要每隔几十到几百毫秒修订一次目标。RT-1 论文明确按 3 Hz 控制频率设计模型大小（推理延迟要压进 100 ms 以内）；ALOHA 的遥操作与策略执行都在 50 Hz——论文还做了用户实验：把遥操作频率从 50 Hz 降到 5 Hz，完成毫米级任务的时间增加 62%。频率不是越高越好，而是<b>要和任务精度匹配</b>。</p>
+
+<div class="infer">表中「底层伺服 500–1000 Hz」是机器人控制的常见量级（教科书常识），具体数值随电机与驱动器而变，非某一篇论文原文；「策略不需要高频，因为底层伺服会追踪目标」这一分层解释也是对多篇论文（RT-1 第 5.1 节、ALOHA 第 V-E 节）设定综合后的转述。</div>
+
+<h2>3. 策略 = 条件生成模型：训练方式只有两大族</h2>
+
+<p>现在可以把「机器人学习」形式化了。<b>策略（policy）</b>记作 \(\pi(a \mid o)\)：给定观测 \(o\)（图像 + 本体感 + 指令），输出动作 \(a\) 的分布。如果你熟悉 LLM，这就是一个<b>条件生成模型</b>——和 \(\pi(\text{token} \mid \text{prompt})\) 在数学形式上完全同构，只是词表从几万个离散 token 换成了连续向量。</p>
+
+<p>怎么训练这个 \(\pi_\theta\)？剥掉所有花哨的名字，只有两大族：</p>
+
+<table>
+  <tr><th style="width:16%">族</th><th style="width:30%">学习信号</th><th style="width:27%">LLM 世界的对应物</th><th>机器人世界的主流用法</th></tr>
+  <tr><td><b>监督 / 模仿学习</b></td><td>专家演示：(观测, 专家动作) 成对数据</td><td>SFT / next-token 监督训练</td><td>操作领域的绝对主流：BC、ACT、RT 系列、OpenVLA、π0</td></tr>
+  <tr><td><b>强化学习 RL</b></td><td>奖励标量：试错中自己发现好动作</td><td>RLHF / RLVR 那一套</td><td>locomotion（四足/人形行走）主流；操作中多用于微调而非从零学</td></tr>
+</table>
+
+<p>两族的本质差异在数据从哪来：模仿学习的数据是<b>别人干出来的</b>（ off-policy，一次性给全），RL 的数据是<b>自己边干边采的</b>（on-policy，与环境闭环交互）。这决定了它们各自的死穴——模仿学习「只见专家、不见错误」，RL「采样太贵、奖励难写」。下面两节分别展开。想先补 RL 基础的话，本仓库有现成的两讲：<a href="../rl/rl-t1-policy-gradient.html">RL 第 1 讲：策略梯度</a>与<a href="../rl/rl-t2-llm-as-rl.html">RL 第 2 讲：LLM 视角的 RL</a>。</p>
+
+<h2>4. 行为克隆（BC）：机器人版的监督学习</h2>
+
+<h3>4.1 训练循环，一句话讲完</h3>
+
+<p><b>行为克隆（Behavior Cloning, BC）</b>是最朴素也最重要的模仿学习算法。数据集 \(\mathcal{D}\) 是一堆 (观测, 专家动作) 对——人遥操作机器人做几百遍任务，把每一帧的观测和人给出的动作都录下来。训练目标：</p>
+
+<div class="formula">\[ \min_\theta \ \mathbb{E}_{(o,a)\sim\mathcal{D}}\Big[\ \big\| a - \pi_\theta(o) \big\|^2\ \Big] \]</div>
+
+<p>大白话：<b>让模型预测的动作尽量贴近专家在同一观测下的真实动作</b>。动作是连续向量，所以「贴近」用回归损失（L2 或 L1）度量；如果把动作离散成 bin（RT-1、OpenVLA 的做法），就变成分类问题，和 next-token prediction 一字不差。就这么简单——BC 就是机器人版的 SFT。</p>
+
+<p>简单，但有两个能让它彻底失效的魔头。它们是理解后面一切架构创新（包括 ACT、扩散动作头）的钥匙。</p>
+
+<h3>4.2 魔头一：covariate shift（分布偏移）</h3>
+
+<p>训练时，模型只见过<b>专家会到达的状态</b>。部署时，只要有一步预测偏了一点点，机器人就到达了一个训练集里从未出现过的状态——从这一刻起，模型在做纯外推，输出什么全凭运气，而错误的输出又把它带得更偏。这就是 <b>covariate shift</b>：策略自己造成的输入分布，和训练分布对不上。</p>
+
+<h3>4.3 魔头二：误差复合（compounding error）</h3>
+
+<p>把魔头一定量化：经典理论（Ross &amp; Bagnell 2010）证明，单步误差为 \(\varepsilon\) 的 BC 策略，在长度 \(T\) 的任务里累积误差上界是 \(O(\varepsilon T^2)\)——<b>平方级</b>。任务越长、精度要求越高，BC 死得越惨。一个 8 秒、50 Hz 的任务有 400 步，\(T^2 = 16\) 万——这就是为什么朴素的逐步 BC 在 ALOHA 的精密任务上成功率几乎为零（ACT 论文实测 chunk size k=1 时仿真平均成功率仅 <b>1%</b>）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="450" y="28" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">行为克隆的两大魔头</text>
+
+  <!-- ===== left panel: covariate shift ===== -->
+  <text x="230" y="66" font-size="14" font-weight="bold" fill="#2456c4" text-anchor="middle">魔头 ①：covariate shift（分布偏移）</text>
+  <ellipse cx="210" cy="230" rx="155" ry="105" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="210" y="146" font-size="12" fill="#2456c4" text-anchor="middle">训练数据覆盖的状态分布</text>
+
+  <path d="M 70 262 C 120 200 180 188 240 228 S 300 268 335 240" fill="none" stroke="#2456c4" stroke-width="3"/>
+  <text x="105" y="292" font-size="12" fill="#2456c4">专家轨迹（训练时只见过这些）</text>
+
+  <path d="M 70 262 C 118 204 176 194 232 232 C 282 266 330 298 402 318" fill="none" stroke="#d97706" stroke-width="3" stroke-dasharray="7,5"/>
+  <line x1="394" y1="310" x2="410" y2="326" stroke="#d97706" stroke-width="4"/>
+  <line x1="410" y1="310" x2="394" y2="326" stroke="#d97706" stroke-width="4"/>
+  <text x="268" y="196" font-size="12" fill="#b45309">某一步的小误差 ε</text>
+  <line x1="285" y1="202" x2="252" y2="226" stroke="#b45309" stroke-width="1.5"/>
+  <text x="404" y="350" font-size="12" fill="#b45309" text-anchor="middle">漂进没见过的状态 → 纯外推</text>
+  <text x="230" y="384" font-size="12" fill="#5a6272" text-anchor="middle">越界之后，模型的输出只能靠瞎猜，而瞎猜又把它带得更偏</text>
+
+  <!-- ===== right panel: compounding error ===== -->
+  <text x="672" y="66" font-size="14" font-weight="bold" fill="#2456c4" text-anchor="middle">魔头 ②：误差复合（T 步 → εT² 上界）</text>
+  <line x1="510" y1="330" x2="870" y2="330" stroke="#5a6272" stroke-width="2"/>
+  <line x1="510" y1="330" x2="510" y2="100" stroke="#5a6272" stroke-width="2"/>
+  <polygon points="870,330 858,325 858,335" fill="#5a6272"/>
+  <polygon points="510,100 505,112 515,112" fill="#5a6272"/>
+  <text x="866" y="354" font-size="12" fill="#5a6272" text-anchor="end">执行步数 T</text>
+  <text x="524" y="96" font-size="12" fill="#5a6272">累积偏差</text>
+
+  <path d="M 510 330 L 845 226" fill="none" stroke="#2456c4" stroke-width="3"/>
+  <text x="770" y="205" font-size="12" fill="#2456c4" text-anchor="end">εT（理想线性）</text>
+  <path d="M 510 330 C 660 326 790 302 845 128" fill="none" stroke="#d97706" stroke-width="3"/>
+  <text x="865" y="115" font-size="12" fill="#b45309" text-anchor="end">εT²（BC 理论上界）</text>
+  <text x="690" y="368" font-size="12" fill="#5a6272" text-anchor="middle">任务越长，平方级放大越致命：400 步的任务 T² = 16 万</text>
+</svg>
+</div>
+<p class="cap"><b>图 1-2</b>｜左：covariate shift——橙色虚线是策略实际走出的轨迹，一旦离开训练分布（蓝色区域）就开始瞎猜（对应 Ross &amp; Bagnell 2010 对 BC 的经典分析，也是 ACT 论文引言里「compounding error」的问题设定）。右：单步误差 ε 在 T 步内的累积，理论上界是平方级 εT²。</p>
+
+<h3>4.4 怎么治：三副药</h3>
+
+<ul>
+  <li><b>DAgger（在线纠正，Ross et al. 2011）</b>：让策略自己跑，跑偏到哪里，就请专家在<b>那个状态</b>下补一个正确动作标签，加回训练集重训。相当于「模型犯错 → 人针对性标注」的主动学习循环，把 \(O(\varepsilon T^2)\) 压回 \(O(\varepsilon T)\)。缺点：专家得随叫随到，真机上很贵（类比 LLM：像 online RLHF 里让人实时改错，而不是离线跑 SFT）。</li>
+  <li><b>动作分块（action chunking）</b>：不逐步预测，一次预测未来 k 步——第 6 节 ACT 的主打设计，今天 π0、Diffusion Policy 这类带动作头的策略仍在沿用。</li>
+  <li><b>数据增广与多样性</b>：随机化物体位置、背景、光照采数据；或者干脆用仿真批量生成（第 7 节）。魔头一的本质是「训练分布太窄」，把分布铺宽是最直接的缓解。</li>
+</ul>
+
+<div class="box">
+<span class="bt">旁白</span>还有一族更「温和」的病：<b>多模态动作（multimodality）</b>。同一观测下，专家可能有时从左绕、有时从右绕——都合理。用 L2 回归去拟合「一对多」的数据，模型会输出两个模式的<b>平均</b>（从中间直撞过去），这是回归损失对多模态分布的经典失效。它不是 BC 独有，但在 BC 里最致命。治法有两类：给模型一个随机变量来「选模式」（ACT 的 CVAE，第 6 节），或者干脆把动作头换成真正的生成模型（Diffusion Policy / π0 的流匹配，<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>细讲数学）。
+</div>
+
+<h2>5. 强化学习：另一条路，以及为什么操作领域没走它</h2>
+
+<p>RL 的世界观完全不同：没有专家，只有一个<b>奖励函数</b> \(r(s,a)\) 告诉策略「刚才那下值多少分」。策略靠<b>探索</b>（试错）采集自己的数据，用<b>策略梯度</b>把「得分高的动作」的概率调大——直觉就是「多做让你得分的事」。数学细节不在本讲展开，见<a href="../rl/rl-t1-policy-gradient.html">RL 第 1 讲</a>；它和 LLM 训练（RLHF/RLVR）的关系见<a href="../rl/rl-t2-llm-as-rl.html">RL 第 2 讲</a>。</p>
+
+<p><b>RL 在 locomotion 取得了教科书级的成功</b>。配方 = 大规模并行仿真 + domain randomization：在 Isaac Gym / RaiSim 这样的 GPU 物理仿真器里同时跑几千个虚拟机器人（Rudin et al. 2021 用单张 GPU 并行仿真，<b>4 分钟</b>训出 ANYmal 四足机器人在平地行走的策略，崎岖地形 20 分钟），训练时故意把摩擦、质量、电机延迟、地形全部随机化，练出的策略直接零样本部署到真机。ETH 的 ANYmal 系列工作（Lee et al. 2020, Science Robotics）让它踏过泥泞、雪地、碎石，配套视频里还有后空翻这类高动态动作；更早的 OpenAI Dactyl 项目用同样配方让一只 Shadow 灵巧手转魔方（2019 年甚至解了魔方）。你刷到的四足/人形机器人跑酷视频，几乎全是这个配方的产物。</p>
+
+<p>但把同一套配方搬到<b>真机操作</b>上，三座大山立刻出现：</p>
+
+<ul>
+  <li><b>样本效率</b>：RL 动辄要百万次尝试。仿真里百万次是几小时 GPU 时间；真机上百万次抓取，按一次 10 秒算要连续抓 116 天，还不算摆盘复位的人力。</li>
+  <li><b>安全与不可逆</b>：探索意味着「故意试错」。语言模型试错输出一个坏词可以重采样，机械臂试错可能砸碎相机、夹坏手指、撞伤旁边的人。</li>
+  <li><b>奖励难定</b>：「把衬衫叠好」怎么写成奖励函数？操作任务的成败往往是稀疏、难自动判定的（插电池插到位没有？），设计奖励本身就是难题，还容易被策略钻空子（reward hacking）。</li>
+</ul>
+
+<p>仿真操作（桌面场景）虽然可以并行，但接触丰富的操作对物理仿真精度极其敏感（软物体、摩擦、液体都是仿真的老大难），sim2real gap 比 locomotion 大得多。于是操作领域的共识路线变成：<b>模仿学习打底（人类演示直接给出「好动作」，跳过探索和奖励设计），再叠加大模型先验（VLM 的语义常识）</b>——这正是 RT-2、OpenVLA、π0 的故事线。RL 在操作里并没有退场，而是退居二线做微调（类比 LLM：先 SFT 再 RL 的顺序，在机器人里同样成立，<a href="vla-t5-frontier.html">第 5 讲</a>会见到来）。</p>
+
+<div class="infer">「操作领域主流是模仿 + 大模型先验，RL 退居微调」是对 2022–2025 年文献格局的归纳判断（RT 系列、OXE、ACT、OpenVLA、π0 等主流工作均属模仿路线），并非某篇论文的原文结论；「真机 RL 百万次尝试 ≈ 116 天」是本讲按 10 秒/次的粗略估算，仅用于建立量级直觉；「刷屏的四足/人形跑酷视频几乎都出自大规模并行仿真 RL + 域随机化配方」也是对本讲所引工作（Lee et al. 2020、Rudin et al. 2021 等）代表路线的概括，个别视频可能出自其他方法（如模型预测控制）。</div>
+
+<h2>6. ACT 精读：第一个「现代模仿学习架构」</h2>
+
+<p>2023 年，斯坦福的 Tony Zhao 等人发表了 ALOHA 论文（arXiv:2304.13705），贡献了一对组合：<b>ALOHA</b>——一套不到 2 万美元的双臂遥操作硬件；<b>ACT</b>（Action Chunking with Transformers）——一个在这套硬件采的数据上训练的策略架构。为什么说它是「现代模仿学习架构」的起点？因为它确立的三个设计——<b>动作分块、CVAE 建模多模态、Transformer 编码观测</b>——定义了后来者的议程：动作分块活在 π0 与 Diffusion Policy 里，「Transformer 编码图像+本体感+指令」进化成直接拿预训练 VLM 当编码器，多模态动作建模则交给更强的扩散/流匹配动作头。读懂 ACT，后面每一讲都只是在它身上做加法或替换。</p>
+
+<h3>6.1 ALOHA：leader–follower 遥操作，数据从人手直接流进数据集</h3>
+
+<p>ACT 的数据全部来自<b>遥操作（teleoperation）</b>：人远程操控机器人做任务，把机器人的观测和人的动作同步录下来，就得到 (o, a) 对——BC 数据集。ALOHA 的遥操作方案朴素得惊人：<b>leader–follower（主从臂）</b>。</p>
+
+<ul>
+  <li>桌上放两套臂：两条大的 <b>ViperX</b>（6-DOF + 夹爪，约 $5600/条）是 <b>follower（从臂）</b>，真正干活；两条小的 <b>WidowX</b>（约 $3300/条）是 <b>leader（主臂）</b>，供人操作。</li>
+  <li>人<b>用手直接拖动 leader</b>（backdriving，反向驱动：电机不通电时可以用手掰动关节），系统以 50 Hz 读取 leader 的关节角，实时镜像给 follower。人手怎么动，大臂就怎么动——不需要 VR 手柄、不需要视觉手势识别。</li>
+  <li>论文特意选了<b>关节空间映射</b>而非「手柄位姿 → 末端位姿」的任务空间映射：精密操作常在奇异位形附近进行，现成 IK 经常求解失败；关节映射零延迟、无求解器，leader 自身的重量还天然抑制了手抖。</li>
+  <li>录数据时，<b>动作标签 = leader 的关节角</b>（而不是 follower 的）——两者的差值经过底层 PID 隐式编码了「用多大力」的信息。观测 = follower 当前关节角 + 4 台相机（顶部/前方/双腕，640×480）的图像。</li>
+  <li>整套系统 &lt;$20k（3D 打印件 + 现成机械臂，2 小时内可组装）。作为对比，一条工业臂往往就不止这个价。</li>
+</ul>
+
+<p>采集效率的量级：每条演示 8–14 秒（400–700 步 @50 Hz），每个任务录 50 条（Thread Velcro 任务 100 条），净数据约 10–20 分钟/任务，加上复位和失误实际耗时 30–60 分钟。</p>
+
+<div class="infer">由上述论文数字折算，ALOHA 式遥操作的净采集速度约每小时 50–100 条轨迹（含复位与失败重录）；「每小时几十条」这个业界常说的量级即由此而来，是对论文数据的推算而非原文表述。</div>
+
+<h3>6.2 动作分块（action chunking）：一次预测未来 k 步</h3>
+
+<p>ACT 的第一个核心设计直击第 4 节的两大魔头：策略不建模 \(\pi_\theta(a_t \mid o_t)\)（一次一步），而是建模</p>
+
+<div class="formula">\[ \pi_\theta\big(a_{t:t+k} \mid o_t\big) \]</div>
+
+<p>大白话：<b>看一眼观测，一口气把未来 k 步动作全写出来</b>，然后照着执行；执行完（或执行到一半）再看一眼、再写下一块。论文取 k=100——在 50 Hz 下就是「一次规划未来 2 秒」。</p>
+
+<p>为什么这一招同时治两个病？</p>
+
+<ul>
+  <li><b>治误差复合</b>：决策次数从 T 次降到 T/k 次。误差在「决策之间」没有机会滚雪球——把有效任务时长（effective horizon）压缩了 k 倍。论文消融极其直观：k=1（逐步预测）时仿真平均成功率 <b>1%</b>，k=100 时 <b>44%</b>；k 再大（200、400，接近整条轨迹开环输出）反而略降——完全没有反馈也不行。</li>
+  <li><b>治多模态犹豫</b>：逐步策略在「从左绕还是从右绕」的分岔口每步都要重新投票，容易在两个模式之间反复横跳（抖动机）。分块策略一次性承诺整段轨迹，选了哪条路就把这条路走完整——就像写文章先列提纲，不会每写一个词就推翻一次大纲。这也顺带处理了人类演示里的<b>停顿</b>：单步马尔可夫策略看到「和 1 秒前一样的观测」会困惑（专家当时在停顿还是在发力？），而分块模型把停顿包在整块轨迹里，自然消化。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 900 470" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="450" y="26" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">动作分块与时间集成（k=100，50 Hz 下一块 = 2 秒）</text>
+
+  <!-- row A: single step -->
+  <text x="70" y="76" font-size="13" font-weight="bold" fill="#2456c4">单步策略：每步只预测下一个动作，步步重新决策</text>
+  <polyline points="70,116 90,104 110,128 130,100 150,124 170,106 190,130 210,102 230,126 250,108 270,128 290,104 310,126 330,106 350,128 370,102 390,124 410,108 430,130 450,100 470,126 490,106 510,128 530,104 550,124 570,108 590,130 610,102 630,126 650,106 670,128 690,104 710,124 730,108 750,130 770,102 790,126 810,106 830,128 850,108" fill="none" stroke="#d97706" stroke-width="2.5"/>
+  <text x="862" y="152" font-size="12" fill="#b45309" text-anchor="end">抖动：误差复合 + 模式间犹豫</text>
+
+  <!-- row B: chunking -->
+  <text x="70" y="176" font-size="13" font-weight="bold" fill="#2456c4">动作分块：t=0 时一次预测 a₀…a₉₉，整块执行，t=100 再重新规划</text>
+  <rect x="70" y="192" width="533" height="30" rx="8" fill="#2456c4"/>
+  <text x="336" y="212" font-size="12" fill="#ffffff" text-anchor="middle">块 ①：a₀ a₁ … a₉₉（一次承诺，不再逐步犹豫）</text>
+  <rect x="603" y="192" width="264" height="30" rx="8" fill="#7c9fe0"/>
+  <text x="735" y="212" font-size="12" fill="#1e293b" text-anchor="middle">块 ②：t=100 重新看、重新规划</text>
+  <text x="70" y="246" font-size="12" fill="#5a6272">决策次数 ÷100 → 误差复合被压缩；论文消融：k=1 成功率 1%，k=100 达 44%</text>
+
+  <!-- row C: temporal ensembling -->
+  <text x="70" y="288" font-size="13" font-weight="bold" fill="#2456c4">时间集成：其实每步都重新查询，重叠块对同一时刻各有一份预测 → 加权平均</text>
+  <rect x="70"  y="302" width="533" height="10" rx="5" fill="#2456c4" opacity="0.85"/>
+  <rect x="83"  y="316" width="533" height="10" rx="5" fill="#2456c4" opacity="0.68"/>
+  <rect x="96"  y="330" width="533" height="10" rx="5" fill="#2456c4" opacity="0.51"/>
+  <rect x="109" y="344" width="533" height="10" rx="5" fill="#2456c4" opacity="0.34"/>
+  <rect x="122" y="358" width="533" height="10" rx="5" fill="#2456c4" opacity="0.20"/>
+  <line x1="470" y1="296" x2="470" y2="378" stroke="#d97706" stroke-width="2" stroke-dasharray="5,4"/>
+  <text x="470" y="396" font-size="12" fill="#b45309" text-anchor="middle">物理时刻 t：多个块都在预测它</text>
+
+  <!-- axis -->
+  <line x1="70" y1="420" x2="870" y2="420" stroke="#5a6272" stroke-width="2"/>
+  <g font-size="12" fill="#5a6272" text-anchor="middle">
+    <line x1="70" y1="420" x2="70" y2="426" stroke="#5a6272"/><text x="70" y="442">t=0</text>
+    <line x1="203" y1="420" x2="203" y2="426" stroke="#5a6272"/><text x="203" y="442">25</text>
+    <line x1="337" y1="420" x2="337" y2="426" stroke="#5a6272"/><text x="337" y="442">50</text>
+    <line x1="470" y1="420" x2="470" y2="426" stroke="#5a6272"/><text x="470" y="442">75</text>
+    <line x1="603" y1="420" x2="603" y2="426" stroke="#5a6272"/><text x="603" y="442">100</text>
+    <line x1="737" y1="420" x2="737" y2="426" stroke="#5a6272"/><text x="737" y="442">125</text>
+    <line x1="866" y1="420" x2="866" y2="426" stroke="#5a6272"/><text x="862" y="442">150</text>
+  </g>
+  <text x="470" y="464" font-size="12" fill="#1e293b" text-anchor="middle">控制步（50 Hz）；每条横杠 = 一次查询产出的动作块；权重 wᵢ = exp(−m·i)，官方代码 m = 0.01</text>
+</svg>
+</div>
+<p class="cap"><b>图 1-3</b>｜上：单步策略的抖动。中：动作分块——一次预测 k=100 步（对应 ACT 论文第 V-A 节，消融数据来自第 VI-A 节）。下：时间集成（temporal ensembling）——官方实现每步都查询策略，同一物理时刻收到多份预测后做指数加权平均（论文第 V-C 节；权重实现见 <code>imitate_episodes.py:250-259</code>）。</p>
+
+<h3>6.3 CVAE：为什么需要一个潜变量 z</h3>
+
+<p>第二个核心设计治的是「多模态平均」病。50 条人类演示里，同一个「抓起杯子」的瞬间，有人先挪左臂、有人先挪右臂——都对。如果直接回归，L2/L1 损失会把模型往「所有演示的平均」上拉，输出一个谁也没做过的折中动作（两臂同时微动 → 哪个都没抓到）。</p>
+
+<p>ACT 的解法是把策略做成<b>条件变分自编码器（CVAE）</b>——如果你没学过 VAE，只需记住一句话：<b>给模型配一个随机向量 z，让它把「这次选哪种做法」的决策外包给 z</b>。结构上：</p>
+
+<ul>
+  <li><b>训练时</b>：一个 Transformer 编码器（4 层）读入「专家动作块 \(a_{t:t+k}\) + 当前关节角」，压缩成一个 32 维的 z。z 相当于给这段动作打的「风格标签」——这条演示是「先左后右、动作偏快」的那一类。解码器（也就是策略本体）拿着 z + 图像 + 关节角，去重建整段动作。因为有 z 兜住模式差异，解码器不再需要在冲突的演示间取平均。</li>
+  <li><b>推理时</b>：编码器整个被扔掉（它需要看专家动作，而部署时没有专家）。z 直接置为先验均值 0——所有演示的「风格」都被 KL 项拉着向标准正态分布靠拢，所以 z=0 落在所有风格的中心，解码出一个「典型且合理」的动作块。</li>
+  <li><b>损失函数</b> = L1 重建项 + β·KL 正则项（β=10；论文实测 L1 比 L2 对动作序列建模更精确）。KL 项的角色：不让 z 变成「每条演示的身份证号」（那样 z=0 就废了），逼它只保留模式级别的信息。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="450" y="26" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">ACT 架构：CVAE 编码器（仅训练）+ Transformer 解码器（策略本体）</text>
+
+  <!-- encoder panel (train only) -->
+  <rect x="30" y="52" width="290" height="318" rx="10" fill="none" stroke="#e6c96a" stroke-width="2" stroke-dasharray="7,5"/>
+  <text x="46" y="78" font-size="13" font-weight="bold" fill="#9a7b1c">CVAE 编码器：仅训练时用，推理时整个扔掉</text>
+
+  <rect x="50" y="96" width="250" height="40" rx="6" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="175" y="113" font-size="12" fill="#1e293b" text-anchor="middle">专家动作块 a_t:t+k</text>
+  <text x="175" y="130" font-size="12" fill="#5a6272" text-anchor="middle">（100 × 14 维）</text>
+
+  <rect x="50" y="152" width="250" height="32" rx="6" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="175" y="173" font-size="12" fill="#1e293b" text-anchor="middle">关节角 q_t（14 维）</text>
+
+  <line x1="175" y1="136" x2="175" y2="152" stroke="#5a6272" stroke-width="1.5"/>
+  <line x1="175" y1="184" x2="175" y2="204" stroke="#5a6272" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="65" y="204" width="220" height="40" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="175" y="221" font-size="12" fill="#1e293b" text-anchor="middle">Transformer 编码器（4 层）</text>
+  <text x="175" y="238" font-size="12" fill="#5a6272" text-anchor="middle">[CLS] 位输出整块摘要</text>
+
+  <line x1="175" y1="244" x2="175" y2="264" stroke="#5a6272" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="85" y="264" width="180" height="34" rx="6" fill="#fff" stroke="#2456c4"/>
+  <text x="175" y="286" font-size="12" fill="#1e293b" text-anchor="middle">μ, σ → 重参数化采样</text>
+
+  <line x1="265" y1="281" x2="335" y2="281" stroke="#5a6272" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- z node -->
+  <rect x="335" y="259" width="86" height="44" rx="8" fill="#2456c4"/>
+  <text x="378" y="278" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">z</text>
+  <text x="378" y="295" font-size="12" fill="#dbeafe" text-anchor="middle">32 维风格变量</text>
+  <text x="378" y="325" font-size="12" fill="#9a7b1c" text-anchor="middle">推理时：z = 0</text>
+
+  <line x1="421" y1="281" x2="488" y2="299" stroke="#5a6272" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- decoder panel -->
+  <rect x="440" y="52" width="430" height="500" rx="10" fill="none" stroke="#e3e7ee" stroke-width="2"/>
+  <text x="456" y="78" font-size="13" font-weight="bold" fill="#2456c4">解码器 = 策略本体（训练与推理都在用）</text>
+
+  <rect x="460" y="96" width="190" height="56" rx="6" fill="#fff" stroke="#e3e7ee"/>
+  <text x="555" y="118" font-size="12" fill="#1e293b" text-anchor="middle">4 × RGB 图像 640×480</text>
+  <text x="555" y="138" font-size="12" fill="#5a6272" text-anchor="middle">顶部 / 前方 / 双腕</text>
+
+  <line x1="555" y1="152" x2="555" y2="170" stroke="#5a6272" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="460" y="170" width="190" height="34" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="555" y="192" font-size="12" fill="#1e293b" text-anchor="middle">CNN 骨干 → 图像特征</text>
+
+  <rect x="672" y="170" width="180" height="34" rx="6" fill="#fff" stroke="#e3e7ee"/>
+  <text x="762" y="192" font-size="12" fill="#1e293b" text-anchor="middle">关节角 q_t（本体感知）</text>
+
+  <rect x="672" y="220" width="180" height="34" rx="6" fill="#fff" stroke="#e3e7ee"/>
+  <text x="762" y="242" font-size="12" fill="#1e293b" text-anchor="middle">k=100 个可学习 query</text>
+
+  <line x1="555" y1="204" x2="555" y2="278" stroke="#5a6272" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="762" y1="204" x2="762" y2="220" stroke="#5a6272" stroke-width="1.5"/>
+  <line x1="762" y1="254" x2="762" y2="278" stroke="#5a6272" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="490" y="278" width="330" height="44" rx="6" fill="#eef3fc" stroke="#2456c4" stroke-width="2"/>
+  <text x="655" y="296" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">Transformer 解码器（7 层，交叉注意图像特征）</text>
+  <text x="655" y="314" font-size="12" fill="#5a6272" text-anchor="middle">输入：图像特征 + q_t + z + 100 个 query</text>
+
+  <line x1="655" y1="322" x2="655" y2="348" stroke="#5a6272" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="565" y="348" width="180" height="34" rx="6" fill="#fff" stroke="#e3e7ee"/>
+  <text x="655" y="370" font-size="12" fill="#1e293b" text-anchor="middle">MLP 动作头（降维）</text>
+
+  <line x1="655" y1="382" x2="655" y2="406" stroke="#5a6272" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="505" y="406" width="300" height="42" rx="6" fill="#2456c4"/>
+  <text x="655" y="424" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">动作块 â（100 × 14 维目标关节角）</text>
+  <text x="655" y="441" font-size="12" fill="#dbeafe" text-anchor="middle">交给底层伺服执行</text>
+
+  <text x="655" y="478" font-size="12" fill="#5a6272" text-anchor="middle">执行若干步后 → 拿新观测重新查询（循环）</text>
+  <text x="655" y="500" font-size="12" fill="#5a6272" text-anchor="middle">开启时间集成时：每步都查询，重叠块加权平均</text>
+  <text x="655" y="530" font-size="12" fill="#5a6272" text-anchor="middle">隐藏维 512 · 8 头 · dropout 0.1 · lr 1e-5 · batch 8</text>
+
+  <!-- loss box -->
+  <rect x="30" y="400" width="360" height="150" rx="10" fill="#f4f7fd" stroke="#e3e7ee"/>
+  <text x="48" y="428" font-size="13" font-weight="bold" fill="#2456c4">训练目标</text>
+  <text x="48" y="456" font-size="12" fill="#1e293b">Loss = L1(a, â) + β · KL( qφ(z|a,o) ‖ N(0, I) )</text>
+  <text x="48" y="482" font-size="12" fill="#5a6272">L1：重建的动作块贴近专家动作块（β=10）</text>
+  <text x="48" y="504" font-size="12" fill="#5a6272">KL：把 z 压向标准正态 → 推理时敢直接取 z=0</text>
+  <text x="48" y="530" font-size="12" fill="#5a6272">编码器只服务于「给演示打风格标签」这一件事</text>
+
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#5a6272"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+<p class="cap"><b>图 1-4</b>｜ACT 的 CVAE 结构（对应论文第 V 节 Fig. 4 与超参表 III）。训练时编码器把「专家动作块 + 关节角」压成 32 维风格变量 z，解码器以 z + 4 路图像 + 关节角为条件重建动作块；推理时编码器被丢弃，z 置 0。解码器输出 100×14：未来 100 步、每步 14 维目标关节角。</p>
+
+<h3>6.4 时间集成（temporal ensembling）：让块与块的交接不「咯噔」</h3>
+
+<p>纯分块有个副作用：块与块交接的瞬间（第 100 步切到新块），动作可能跳变。ACT 的补丁：<b>其实每一步都查询一次策略</b>，于是同一个物理时刻 t 会同时被多个块覆盖（t 时刻执行的动作，可能来自 1 步前、2 步前……最多 100 步前生成的块）。执行时对这些重叠预测做<b>指数加权平均</b>：\(w_i = \exp(-m \cdot i)\)，i 从最老的块数起，官方代码取 m = 0.01——权重曲线非常平缓，接近均匀平均，效果是把动作磨得平滑，同时保留反应性。消融显示时间集成给 ACT 带来 +3.3% 成功率，代价只是推理时多算几次。</p>
+
+<h3>6.5 官方代码逐段对照</h3>
+
+<p>以下片段全部来自官方实现 <code>tonyzhaozh/act</code>（浅克隆 commit <code>742c753</code>，2026-10-21 抓取），行号以该版本为准。</p>
+
+<p><b>① 训练损失与推理路径</b>（<code>policy.py:27-38</code>）——L1 + β·KL 就是图 1-4 左下那个框；推理时不传 <code>actions</code>，模型自动走「z 来自先验」分支：</p>
+
+<pre><code class="language-python">a_hat, is_pad_hat, (mu, logvar) = self.model(qpos, image, env_state, actions, is_pad)
+total_kld, dim_wise_kld, mean_kld = kl_divergence(mu, logvar)
+loss_dict = dict()
+all_l1 = F.l1_loss(actions, a_hat, reduction='none')
+l1 = (all_l1 * ~is_pad.unsqueeze(-1)).mean()      # 动作块不足 100 步时用 is_pad 掩掉补齐位
+loss_dict['l1'] = l1
+loss_dict['kl'] = total_kld[0]
+loss_dict['loss'] = loss_dict['l1'] + loss_dict['kl'] * self.kl_weight   # β=10
+...
+else:  # inference time
+    a_hat, _, (_, _) = self.model(qpos, image, env_state)  # no action, sample from prior</code></pre>
+
+<p><b>② 推理时 z 置零</b>（<code>detr/models/detr_vae.py:111-114</code>）——「编码器被扔掉」在代码里就是这一个分支：<code>actions=None</code>（推理）时不看任何专家动作，潜变量直接取全零向量：</p>
+
+<pre><code class="language-python">else:
+    mu = logvar = None
+    latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(qpos.device)
+    latent_input = self.latent_out_proj(latent_sample)</code></pre>
+
+<p><b>③ 时间集成的全部实现</b>（<code>imitate_episodes.py:250-259</code>）——<code>all_time_actions</code> 是一张「第几行 = 哪一步生成的块、第几列 = 预测哪个物理时刻」的大表；每步取出所有块对当前时刻 t 的预测，按块龄做指数加权平均：</p>
+
+<pre><code class="language-python">if temporal_agg:
+    all_time_actions[[t], t:t+num_queries] = all_actions   # 存入本次查询产出的 100 步预测
+    actions_for_curr_step = all_time_actions[:, t]         # 取出所有块对当前时刻 t 的预测
+    actions_populated = torch.all(actions_for_curr_step != 0, axis=1)
+    actions_for_curr_step = actions_for_curr_step[actions_populated]
+    k = 0.01                                               # 衰减系数 m
+    exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))  # 行 0 = 最老的块，权重最大
+    exp_weights = exp_weights / exp_weights.sum()
+    exp_weights = torch.from_numpy(exp_weights).cuda().unsqueeze(dim=1)
+    raw_action = (actions_for_curr_step * exp_weights).sum(dim=0, keepdim=True)</code></pre>
+
+<p>另一个值得注意的细节在 <code>imitate_episodes.py:191-194</code>：不开时间集成时 <code>query_frequency = num_queries</code>（每 100 步才查一次模型，即纯分块执行）；开了时间集成则 <code>query_frequency = 1</code>（每步都查）。图 1-3 中间一行与下面一行，在代码里就靠这一个变量切换。</p>
+
+<h3>6.6 成果：50 条演示，80–90% 成功率</h3>
+
+<p>ACT + ALOHA 在 6 个真实双臂任务上（打开半透明调味杯、插槽电池、穿 Velcro 魔术贴、双手交接胶带等）达到 80–90% 成功率，每个任务只用约 50 条演示（净数据 10–20 分钟）。三件消融把每个设计的功劳算得很清楚：</p>
+
+<table>
+  <tr><th style="width:34%">拆掉什么</th><th style="width:30%">后果（论文第 VI 节）</th><th>说明什么</th></tr>
+  <tr><td>动作分块（k=100 → k=1）</td><td>仿真平均成功率 44% → 1%</td><td>逐步 BC 在精密长任务上基本不可用</td></tr>
+  <tr><td>CVAE（人类演示数据）</td><td>成功率 35.3% → 2%</td><td>没有 z，模型在多模态人类数据上学到「平均动作」而崩溃；脚本演示（单模态）上拆不拆差别不大（59% vs 58%）</td></tr>
+  <tr><td>时间集成</td><td>ACT −3.3%，BC-ConvMLP −4%</td><td>平滑交接是普适增益</td></tr>
+</table>
+
+<div class="cap"><b>表 1-2</b>｜ACT 消融汇总。注意第二行：CVAE 只在「人类演示」（多模态、有停顿）上是生死线，在「脚本演示」（确定性）上无关紧要——多模态才是 z 存在的理由。</div>
+
+<div class="box">
+<span class="bt">ACT 的遗产</span>ACT 的三件遗产在今天的主流系统里都还活着：① <b>动作分块</b>——π0 一次预测 50 步动作块，Diffusion Policy 也输出多步动作（RT-2/OpenVLA 反而是单步输出，那是「动作语言化」路线付出的代价，见第 2、3 讲）；② <b>Transformer 联合编码图像 + 本体感 + 指令</b>——直接进化成「拿预训练 VLM 当编码器」；③ <b>用生成式模型处理多模态动作</b>——CVAE 的 z 被更强的扩散 / 流匹配动作头取代，后者天生会建模多模态分布，不再需要显式潜变量（<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>）。ACT 是这条演化链的根部。
+</div>
+
+<h2>7. 数据从哪来：具身智能的数据金字塔</h2>
+
+<p>LLM 的训练燃料是互联网文本——人类为了交流而免费生产了几十年的数据。机器人没有这份运气：<b>动作标签不会自然存在</b>，互联网上没有「(图像, 7 维末端位姿增量)」这样的成对数据。数据稀缺是具身智能与 LLM 最根本的不对称，也是整个领域所有路线之争的根源。业界习惯把数据来源画成一座金字塔：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 650" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="450" y="26" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">机器人学习数据金字塔</text>
+
+  <!-- up arrow -->
+  <line x1="34" y1="428" x2="34" y2="86" stroke="#5a6272" stroke-width="2"/>
+  <polygon points="34,80 29,94 39,94" fill="#5a6272"/>
+  <text x="24" y="260" font-size="12" fill="#5a6272" text-anchor="middle" transform="rotate(-90 24 260)">单条成本 · 动作标签质量 上升</text>
+
+  <!-- pyramid tiers -->
+  <polygon points="230,70 286,185 174,185" fill="#2456c4" stroke="#fff" stroke-width="2"/>
+  <polygon points="174,185 286,185 342,300 118,300" fill="#7c9fe0" stroke="#fff" stroke-width="2"/>
+  <polygon points="118,300 342,300 400,420 60,420" fill="#c9d8f2" stroke="#fff" stroke-width="2"/>
+  <text x="230" y="160" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">真机遥操作</text>
+  <text x="230" y="252" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">仿真合成</text>
+  <text x="230" y="368" font-size="12" font-weight="bold" fill="#1e293b" text-anchor="middle">互联网图文 / 视频</text>
+
+  <!-- tier1 labels -->
+  <line x1="258" y1="128" x2="428" y2="112" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="436" y="106" font-size="13" font-weight="bold" fill="#2456c4">塔尖：真机遥操作演示</text>
+  <text x="436" y="128" font-size="12" fill="#2a3040">ALOHA 主从臂 · UMI 手持夹爪 · VR 手柄 · 拖动示教</text>
+  <text x="436" y="149" font-size="12" fill="#2a3040">真实动作标签、质量最高、成本最高（约每小时 50–100 条）</text>
+  <text x="436" y="170" font-size="12" fill="#2a3040">代表：ACT 每任务 50 条；OXE 100 万+ 条轨迹几乎全出自此层</text>
+
+  <!-- tier2 labels -->
+  <line x1="314" y1="242" x2="428" y2="218" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="436" y="212" font-size="13" font-weight="bold" fill="#2456c4">塔中：仿真合成数据</text>
+  <text x="436" y="234" font-size="12" fill="#2a3040">Isaac Sim / Isaac Lab · RoboCasa：GPU 并行渲染上千个厨房场景</text>
+  <text x="436" y="255" font-size="12" fill="#2a3040">MimicGen：把约 200 条人类演示自动放大成 50K+ 条仿真演示</text>
+  <text x="436" y="276" font-size="12" fill="#2a3040">便宜、可无限扩展、自带完美标签，但有 sim2real gap（见下）</text>
+
+  <!-- tier3 labels -->
+  <line x1="371" y1="360" x2="428" y2="326" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="436" y="320" font-size="13" font-weight="bold" fill="#2456c4">塔基：互联网图文与人类视频</text>
+  <text x="436" y="342" font-size="12" fill="#2a3040">没有动作标签，但规模近乎无限、语义覆盖极广</text>
+  <text x="436" y="363" font-size="12" fill="#2a3040">用途①：预训练 VLM，提供语义与常识 —— RT-2 的配方（第 2 讲）</text>
+  <text x="436" y="384" font-size="12" fill="#2a3040">用途②：latent action，从视频学「伪动作标签」—— GO-1（第 5 讲）</text>
+
+  <text x="230" y="448" font-size="12" fill="#5a6272" text-anchor="middle">越往上：数量越少、每条越贵、动作标签越真；越往下：数据越多、标签越弱</text>
+
+  <!-- sim2real strip -->
+  <rect x="40" y="474" width="820" height="160" rx="10" fill="#fafbfd" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="60" y="502" font-size="13" font-weight="bold" fill="#2456c4">sim2real 与 domain randomization（域随机化）的直觉</text>
+
+  <rect x="62" y="518" width="66" height="66" rx="6" fill="#dbeafe" stroke="#3b82f6"/>
+  <line x1="62" y1="534" x2="128" y2="534" stroke="#3b82f6" stroke-width="2"/>
+  <line x1="62" y1="552" x2="128" y2="552" stroke="#3b82f6" stroke-width="2"/>
+  <line x1="62" y1="570" x2="128" y2="570" stroke="#3b82f6" stroke-width="2"/>
+  <text x="95" y="604" font-size="12" fill="#5a6272" text-anchor="middle">纹理 A</text>
+
+  <rect x="146" y="518" width="66" height="66" rx="6" fill="#fef3c7" stroke="#f59e0b"/>
+  <circle cx="179" cy="551" r="20" fill="#fde68a" stroke="#f59e0b" stroke-width="2"/>
+  <text x="179" y="604" font-size="12" fill="#5a6272" text-anchor="middle">光照 B</text>
+
+  <rect x="230" y="518" width="66" height="66" rx="6" fill="#d1fae5" stroke="#22c55e"/>
+  <rect x="248" y="536" width="30" height="30" fill="#a7f3d0" stroke="#22c55e" stroke-width="2" transform="rotate(18 263 551)"/>
+  <text x="263" y="604" font-size="12" fill="#5a6272" text-anchor="middle">物理参数 C</text>
+
+  <text x="200" y="628" font-size="12" fill="#5a6272" text-anchor="middle">同一个仿真任务，随机化外观 / 光照 / 质量 / 摩擦 / 电机延迟</text>
+
+  <line x1="330" y1="551" x2="392" y2="551" stroke="#5a6272" stroke-width="2" marker-end="url(#arr2)"/>
+
+  <rect x="400" y="520" width="200" height="62" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="500" y="546" font-size="12" fill="#1e293b" text-anchor="middle">仿真中百万次试错</text>
+  <text x="500" y="566" font-size="12" fill="#1e293b" text-anchor="middle">训练策略（RL 或 BC）</text>
+
+  <line x1="608" y1="551" x2="668" y2="551" stroke="#5a6272" stroke-width="2" marker-end="url(#arr2)"/>
+
+  <rect x="676" y="520" width="168" height="62" rx="8" fill="#fff" stroke="#e3e7ee" stroke-width="1.5"/>
+  <text x="760" y="546" font-size="12" fill="#1e293b" text-anchor="middle">真机部署：眼前的一切</text>
+  <text x="760" y="566" font-size="12" fill="#1e293b" text-anchor="middle">都是「没见过的随机化」</text>
+
+  <text x="760" y="608" font-size="12" fill="#5a6272" text-anchor="middle">随机化逼策略学「不变的结构」，</text>
+  <text x="760" y="628" font-size="12" fill="#5a6272" text-anchor="middle">而不是背某一套像素</text>
+
+  <defs>
+    <marker id="arr2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#5a6272"/>
+    </marker>
+  </defs>
+</svg>
+</div>
+<p class="cap"><b>图 1-5</b>｜上：数据金字塔三层（数量为量级示意，非等比例）。下：domain randomization 的直觉——训练时故意把仿真「弄得千奇百怪」，真机就只是又一种随机化。这也是第 5 节 locomotion RL 成功的核心配方。</p>
+
+<h3>7.1 塔尖：真机遥操作——贵，但每条都真</h3>
+
+<ul>
+  <li><b>ALOHA leader–follower</b>（第 6 节）：人手拖动主臂，50 Hz 关节镜像，双臂灵巧操作数据的标准产线。</li>
+  <li><b>UMI 手持夹爪</b>（arXiv:2402.10329）：把遥操作设备做到极致——一个<b>手持夹爪 + 一台 GoPro</b>（155° 鱼眼镜头，侧面装小镜子提供隐式立体视觉），人在任何真实环境里捏着夹爪做演示，GoPro 的 SLAM + IMU 实时解算夹爪 6 维轨迹，得到动作标签。<b>全程不需要机器人在场</b>；训出的策略用「相对轨迹动作表示 + 推理延迟对齐」做到跨本体，零样本部署到 Franka、UR5，还能学掷物这类动态任务。数据采集彻底和机器人本体解耦——这是「众包采集机器人数据」最有想象力的路线。</li>
+  <li><b>VR 遥操作 / 拖动示教</b>：戴 VR 手柄映射末端位姿（适合大动作，精度不如 ALOHA 的关节映射），或直接用手掰机器人臂走一遍轨迹（kinesthetic teaching，单臂简单任务常用）。Google 的 RT-1 数据（130k episodes）来自 13 台机器人 17 个月的遥操作，是「堆人力」路线的极致。</li>
+</ul>
+
+<h3>7.2 塔中：仿真合成——便宜，但要跨 sim2real 鸿沟</h3>
+
+<p>物理引擎（Isaac Sim / Isaac Lab、MuJoCo、SAPIEN）里渲染机器人和场景，动作标签免费且完美。两个代表：<b>RoboCasa</b>（arXiv:2406.02523，上百个厨房场景、上千类物体的大规模仿真基准）和 <b>MimicGen</b>（arXiv:2310.17596，NVIDIA）——后者的思路值得记住：给约 200 条人类演示，它把每段演示切成「对准物体 → 抓取 → 移动」等子任务片段，自动适配到新物体位姿上重新拼接，在 18 个任务上放大出 <b>50K+</b> 条仿真演示。人类演示负责「教结构」，仿真负责「铺数量」。代价是 <b>sim2real gap</b>：仿真渲染不像真实相机、接触物理算不准（软物体、摩擦、液体尤甚），治法就是图 1-5 下半的 domain randomization。操作任务的接触物理太复杂，随机化也补不齐，所以仿真数据在操作领域至今是辅助而非主力——这与 locomotion 形成鲜明对比（那里刚体接触简单，随机化足够跨过去）。</p>
+
+<h3>7.3 塔基：互联网数据——没有动作，但有一切「常识」</h3>
+
+<p>互联网图文和视频里没有动作标签，但藏着操作最需要的先验：「杯子有把手、把手用来握、玻璃会碎、抽屉要先拉再放」。利用方式有两条：</p>
+
+<ul>
+  <li><b>预训练 VLM</b>：先让模型在图文对上学语义，再接上动作头微调——RT-2、OpenVLA 的配方，本质是「把 LLM 的知识白嫖进机器人」（第 2、3 讲的主线）。</li>
+  <li><b>从视频学动作（latent action）</b>：人类操作视频虽没有 7 维动作标签，但「下一帧和上一帧的差别」本身就是一种监督。做法是训一个模型把视频帧间变化压缩成离散的<b>潜动作</b>（latent action，「伪 token」），用它预训练策略，再用少量真机数据把潜动作对齐到真实动作空间。这是把塔基数据真正变成「动作燃料」的最有野心的路线——Generalist AI 的 GO-1（GEN-0）是代表，<a href="vla-t5-frontier.html">第 5 讲</a>展开，此处按下不表。</li>
+</ul>
+
+<div class="box">
+<span class="bt">一句话总结燃料问题</span>VLA = 塔基的语义（VLM 预训练）+ 塔尖的肌肉记忆（真机演示微调）。各家 VLA 的差异，很大程度上就是「三层数据各掺多少」的配方差异——这也是<a href="vla-t5-frontier.html">第 5 讲</a>看前沿格局时最好用的一把尺子。
+</div>
+
+<h2>8. Open X-Embodiment：机器人领域的「ImageNet 时刻」</h2>
+
+<p>2023 年之前，每个实验室的数据都锁在自己的机器人和硬盘里：RT-1 的 130k episodes 只属于 Google Robot，Bridge 数据集只属于 WidowX。DeepMind 牵头 21 家机构把家底拼在了一起，就是 <b>Open X-Embodiment（OXE，arXiv:2310.08864）</b>：</p>
+
+<table>
+  <tr><th style="width:40%">维度</th><th>数字 / 内容</th></tr>
+  <tr><td>机器人本体（embodiment）</td><td><b>22 种</b>：单臂、双臂、四足、移动操作平台都在内，Franka 最多</td></tr>
+  <tr><td>子数据集</td><td><b>60 个</b>，来自全球 <b>34 个</b>机器人实验室，统一转成 RLDS 格式</td></tr>
+  <tr><td>轨迹总量</td><td><b>100 万+ 条</b>真实机器人轨迹</td></tr>
+  <tr><td>任务与技能</td><td><b>527 种技能</b>、<b>160,266 个任务</b>描述（语言指令）</td></tr>
+  <tr><td>动作表示</td><td>主流是 delta EE，训练时离散成 <b>256 个 bin</b>（变成「动作 token」）</td></tr>
+  <tr><td>RT-1-X 结果</td><td>在 OXE 混合数据上联训，成功率比各机构自家 SOTA <b>高 50%</b>（相对）</td></tr>
+  <tr><td>RT-2-X 结果</td><td>换 VLM 底座后，在分布外技能/物体/背景上泛化能力约 <b>3 倍</b>于只用自有数据训练的模型</td></tr>
+</table>
+
+<div class="cap"><b>表 1-3</b>｜OXE 关键数字（均出自论文摘要与第 II、III 节）。RT-1-X / RT-2-X 是把 RT-1 / RT-2 原封不动放到 OXE 混合数据上重训的版本——架构没变，只换了数据配方。</div>
+
+<p>OXE 想回答的问题很具体：<b>不同机器人的数据混在一起训练，是互相拖累还是互相帮助？</b>22 种本体的动作维度、相机位置、夹爪型号都不一样，直觉上「串味」很合理。RT-X 的实验给了明确答案：<b>正迁移（positive transfer）</b>——在自己本体上评测，用全联盟数据联训的模型，比只用自家数据训的更强（RT-1-X 相对提升 50%）。别的机器人的数据非但没拖后腿，反而带来了物体、场景、技能的多样性红利。</p>
+
+<p>这个结论的历史意义怎么强调都不过分：它证明了机器人数据存在跨本体的「可共享知识」，于是「攒各家数据 → 训一个大策略 → 各本体都受益」成为可行路线，机器人学习第一次有了类似 ImageNet 之于视觉、The Pile 之于 LLM 的公共数据底座。</p>
+
+<div class="infer">「ImageNet 时刻」是社区对 OXE 的流行类比而非论文原文用语（论文引言引用的是「大规模数据集驱动机器学习进步」这一普遍教训）；「可共享知识」的机制解释（视觉常识与任务结构跨本体通用，而低层动作差异被模型自行吸收）是对实验结果的合理转述，论文未做机制层面的归因分析。</div>
+
+<p>OXE 的直接后果：<b>OpenVLA（第 3 讲）</b>就是「7B 开源 VLM + OXE 的 970k 轨迹子集」训出来的——没有 OXE，开源社区根本凑不出这份数据。此后几乎所有开源 VLA 都以 OXE 为预训练底座，它成了这个领域事实上的标准训练集。</p>
+
+<h2>9. 小结：带走三个心智模型，下一讲见</h2>
+
+<p>这一讲的全部细节可以压缩成三句话：</p>
+
+<ol>
+  <li><b>机器人策略 = 条件生成模型 \(\pi_\theta(a \mid o)\)</b>。观测是图像 + 本体感 + 指令，动作是关节角或 delta EE 向量；控制分层，策略只管 3–50 Hz 地修订目标，底层伺服负责毫秒级追踪。</li>
+  <li><b>BC = 机器人版的监督学习</b>，被分布偏移与误差复合（\(O(\varepsilon T^2)\)）两把刀抵着喉咙；ACT 的三板斧——动作分块（k=100）、CVAE 潜变量（z，32 维，推理置 0）、时间集成（指数加权平均）——配 50 条遥操作演示就能学会双臂精密任务。</li>
+  <li><b>数据金字塔 = 燃料体系</b>：塔尖真机遥操作（ALOHA/UMI，贵而真）、塔中仿真合成（MimicGen/RoboCasa，便宜但有 sim2real gap，靠 domain randomization 硬 bridging）、塔基互联网（无动作标签，VLM 先验与 latent action 的原料）。OXE 把塔尖数据拼成了 22 本体、100 万+ 轨迹的公共底座，并用 RT-X 证明跨本体联训有正迁移。</li>
+</ol>
+
+<p>自查清单（都能答上来就过关）：</p>
+
+<ol class="checklist">
+  <li>关节空间和任务空间动作各长什么样？各举一个代表用户。（答：θ1…θ6+夹爪，绝对或增量角，ALOHA/ACT；Δx Δy Δz Δroll Δpitch Δyaw+夹爪 共 7 维，RT-1/OXE/多数 VLA）</li>
+  <li>covariate shift 和误差复合分别是什么？为什么误差是平方级的？（答：策略把自己带进训练没见过的状态；每步的小偏差让下一步偏得更多，T 步累积上界 O(εT²)）</li>
+  <li>动作分块为什么能同时缓解误差复合和多模态犹豫？（答：决策次数 ÷k，误差没有机会逐步滚雪球；整块轨迹一次承诺，不会在模式分岔口步步反悔）</li>
+  <li>ACT 的 z 是什么？训练和推理时分别从哪来？（答：32 维风格潜变量；训练时由编码器从「专家动作块+关节角」压出，推理时编码器被丢弃、z 置 0）</li>
+  <li>为什么操作领域主流是模仿学习而不是 RL？（答：真机试错太贵且不可逆、奖励难写、样本效率低；人类演示直接给出好动作）</li>
+  <li>数据金字塔三层各是什么，各有什么代价？（答：遥操作—贵；仿真—sim2real gap；互联网—无动作标签）</li>
+  <li>OXE 的核心实验结论是什么？（答：22 本体数据联训产生正迁移，RT-1-X 比各家自家 SOTA 相对高 50%）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一讲</span><a href="vla-t2-rt1-rt2.html">第 2 讲：RT-1 与 RT-2 精读</a>——地基打好了，该看 Google 怎么把「BC + 数据金字塔」装进 Transformer：RT-1 如何用 130k 遥操作 episodes 训出第一个大规模多任务机器人 Transformer（动作离散成 256 个 bin，next-token 式输出）；RT-2 如何更进一步，直接把 VLM 的文本词表借来当动作词表，让「互联网常识」第一次流进机器人动作——VLA 这个词，就是从它开始的。
+</div>
+
+<h2>参考文献</h2>
+
+<ol class="refs">
+  <li>Zhao, T. Z., Kumar, V., Levine, S., Finn, C. <i>Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware</i>（ALOHA / ACT）. <a href="https://arxiv.org/abs/2304.13705">arXiv:2304.13705</a>；项目页 <a href="https://tonyzhaozh.github.io/aloha/">tonyzhaozh.github.io/aloha</a>。本讲第 6 节硬件参数、消融数字与超参（k=100、β=10、50 demos、80–90% 成功率、50 Hz）均核自该论文原文。</li>
+  <li>ACT 官方代码：<a href="https://github.com/tonyzhaozh/act">github.com/tonyzhaozh/act</a>（浅克隆 commit <code>742c753</code>，2026-10-21 抓取）。第 6.5 节代码片段行号以此版本为准：<code>policy.py:27-38</code>、<code>detr/models/detr_vae.py:111-114</code>、<code>imitate_episodes.py:191-194, 250-259</code>。</li>
+  <li>Open X-Embodiment Collaboration. <i>Open X-Embodiment: Robotic Learning Datasets and RT-X Models</i>. <a href="https://arxiv.org/abs/2310.08864">arXiv:2310.08864</a>。第 8 节数字（22 本体、60 数据集、34 实验室、1M+ 轨迹、527 技能、160,266 任务、RT-1-X +50%、RT-2-X ~3×）核自该论文。</li>
+  <li>Brohan, A., et al. <i>RT-1: Robotics Transformer for Real-World Control at Scale</i>. <a href="https://arxiv.org/abs/2212.06817">arXiv:2212.06817</a>。130k episodes、13 台机器人、17 个月、700+ 任务、3 Hz 控制、256-bin 动作离散化出自该论文。</li>
+  <li>Chi, C., et al. <i>Universal Manipulation Interface: In-The-Wild Robot Teaching Without In-The-Wild Robots</i>（UMI）. <a href="https://arxiv.org/abs/2402.10329">arXiv:2402.10329</a>；项目页 <a href="https://umi-gripper.github.io/">umi-gripper.github.io</a>。</li>
+  <li>Mandlekar, A., et al. <i>MimicGen: A Data Generation System for Scalable Robot Learning using Human Demonstrations</i>. <a href="https://arxiv.org/abs/2310.17596">arXiv:2310.17596</a>。约 200 条人类演示 → 50K+ 生成演示、18 个任务，核自摘要。</li>
+  <li>Nasiriany, S., et al. <i>RoboCasa: Large-Scale Simulation of Everyday Tasks for Generalist Robots</i>. <a href="https://arxiv.org/abs/2406.02523">arXiv:2406.02523</a>。</li>
+  <li>Ross, S., Gordon, G., Bagnell, D. <i>A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning</i>（DAgger 与 BC 误差界）. <a href="https://arxiv.org/abs/1011.0686">arXiv:1011.0686</a>。</li>
+  <li>Lee, J., et al. <i>Learning quadrupedal locomotion over challenging terrain</i>（ANYmal）. <a href="https://arxiv.org/abs/2010.11251">arXiv:2010.11251</a>, Science Robotics 2020。</li>
+  <li>Rudin, N., et al. <i>Learning to Walk in Minutes Using Massively Parallel Deep Reinforcement Learning</i>. <a href="https://arxiv.org/abs/2109.11978">arXiv:2109.11978</a>。单 GPU 并行仿真、平地 4 分钟/崎岖 20 分钟训出 ANYmal 步态，核自摘要。</li>
+  <li>Makoviychuk, V., et al. <i>Isaac Gym: High Performance GPU-Based Physics Simulation for Robot Learning</i>. <a href="https://arxiv.org/abs/2108.10470">arXiv:2108.10470</a>。</li>
+  <li>OpenAI, Akkaya, I., et al. <i>Learning Dexterous In-Hand Manipulation</i>. <a href="https://arxiv.org/abs/1808.00177">arXiv:1808.00177</a>；后续 <i>Solving Rubik's Cube with a Robot Hand</i>. <a href="https://arxiv.org/abs/1910.07113">arXiv:1910.07113</a>。</li>
+  <li>Chi, C., et al. <i>Diffusion Policy: Visuomotor Policy Learning via Action Diffusion</i>. <a href="https://arxiv.org/abs/2303.04137">arXiv:2303.04137</a>。本讲仅提名，数学与实现见<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>。</li>
+  <li>Kim, M. J., et al. <i>OpenVLA: An Open-Source Vision-Language-Action Model</i>. <a href="https://arxiv.org/abs/2406.09246">arXiv:2406.09246</a>。7B 模型、OXE 970k 轨迹子集、256-bin 动作离散化核自该论文。</li>
+  <li>Black, K., et al. <i>π0: A Vision-Language-Action Flow Model for General Robot Control</i>. <a href="https://arxiv.org/abs/2410.24164">arXiv:2410.24164</a>。本讲仅提及动作分块思想的延续，详见<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>。</li>
+  <li>Generalist AI（原 Physical Intelligence 团队）. <i>GO-1 / GEN-0: Enabling Generalized Robot Learning from Massive Multimodal Data</i>（技术报告与博客）. <a href="https://www.generalistai.com/blog/go-1">generalistai.com/blog/go-1</a>。latent action 路线的代表，<a href="vla-t5-frontier.html">第 5 讲</a>展开。</li>
+</ol>
+
+<footer>生成于 2026-10-21 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

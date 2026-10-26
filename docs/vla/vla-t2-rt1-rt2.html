@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>具身智能与 VLA 零基础七讲 · 第 2 讲：VLA 的诞生——RT-1 与 RT-2，动作变成 token</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>具身智能与 VLA 零基础七讲 · 第 2 讲：VLA 的诞生——RT-1 与 RT-2，动作变成 token</h1>
+
+<div class="series-nav">
+  <a href="vla-t0-overview.html">0 全景地图</a>
+  <a href="vla-t1-robot-learning.html">1 机器人学习</a>
+  <a class="here">2 RT-1·RT-2</a>
+  <a href="vla-t3-openvla.html">3 OpenVLA</a>
+  <a href="vla-t4-diffusion-pi0.html">4 Diffusion·π0</a>
+  <a href="vla-t5-frontier.html">5 前沿全景</a>
+  <a href="vla-t6-roadmap.html">6 实战路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>具身智能与 VLA 零基础七讲（本篇为第 2 讲）。<a href="vla-t1-robot-learning.html">第 1 讲</a>里的动作空间（delta EE 7 维）、行为克隆、数据金字塔、Open X-Embodiment 等概念本篇直接使用、不再重讲。</p>
+  <p style="margin:4px 0"><b>读者假设：</b>知道 token、自回归、微调是什么，大概听说过 VLM（视觉语言模型）。机器人行话第一次出现都会解释。</p>
+  <p style="margin:4px 0"><b>资料与核实：</b>全部数字以 arXiv 原文为准（本地归档 <code>paper/rt-1.pdf</code>、<code>paper/rt-2.pdf</code>、<code>paper/saycan.pdf</code>、<code>paper/palm-e.pdf</code>、<code>paper/open-x-embodiment.pdf</code>、<code>paper/rt-h.pdf</code>）；代码片段来自 RT-1 官方开源仓库 <code>google-research/robotics_transformer</code>（commit <code>4569641</code>，最后提交 2023-02-10，2026-10-21 抓取）。</p>
+</div>
+
+<div class="tldr">
+<p><b>一句话主线：</b>Google Robotics 用两步把「机器人策略」变成了「大模型」。<b>第一步 RT-1</b>（2022.12）：一个只有 3500 万参数的专用 Transformer，靠 13 台机器人 17 个月攒下的约 13 万条真机演示，吃下 700 多条任务指令，证明「机器人数据也能喂出多任务大模型」，并且第一次把<b>动作离散成 256 个 bin、当分类问题训练</b>——「动作 tokenization」由此诞生。<b>第二步 RT-2</b>（2023.7）：不再造机器人专用模型，而是拿现成的 VLM（PaLI-X / PaLM-E，最大 55B）继续训练，把动作「写成文本」、借用 VLM 词表里的 token 输出——机器人第一次<b>继承了互联网知识</b>，出现符号理解、推理等<b>涌现泛化</b>能力。「vision-language-action model（VLA）」这个词就是 RT-2 论文正式提出的，本讲讲透它的出生过程。</p>
+</div>
+
+<h2>1. 背景：2021–2022，「一个任务一个模型」的时代</h2>
+
+<p>在 RT-1 之前，机器人学习的主流工作流是这样的：想让机器人叠积木，就采一批叠积木的演示数据、训一个叠积木的模型；想开抽屉，就再采一批开抽屉的数据、再训一个模型——术语叫<b>单任务 / 少任务策略</b>。这和 2010 年代的计算机视觉一模一样：每个数据集各训各的分类器。而 NLP 和 CV 已经先后证明了另一条路：<b>先用海量、任务无关的数据训一个大模型，再迁移到具体任务</b>。机器人领域没跟上，原因很实际：互联网文本和图片几乎免费，机器人数据却要人握着遥控手柄一条条采——这个过程叫<b>遥操作（teleoperation）</b>：人远程操控机器人做示范，机器人的动作被录下来当训练数据（第 1 讲的数据采集部分讲过）。</p>
+
+<p>Google Robotics（及其机器人子公司 Everyday Robots）手里有一份别人没有的资产：一支 <b>13 台移动操作机器人</b>的车队。每台机器人有 7 自由度机械臂（<b>自由度 degree-of-freedom, DoF</b>：可独立运动的关节数）、两指夹爪和一个可移动底座，部署在仿办公室厨房的「机器人教室」里，由专职团队<b>连续 17 个月</b>采集数据，累计约 <b>13 万条演示轨迹（episodes）</b>、覆盖 <b>744 条不同的语言指令</b>（论文 Table 1：pick、move near、place upright、knock over、open/close drawer、放入/取出容器等 12 类技能 × 大量物体）。「轨迹 / episode」指从任务开始到结束的一整段「观察 + 动作」记录。</p>
+
+<div class="infer">「数据引擎先于模型」——先把大规模采数据的基础设施建起来，模型架构反而是后置的选择——是 RT 系列给整个领域留下的最重要规律之一。后来的 Open X-Embodiment、OpenVLA（第 3 讲）、π0（第 4 讲）全都踩在这条规律上：谁能攒到更大更杂的机器人数据，谁就定义下一代模型的上限。这是我对这段历史的归纳，论文本身没有这样表述。</div>
+
+<p>有了数据，还需要两个前奏性的探索来回答「LLM / VLM 到底能在机器人系统里干什么」。这就是下面两篇。</p>
+
+<h2>2. 前奏两篇：SayCan 与 PaLM-E</h2>
+
+<h3>2.1 SayCan（2022.4）：LLM 当规划器，但不碰手柄</h3>
+
+<p>SayCan（论文标题 <i>Do As I Can, Not As I Say</i>，「照我能做的做，别照我说的做」，arXiv:2204.01691）要解决的问题是：LLM 懂常识（知道「打扫洒掉的饮料」要先拿海绵、再擦、再扔垃圾桶），但不知道机器人此刻<b>能</b>做什么。它的方案是把两个分数相乘——先人工预建一个底层技能库（论文提出 551 个候选技能，如「拿起 X」「走到桌子旁」，每个技能都是一个独立训练好的小策略，并配一个<b>值函数（value function）</b>：强化学习里估计「当前状态下执行该技能的成功概率」的函数），然后每一步决策时给每个技能打分：</p>
+
+<div class="formula">
+\[ \text{score}(\pi) \;=\; \underbrace{p_{\text{LLM}}(\ell_\pi \mid i, \ell_{\pi_0}, \dots)}_{\text{语义分：LLM 觉得下一步该做什么}} \;\times\; \underbrace{p_{\text{aff}}(c_\pi \mid s, \ell_\pi)}_{\text{可行分：值函数觉得当前状态下做得成吗}} \]
+</div>
+
+<p>选分数最高的技能执行，循环直到完成（论文 Algorithm 1）。\(\ell_\pi\) 是技能的语言描述，\(i\) 是用户的高层指令，\(s\) 是当前观察。「可行分」也叫 <b>affordance（可供性）</b>：环境「允许」机器人做什么。在 101 条指令的评测里，PaLM-SayCan 在模拟厨房达到 <b>84% 规划成功率、74% 执行成功率</b>（真实厨房 81% / 60%）。</p>
+
+<p><b>关键局限：</b>LLM 全程只在「技能层」说话，从不产生底层电机动作；技能库要人工逐个预建（每个技能都要自己的演示数据和值函数）；语义理解和运动执行是两个互不相通的模块。SayCan 的底层技能后来被 RT-1 替换，效果立竿见影（RT-1 论文 Table 6：SayCan w/ RT-1 在两个真实厨房的长程任务执行成功率均为 67%，而 w/ Gato 为 33%/0%、w/ BC-Z 为 53%/13%）。</p>
+
+<h3>2.2 PaLM-E（2023.3）：把「眼睛」接进 LLM，但输出仍是语言</h3>
+
+<p>PaLM-E（arXiv:2303.03378）走了另一条路：不预建技能库，而是把图像、机器人状态等连续信号经过编码器（ViT，Vision Transformer）变成一串 <b>embedding（连续向量）</b>，直接注入 LLM 的输入序列——文本里的特殊占位 token 被替换成这些向量，LLM 像「读」文字一样「读」图像。最大的 PaLM-E-562B = 540B 的 PaLM 语言模型 + 22B 的 ViT，是当时最大的多模态模型，在 OK-VQA（看图问答基准）上拿了 SOTA，还能做机器人任务规划——但输出的是<b>语言计划</b>（「先去抽屉→打开顶层抽屉→拿出薯片袋」），不是动作。</p>
+
+<p>PaLM-E 最重要的实验发现是<b>正迁移（positive transfer）</b>：把具身数据（机器人图像、规划数据）混进多模态训练，不但没拖累语言能力，反而让视觉问答、图像描述等任务变好了。这直接启发了 RT-2 的反向操作：既然具身训练能帮到语言任务，那<b>让 VLM 直接输出动作</b>，互联网知识是不是也能帮到机器人？PaLM-E 还有一个更直接的贡献：它的 12B 版本（8B PaLM + 4B ViT）后来就是 RT-2 的两个主干之一（RT-2-PaLM-E）。</p>
+
+<div class="infer">把 PaLM-E 称为「RT-2 的思想跳板」是我的叙事概括：两个事实支撑都在论文里（RT-2 用 PaLM-E 当主干之一、RT-2 引用其正迁移结论），但「跳板」这个因果定位是我加的。</div>
+
+<h2>3. RT-1 精读：数据喂出来的机器人 Transformer</h2>
+
+<p>RT-1（Robotics Transformer 1，arXiv:2212.06817）的野心写在摘要里：证明机器人领域也能复制「大数据 + 大模型 → 泛化」的公式。它的答案分两半：<b>数据</b>（第 1 节说的约 130k 轨迹、744 指令）和<b>模型</b>（一个为实时控制量身定做的 35M 参数 Transformer）。</p>
+
+<h3>3.1 架构：为 3 Hz 实时控制而设计</h3>
+
+<p>先解释一个硬约束：机器人是<b>闭环控制（closed-loop control）</b>的——模型每输出一步动作，机器人动一下，摄像头拍新画面，模型再根据新画面输出下一步，边看边做、错了能纠。人类演示动作的节奏约 2–4 秒一小步，论文据此推出模型至少要 <b>3 Hz</b>（每秒推理 3 次，即单次推理预算 &lt;100 毫秒）才不拖后腿。这决定了 RT-1 不能像 GPT 那样堆参数，只能精打细算：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 470" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arr1" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#2456c4"/></marker>
+  </defs>
+  <text x="450" y="30" font-size="16" font-weight="bold" fill="#1a1f2e" text-anchor="middle">RT-1：从相机帧到动作 token（共 35M 参数，3 Hz 实时推理）</text>
+  <text x="450" y="52" font-size="12" fill="#5a6272" text-anchor="middle">数据流对应论文 Figure 1a 与 Figure 3（Section 5.1）</text>
+
+  <rect x="24" y="70" width="120" height="92" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="84" y="96" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">相机图像</text>
+  <text x="84" y="118" font-size="12" fill="#2a3040" text-anchor="middle">最近 6 帧</text>
+  <text x="84" y="138" font-size="12" fill="#2a3040" text-anchor="middle">300×300 像素</text>
+  <line x1="144" y1="116" x2="172" y2="116" stroke="#2456c4" stroke-width="2" marker-end="url(#arr1)"/>
+
+  <rect x="176" y="70" width="176" height="92" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="264" y="96" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">FiLM EfficientNet-B3</text>
+  <text x="264" y="118" font-size="12" fill="#2a3040" text-anchor="middle">16M · ImageNet 预训练</text>
+  <text x="264" y="138" font-size="12" fill="#2a3040" text-anchor="middle">每帧输出 81 个视觉 token</text>
+  <line x1="352" y1="116" x2="380" y2="116" stroke="#2456c4" stroke-width="2" marker-end="url(#arr1)"/>
+
+  <rect x="384" y="70" width="140" height="92" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="454" y="96" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">TokenLearner</text>
+  <text x="454" y="118" font-size="12" fill="#2a3040" text-anchor="middle">81 → 8 token / 帧</text>
+  <text x="454" y="138" font-size="12" fill="#2a3040" text-anchor="middle">压缩序列省算力</text>
+  <line x1="524" y1="116" x2="552" y2="116" stroke="#2456c4" stroke-width="2" marker-end="url(#arr1)"/>
+
+  <rect x="556" y="70" width="152" height="92" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="632" y="96" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">Transformer</text>
+  <text x="632" y="118" font-size="12" fill="#2a3040" text-anchor="middle">decoder-only 8 层 · 19M</text>
+  <text x="632" y="138" font-size="12" fill="#2a3040" text-anchor="middle">输入 48 个 token</text>
+  <line x1="708" y1="116" x2="736" y2="116" stroke="#2456c4" stroke-width="2" marker-end="url(#arr1)"/>
+
+  <rect x="740" y="70" width="136" height="92" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="808" y="96" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">输出头</text>
+  <text x="808" y="118" font-size="12" fill="#2a3040" text-anchor="middle">11 维 × 256 类</text>
+  <text x="808" y="138" font-size="12" fill="#2a3040" text-anchor="middle">softmax 分类</text>
+
+  <rect x="24" y="210" width="120" height="56" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="84" y="232" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">语言指令</text>
+  <text x="84" y="252" font-size="12" fill="#2a3040" text-anchor="middle">"pick apple"</text>
+  <line x1="144" y1="238" x2="172" y2="238" stroke="#2456c4" stroke-width="2" marker-end="url(#arr1)"/>
+  <rect x="176" y="210" width="176" height="56" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="264" y="232" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">USE 句编码器</text>
+  <text x="264" y="252" font-size="12" fill="#2a3040" text-anchor="middle">指令 → 512 维句向量</text>
+  <line x1="264" y1="210" x2="264" y2="166" stroke="#2456c4" stroke-width="2" marker-end="url(#arr1)"/>
+  <text x="282" y="192" font-size="12" fill="#5a6272">FiLM 调制：(1+γ)·特征 + β</text>
+
+  <line x1="808" y1="162" x2="808" y2="306" stroke="#2456c4" stroke-width="2" marker-end="url(#arr1)"/>
+  <rect x="740" y="310" width="136" height="64" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="808" y="334" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">动作 token</text>
+  <text x="808" y="356" font-size="12" fill="#2a3040" text-anchor="middle">11 个 0–255 整数</text>
+  <line x1="740" y1="342" x2="712" y2="342" stroke="#2456c4" stroke-width="2" marker-end="url(#arr1)"/>
+  <rect x="556" y="310" width="152" height="64" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="632" y="334" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">detokenize 反解</text>
+  <text x="632" y="356" font-size="12" fill="#2a3040" text-anchor="middle">bin → 米 / 弧度 / 速度</text>
+  <line x1="556" y1="342" x2="528" y2="342" stroke="#2456c4" stroke-width="2" marker-end="url(#arr1)"/>
+  <rect x="384" y="310" width="140" height="64" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="454" y="334" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">机器人执行</text>
+  <text x="454" y="356" font-size="12" fill="#2a3040" text-anchor="middle">3 Hz 闭环控制</text>
+  <text x="24" y="334" font-size="12" fill="#5a6272">闭环 = 边看边做、错了下一步纠正；</text>
+  <text x="24" y="356" font-size="12" fill="#5a6272">输出 terminate token 或超时才结束。</text>
+
+  <text x="24" y="410" font-size="12" fill="#2a3040">实时预算：单次推理 &lt; 100 ms。TokenLearner 提速 2.4×，图像 token 跨步缓存再提速 1.7×（论文 Section 5.1）。</text>
+  <text x="24" y="434" font-size="12" fill="#2a3040">11 维动作一次性并行输出、不逐个自回归采样——消融显示自回归反而慢 2 倍以上且无收益（论文 Table 13）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-1</b>｜RT-1 架构总览（依据论文 Figure 1a、Figure 3 与 Section 5.1 重绘）。三个组件各司其职：FiLM-EfficientNet 负责「带着指令去看图」，TokenLearner 负责「把看到的压缩成 8 个重点」，Transformer 负责「结合 6 帧历史决定动作」。</p>
+
+<p>逐个组件拆开看（论文 Section 5.1）：</p>
+<ul>
+  <li><b>指令编码</b>：语言指令先经过 <b>USE（Universal Sentence Encoder，谷歌的预训练句向量模型）</b>变成一个 512 维句向量——注意 RT-1 不让 Transformer 自己读文字，而是借用一个现成句向量，省参数。</li>
+  <li><b>FiLM EfficientNet-B3</b>：图像用 ImageNet 预训练的 EfficientNet-B3（一种轻量卷积网络）提特征，输出 9×9×512 的特征图，摊平成每帧 81 个视觉 token。关键设计是 <b>FiLM 层</b>（Feature-wise Linear Modulation，特征级线性调制）：把指令向量变成两组系数 \(\gamma, \beta\)，对图像特征做 \((1+\gamma)\cdot x + \beta\) 的逐通道缩放平移——相当于「带着问题看图」，任务相关区域被放大。FiLM 的两个 dense 层零初始化，训练开始时等于恒等映射，不破坏 EfficientNet 的预训练权重。图像 + 指令部分共 16M 参数。</li>
+  <li><b>TokenLearner</b>：81 token × 6 帧 = 486 个 token，小 Transformer 也算不动（注意力开销随 token 数平方增长）。TokenLearner 是一个学出来的「软选择」模块，把每帧 81 个 token 压成 <b>8 个</b>信息量最大的 token，6 帧共 48 个——这是 3 Hz 实时的第一功臣（提速 2.4 倍）。</li>
+  <li><b>Transformer</b>：decoder-only、8 层自注意力、19M 参数，对 48 个 token 做注意力后输出动作。全模型合计 <b>35M 参数</b>——不到 GPT-2 small 的 1/3。论文证明这个「小」是刻意的：受实时约束，模型大小不是越大越好（附录 D.4：砍到 21M 掉点，但推理时间从 129ms 的 Gato 级降到 15ms）。</li>
+</ul>
+
+<h3>3.2 动作 tokenization：本讲最重要的发明</h3>
+
+<p>现在到关键问题了：<b>Transformer 天生只会做「从固定词表里选 token」的分类题，怎么让它输出连续的机械臂动作？</b>RT-1 的答案简单粗暴：把连续动作<b>离散化（discretize）</b>。动作共 11 维（论文 Section 4 / 5.1）：</p>
+
+<table>
+  <tr><th style="width:28%">动作维度</th><th>含义</th><th style="width:26%">离散化方式</th></tr>
+  <tr><td>臂末端 x, y, z 位移（3 维）</td><td><b>末端执行器（end-effector）</b>——机械臂最前端装夹爪的那个点，第 1 讲讲过——在空间里平移多少米</td><td rowspan="3">每个连续维在取值范围内<b>均匀切 256 个 bin（格子）</b>，动作值落在哪个格子，就输出格子编号（0–255 的整数）</td></tr>
+  <tr><td>臂 roll, pitch, yaw 旋转（3 维）</td><td>末端执行器绕三个轴各转多少（翻滚 / 俯仰 / 偏航）</td></tr>
+  <tr><td>夹爪开合（1 维）</td><td>两指夹爪的张开程度</td></tr>
+  <tr><td>底座 x, y, yaw（3 维）</td><td>移动底盘前进 / 平移 / 转向多少</td><td>同上，256 bin</td></tr>
+  <tr><td>模式切换（1 维，本身离散）</td><td>三选一：控制手臂 / 控制底座 / <b>终止任务（terminate）</b></td><td>直接当分类维度</td></tr>
+</table>
+
+<p>于是一个动作 = <b>11 个整数</b>，每个 ∈ {0, …, 255}；模型输出 11 个 256 类的 softmax 分类，损失函数就是最普通的<b>分类交叉熵（cross-entropy）</b>（论文 Section 5.1 "Loss"）。用第 1 讲的行为克隆框架写出来，就是对演示轨迹最大化「专家动作 token」的对数似然：</p>
+
+<div class="formula">
+\[ \mathcal{L}_{\text{BC}} \;=\; -\sum_{k=1}^{11} \log p_\theta\!\left(y_k \,\middle|\, i,\; \{x_j\}_{j=0}^{t}\right), \qquad y_k \in \{0,\dots,255\} \]
+</div>
+
+<p>其中 \(y_k\) 是第 \(k\) 维动作的 bin 编号，\(i\) 是指令，\(\{x_j\}\) 是最近 6 帧图像。训练时带因果掩码；最终版推理时 11 维一次并行输出、不做自回归（论文 Table 13 消融：加自回归慢 2 倍以上且效果略降，所以砍掉了）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 440" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arr2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#2456c4"/></marker>
+  </defs>
+  <text x="450" y="30" font-size="16" font-weight="bold" fill="#1a1f2e" text-anchor="middle">动作 tokenization：把「动多少」变成「第几格」</text>
+  <text x="450" y="52" font-size="12" fill="#5a6272" text-anchor="middle">以「末端执行器 x 位移」这一维为例，其余 10 维同理（论文 Section 5.1 "Action tokenization"）</text>
+
+  <rect x="24" y="72" width="196" height="80" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="122" y="96" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">① 取一维动作</text>
+  <text x="122" y="118" font-size="12" fill="#2a3040" text-anchor="middle">末端 x 位移 Δx</text>
+  <text x="122" y="138" font-size="12" fill="#2a3040" text-anchor="middle">当前值 = +0.35 米</text>
+  <line x1="220" y1="112" x2="232" y2="112" stroke="#2456c4" stroke-width="2" marker-end="url(#arr2)"/>
+
+  <rect x="236" y="72" width="196" height="80" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="334" y="96" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">② 均匀切 256 个格</text>
+  <text x="334" y="118" font-size="12" fill="#2a3040" text-anchor="middle">取值范围 [−1.0, +1.0]</text>
+  <text x="334" y="138" font-size="12" fill="#2a3040" text-anchor="middle">每格宽 ≈ 0.0078 米</text>
+  <line x1="432" y1="112" x2="444" y2="112" stroke="#2456c4" stroke-width="2" marker-end="url(#arr2)"/>
+
+  <rect x="448" y="72" width="196" height="80" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="546" y="96" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">③ 算出落在第几格</text>
+  <text x="546" y="118" font-size="12" fill="#2a3040" text-anchor="middle">(0.35+1)/2 × 255 = 172.1</text>
+  <text x="546" y="138" font-size="12" fill="#2a3040" text-anchor="middle">截断取整 → 编号 172</text>
+  <line x1="644" y1="112" x2="656" y2="112" stroke="#2456c4" stroke-width="2" marker-end="url(#arr2)"/>
+
+  <rect x="660" y="72" width="196" height="80" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="758" y="96" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">④ 变成分类题</text>
+  <text x="758" y="118" font-size="12" fill="#2a3040" text-anchor="middle">256 类 softmax</text>
+  <text x="758" y="138" font-size="12" fill="#2a3040" text-anchor="middle">交叉熵损失训练</text>
+
+  <text x="24" y="196" font-size="13" font-weight="bold" fill="#1a1f2e">[−1, +1] 上的 256 个格子（示意，未按实际数量绘制）：</text>
+  <rect x="80" y="216" width="740" height="26" fill="#eef3fc" stroke="#2456c4"/>
+  <g stroke="#c7d4ee">
+    <line x1="126" y1="216" x2="126" y2="242"/><line x1="172" y1="216" x2="172" y2="242"/>
+    <line x1="219" y1="216" x2="219" y2="242"/><line x1="265" y1="216" x2="265" y2="242"/>
+    <line x1="311" y1="216" x2="311" y2="242"/><line x1="357" y1="216" x2="357" y2="242"/>
+    <line x1="404" y1="216" x2="404" y2="242"/><line x1="450" y1="216" x2="450" y2="242"/>
+    <line x1="496" y1="216" x2="496" y2="242"/><line x1="542" y1="216" x2="542" y2="242"/>
+    <line x1="629" y1="216" x2="629" y2="242"/><line x1="675" y1="216" x2="675" y2="242"/>
+    <line x1="721" y1="216" x2="721" y2="242"/><line x1="768" y1="216" x2="768" y2="242"/>
+  </g>
+  <rect x="573" y="216" width="10" height="26" fill="#2456c4"/>
+  <text x="80" y="262" font-size="12" fill="#5a6272">−1.0</text>
+  <text x="450" y="262" font-size="12" fill="#5a6272" text-anchor="middle">0</text>
+  <text x="820" y="262" font-size="12" fill="#5a6272" text-anchor="end">+1.0</text>
+  <line x1="578" y1="300" x2="578" y2="250" stroke="#2456c4" stroke-width="2" marker-end="url(#arr2)"/>
+  <text x="578" y="320" font-size="12" font-weight="bold" fill="#2456c4" text-anchor="middle">Δx=+0.35 落进第 172 格（覆盖约 [+0.344, +0.352)）</text>
+
+  <text x="24" y="356" font-size="12" fill="#2a3040">反解 detokenize：172 ÷ 255 × 2 − 1 ≈ +0.349 米 —— 与真值 0.35 只差 0.001，这就是离散化的「量化误差」。</text>
+  <text x="24" y="388" font-size="12" fill="#2a3040">RT-1 有 11 个这样的维度：臂 x,y,z + roll,pitch,yaw + 夹爪开合 + 底座 x,y,yaw + 模式切换；</text>
+  <text x="24" y="410" font-size="12" fill="#2a3040">一个动作 = 11 个整数。RT-2 原样继承 256-bin 方案，只是把整数进一步「写进」VLM 的词表。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-2</b>｜动作 tokenization 机制（依据论文 Section 5.1 "Action tokenization" 与开源代码 <code>tokenizers/action_tokenizer.py</code> 绘制）。数字例子按开源代码公式 <code>int((a−min)/(max−min)×(vocab−1))</code> 实算。</p>
+
+<p>为什么要多此一举地离散化，而不是让网络直接回归输出 11 个小数（MSE 损失）？论文用消融实验（Table 13）回答了：换成连续高斯输出后，seen tasks 从 97% 暴跌到 68%，抗干扰从 83% 跌到 37%。原因是<b>人类演示是多峰的</b>：绕开同一个障碍物，可以从左边绕也可以从右边绕，两种动作都对。高斯回归会把两个峰「平均」成中间的错误动作；而 256 类分类分布天生能表达「172 号和 30 号格子概率都高」这种多峰形状。<b>离散化不只是工程妥协，它是表达能力的选择。</b>这一点在第 4 讲会再次出现——扩散 / 流匹配路线用另一种方式（直接建模连续多峰分布）解决同一个问题。</p>
+
+<h3>3.3 代码对照：开源 RT-1 里的动作 tokenizer</h3>
+
+<p>RT-1 开源了推理代码（github.com/google-research/robotics_transformer，本节代码均出自 commit <code>4569641</code>）。核心的动作 tokenizer 只有一百多行。先看文件头注释——它给出的动作规格恰好是 8 个 token（终止 1 + 平移 3 + 旋转 3 + 夹爪 1），比论文正文的 11 维少了底座 3 维和模式维，与 RT-2 论文里的 8 槽格式一致（开源版针对已发布 checkpoint 的纯操作任务）：</p>
+
+<pre><code class="language-python"># tokenizers/action_tokenizer.py:16-22
+# As an example, if an action is:
+# terminate = [0, 1]
+# world_vector = [0.9, 0.8, -0.3]
+# rotation_delta = [-0.1, 0.2, .6]
+# gripper_closedness = 0.9
+# Then we build a sequence of tokens of length 8 [one for each dimension].</code></pre>
+
+<p>tokenize 的核心几行就是图 2-2 的「②③步」写成代码——先裁剪到合法范围，再归一化到 [0,1]，乘 (vocab−1) 截断取整：</p>
+
+<pre><code class="language-python"># tokenizers/action_tokenizer.py:103-127（节选，省略若干断言）
+def tokenize(self, action: tensorspec_utils.TensorSpecStruct) -> tf.Tensor:
+    """Tokenizes an action."""
+    action_tokens = []
+    for k in self._action_order:
+      a = action[k]  # a is [batch, actions_size]
+      spec = self._action_spec[k]
+      if spec.dtype == tf.int32:
+        # Int32 actions are already assumed to be tokens ...
+        token = tf.argmax(a, axis=-1, output_type=tf.int32)
+        token = tf.expand_dims(token, axis=-1)
+      else:
+        a = tf.clip_by_value(a, spec.minimum, spec.maximum)
+        # Normalize the action [batch, actions_size]
+        token = (a - spec.minimum) / (spec.maximum - spec.minimum)
+        # Bucket and discretize the action to vocab_size, [batch, actions_size]
+        token = tf.cast(token * (self._vocab_size - 1), tf.int32)
+      action_tokens.append(token)
+    # Append all actions, [batch, all_actions_size]
+    action_tokens = tf.concat(action_tokens, axis=-1)
+    return action_tokens</code></pre>
+
+<p>反解（detokenize）是它的镜像运算——把 bin 编号还原成物理量，机器人拿到的就是这个浮点指令：</p>
+
+<pre><code class="language-python"># tokenizers/action_tokenizer.py:147-156（节选，float 维度的还原分支）
+else:
+    actions = []
+    for _ in range(action_dim):
+      a = action_tokens[..., token_index:token_index + 1]
+      a = tf.cast(a, tf.float32)
+      a = a / (self._vocab_size - 1)
+      a = (a * (spec.maximum - spec.minimum)) + spec.minimum
+      actions.append(a)
+      token_index += 1
+    action[k] = tf.concat(actions, axis=-1)</code></pre>
+
+<p>词表大小 256、图像历史 6 帧、Transformer 8 层，全部写死在配置文件里，与论文数字一一对应：</p>
+
+<pre><code class="language-python"># configs/transformer_mixin.gin:6-21
+LEARNING_RATE_ACTOR = 0.0001
+SEQUENCE_LENGTH = 6          # 最近 6 帧图像
+
+transformer_network.TransformerNetwork:
+  num_layers = 8             # 论文 Section 5.1：8 层自注意力
+  layer_size = 128
+  num_heads = 8
+  feed_forward_size = 512
+  dropout_rate = 0.1
+  vocab_size = 256           # 每维动作 256 个 bin
+  token_embedding_size = 512
+  time_sequence_length = %SEQUENCE_LENGTH
+  use_token_learner = True   # 81 → 8 token/帧</code></pre>
+
+<p>损失函数在 <code>transformer_network.py:117-119</code>：就是普通的稀疏分类交叉熵，没有任何机器人专属的魔法——</p>
+
+<pre><code class="language-python"># transformer_network.py:117-119
+# define loss function
+self._loss_object = tf.keras.losses.SparseCategoricalCrossentropy(
+    from_logits=True, reduction=tf.keras.losses.Reduction.NONE)</code></pre>
+
+<div class="box">
+<span class="bt">划重点</span>「动作 = token」在 RT-1 这里还只完成了<b>一半</b>：动作确实变成了离散 token、用交叉熵训练，但这些 token 活在一个<b>机器人专属的小词表</b>（每维 256 个 bin）里，和语言世界的词表毫无关系——模型不认识 "apple" 这个词的含义，只把它当第 42 号任务开关。RT-2 的革命是把另一半补上：让动作 token 直接住进 VLM 的词表。
+</div>
+
+<h3>3.4 训练数据与结果</h3>
+
+<p><b>数据侧的两个细节</b>（论文 Section 5.2 与附录 C.2 / D.1）：</p>
+<ul>
+  <li><b>不均衡靠采集端解决</b>：有一个软件模块专门给操作员派发「下一条演示什么指令、场景怎么随机化」，从源头保证各指令的数据量均衡；评测指标也按技能加权平均，避免数据多的大技能淹没小技能。</li>
+  <li><b>异构数据 co-training</b>：混入仿真数据后，只在仿真里出现过的物体在真实世界的成功率从 23% 涨到 87%（+64 个百分点），原任务几乎不掉（−2）；混入另一种机器人（Kuka 机械臂，QT-Opt 强化学习采的 209k 抓取数据）后，跨本体评测从 22% 涨到 39%（Table 4 / Table 5）。这是「数据金字塔」（第 1 讲）思想最早的实证之一。</li>
+</ul>
+
+<p><b>主结果</b>（论文 Table 2，全部真机评测，共 3000+ 次试验）：</p>
+
+<table>
+  <tr><th>模型</th><th>见过的任务</th><th>没见过的指令组合</th><th>抗干扰物</th><th>抗新背景</th></tr>
+  <tr><td>Gato（DeepMind 通才模型架构）</td><td>65%</td><td>52%</td><td>43%</td><td>35%</td></tr>
+  <tr><td>BC-Z（第 1 讲讲过的行为克隆基线）</td><td>72%</td><td>19%</td><td>47%</td><td>41%</td></tr>
+  <tr><td>BC-Z XL（放大版）</td><td>56%</td><td>43%</td><td>23%</td><td>35%</td></tr>
+  <tr><td><b>RT-1</b></td><td><b>97%</b></td><td><b>76%</b></td><td><b>83%</b></td><td><b>59%</b></td></tr>
+</table>
+<div class="cap"><b>表 2-1</b>｜RT-1 vs 基线（论文 Table 2）。所有模型用同一份 130k 数据训练，只比架构。「没见过的指令」指 held-out 的 53 条新组合——比如训练里有「拿苹果」「放到台面上」，但没见过把两者连起来的说法。</div>
+
+<p>另一个影响深远的消融（论文 Table 7）：把数据量砍掉 49%（但保留全部 744 种任务）对泛化的伤害，与把任务种类砍掉 25%（保留 97% 数据量）大致相当——<b>数据多样性比数据量更重要</b>。这句话后来成了机器人数据工程的口头禅。</p>
+
+<h3>3.5 RT-1 的局限：它不认识「恐龙」</h3>
+
+<ul>
+  <li><b>纯视觉运动模型，没有语言/常识。</b>USE 句编码器只把指令压成一个向量当「任务开关」，模型并不真正理解词义——指令超出训练分布的词汇（比如「把灭绝动物拿给我」）就完全无能为力。论文自己承认：对新指令的泛化仅限于「见过概念的新组合」。</li>
+  <li><b>专用架构，吃不到大模型红利。</b>EfficientNet + TokenLearner + 小 Transformer 是为 3 Hz 定制的；NLP/CV 社区把模型越做越大，RT-1 无法直接受益。</li>
+  <li><b>模仿学习天花板 + 闭源数据。</b>行为克隆学不过演示者（第 1 讲的老问题）；代码开源了，13 万条真机数据不开源，外界无法复现。</li>
+</ul>
+
+<p>这三条局限里，前两条正是 RT-2 的靶子。</p>
+
+<h2>4. RT-2 精读：把动作「写成」VLM 会说的一句话</h2>
+
+<h3>4.1 核心思想：不再造机器人模型，而是「续训」一个 VLM</h3>
+
+<p>RT-2（arXiv:2307.15818）的出发点，用论文自己的话说：与其从零设计视觉-语言-动作架构（Gato 路线），或给 VLM 外挂一个动作头（CLIPort / MOO 路线），不如<b>直接拿现成的、已经在互联网数据上烧过海量算力的 VLM 继续训练，不加任何新参数，让它学会把动作当文本说出来</b>。论文选了两个主干：</p>
+
+<ul>
+  <li><b>RT-2-PaLI-X</b>：PaLI-X 5B / 55B（ViT-22B 视觉编码器 + UL2 风格 encoder-decoder 文本骨干）；</li>
+  <li><b>RT-2-PaLM-E</b>：PaLM-E 12B（ViT-4B + PaLM 8B，decoder-only，即上一节那位「跳板」的缩小版）。</li>
+</ul>
+
+<p>机器人数据就是 RT-1 那批约 130k 演示。训练目标没有任何新东西——<b>next token prediction</b>（下一个 token 预测），论文附录 E 明说：这在机器人学习里就等于行为克隆损失。也就是说：<b>训一个 VLA = 第 1 讲的行为克隆 + LLM 界最普通的自回归微调，唯一的发明在「动作怎么表示」。</b></p>
+
+<h3>4.2 动作如何变成文本 token：三步走</h3>
+
+<p><b>第一步：沿用 RT-1 的离散化。</b>RT-2 的动作空间是末端执行器 6-DoF 位移（Δx, Δy, Δz, Δroll, Δpitch, Δyaw）+ 夹爪开合，共 7 个连续维，每维均匀切 <b>256 个 bin</b>；再加 1 个离散的终止命令。一个动作 = <b>8 个整数</b>，按固定槽位排成一行「句子」（论文 Section 3.2）：</p>
+
+<p style="text-align:center"><code>"terminate Δpos_x Δpos_y Δpos_z Δrot_x Δrot_y Δrot_z gripper_extension"</code><br>真实输出样例：<code>"1 128 124 136 121 158 111 255"</code>（论文 Section 4.4）</p>
+
+<p>（细心读原文会发现：Section 3.2 给的示例 <code>"1 128 91 241 5 101 127"</code> 只写了 7 个数，与它自己定义的 8 槽格式差一个；而 Figure 7 与 Section 4.4 的所有样例都是 8 个数。以 8 槽为准，前者当排版疏漏看待即可。）</p>
+
+<p><b>第二步：给 256 个 bin 在 VLM 词表里找「座位」。</b>这是 RT-2 最巧的一步，两个主干用了两种办法（论文 Section 3.2）：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="450" y="30" font-size="16" font-weight="bold" fill="#1a1f2e" text-anchor="middle">动作 token 在 VLM 词表里怎么「占座」</text>
+  <text x="450" y="52" font-size="12" fill="#5a6272" text-anchor="middle">RT-2 不新增参数、不新增输出头——直接复用 VLM 原有的词表与 softmax 层（论文 Section 3.2）</text>
+
+  <text x="24" y="96" font-size="13" font-weight="bold" fill="#2456c4">PaLI-X：词表天生有数字 token（0–1000 的整数各自独占一个 token）</text>
+  <rect x="24" y="108" width="852" height="30" fill="#ffffff" stroke="#e3e7ee"/>
+  <rect x="24" y="108" width="218" height="30" fill="#2456c4"/>
+  <text x="34" y="128" font-size="12" fill="#ffffff">数字 0 – 255 的 token</text>
+  <text x="254" y="128" font-size="12" fill="#5a6272">… 普通语言 token（"apple"、"pick"、"the"…）… 数字 256 – 1000 …</text>
+  <text x="24" y="162" font-size="12" fill="#2a3040">动作 bin 编号 k ↔ 数字字符串 "k" 的 token：bin 128 就是 token "128"，映射零成本。</text>
+
+  <text x="24" y="212" font-size="13" font-weight="bold" fill="#2456c4">PaLM-E：词表没有现成数字 token → 征用 256 个「最少被使用」的 token</text>
+  <rect x="24" y="224" width="852" height="30" fill="#ffffff" stroke="#e3e7ee"/>
+  <g fill="#2456c4">
+    <rect x="60" y="224" width="13" height="30"/><rect x="118" y="224" width="13" height="30"/>
+    <rect x="169" y="224" width="13" height="30"/><rect x="233" y="224" width="13" height="30"/>
+    <rect x="296" y="224" width="13" height="30"/><rect x="345" y="224" width="13" height="30"/>
+    <rect x="412" y="224" width="13" height="30"/><rect x="468" y="224" width="13" height="30"/>
+    <rect x="523" y="224" width="13" height="30"/><rect x="590" y="224" width="13" height="30"/>
+    <rect x="641" y="224" width="13" height="30"/><rect x="706" y="224" width="13" height="30"/>
+    <rect x="757" y="224" width="13" height="30"/><rect x="812" y="224" width="13" height="30"/>
+  </g>
+  <text x="24" y="278" font-size="12" fill="#2a3040">蓝色格 = 被「覆写」成动作含义的低频 token（示意，实际共 256 个、散布在词表中）。论文称这种做法为</text>
+  <text x="24" y="300" font-size="12" fill="#2a3040">符号微调（symbol tuning，引 Wei et al. 2023：先例表明把任意符号当新语义训练，对 VLM 效果良好）。</text>
+
+  <text x="24" y="344" font-size="13" font-weight="bold" fill="#1a1f2e">共同的要害：动作 token 与语言 token 共享同一个词表、同一个输出 softmax 层。</text>
+  <text x="24" y="368" font-size="12" fill="#2a3040">于是「机器人动作」在这个 VLM 眼里只是又一种语言——权重完全共享，互联网知识能流进动作输出。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-3</b>｜动作 token 与 VLM 词表的映射（依据论文 Section 3.2 绘制）。两种做法殊途同归：给 256 个 bin 在既有词表里找到 256 个「座位」，一个参数都不用加。</p>
+
+<div class="infer">选「最少使用的 token」的动机——尽量不与高频语言 token 抢座位、把对原有语言能力的破坏降到最低——论文只陈述了做法并引用 symbol tuning 先例，没有展开论证动机；这个因果解释是我基于上下文的推断。</div>
+
+<p><b>第三步：把机器人数据改写成 VQA 问答格式。</b>每条轨迹的每一步都变成一个「问答对」：输入是相机图像 + 文本 <code>"Q: What action should the robot take to {指令}? A:"</code>（VQA = Visual Question Answering，视觉问答，VLM 最常见的训练格式），输出就是那行数字「句子」。对模型来说，它和普通的图文问答数据没有任何区别。</p>
+
+<p><b>推理时加一道保险：约束解码。</b>机器人可不能让模型回答「今天天气不错」——RT-2 在动作任务下把采样范围<b>限制在合法动作 token 内</b>（论文 Section 3.2 "Output Constraint"），保证吐出的每个 token 都能反解成电机指令；在普通 VQA 任务下仍允许输出全部词表。反解（de-tokenize）之后就是第 1 讲说的 delta EE 指令，机器人闭环执行。整条流水线：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arr3" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#2456c4"/></marker>
+  </defs>
+  <text x="450" y="30" font-size="16" font-weight="bold" fill="#1a1f2e" text-anchor="middle">RT-2：用预训练 VLM 直接输出动作 token</text>
+  <text x="450" y="52" font-size="12" fill="#5a6272" text-anchor="middle">上半为推理流（论文 Figure 1、Section 3.2–3.3），下半为训练数据配比（Section 3.2、附录 B）</text>
+
+  <rect x="24" y="72" width="140" height="88" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="94" y="98" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">机器人观察</text>
+  <text x="94" y="120" font-size="12" fill="#2a3040" text-anchor="middle">相机图像</text>
+  <text x="94" y="140" font-size="12" fill="#2a3040" text-anchor="middle">+ 任务指令</text>
+  <line x1="164" y1="116" x2="188" y2="116" stroke="#2456c4" stroke-width="2" marker-end="url(#arr3)"/>
+
+  <rect x="192" y="72" width="208" height="88" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="296" y="94" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">包装成一个「问答」</text>
+  <text x="296" y="116" font-size="12" fill="#2a3040" text-anchor="middle">"Q: What action should the</text>
+  <text x="296" y="136" font-size="12" fill="#2a3040" text-anchor="middle">robot take to {指令}? A:"</text>
+  <line x1="400" y1="116" x2="424" y2="116" stroke="#2456c4" stroke-width="2" marker-end="url(#arr3)"/>
+
+  <rect x="428" y="72" width="140" height="88" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="498" y="98" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">ViT 视觉编码</text>
+  <text x="498" y="120" font-size="12" fill="#2a3040" text-anchor="middle">图像 → 视觉 token</text>
+  <text x="498" y="140" font-size="12" fill="#2a3040" text-anchor="middle">与文本 token 拼接</text>
+  <line x1="568" y1="116" x2="592" y2="116" stroke="#2456c4" stroke-width="2" marker-end="url(#arr3)"/>
+
+  <rect x="596" y="72" width="150" height="88" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="671" y="98" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">VLM 主干</text>
+  <text x="671" y="120" font-size="12" fill="#2a3040" text-anchor="middle">PaLI-X 5B / 55B</text>
+  <text x="671" y="140" font-size="12" fill="#2a3040" text-anchor="middle">或 PaLM-E 12B</text>
+  <line x1="746" y1="116" x2="770" y2="116" stroke="#2456c4" stroke-width="2" marker-end="url(#arr3)"/>
+
+  <rect x="774" y="72" width="102" height="88" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="825" y="98" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">约束解码</text>
+  <text x="825" y="120" font-size="12" fill="#2a3040" text-anchor="middle">只许采样</text>
+  <text x="825" y="140" font-size="12" fill="#2a3040" text-anchor="middle">动作 token</text>
+
+  <polyline points="825,160 825,186 565,186 565,206" fill="none" stroke="#2456c4" stroke-width="2" marker-end="url(#arr3)"/>
+  <rect x="440" y="210" width="250" height="56" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="565" y="232" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">自回归输出动作「句子」</text>
+  <text x="565" y="252" font-size="12" fill="#2a3040" text-anchor="middle">"1 128 124 136 121 158 111 255"</text>
+  <line x1="440" y1="238" x2="412" y2="238" stroke="#2456c4" stroke-width="2" marker-end="url(#arr3)"/>
+  <rect x="200" y="210" width="208" height="56" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="304" y="232" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">de-tokenize 反解</text>
+  <text x="304" y="252" font-size="12" fill="#2a3040" text-anchor="middle">整数串 → 位移 / 旋转指令</text>
+  <line x1="200" y1="238" x2="172" y2="238" stroke="#2456c4" stroke-width="2" marker-end="url(#arr3)"/>
+  <rect x="24" y="210" width="144" height="56" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="96" y="232" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">机器人执行</text>
+  <text x="96" y="252" font-size="12" fill="#2a3040" text-anchor="middle">1–3 Hz 闭环</text>
+
+  <text x="24" y="298" font-size="12" fill="#5a6272">部署：55B 模型跑在云端 TPU 集群，机器人经网络查询；5B 版约 5 Hz（论文 Section 3.3）。</text>
+
+  <text x="24" y="352" font-size="13" font-weight="bold" fill="#1a1f2e">训练阶段：co-fine-tuning（混合微调）</text>
+  <rect x="24" y="366" width="250" height="64" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="149" y="392" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">互联网图文 / VQA 数据</text>
+  <text x="149" y="414" font-size="12" fill="#2a3040" text-anchor="middle">PaLI-X 版约占混合的 50%</text>
+  <line x1="274" y1="398" x2="294" y2="398" stroke="#2456c4" stroke-width="2" marker-end="url(#arr3)"/>
+  <rect x="298" y="366" width="250" height="64" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="423" y="392" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">机器人轨迹数据</text>
+  <text x="423" y="414" font-size="12" fill="#2a3040" text-anchor="middle">RT-1 同款 ~130k 条演示</text>
+  <line x1="548" y1="398" x2="568" y2="398" stroke="#2456c4" stroke-width="2" marker-end="url(#arr3)"/>
+  <rect x="572" y="366" width="304" height="64" rx="10" fill="#ffffff" stroke="#2456c4"/>
+  <text x="724" y="392" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">混进同一批 batch，训练同一套权重</text>
+  <text x="724" y="414" font-size="12" fill="#2a3040" text-anchor="middle">既学输出动作，又保住语言与视觉常识</text>
+  <line x1="724" y1="366" x2="724" y2="166" stroke="#2456c4" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arr3)"/>
+  <text x="736" y="330" font-size="12" fill="#5a6272">续训 VLM 主干</text>
+
+  <text x="24" y="466" font-size="12" fill="#2a3040">训练目标与普通 VLM 完全相同：next token prediction —— 论文附录 E 明说这等价于机器人学习里的行为克隆损失。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-4</b>｜RT-2 推理与训练全景（依据论文 Figure 1、Section 3.2–3.3 与附录 B/E 重绘）。注意那条虚线：co-fine-tuning 更新的就是上面推理用的那套 VLM 权重，没有旁路、没有新增动作头。</p>
+
+<h3>4.3 co-fine-tuning：为什么必须「掺着」网络数据一起训</h3>
+
+<p>如果只拿 130k 机器人数据去微调 55B 的 VLM，会发生 LLM 界的老毛病——<b>灾难性遗忘（catastrophic forgetting）</b>：新数据分布太窄，模型把预训练学到的语义知识「冲掉」，退化成一个昂贵的 RT-1。RT-2 的对策是 <b>co-fine-tuning（共同微调）</b>：每个训练 batch 里同时掺入原始的网络图文/VQA 数据和机器人动作数据（论文 Section 3.2；配比见附录 B：PaLI-X 版机器人数据约 50%，PaLM-E 版约 66%，通过调高机器人数据的采样权重来实现批内平衡）。</p>
+
+<p>消融实验（论文 Table 6，指标是未见物体/背景/环境三类泛化场景的平均成功率）直接量化了每一味药的效果：</p>
+
+<table>
+  <tr><th>模型</th><th>训练方式</th><th>unseen 泛化平均</th></tr>
+  <tr><td>RT-2-PaLI-X 5B</td><td>从零训练（不用 VLM 预训练权重）</td><td>9%</td></tr>
+  <tr><td>RT-2-PaLI-X 5B</td><td>只用机器人数据微调</td><td>42%</td></tr>
+  <tr><td>RT-2-PaLI-X 5B</td><td><b>co-fine-tuning</b></td><td><b>44%</b></td></tr>
+  <tr><td>RT-2-PaLI-X 55B</td><td>只用机器人数据微调</td><td>52%</td></tr>
+  <tr><td>RT-2-PaLI-X 55B</td><td><b>co-fine-tuning</b></td><td><b>63%</b></td></tr>
+</table>
+<div class="cap"><b>表 2-2</b>｜训练方式消融（论文 Table 6）。三个结论一目了然：① 从零训大模型完全不行（9%）——VLM 预训练是根基；② co-fine-tuning 稳定优于纯机器人数据微调，且模型越大差距越明显（55B 上 +11 个百分点）；③ 模型越大泛化越好。</div>
+
+<div class="infer">把 co-fine-tuning 类比成 LLM 持续预训练里的 replay（回放旧数据防遗忘）是我的教学类比——论文给出的机制解释就是「保留原数据让模型不忘记 VLM 阶段学到的概念」，与 replay 思想同源，但论文没有使用这个术语。</div>
+
+<h3>4.4 结果与涌现能力：机器人第一次「懂」了词义</h3>
+
+<p><b>常规泛化</b>（论文 Table 4，约 6000 次真机评测）：seen tasks 上 RT-2（PaLI-X-55B 91% / PaLM-E-12B 93%）与 RT-1（92%）打平——说明换成 VLM 主干没牺牲基本功；但在未见物体/背景/环境三类泛化场景上，RT-2 两个版本平均都是 <b>62%</b>，约为 RT-1（32%）和 MOO（35%）的 <b>2 倍</b>，约为 VC-1 / R3M 等预训练视觉表征基线（10% / 12%）的 6 倍。</p>
+
+<p><b>涌现能力（emergent capabilities）</b>才是 RT-2 的真正卖点：下面这些指令在机器人数据里<b>一次都没出现过</b>，能力完全来自互联网图文预训练的迁移。论文把它们分成三类做定量评测（Table 3、Table 5）：</p>
+
+<table>
+  <tr><th style="width:15%">类别</th><th style="width:47%">论文 / 官网真实例子（原文）</th><th>考察什么</th></tr>
+  <tr><td rowspan="3"><b>符号理解</b></td><td>"move coke can near 3"（把可乐罐移到数字「3」旁边）</td><td>认出打印的数字卡片——机器人数据里从没出现过数字</td></tr>
+  <tr><td>"push coke can on top of heart"（把可乐罐推到心形图案上）</td><td>认出图标 / 符号</td></tr>
+  <tr><td>"pick up the extinct animal"（拿起已灭绝的动物，官网演示视频）</td><td>场景里只有恐龙玩具符合「已灭绝动物」——需要百科常识</td></tr>
+  <tr><td rowspan="3"><b>推理</b></td><td>"move banana near the sum of two plus one"（把香蕉移到 2+1 的和旁边）</td><td>算术：先算出 3，再找「3」卡片</td></tr>
+  <tr><td>"move cup to a search engine"（把杯子移到「某搜索引擎」旁）</td><td>开放语义：知道 Google 标志代表搜索引擎</td></tr>
+  <tr><td>"mueve la manzana al vaso verde"（西班牙语：把苹果移到绿杯子旁）</td><td>多语言指令——机器人数据全是英文</td></tr>
+  <tr><td><b>人物识别</b></td><td>"move coke can to Taylor Swift" / "… to person with glasses"</td><td>认名人脸、认人脸属性（戴眼镜的人）</td></tr>
+</table>
+<div class="cap"><b>表 2-3</b>｜涌现能力评测例子（论文 Table 3、Figure 2、Figure 8 与项目官网 robotics-transformer2.github.io）。定量结果（论文 Table 5）：三类涌现任务的平均成功率，RT-2-PaLI-X-55B 为 <b>60%</b>、RT-2-PaLM-E-12B 为 40%，而 RT-1 只有 <b>17%</b>、VC-1 只有 11%——超过 3 倍差距，且 RT-2 没有多用一条机器人演示数据。</div>
+
+<p>值得注意的对照：RT-1 面对这些指令不是「差一点」，而是<b>根本听不懂</b>——它的 USE 编码器把 "Taylor Swift" 压成一个向量，但 35M 的视觉运动模型里不存在「Taylor Swift 长什么样」的知识。RT-2 能行，是因为这份知识本来就躺在 55B 权重里，动作 tokenization 只是给它开了一条「表达出口」。这也回答了为什么 RT-2 是「VLA 的诞生」：<b>V-L-A 三个字母第一次真正共享同一套权重。</b></p>
+
+<h3>4.5 chain-of-thought 变体：先打草稿，再动手</h3>
+
+<p>LLM 的思维链（chain-of-thought：先输出中间推理再给答案）也被搬了过来。RT-2 把 PaLM-E 版本额外微调几百步，让它在动作 token 之前先输出一段自然语言「Plan」。论文 Section 4.4 与 Figure 7 / Figure 10 的真实样例：</p>
+
+<pre><code class="language-text">Instruction: I'm hungry.
+Plan: pick rxbar chocolate.  Action: 1 128 124 136 121 158 111 255   （论文 Section 4.4）
+
+Prompt: I need to hammer a nail, what object from the scene might be useful?
+Prediction: Rocks.  Action: 1 129 138 122 132 135 106 127            （论文 Figure 7）
+
+Instruction: I am sleepy, bring me a drink to help.
+Plan: Pick redbull can.                                              （论文 Figure 10）</code></pre>
+
+<p>「饿了 → 拿巧克力棒」「要钉钉子 → 选石头当锤子」「困了 → 拿红牛」——中间那步语言推理把 VQA 数据和操作数据在同一个输出序列里桥接了起来。这是后来所有「VLA + 推理」工作（第 5 讲会再见到）的雏形。论文的态度也很克制：这是「有希望的初步证据」，不是成熟能力。</p>
+
+<h3>4.6 代价与局限</h3>
+
+<ul>
+  <li><b>推理太慢、太贵。</b>55B 模型机器人本体装不下，只能部署在云端 TPU 集群、机器人走网络查询，控制频率 <b>1–3 Hz</b>（5B 版约 5 Hz）——比 RT-1 的 3 Hz 本地推理更脆弱（网络一断机器人就停），也远低于灵巧操作所需的几十 Hz。论文自称这是当时「用于闭环控制的最大模型」（比此前记录大一个数量级以上）。</li>
+  <li><b>语义泛化 ≠ 动作泛化。</b>互联网知识只教会模型「<b>对什么</b>做、<b>何时</b>做」，不会教「<b>怎么动</b>」：论文 Section 5 明确说 RT-2 学不会任何新<b>动作</b>，技能仍限于机器人数据的分布（附录 G 的失败案例：按特定部位抓取、用毛巾擦、叠衣服、工具使用，全部不行）。</li>
+  <li><b>离散 bin 精度有限。</b>256 格意味着每维动作分辨率固定，精细操作（论文原话 "dexterous or precise motions"）做不了；自回归逐 token 输出 8 个数字也拖慢频率。</li>
+  <li><b>闭源、单本体。</b>模型、数据、训练代码都不开放，外界无法复现；训练数据几乎全部来自同一种 Everyday Robots 机器人。论文自己都在 Limitations 里呼吁「希望更多开源 VLM 出现」——这句话直接预告了第 3 讲的 OpenVLA。</li>
+</ul>
+
+<div class="infer">「离散自回归 token 的精度与频率局限，是后来扩散 / 流匹配连续动作头（第 4 讲 π0 路线）取而代之的直接动因」——这是我基于后续文献的因果归纳；RT-2 论文只把量化、蒸馏、更高频控制列为未来方向，没有点名扩散模型。</div>
+
+<h2>5. RT-X / Open X-Embodiment：把「数据引擎」开放给全世界</h2>
+
+<p>RT-2 的闭源单本体局限，由 2023 年 10 月的 Open X-Embodiment（OXE，arXiv:2310.08864）部分补上——<a href="vla-t1-robot-learning.html">第 1 讲</a>介绍过这份「数据金字塔」底座，这里只讲它与 RT 配方结合后的实验结论。全球几十家机构（论文摘要口径：21 家机构；正文口径：34 个实验室贡献的 60 个数据集）把各自的机器人数据统一成 RLDS 格式，汇成 <b>100 万+ 真机轨迹、22 种机器人本体、527 种技能、160,266 个任务</b>。</p>
+
+<p>在这份混合数据上重训 RT-1 和 RT-2 的配方，得到 <b>RT-1-X</b> 与 <b>RT-2-X</b>，回答一个关键问题：<b>别的机器人的数据对我有用吗？</b>答案是有用，而且不小（论文 Figure 4、Table I 与结论节）：</p>
+
+<ul>
+  <li>RT-1-X 在评测机器人上的平均成功率，比各机构原本为自己机器人调的最优方法<b>高 50%</b>——纯靠 co-training 别人本体的数据；</li>
+  <li>RT-2-X（55B）相比只用评测本体自己数据训练的模型，泛化性能约 <b>3 倍</b>提升；在 Stanford Bridge 数据评测上 RT-2-X 达 50%，而原方法 LCBC 只有 13%、单数据 RT-1 为 40%（论文 Table I）。</li>
+</ul>
+
+<p>这就是「跨本体正迁移（positive transfer）」的第一份大规模证据，也宣告了 RT-1 消融里「多样性 &gt; 数据量」的规律在更大尺度上成立。这份开放数据后来直接成为 <a href="vla-t3-openvla.html">OpenVLA（第 3 讲）</a>和 <a href="vla-t4-diffusion-pi0.html">π0（第 4 讲）</a>的预训练底座——RT 系列闭源，但数据开源了，火种就这样传了下去。</p>
+
+<h2>6. 插曲：RT-H——在任务和动作之间再插一层「语言」</h2>
+
+<p>Google 系 2024 年的 RT-H（arXiv:2403.01823）继续琢磨「语言 ↔ 动作」的接口：在高层任务（"close the pistachio jar"）和低层动作 token 之间，插入一层<b>语言动作（language motions）</b>——细粒度运动短语，如 "move arm forward"、"rotate arm right"、"close gripper"。模型先预测语言动作，再以它为条件预测动作 token。好处有两个：① 语义迥异的任务（"pick coke can" 和 "pour cup"）在语言动作层共享结构，多任务数据更好复用（论文用约 100K 演示验证：RT-1/RT-2 同款厨房数据 70K + 更多样任务 30K）；② 人类可以在执行中途用语言动作<b>纠正</b>机器人（喊一句 "move arm backward"），模型还能从这些语言纠正中继续学习——论文报告比遥操作纠正类的交互式模仿学习基线（IWR）高 50%。RT-H 说明「把更多东西写成语言」这条路 Google 一直在深耕，也预示了<a href="vla-t5-frontier.html">第 5 讲</a>会看到的分层 VLA 思路。</p>
+
+<h2>7. 影响与线索：RT 系列之后发生了什么</h2>
+
+<ul>
+  <li><b>「VLA」一词由此确立。</b>RT-2 论文正式提出 "vision-language-action models (VLA)" 这个类别名（Section 1 原话 "We refer to such category of models as vision-language-action models"），此后所有「VLM 主干 + 动作输出」的模型都归入此类——本系列的名字就是这么来的（见<a href="vla-t0-overview.html">第 0 讲全景地图</a>）。</li>
+  <li><b>范式被开源化。</b>RT-2 闭源，2024 年 6 月的 OpenVLA 用全开源件复刻了同一配方：7B 参数（Llama-2 主干 + 融合视觉编码器）、OXE 97 万条轨迹训练、动作离散 token 输出——<a href="vla-t3-openvla.html">第 3 讲</a>的主角，也是你第一个能亲手跑起来的 VLA。</li>
+  <li><b>离散 token 的局限被新路线接管。</b>1–3 Hz、bin 精度、自回归慢——这些痛点催生了扩散 / 流匹配的连续动作头路线，代表作 π0（可达 50 Hz 控制）——<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>展开数学。</li>
+  <li><b>人马出走，创立 Physical Intelligence。</b>RT 系列的核心作者（Sergey Levine、Chelsea Finn、Karol Hausman、Brian Ichter 等）2024 年创立机器人基础模型公司 Physical Intelligence（π 公司），π0 即出自该团队——<a href="vla-t5-frontier.html">第 5 讲</a>的前沿全景会从这条线讲起。</li>
+</ul>
+
+<h2>8. 大总结：四篇里程碑一张表</h2>
+
+<table>
+  <tr><th style="width:14%"></th><th>SayCan (2022.4)</th><th>RT-1 (2022.12)</th><th>PaLM-E (2023.3)</th><th>RT-2 (2023.7)</th></tr>
+  <tr><td><b>角色一句话</b></td><td>LLM 当规划器，技能库当手</td><td>机器人专用视觉运动大模型</td><td>长了眼睛的 LLM，输出语言计划</td><td>VLA：VLM 直接输出动作</td></tr>
+  <tr><td><b>主干</b></td><td>PaLM 540B + 551 个预建技能（各配值函数）</td><td>FiLM EfficientNet-B3 + TokenLearner + 8 层 Transformer</td><td>ViT-22B + PaLM 540B（连续 embedding 注入）</td><td>PaLI-X 5B/55B 或 PaLM-E 12B（VLM 原样续训）</td></tr>
+  <tr><td><b>参数规模</b></td><td>技能策略各自独立（小）；LLM 540B 只做规划</td><td>35M</td><td>最大 562B（不输出动作）</td><td>5B – 55B</td></tr>
+  <tr><td><b>训练数据</b></td><td>每技能人工演示 + RL 值函数</td><td>130k 真机演示、744 指令（可选仿真 / 异本体 co-training）</td><td>互联网语言图文 + 具身规划数据</td><td>RT-1 机器人数据 + 互联网图文（co-fine-tuning，约 1:1 至 2:1）</td></tr>
+  <tr><td><b>动作表示</b></td><td>从技能库选一个技能（语言描述）</td><td>11 维 × 256 bin，专用分类头</td><td>无低层动作（输出文本计划）</td><td>VLM 词表里的文本 token（8 槽整数字符串）</td></tr>
+  <tr><td><b>输出低层动作？</b></td><td>否（技能内部控制器产生）</td><td>是</td><td>否</td><td>是</td></tr>
+  <tr><td><b>控制频率</b></td><td>技能级决策</td><td>3 Hz（本地推理 &lt;100 ms）</td><td>—（计划级）</td><td>1–3 Hz（55B 云端 TPU）/ ~5 Hz（5B）</td></tr>
+  <tr><td><b>语义泛化</b></td><td>有常识但不动手；101 条指令规划 84% / 执行 74%</td><td>弱：仅「见过概念的新组合」；seen 97%</td><td>强语义但无动作</td><td>强：涌现符号理解 / 推理 / 认人；unseen 泛化 ≈ 2× RT-1，涌现任务 ≈ 3× RT-1</td></tr>
+  <tr><td><b>开源情况</b></td><td>桌面域代码开源</td><td>推理代码开源（数据不开源）</td><td>闭源</td><td>闭源</td></tr>
+</table>
+<div class="cap"><b>表 2-4</b>｜2022–2023 四篇里程碑对照（各数字出处见对应小节）。演进主线清晰可见：语义与控制从「两个模块相乘」（SayCan）→「先各干各的」（RT-1 只有控制、PaLM-E 只有语义）→「一套权重全干」（RT-2）。</div>
+
+<h2>9. 本讲要点与自查</h2>
+
+<div class="box">
+<span class="bt">三个钥匙概念</span>读懂后面所有 VLA 论文，只需要记住本讲这三个词的一句话定义：<br>
+① <b>动作 tokenization</b>：把连续动作的每一维均匀切成 256 个 bin，动作变成整数序列，机器人控制从此变成「从词表选 token」的分类题，用交叉熵训练（RT-1 发明，RT-2 沿用并写进 VLM 词表）。<br>
+② <b>co-fine-tuning</b>：微调 VLM 输出动作时，把机器人数据和原始互联网图文数据混在同一批 batch 里训练，防止灾难性遗忘、保住语义能力（RT-2 的关键配方）。<br>
+③ <b>涌现泛化</b>：机器人数据里从未出现的语义能力（认符号、做算术、认名人）因互联网知识迁移而「凭空出现」——VLA 区别于普通机器人策略的本质卖点。
+</div>
+
+<p>下面 8 个问题都能答上来，本讲就过关了：</p>
+
+<ol class="checklist">
+  <li>RT-1 的训练数据规模和采集方式？（答：13 台 Everyday Robots 机器人车队、17 个月遥操作采集、约 130k episodes、744 条指令）</li>
+  <li>动作 tokenization 具体怎么做？为什么离散化反而比连续回归好？（答：每维均匀 256 bin → 编号当分类标签 → 交叉熵；分类分布能表达多峰动作，高斯回归会把多峰平均成错误动作——消融显示 seen 97%→68%）</li>
+  <li>RT-1 靠什么做到 3 Hz 实时？（答：35M 小模型 + TokenLearner 把每帧 81 token 压到 8 + 图像 token 跨步缓存；单次推理 &lt;100 ms）</li>
+  <li>RT-2 与 RT-1 的本质区别一句话？（答：RT-1 的动作 token 住在机器人专属小词表里；RT-2 把动作写成 VLM 既有词表里的文本 token，零新增参数继承互联网知识）</li>
+  <li>PaLI-X 和 PaLM-E 各怎么给动作 token 找座位？（答：PaLI-X 直接用词表里现成的数字 token；PaLM-E 覆写 256 个最少使用的 token，即 symbol tuning）</li>
+  <li>co-fine-tuning 是什么、解决什么问题？（答：机器人数据与原始网络图文数据混合训练同一套权重，防灾难性遗忘；消融显示 55B 上比纯机器人数据微调高 11 个百分点）</li>
+  <li>举两个 RT-2 的涌现能力例子。（答：如 "move coke can near 3" 认数字卡片、"move banana near the sum of two plus one" 先算 2+1 再找「3」、"move coke can to Taylor Swift" 认名人——都不在机器人数据里）</li>
+  <li>RT-2 为什么控制频率只有 1–3 Hz？这暴露了离散自回归路线的什么问题？（答：55B 模型只能云端 TPU 推理 + 网络往返 + 逐 token 自回归输出；精度受 bin 数限制、频率受解码步数限制——第 4 讲的扩散 / 流匹配路线由此接棒）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="vla-t3-openvla.html">第 3 讲：OpenVLA——把 RT-2 配方开源给你</a>。RT-2 证明了「VLM 主干 + 动作 token」的威力，但一切都锁在 Google 的 TPU 集群里。OpenVLA（2024.6，arXiv:2406.09246）用 Llama-2 + 开源视觉编码器 + OXE 97 万条轨迹复刻了这个配方，7B 参数、权重全公开、一张消费级显卡就能微调。第 3 讲我们会把它的动作 token 设计（256 bin 塞进 Llama 词表的最低频 token——和 RT-2-PaLM-E 如出一辙）逐行拆开，并教你怎么跑起来。
+</div>
+
+<h2>参考来源</h2>
+
+<ol class="refs">
+  <li>Brohan et al., <b>RT-1: Robotics Transformer for Real-World Control at Scale</b>, arXiv:2212.06817（CoRL 2022）。<a href="https://arxiv.org/abs/2212.06817">https://arxiv.org/abs/2212.06817</a> · 本地归档 <code>paper/rt-1.pdf</code> · 项目页 <a href="https://robotics-transformer1.github.io">robotics-transformer1.github.io</a></li>
+  <li>Brohan et al., <b>RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control</b>, arXiv:2307.15818（CoRL 2023）。<a href="https://arxiv.org/abs/2307.15818">https://arxiv.org/abs/2307.15818</a> · 本地归档 <code>paper/rt-2.pdf</code> · 项目页 <a href="https://robotics-transformer2.github.io">robotics-transformer2.github.io</a> · 官方博客 <a href="https://deepmind.google/discover/blog/rt-2-new-model-translates-vision-and-language-into-action/">RT-2: New model translates vision and language into action</a></li>
+  <li>Ahn et al., <b>Do As I Can, Not As I Say: Grounding Language in Robotic Affordances</b>（SayCan）, arXiv:2204.01691。<a href="https://arxiv.org/abs/2204.01691">https://arxiv.org/abs/2204.01691</a> · 本地归档 <code>paper/saycan.pdf</code> · 项目页 <a href="https://say-can.github.io">say-can.github.io</a></li>
+  <li>Driess et al., <b>PaLM-E: An Embodied Multimodal Language Model</b>, arXiv:2303.03378（ICML 2023）。<a href="https://arxiv.org/abs/2303.03378">https://arxiv.org/abs/2303.03378</a> · 本地归档 <code>paper/palm-e.pdf</code> · 项目页 <a href="https://palm-e.github.io">palm-e.github.io</a></li>
+  <li>Open X-Embodiment Collaboration, <b>Open X-Embodiment: Robotic Learning Datasets and RT-X Models</b>, arXiv:2310.08864（ICRA 2024）。<a href="https://arxiv.org/abs/2310.08864">https://arxiv.org/abs/2310.08864</a> · 本地归档 <code>paper/open-x-embodiment.pdf</code> · 项目页 <a href="https://robotics-transformer-x.github.io">robotics-transformer-x.github.io</a></li>
+  <li>Belkhale et al., <b>RT-H: Action Hierarchies Using Language</b>, arXiv:2403.01823。<a href="https://arxiv.org/abs/2403.01823">https://arxiv.org/abs/2403.01823</a> · 本地归档 <code>paper/rt-h.pdf</code> · 项目页 <a href="https://rt-hierarchy.github.io">rt-hierarchy.github.io</a></li>
+  <li>RT-1 官方开源代码：<a href="https://github.com/google-research/robotics_transformer">github.com/google-research/robotics_transformer</a>（commit <code>4569641</code>，最后提交 2023-02-10，2026-10-21 抓取；本讲引用的文件：<code>tokenizers/action_tokenizer.py</code>、<code>transformer_network.py</code>、<code>configs/transformer_mixin.gin</code>）</li>
+  <li>后续预告：Kim et al., <b>OpenVLA: An Open-Source Vision-Language-Action Model</b>, arXiv:2406.09246（第 3 讲）；Black et al., <b>π0: A Vision-Language-Action Flow Model for General Robot Control</b>, arXiv:2410.24164（第 4 讲）。</li>
+</ol>
+
+<footer>生成于 2026-10-21 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

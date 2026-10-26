@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>具身智能与 VLA 零基础七讲 · 第 4 讲：连续动作头——Diffusion Policy 与 π0，扩散/流匹配取代自回归 token</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>具身智能与 VLA 零基础七讲 · 第 4 讲：连续动作头——Diffusion Policy 与 π0，扩散/流匹配取代自回归 token</h1>
+
+<div class="series-nav">
+  <a href="vla-t0-overview.html">0 全景地图</a>
+  <a href="vla-t1-robot-learning.html">1 机器人学习</a>
+  <a href="vla-t2-rt1-rt2.html">2 RT-1·RT-2</a>
+  <a href="vla-t3-openvla.html">3 OpenVLA</a>
+  <a class="here">4 Diffusion·π0</a>
+  <a href="vla-t5-frontier.html">5 前沿全景</a>
+  <a href="vla-t6-roadmap.html">6 实战路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>具身智能与 VLA 零基础七讲（本篇为第 4 讲）</p>
+  <p style="margin:4px 0"><b>前置：</b><a href="vla-t1-robot-learning.html">第 1 讲</a>的 ACT/CVAE 与动作分块、<a href="vla-t2-rt1-rt2.html">第 2 讲</a>的 RT-2 离散 tokenization、<a href="vla-t3-openvla.html">第 3 讲</a>的 OpenVLA 与 OFT。本讲需要的数学只有「向量、均值、平方差」三个概念——每个公式后面都紧跟大白话翻译，推导一律从简。</p>
+  <p style="margin:4px 0"><b>本讲地位：</b>这是全系列数学最多的一讲，也是分水岭：动作头（action head，把模型的「理解」翻译成机器人「动作」的那个组件）从「把动作伪装成文字」切换到「直接生成连续动作」。2024 年之后的明星模型（π0、GR00T N1、Helix……）几乎全部建立在本讲的两个词上：<b>扩散（diffusion）</b>与<b>流匹配（flow matching）</b>。</p>
+</div>
+
+<div class="tldr">
+<p><b>一句话版本：</b>把动作切成 256 个格子再当文字往外蹦（第 2、3 讲的路线）有<b>精度、延迟、多模态</b>三宗罪；扩散与流匹配换了个思路——把「生成一段动作」变成「从一坨纯噪声里一步步雕刻出动作序列」，天生输出连续值、天生一次出整段、天生能表达「左绕右绕都对」的多峰分布。</p>
+<p><b>本讲路线：</b>① 2023 年 <b>Diffusion Policy</b> 证明扩散能当机器人策略，12 个任务平均比此前最强方法高 46.9 个百分点；② 流匹配是扩散的「直线加速版」，训练目标更简单、采样只要几步；③ 2024 年 <b>π0</b> 把流匹配动作专家（约 300M 参数）挂到 3B VLM（PaliGemma）上，用约 10,000 小时自采数据预训练，实现 50Hz 的叠衣服、清桌子等长时程灵巧操作；④ <b>FAST</b> 证明离散路线也能救活（频域压缩 token），<b>π0.5</b> 进一步让同一个模型先「说出子任务」再「生成动作」，走进没见过的真实家庭打扫。</p>
+<p><b>读完你会：</b>看懂扩散/流匹配的训练目标和采样过程，能自己画出 π0 的架构图并解释每个组件为什么存在。</p>
+</div>
+
+<h2>0. 回顾：前三讲的「离散 → 连续」线索</h2>
+
+<p>先把前三讲埋的线收拢成一句话：<b>让 VLM 控制机器人，最先想到的办法是「把动作伪装成文字」，但文字这条路越走越窄，最后被「直接生成连续动作」取代。</b></p>
+
+<ul>
+  <li><a href="vla-t1-robot-learning.html">第 1 讲</a>里，ALOHA 的 <b>ACT</b> 用 CVAE（条件变分自编码器，一种「先掷骰子选风格、再生成动作」的生成模型）一次输出一整块动作（action chunking，动作分块），解决抖动和多模态——这是「连续动作头」最早的实用形态，但 CVAE 的表达能力有限。</li>
+  <li><a href="vla-t2-rt1-rt2.html">第 2 讲</a>里，<b>RT-2</b> 把每个动作维度离散化成 256 个 bin（格子），复用 VLM 的词表自回归输出 7 个 token——好处是零成本继承互联网知识，代价是把连续世界硬塞进 256 格。</li>
+  <li><a href="vla-t3-openvla.html">第 3 讲</a>里，<b>OpenVLA</b> 照抄这套 tokenization，而它的升级版 <b>OFT</b> 已经开始「叛逃」：改连续值回归、改并行解码——说明社区自己也意识到离散 token 是瓶颈。</li>
+</ul>
+
+<p>本讲就是这条线索的终点站：既然瓶颈在「动作头」，那就把图像生成领域最强的两件武器——扩散模型与流匹配——搬到动作头上。<b>Diffusion Policy</b> 打头阵，<b>π0</b> 集大成。</p>
+
+<h2>1. 为什么要连续动作头：离散 token 的三宗罪</h2>
+
+<p>先立个靶子。RT-2 / OpenVLA 式的离散动作 token，到底差在哪？三宗罪：<b>精度、延迟、多模态</b>。逐条看，每条都配一个数字或一张图。</p>
+
+<h3>罪状一：精度——256 个格子不够细</h3>
+
+<p>第 2 讲说过，RT-2 把每个动作维度（比如夹爪的 x 坐标位移）均匀切成 256 个 bin。这意味着动作的最小分辨率只有全范围的约 \(1/256 \approx 0.4\%\)：如果某个关节的活动范围是 0.5 米，一格就是约 2 毫米。对「把方块推到大概位置」够用；对「把 USB 插进接口」「捏起一片布料边缘」这种毫米级任务，量化误差（真值落在两格之间被强行归到一格）直接决定成败。连续值输出没有这道工序——想输出多细就多细（只受浮点精度限制）。</p>
+
+<h3>罪状二：延迟——一个 token 一个 token 往外蹦</h3>
+
+<p>自回归（autoregressive，第 2 讲解释过：像写作文一样逐词生成，后一个词依赖前一个词）输出一个 7 维动作需要 7 次完整的前向计算，而且没法并行。7B 级的 OpenVLA 在一张 A100 上大约 6Hz（第 3 讲 OFT 论文对基线的测量口径），RT-2 论文自述 1–3Hz。人手演示灵巧操作的控制频率是 50Hz 量级——差了一个数量级。而扩散/流匹配动作头<b>一次生成整个动作块</b>（比如 50 步），50 步动作只需一轮几步去噪迭代，π0 因此能做到 50Hz 连续控制（第 5 节细讲）。</p>
+
+<h3>罪状三：多模态——「都行」的时候，平均就是找死</h3>
+
+<p><b>多模态（multimodal，此处指动作分布有多个峰，不是「图文多模态」的多模态）</b>是机器人学习独有的大坑：同一个场景下，人类演示可能有好几种都正确的做法。经典例子——绕开障碍物，演示 A 从左绕，演示 B 从右绕，都对。如果用普通的 L2 回归（最小化「预测动作与演示动作的平方差」）去学，模型学到的最优解是<b>两条轨迹的平均</b>——正对着障碍物撞上去。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 340" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="ar" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <text x="450" y="26" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">多模态动作：两种正确走法 vs 回归的「平均答案」</text>
+
+  <!-- 左：俯视场景 -->
+  <rect x="30" y="44" width="400" height="272" rx="10" fill="#fbfbfd" stroke="#e3e7ee"/>
+  <text x="230" y="66" font-size="13" fill="#5a6272" text-anchor="middle">俯视场景：从机器人到目标，障碍物挡在中间</text>
+  <!-- 目标 -->
+  <circle cx="230" cy="95" r="10" fill="#16a34a"/>
+  <text x="252" y="99" font-size="12" fill="#16a34a">目标</text>
+  <!-- 障碍 -->
+  <rect x="203" y="175" width="54" height="50" rx="6" fill="#94a3b8"/>
+  <text x="266" y="204" font-size="12" fill="#64748b">障碍物</text>
+  <!-- 机器人 -->
+  <rect x="212" y="288" width="36" height="20" rx="5" fill="#2456c4"/>
+  <text x="200" y="303" font-size="12" fill="#2456c4" text-anchor="end">机器人</text>
+  <!-- 左绕 -->
+  <path d="M 218,286 C 140,258 122,158 172,112 C 190,96 206,92 218,93" fill="none" stroke="#2456c4" stroke-width="3"/>
+  <text x="96" y="188" font-size="12" fill="#2456c4">演示 A：左绕 ✓</text>
+  <!-- 右绕 -->
+  <path d="M 242,286 C 320,258 338,158 288,112 C 270,96 254,92 242,93" fill="none" stroke="#0e9f6e" stroke-width="3"/>
+  <text x="364" y="188" font-size="12" fill="#0e9f6e" text-anchor="end">演示 B：右绕 ✓</text>
+  <!-- L2 平均 -->
+  <path d="M 230,284 L 230,110" fill="none" stroke="#dc2626" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#ar)"/>
+  <text x="230" y="148" font-size="12" font-weight="bold" fill="#dc2626" text-anchor="middle">L2 回归 = A、B 平均 → 撞 ✗</text>
+
+  <!-- 右：动作分布 -->
+  <rect x="460" y="44" width="410" height="272" rx="10" fill="#fbfbfd" stroke="#e3e7ee"/>
+  <text x="665" y="66" font-size="13" fill="#5a6272" text-anchor="middle">同一观测下，「正确动作」的概率分布有两个峰</text>
+  <path d="M 490,270 C 535,270 545,150 590,150 C 635,150 645,270 690,270 C 735,270 745,150 790,150 C 835,150 845,270 870,270" fill="none" stroke="#2456c4" stroke-width="3"/>
+  <line x1="480" y1="270" x2="880" y2="270" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="590" y="136" font-size="12" fill="#2456c4" text-anchor="middle">峰 1：向左绕</text>
+  <text x="790" y="136" font-size="12" fill="#2456c4" text-anchor="middle">峰 2：向右绕</text>
+  <line x1="690" y1="262" x2="690" y2="180" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="5 4"/>
+  <circle cx="690" cy="270" r="5" fill="#dc2626"/>
+  <text x="690" y="296" font-size="12" font-weight="bold" fill="#dc2626" text-anchor="middle">回归均值落在山谷：谁也不像</text>
+  <text x="665" y="316" font-size="12" fill="#5a6272" text-anchor="middle">横轴：动作取值（例如第一步的横向速度）　纵轴：概率</text>
+</svg>
+</div>
+<div class="cap"><b>图 4-1</b>｜多模态动作示意（自绘示意图，非论文原图）。左：绕行任务中两条演示轨迹都正确，L2 回归的输出是它们的逐维平均——径直撞向障碍物。右：把「正确动作」看成一个概率分布，它有两个峰；单点回归只能输出均值，落在两峰之间的低谷。这类「平均即错误」的例子正是 Diffusion Policy 论文第 IV-A 节专门讨论的动机场景。</div>
+
+<p>解决思路只有一个：<b>别学「一个动作」，学「整个动作分布」</b>——也就是用生成模型。第 1 讲的 CVAE 是一种（靠隐变量掷骰子选峰），但它一次前向只出一个动作块、表达力受限；扩散和流匹配是更强的生成模型，能表达任意复杂的分布形状。</p>
+
+<table>
+  <tr><th>罪状</th><th>离散自回归 token（RT-2 / OpenVLA）</th><th>连续动作头（扩散 / 流匹配）</th></tr>
+  <tr><td><b>精度</b></td><td>256 bin 量化，最小分辨率约 0.4% 全范围，毫米级任务不够用</td><td>直接输出连续浮点值，无量化误差</td></tr>
+  <tr><td><b>延迟</b></td><td>每步动作 7 个 token 逐个生成，1~6Hz</td><td>一次生成整段动作块（如 50 步），π0 达 50Hz</td></tr>
+  <tr><td><b>多模态</b></td><td>交叉熵目标理论上能表达多峰，但逐 token 近独立采样，易拼出「前半左绕、后半右绕」的不连贯轨迹；改回归微调（OFT）则退化为均值</td><td>扩散/流匹配天生建模整个分布，每次采样「选定一个峰走到底」，轨迹内部一致</td></tr>
+</table>
+
+<div class="cap"><b>表 4-1</b>｜三宗罪对照。「离散 token 逐 token 采样易不连贯」是 Diffusion Policy 等论文对自回归动作头的标准批评口径之一。</div>
+
+<p><b>谱系</b>：动作头的演化是一条「表达能力递增、单点输出 → 分布采样」的路：</p>
+
+<table>
+  <tr><th>代际</th><th>代表</th><th>一句话</th></tr>
+  <tr><td>L2 回归</td><td>早期 BC、OFT 的连续头（<a href="vla-t3-openvla.html">第 3 讲</a>）</td><td>输出单个「最优动作」，遇多模态输出均值撞墙</td></tr>
+  <tr><td>CVAE</td><td>ACT（<a href="vla-t1-robot-learning.html">第 1 讲</a>）</td><td>隐变量先「选峰」再生成，能多模态，但一次前向出一个块、分布形状受高斯先验限制</td></tr>
+  <tr><td>扩散</td><td>Diffusion Policy（本讲 §3）</td><td>迭代去噪雕刻动作，表达力强、训练稳，代价是采样要多次迭代</td></tr>
+  <tr><td>流匹配</td><td>π0（本讲 §5）</td><td>扩散的「直线加速版」，几步采样出整块动作，成为 2024 后 VLA 主流</td></tr>
+</table>
+
+<h2>2. 扩散模型 10 分钟速成：从噪声里雕刻</h2>
+
+<p>你可能听说过 Stable Diffusion——输入一句话生成图片。它背后的数学原型叫 <b>DDPM</b>（Denoising Diffusion Probabilistic Models，去噪扩散概率模型，Ho et al. 2020，arXiv:2006.11239）。这一节把它讲透到「看懂训练目标和采样过程」的程度——这也是本讲唯一需要的扩散知识。</p>
+
+<p>核心图像是一个思想实验：<b>把一滴墨水滴进清水里</b>。墨水会自发地一步步扩散，直到均匀分布（这是物理上必然发生、无需学习的方向）；反过来，让均匀分布的墨水「自发缩回一滴」几乎不可能——但如果你<b>看着</b>扩散的每一步，学会「每一小步长什么样」，就可以倒着一步步回放，从均匀分布回到那滴墨水。扩散模型干的就是这件事：</p>
+
+<ul>
+  <li><b>前向过程（forward / diffusion process）</b>：给数据一步步掺高斯噪声（Gaussian noise，均值为 0 的随机扰动），掺 \(T\) 步后变成纯噪声。规则固定、不用学。</li>
+  <li><b>反向过程（reverse process）</b>：训练一个神经网络学会「去掉一小步噪声」。这是唯一要训练的部分。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 900 340" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="ar2" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 L2,4.5 z" fill="#64748b"/>
+    </marker>
+    <marker id="ar2b" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 L2,4.5 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="450" y="24" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">扩散模型：前向逐步加噪（固定规则），反向学习去噪（神经网络）</text>
+  <text x="450" y="50" font-size="13" fill="#5a6272" text-anchor="middle">这里的数据 x₀ 是一段动作序列（机器人版），也可以是图像（Stable Diffusion 版）</text>
+
+  <!-- 前向 -->
+  <line x1="30" y1="74" x2="860" y2="74" stroke="#94a3b8" stroke-width="2" marker-end="url(#ar2)"/>
+  <text x="450" y="68" font-size="13" font-weight="bold" fill="#5a6272" text-anchor="middle">前向过程：每步掺一点高斯噪声，t 越大越模糊（无需训练）</text>
+
+  <!-- 5 panels, y=90..170 -->
+  <g stroke="#e3e7ee" fill="#fbfbfd">
+    <rect x="30" y="90" width="140" height="80" rx="8"/>
+    <rect x="205" y="90" width="140" height="80" rx="8"/>
+    <rect x="380" y="90" width="140" height="80" rx="8"/>
+    <rect x="555" y="90" width="140" height="80" rx="8"/>
+    <rect x="730" y="90" width="140" height="80" rx="8"/>
+  </g>
+  <g fill="none" stroke="#2456c4" stroke-width="2">
+    <polyline points="42,150 51,135 60,142 69,128 78,134 87,122 96,128 105,118 114,125 123,116 132,122 141,114 150,120 158,112"/>
+    <polyline points="217,152 226,132 235,146 244,126 253,138 262,120 271,132 280,116 289,129 298,114 307,126 316,112 325,124 333,110" stroke="#4b6fd4"/>
+    <polyline points="392,156 401,128 410,150 419,122 428,142 437,116 446,138 455,112 464,134 473,118 482,130 491,110 500,126 508,116" stroke="#7c93de"/>
+    <polyline points="567,158 576,122 585,152 594,118 603,148 612,114 621,142 630,112 639,146 648,116 657,140 666,114 675,144 683,118" stroke="#a5b4e8"/>
+    <polyline points="742,164 748,110 754,158 760,120 766,166 772,105 778,160 784,115 790,164 796,108 802,156 808,112 814,166 820,106 826,162 832,110 838,158 844,116 850,164 856,108 862,152" stroke="#c3cdef"/>
+  </g>
+  <g font-size="12" fill="#5a6272" text-anchor="middle">
+    <text x="100" y="188">t = 0（干净动作）</text>
+    <text x="275" y="188">t = 1</text>
+    <text x="450" y="188">t = 2</text>
+    <text x="625" y="188">t = …</text>
+    <text x="800" y="188">t = T（纯噪声）</text>
+  </g>
+  <g fill="none" stroke="#64748b" stroke-width="2">
+    <line x1="172" y1="130" x2="201" y2="130" marker-end="url(#ar2)"/>
+    <line x1="347" y1="130" x2="376" y2="130" marker-end="url(#ar2)"/>
+    <line x1="522" y1="130" x2="551" y2="130" marker-end="url(#ar2)"/>
+    <line x1="697" y1="130" x2="726" y2="130" marker-end="url(#ar2)"/>
+  </g>
+
+  <!-- 反向 -->
+  <line x1="860" y1="216" x2="30" y2="216" stroke="#2456c4" stroke-width="2" marker-end="url(#ar2b)"/>
+  <text x="450" y="210" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">反向过程：网络 εθ「看图猜噪声」，猜出来减掉，重复 T 步（唯一要训练的部分）</text>
+  <g font-size="12" fill="#2456c4" text-anchor="middle">
+    <text x="712" y="240">猜噪声，减掉</text>
+    <text x="537" y="240">再猜，再减</text>
+    <text x="362" y="240">…</text>
+    <text x="187" y="240">得到干净动作</text>
+  </g>
+  <rect x="330" y="256" width="240" height="56" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="450" y="280" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">εθ(x_t , t , c)</text>
+  <text x="450" y="300" font-size="12" fill="#5a6272" text-anchor="middle">c = 条件：图像 + 指令 + 机器人状态</text>
+</svg>
+</div>
+<div class="cap"><b>图 4-2</b>｜扩散模型的加噪—去噪链（示意）。上排：前向过程按固定规则逐步掺噪声，t 越大信号越弱；下排：反向过程由训练好的网络 εθ 逐步「猜出混进去的噪声并减掉」。对应 DDPM 论文（arXiv:2006.11239）的框架图；在 Diffusion Policy 里，被雕刻的对象不是图像而是动作序列。</div>
+
+<h3>2.1 前向过程：一个可以一步到位的公式</h3>
+
+<p>设干净数据为 \(x_0\)（一段动作序列，就是一个矩阵：16 步 × 每步几个数），第 \(t\) 步加噪后的结果记为 \(x_t\)。DDPM 的好消息是：不用真的一步步加，可以直接写出「加噪 \(t\) 步后长什么样」：</p>
+
+<div class="formula">
+\[ x_t = \sqrt{\bar\alpha_t}\, x_0 + \sqrt{1-\bar\alpha_t}\; \epsilon, \qquad \epsilon \sim \mathcal{N}(0, \mathbf{I}) \]
+</div>
+
+<p><b>大白话：</b>\(\bar\alpha_t\) 是一个从 1 递减到接近 0 的数（由预先定好的加噪时间表决定），可以读作「第 \(t\) 步还剩多少信号」。\(\sqrt{\bar\alpha_t}\, x_0\) 是打了折的原信号，\(\sqrt{1-\bar\alpha_t}\,\epsilon\) 是掺进去的噪声——两个系数平方和恰好为 1，所以「信号 + 噪声」的总量守恒。\(t\) 越小越像原数据，\(t\) 越大越接近纯噪声 \(\epsilon\)；\(t=T\) 时信号几乎归零，剩下的就是一坨标准高斯噪声。</p>
+
+<h3>2.2 反向过程：训练目标简单到离谱——「看图猜噪声」</h3>
+
+<p>反向要学一个网络 \(\epsilon_\theta(x_t, t, c)\)：输入带噪数据 \(x_t\)、步数 \(t\) 和条件 \(c\)，输出「这里面混进去的噪声是什么」。训练损失就是最普通的均方误差（MSE）：</p>
+
+<div class="formula">
+\[ \mathcal{L}(\theta) = \mathbb{E}_{x_0,\, t,\, \epsilon}\left[\, \big\| \epsilon - \epsilon_\theta(x_t, t, c) \big\|^2 \,\right] \]
+</div>
+
+<p><b>大白话：</b>训练像一场自问自答的考试——自己拿干净数据 \(x_0\)，自己随机选步数 \(t\)、自己掷一把噪声 \(\epsilon\) 掺进去得到 \(x_t\)（用上面的公式一步完成），然后让网络猜「掺进去的噪声是哪一把」。猜得越准损失越小。因为考题和标准答案都是自己出的，要多少有多少，而且 MSE 损失极其稳定——这正是 Diffusion Policy 论文强调「训练稳定性好、对演示数量友好」的数学根源（对比：第 1 讲 CVAE 要同时平衡重建项和 KL 项，GAN 更是有名的难训）。</p>
+
+<h3>2.3 采样：从纯噪声出发，迭代 T 步</h3>
+
+<p>生成（采样）时不再需要 \(x_0\)：先掷一坨纯噪声 \(x_T \sim \mathcal{N}(0,\mathbf{I})\)，然后重复「网络猜噪声 → 按公式减掉一小步 → 得到 \(x_{t-1}\)」，直到 \(x_0\)。这个 \(x_0\) 就是生成的样本——在机器人场景里就是一段动作序列。</p>
+
+<p>原始 DDPM 的 \(T\) 通常是 1000 步，太慢。<b>DDIM</b>（Song et al. 2020，arXiv:2010.02502）证明可以把采样改成确定性跳步——训练时仍按多步的定义学，推理时只走 10~50 步，质量损失很小。Diffusion Policy 正是用「训练 100 步、DDIM 推理 10 步」做到 0.1 秒出一次动作（RTX 3080 单卡）。这个「迭代步数 = 推理延迟」的账，是下一节流匹配出场的直接动机。</p>
+
+<h3>2.4 条件 c：扩散模型的方向盘</h3>
+
+<p>无条件扩散生成的是「随机一个像样的样本」；把图像、指令、机器人状态作为条件 \(c\) 注入网络（具体注入方式：CNN 用 FiLM 逐层调制、Transformer 用交叉注意力，下节都会见到），生成的就是「<b>符合要求</b>的样本」——看到当前画面、听到「把杯子放进水槽」、知道关节当前位置，去噪网络雕出来的就是「这个场景下该做的那段动作」。<b>条件扩散 = 按要求生成</b>，这五个字就是它成为机器人策略的全部理由。</p>
+
+<div class="box">
+<span class="bt">一句话记住扩散</span>训练：自己掺噪声，让网络学会「看图猜噪声」（MSE，超稳）。采样：从纯噪声出发，反复「猜噪声、减噪声」，雕刻出符合要求的样本。步数越多雕得越细，但也越慢——加速是永恒主题。
+</div>
+
+<h2>3. Diffusion Policy 精读：把扩散装进机器人</h2>
+
+<p><b>Diffusion Policy</b>（Chi et al. 2023，arXiv:2303.04137，哥伦比亚大学 + TRI + MIT）的想法一句话就能说完：<b>把机器人策略建模为条件去噪扩散过程——生成对象从图像换成动作序列</b>。给定观测 \(\mathbf{O}_t\)，策略学的分布是 \(p(\mathbf{A}_t \mid \mathbf{O}_t)\)，其中 \(\mathbf{A}_t\) 是未来一段动作块。学习方式是行为克隆（behavior cloning，BC：拿人类演示当标准答案做监督学习，第 1 讲讲过）。</p>
+
+<h3>3.1 架构：两种去噪骨干</h3>
+
+<p>「猜噪声」的网络 \(\epsilon_\theta\) 长什么样？论文给了两种：</p>
+
+<ul>
+  <li><b>CNN 版（DP-C）</b>：把动作块看成一条「时间序列图像」，用 <b>1D 时间维 U-Net</b>（一维卷积网络，U 形结构、能同时看局部和全局）去噪；观测特征 \(\mathbf{O}_t\)（视觉编码器输出 + 机器人本体状态）通过 <b>FiLM</b>（Feature-wise Linear Modulation，特征级线性调制：对每层卷积输出做 \(h \leftarrow \gamma \cdot h + \beta\)，其中 \(\gamma,\beta\) 由条件算出——相当于「用观测给网络每层调音量、调音色」）逐层注入。论文推荐新任务先试这版：开箱即用、几乎不用调参。</li>
+  <li><b>Transformer 版（DP-T）</b>：把带噪动作序列当成 token 序列送进 Transformer，观测特征通过<b>交叉注意力</b>（cross-attention：动作 token 作为 query 去「查阅」观测 token）注入每个解码层，动作 token 之间用因果掩码（每个动作 token 只能看到自己和前面的）。适合动作变化又快又尖的任务（比如直接输出速度指令），但对超参更敏感。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="ar3" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 L2,4.5 z" fill="#64748b"/>
+    </marker>
+    <marker id="ar3b" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 L2,4.5 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="450" y="26" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">Diffusion Policy（CNN 版）：观测当条件，从噪声里雕出 16 步动作块</text>
+
+  <!-- 观测通路 -->
+  <rect x="30" y="60" width="130" height="44" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <circle cx="55" cy="82" r="10" fill="#c3cdef"/><circle cx="55" cy="82" r="4" fill="#2456c4"/>
+  <text x="74" y="87" font-size="12" fill="#2a3040">主相机图像</text>
+  <rect x="30" y="114" width="130" height="44" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <circle cx="55" cy="136" r="10" fill="#c3cdef"/><circle cx="55" cy="136" r="4" fill="#2456c4"/>
+  <text x="74" y="141" font-size="12" fill="#2a3040">腕部相机图像</text>
+  <rect x="30" y="168" width="130" height="40" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="95" y="192" font-size="12" fill="#2a3040" text-anchor="middle">机器人状态 q_t</text>
+
+  <rect x="195" y="90" width="130" height="90" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="260" y="125" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">视觉编码器</text>
+  <text x="260" y="145" font-size="12" fill="#5a6272" text-anchor="middle">ResNet（预训练）</text>
+  <text x="260" y="163" font-size="12" fill="#5a6272" text-anchor="middle">只算一次</text>
+  <line x1="160" y1="82" x2="191" y2="112" stroke="#64748b" stroke-width="2" marker-end="url(#ar3)"/>
+  <line x1="160" y1="136" x2="191" y2="136" stroke="#64748b" stroke-width="2" marker-end="url(#ar3)"/>
+  <line x1="160" y1="188" x2="191" y2="160" stroke="#64748b" stroke-width="2" marker-end="url(#ar3)"/>
+
+  <rect x="360" y="105" width="120" height="60" rx="10" fill="#fff" stroke="#2456c4"/>
+  <text x="420" y="130" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">观测特征 O_t</text>
+  <text x="420" y="150" font-size="12" fill="#5a6272" text-anchor="middle">（条件 c）</text>
+  <line x1="325" y1="135" x2="356" y2="135" stroke="#64748b" stroke-width="2" marker-end="url(#ar3)"/>
+
+  <!-- 去噪主路 -->
+  <rect x="530" y="60" width="160" height="56" rx="8" fill="#f6f8fa" stroke="#94a3b8"/>
+  <text x="610" y="84" font-size="13" fill="#2a3040" text-anchor="middle">A^K ~ N(0, I)</text>
+  <text x="610" y="104" font-size="12" fill="#5a6272" text-anchor="middle">16 步动作的纯噪声</text>
+
+  <rect x="530" y="150" width="160" height="96" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="2"/>
+  <text x="610" y="178" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">1D 时间维 U-Net</text>
+  <text x="610" y="198" font-size="12" fill="#5a6272" text-anchor="middle">每层 FiLM 注入 O_t</text>
+  <text x="610" y="216" font-size="12" fill="#5a6272" text-anchor="middle">和扩散步数 k</text>
+  <text x="610" y="236" font-size="12" fill="#2456c4" text-anchor="middle">输出：预测噪声 ε̂</text>
+
+  <line x1="610" y1="116" x2="610" y2="146" stroke="#64748b" stroke-width="2" marker-end="url(#ar3)"/>
+  <path d="M 480,135 C 505,135 505,190 526,192" fill="none" stroke="#2456c4" stroke-width="2" marker-end="url(#ar3b)"/>
+
+  <rect x="740" y="160" width="130" height="76" rx="10" fill="#fff" stroke="#16a34a"/>
+  <text x="805" y="188" font-size="13" font-weight="bold" fill="#16a34a" text-anchor="middle">干净动作块 A⁰</text>
+  <text x="805" y="208" font-size="12" fill="#5a6272" text-anchor="middle">16 步 × 动作维度</text>
+  <text x="805" y="226" font-size="12" fill="#5a6272" text-anchor="middle">（连续值）</text>
+  <line x1="690" y1="198" x2="736" y2="198" stroke="#64748b" stroke-width="2" marker-end="url(#ar3)"/>
+
+  <!-- 循环 -->
+  <path d="M 610,246 C 610,290 700,290 700,255 C 700,130 700,90 694,88" fill="none" stroke="#2456c4" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ar3b)"/>
+  <text x="742" y="286" font-size="12" font-weight="bold" fill="#2456c4" text-anchor="middle">A^k ← 去噪一步(A^k)</text>
+  <text x="742" y="304" font-size="12" fill="#5a6272" text-anchor="middle">重复 K 次（DDPM K=100；</text>
+  <text x="742" y="320" font-size="12" fill="#5a6272" text-anchor="middle">DDIM 推理仅 10 次）</text>
+
+  <!-- 执行 -->
+  <rect x="530" y="330" width="340" height="52" rx="10" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="700" y="352" font-size="13" font-weight="bold" fill="#15803d" text-anchor="middle">只执行前 8 步（Ta），随后拿新观测重新去噪</text>
+  <text x="700" y="372" font-size="12" fill="#5a6272" text-anchor="middle">滚动规划（receding horizon），兼顾平滑与反应速度</text>
+  <line x1="805" y1="236" x2="805" y2="326" stroke="#16a34a" stroke-width="2" marker-end="url(#ar3)"/>
+
+  <!-- Transformer 备选 -->
+  <rect x="30" y="250" width="450" height="132" rx="10" fill="#fbfbfd" stroke="#e3e7ee"/>
+  <text x="255" y="276" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">备选骨干：Transformer 版（DP-T）</text>
+  <text x="255" y="300" font-size="12" fill="#5a6272" text-anchor="middle">带噪动作序列 → 当作 token 送入 Transformer</text>
+  <text x="255" y="320" font-size="12" fill="#5a6272" text-anchor="middle">观测 O_t 经 cross-attention 注入每个解码层</text>
+  <text x="255" y="340" font-size="12" fill="#5a6272" text-anchor="middle">动作 token 间因果掩码（只看自己和过去）</text>
+  <text x="255" y="364" font-size="12" fill="#2456c4" text-anchor="middle">适合高频急变的动作空间，但超参更敏感</text>
+</svg>
+</div>
+<div class="cap"><b>图 4-3</b>｜Diffusion Policy 架构（依据论文图 3 重绘）。上半：CNN 版数据流——观测编码一次成条件 \(\mathbf{O}_t\)，纯噪声动作块经 1D U-Net 迭代去噪 K 次得到 16 步动作，只执行前 8 步再重新规划。左下：Transformer 版的条件注入方式不同（交叉注意力），思想完全一致。</div>
+
+<h3>3.2 视野三参数：看几步、想几步、走几步</h3>
+
+<p>Diffusion Policy 把「一次生成多长、执行多长」显式拆成三个超参数（论文记号 \(T_o, T_p, T_a\)）：</p>
+
+<ul>
+  <li><b>观测视野 \(T_o\)</b>（observation horizon）：条件里放最近几帧观测。默认 <b>2</b> 帧——注意它<b>不</b>建模整段历史，需要历史信息的任务靠动作块本身消化。</li>
+  <li><b>预测视野 \(T_p\)</b>（prediction horizon）：一次去噪生成未来多少步动作。默认 <b>16</b> 步。</li>
+  <li><b>执行视野 \(T_a\)</b>（action horizon）：生成的 16 步里<b>只执行前 8 步</b>，然后把窗口整体向前挪 8 步，拿新观测重新生成——这叫<b>滚动时域控制</b>（receding horizon control，控制论老概念：计划要长、执行要短、随时重划）。\(T_a\) 太小 → 动作不连贯、像在抽搐；太大 → 对环境变化反应迟钝。论文消融实验确认 8 步对多数任务最优。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 900 300" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="ar4" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 L2,4.5 z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <text x="450" y="26" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">Diffusion Policy 的三个视野：To=2 看、Tp=16 想、Ta=8 走</text>
+
+  <!-- 第一轮 -->
+  <text x="42" y="76" font-size="13" fill="#5a6272" text-anchor="middle">t 时刻</text>
+  <rect x="62" y="60" width="92" height="22" rx="5" fill="#2456c4"/>
+  <text x="108" y="76" font-size="12" fill="#fff" text-anchor="middle">观测 To=2</text>
+  <rect x="154" y="60" width="644" height="22" rx="5" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="476" y="76" font-size="12" fill="#2456c4" text-anchor="middle">一次去噪生成的动作块：预测视野 Tp=16 步</text>
+  <rect x="154" y="90" width="322" height="22" rx="5" fill="#16a34a"/>
+  <text x="315" y="106" font-size="12" fill="#fff" text-anchor="middle">实际执行 Ta=8 步</text>
+  <rect x="476" y="90" width="322" height="22" rx="5" fill="#fbfbfd" stroke="#94a3b8" stroke-dasharray="5 4"/>
+  <text x="637" y="106" font-size="12" fill="#94a3b8" text-anchor="middle">后 8 步丢弃（下轮重新生成）</text>
+  <g font-size="12" fill="#5a6272" text-anchor="middle">
+    <text x="85" y="134">t−1</text><text x="131" y="134">t</text>
+    <text x="315" y="134">t+7</text><text x="637" y="134">t+15</text>
+  </g>
+  <line x1="62" y1="140" x2="800" y2="140" stroke="#e3e7ee" stroke-width="2"/>
+
+  <!-- 窗口平移箭头 -->
+  <path d="M 315,150 L 315,168 L 476,168 L 476,184" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#ar4)"/>
+  <text x="620" y="172" font-size="12" fill="#5a6272">执行完 8 步 → 拿新观测，窗口整体前移 8 步</text>
+
+  <!-- 第二轮 -->
+  <text x="42" y="216" font-size="13" fill="#5a6272" text-anchor="middle">t+8 时刻</text>
+  <rect x="384" y="200" width="92" height="22" rx="5" fill="#2456c4"/>
+  <text x="430" y="216" font-size="12" fill="#fff" text-anchor="middle">观测 To=2</text>
+  <rect x="476" y="200" width="392" height="22" rx="5" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="672" y="216" font-size="12" fill="#2456c4" text-anchor="middle">新动作块 Tp=16（画不下，示意）</text>
+  <rect x="476" y="230" width="196" height="22" rx="5" fill="#16a34a"/>
+  <text x="574" y="246" font-size="12" fill="#fff" text-anchor="middle">又只执行前 8 步</text>
+  <g font-size="12" fill="#5a6272" text-anchor="middle">
+    <text x="407" y="274">t+7</text><text x="453" y="274">t+8</text><text x="574" y="274">t+15</text>
+  </g>
+  <text x="450" y="294" font-size="12" fill="#94a3b8" text-anchor="middle">如此滚动：「想得远（16 步保证连贯），走得短（8 步保证应变），随时重想」= receding horizon</text>
+</svg>
+</div>
+<div class="cap"><b>图 4-4</b>｜视野参数与滚动规划（依据论文第 III-B、IV-C 节重绘）。第一轮在 \(t\) 时刻看 2 帧观测、生成 16 步、执行前 8 步；到 \(t{+}8\) 时刻丢弃剩余预测，用新观测重新去噪。默认值 \(T_o{=}2,\; T_p{=}16,\; T_a{=}8\) 与官方代码 <code>diffusion_policy/config/train_diffusion_unet_hybrid_workspace.yaml:12-14</code>（<code>horizon: 16 / n_obs_steps: 2 / n_action_steps: 8</code>）一致，仓库 <code>real-stanford/diffusion_policy</code>，commit <code>5ba07ac</code>，2026-10-21 抓取。</div>
+
+<h3>3.3 代码走读：官方实现只有两段核心</h3>
+
+<p>以下片段来自官方仓库 <code>real-stanford/diffusion_policy</code>（commit <code>5ba07ac</code>，2026-10-21 抓取）。先看<b>训练</b>——和上一节的公式逐行对应：</p>
+
+<pre><code class="language-python"># diffusion_policy/policy/diffusion_unet_hybrid_image_policy.py:316-347（节选）
+# Sample noise that we'll add to the images
+noise = torch.randn(trajectory.shape, device=trajectory.device)
+# Sample a random timestep for each image
+timesteps = torch.randint(
+    0, self.noise_scheduler.config.num_train_timesteps,
+    (bsz,), device=trajectory.device
+).long()
+# Add noise to the clean images according to the noise magnitude at each timestep
+# (this is the forward diffusion process)
+noisy_trajectory = self.noise_scheduler.add_noise(
+    trajectory, noise, timesteps)
+# Predict the noise residual
+pred = self.model(noisy_trajectory, timesteps,
+    local_cond=local_cond, global_cond=global_cond)
+
+pred_type = self.noise_scheduler.config.prediction_type
+if pred_type == 'epsilon':
+    target = noise
+
+loss = F.mse_loss(pred, target, reduction='none')</code></pre>
+
+<p><b>逐段解释：</b>① <code>trajectory</code> 就是演示数据里的干净动作块 \(x_0\)（形状：批 × 16 步 × 动作维度）；② <code>torch.randn</code> 掷噪声 \(\epsilon\)，<code>torch.randint</code> 随机选步数 \(t\)（配置里 <code>num_train_timesteps: 100</code>，即 \(T=100\)，噪声时间表为 <code>squaredcos_cap_v2</code>）；③ <code>add_noise</code> 一行实现前向公式 \(x_t=\sqrt{\bar\alpha_t}\,x_0+\sqrt{1-\bar\alpha_t}\,\epsilon\)；④ <code>self.model</code> 就是图 4-3 那个 U-Net，<code>global_cond</code> 是观测特征 \(\mathbf{O}_t\)（FiLM 注入）；⑤ 预测目标是噪声本身（<code>target = noise</code>），损失是 MSE——整段代码就是 \(\|\epsilon-\epsilon_\theta(x_t,t,c)\|^2\) 的直译，没有任何高深内容。</p>
+
+<p>再看<b>推理（采样）</b>：</p>
+
+<pre><code class="language-python"># diffusion_policy/policy/diffusion_unet_hybrid_image_policy.py:185-207（节选）
+trajectory = torch.randn(
+    size=condition_data.shape, ...)        # 从纯噪声 x_T 出发
+
+scheduler.set_timesteps(self.num_inference_steps)  # 推理步数（可 DDIM 加速）
+
+for t in scheduler.timesteps:
+    # 2. predict model output
+    model_output = model(trajectory, t,
+        local_cond=local_cond, global_cond=global_cond)   # 猜噪声 ε̂
+    # 3. compute previous image: x_t -> x_t-1
+    trajectory = scheduler.step(
+        model_output, t, trajectory, ...).prev_sample     # 减掉一小步</code></pre>
+
+<p><b>逐段解释：</b>初始化一坨和动作块同形状的纯噪声；<code>for</code> 循环从 \(t=T\) 走到 \(t=0\)，每轮「网络猜噪声 → <code>scheduler.step</code> 按 DDPM/DDIM 公式减掉一小步」；循环结束，<code>trajectory</code> 里躺着的就是一段可直接下发给机器人的连续动作。整个「策略」就是这 20 来行循环。</p>
+
+<h3>3.4 效果与特性：论文怎么说</h3>
+
+<ul>
+  <li><b>性能</b>：在 4 个基准（Robomimic、Push-T、Multimodal Block Pushing、Franka Kitchen）共 12 个任务上，比此前最强方法（BC-RNN、IBC、BeT、ACT 等）<b>平均绝对提升 46.9 个百分点</b>（论文摘要口径：各任务成功率差值的平均，是绝对提升而非相对提升）。</li>
+  <li><b>多模态</b>：Block Pushing 基准专门设计成「挡路块可以往左推也可以往右推」，Diffusion Policy 两个峰都学到了，回归基线在峰间输出废动作（正是图 4-1 的剧情，论文第 IV-A 节有对应实验）。</li>
+  <li><b>动作平滑 + 位置控制</b>：迭代去噪天然产出时间上连贯的轨迹，配合位置控制（而非速度控制）对推理延迟也更鲁棒（论文第 IV-B 节）。</li>
+  <li><b>实时性</b>：DDIM 推理 10 步，RTX 3080 上单次推理 0.1 秒（论文第 III-C 节）。</li>
+  <li><b>数据效率</b>：真实机器人 Push-T 任务用少量演示（几十条量级）就能学会（论文附录 A-E）。</li>
+</ul>
+
+<p>一句话带过后续：<b>3D Diffusion Policy（DP3）</b>（Ze et al. 2024，arXiv:2403.03954）把条件从 2D 图像换成点云（3D 点的集合），只需极少量演示就能学会不少任务——扩散动作头对「条件长什么样」并不挑剔，这也是它能一路活到 π0 的原因。</p>
+
+<h2>4. 流匹配 10 分钟速成：扩散的直线加速版</h2>
+
+<p>扩散很好，但采样要迭代几十步（DDPM 原版上千步），每步都是一次完整的网络前向。对聊天机器人，用户等两秒出一张图无所谓；对 50Hz 的机械臂，20 毫秒一个控制周期，预算紧得多。<b>流匹配（flow matching，Lipman et al. 2022，arXiv:2210.02747；直线版本叫 rectified flow，Liu et al. 2022，arXiv:2209.03003）</b>给出的答案是：<b>别让样本走弯曲的随机路径了，直接学一条从噪声到数据的直线航线</b>。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="ar5" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 L2,4.5 z" fill="#64748b"/>
+    </marker>
+    <marker id="ar5b" markerWidth="10" markerHeight="10" refX="2" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5 L0,10 L2,5 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="450" y="26" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">从噪声分布走到数据分布：弯路（扩散）vs 直线（流匹配）</text>
+  <line x1="450" y1="50" x2="450" y2="250" stroke="#e3e7ee" stroke-width="2"/>
+
+  <!-- 左：扩散 -->
+  <text x="225" y="62" font-size="14" font-weight="bold" fill="#5a6272" text-anchor="middle">扩散：随机弯路，几十~上千步</text>
+  <circle cx="90" cy="150" r="52" fill="#eef3fc" stroke="#94a3b8"/>
+  <g fill="#94a3b8">
+    <circle cx="72" cy="132" r="3"/><circle cx="100" cy="128" r="3"/><circle cx="112" cy="152" r="3"/>
+    <circle cx="82" cy="166" r="3"/><circle cx="104" cy="178" r="3"/><circle cx="68" cy="152" r="3"/>
+  </g>
+  <text x="90" y="222" font-size="12" fill="#5a6272" text-anchor="middle">纯噪声</text>
+  <circle cx="370" cy="150" r="40" fill="#f0fdf4" stroke="#16a34a"/>
+  <g fill="#16a34a">
+    <circle cx="356" cy="140" r="3"/><circle cx="378" cy="136" r="3"/><circle cx="368" cy="158" r="3"/><circle cx="386" cy="152" r="3"/>
+  </g>
+  <text x="370" y="212" font-size="12" fill="#5a6272" text-anchor="middle">数据（动作块）</text>
+  <path d="M 108,168 C 140,205 150,110 185,150 C 215,185 225,105 258,142 C 285,172 300,120 322,140 C 335,152 340,148 348,146" fill="none" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#ar5)"/>
+  <text x="225" y="248" font-size="12" fill="#5a6272" text-anchor="middle">每步又弯又抖，步子必须小，步数多</text>
+
+  <!-- 右：流匹配 -->
+  <text x="675" y="62" font-size="14" font-weight="bold" fill="#2456c4" text-anchor="middle">流匹配：直线航线，几步~几十步</text>
+  <circle cx="540" cy="150" r="52" fill="#eef3fc" stroke="#94a3b8"/>
+  <g fill="#94a3b8">
+    <circle cx="522" cy="132" r="3"/><circle cx="550" cy="128" r="3"/><circle cx="562" cy="152" r="3"/>
+    <circle cx="532" cy="166" r="3"/><circle cx="554" cy="178" r="3"/><circle cx="518" cy="152" r="3"/>
+  </g>
+  <text x="540" y="222" font-size="12" fill="#5a6272" text-anchor="middle">纯噪声</text>
+  <circle cx="820" cy="150" r="40" fill="#f0fdf4" stroke="#16a34a"/>
+  <g fill="#16a34a">
+    <circle cx="806" cy="140" r="3"/><circle cx="828" cy="136" r="3"/><circle cx="818" cy="158" r="3"/><circle cx="836" cy="152" r="3"/>
+  </g>
+  <text x="820" y="212" font-size="12" fill="#5a6272" text-anchor="middle">数据（动作块）</text>
+  <line x1="586" y1="150" x2="774" y2="150" stroke="#2456c4" stroke-width="4" marker-end="url(#ar5b)"/>
+  <text x="680" y="134" font-size="12" font-weight="bold" fill="#2456c4" text-anchor="middle">速度场 v(x, t)：处处指向数据</text>
+  <text x="675" y="248" font-size="12" fill="#5a6272" text-anchor="middle">学一个「风向标」网络，沿直线大步走即可</text>
+</svg>
+</div>
+<div class="cap"><b>图 4-5</b>｜两种生成路径的直觉对比（示意）。扩散的反向过程是随机微分方程的离散化，路径弯曲带抖动，步子大了容易偏；流匹配（rectified flow，arXiv:2209.03003）把「噪声 → 数据」的路径直接定义成直线插值，网络学直线上每一点的速度方向，因此少数几步欧拉积分就能走完。</div>
+
+<h3>4.1 三个公式讲完流匹配</h3>
+
+<p><b>注意记号翻转</b>：上一节扩散文献里 \(x_0\) 是数据、\(x_T\) 是噪声；流匹配这里反过来——按 π0 论文的习惯，令 \(x_0\) = 噪声、\(x_1\) = 数据，\(t \in [0,1]\) 是「完成度」。</p>
+
+<p><b>公式一：直线路径。</b>在噪声 \(x_0\) 和数据 \(x_1\) 之间画直线，\(t\) 时刻的点是线性插值：</p>
+
+<div class="formula">
+\[ x_t = (1-t)\, x_0 + t\, x_1 \]
+</div>
+
+<p><b>大白话：</b>\(t=0\) 时全是噪声，\(t=1\) 时全是数据，中间就是两者按比例调和——像调酒，\(t\) 是「成品占比」。这条直线就是样本「应该走的路」，训练时的 \(x_t\) 全部由这个公式一步算出（比扩散的加噪还简单，连时间表都不用设计）。</p>
+
+<p><b>公式二：目标速度。</b>直线上每一点的前进方向都是同一个常量：</p>
+
+<div class="formula">
+\[ v^* = \frac{dx_t}{dt} = x_1 - x_0 \]
+</div>
+
+<p><b>大白话：</b>速度 = 终点减起点，「数据减去噪声」。它不随 \(t\) 变——直线的好处。网络 \(v_\theta(x_t, t, c)\) 要学的就是：站在路径上任何一点 \(x_t\)，指出该往哪个方向走、走多快。</p>
+
+<p><b>公式三：训练损失。</b>还是 MSE：</p>
+
+<div class="formula">
+\[ \min_\theta \; \mathbb{E}_{t,\, x_0,\, x_1}\left[\, \big\| v_\theta(x_t, t, c) - (x_1 - x_0) \big\|^2 \,\right] \]
+</div>
+
+<p><b>大白话：</b>随机抽一对（噪声，真实动作），随机抽时刻 \(t\)，用公式一算出中间点 \(x_t\)，让网络在 \(x_t\) 处报一个方向，和标准答案「\(x_1-x_0\)」比，差多少罚多少。和扩散的「看图猜噪声」几乎一样朴素、一样稳。这个损失有个学名叫 CFM（conditional flow matching，条件流匹配）——「条件」是指给定单个数据点 \(x_1\) 算损失；可以证明这样训出来的速度场在整体上也能把噪声分布正确搬运到数据分布（推导从简，结论放心用）。</p>
+
+<p><b>采样 = 顺着风向标走（学名：解常微分方程的欧拉积分）。</b>生成时从纯噪声 \(x_0 \sim \mathcal{N}(0,\mathbf{I})\) 出发，反复做：</p>
+
+<div class="formula">
+\[ x \leftarrow x + v_\theta(x, t, c)\, \Delta t \]
+</div>
+
+<p><b>大白话：</b>\(\Delta t\) 是步长。比如走 10 步，\(\Delta t = 0.1\)：每步问一次网络「现在该往哪走」，挪一小段，重复到 \(t=1\)，手里就是成品。因为学的是直线，步子迈得大也不容易偏——这就是流匹配能用 <b>5~10 步</b>出高质量样本、而 DDPM 需要几十上百步的根本原因。</p>
+
+<h3>4.2 扩散 vs 流匹配</h3>
+
+<table>
+  <tr><th></th><th>扩散（DDPM 系）</th><th>流匹配 / rectified flow</th></tr>
+  <tr><td><b>路径形状</b></td><td>弯曲的随机路径（按噪声时间表扩散）</td><td>直线插值 \(x_t=(1-t)x_0+tx_1\)</td></tr>
+  <tr><td><b>网络学什么</b></td><td>混进去的噪声 \(\epsilon_\theta\)（或等价的 score，即分布的「上坡方向」）</td><td>速度场 \(v_\theta\)（方向 + 快慢）</td></tr>
+  <tr><td><b>训练损失</b></td><td>MSE 猜噪声，需设计噪声时间表</td><td>MSE 猜速度，插值一行搞定，更简单</td></tr>
+  <tr><td><b>采样步数</b></td><td>几十~上千步（DDIM 可减到 ~10）</td><td>几步~几十步（π0 用 10 步）</td></tr>
+  <tr><td><b>实现复杂度</b></td><td>噪声时间表、方差处理等细节多</td><td>插值 + MSE + 欧拉循环，三件套</td></tr>
+  <tr><td><b>机器人友好度</b></td><td>Diffusion Policy 已够用（0.1s/次）</td><td>高频实时（50Hz）首选——π0 的选择</td></tr>
+</table>
+
+<div class="cap"><b>表 4-2</b>｜两条路线对比。两者血缘极近（流匹配可视作扩散家族的确定性特例），工程差异集中在「路径弯不弯 → 步数多不多」。图像界的 SD3、Flux 也是同一时期从 DDPM 转向流匹配的；机器人界跟上只是时间问题。</div>
+
+<h2>5. π0 精读：流匹配装进 3B VLM</h2>
+
+<h3>5.1 背景：谁做的、想干什么</h3>
+
+<p><b>π0</b>（读作「pi zero」，Black, Brown, Levine et al. 2024，arXiv:2410.24164）出自 <b>Physical Intelligence</b>（简称 PI 或 π）——2024 年由 Sergey Levine、Chelsea Finn、Karol Hausman 等原 Google RT 系核心作者（<a href="vla-t2-rt1-rt2.html">第 2 讲</a>埋过的线索）创立的具身智能公司。π0 的目标不是刷某个基准，而是造一个<b>机器人基础模型</b>（robot foundation model）：一个模型，装进多种机器人本体（embodiment，机器人的「身体形态」——单臂、双臂、带底盘的移动操作平台……各自的动作空间、控制频率都不同），干需要灵巧和长时程（long-horizon，由许多小步骤串成、中途不能断的大任务）的真活。</p>
+
+<h3>5.2 架构：VLM 主干 + 动作专家</h3>
+
+<p>π0 的总体量 3.3B 参数，由两块拼成（论文第 III 节与附录 A-B）：</p>
+
+<ul>
+  <li><b>VLM 主干</b>：开源的 <b>PaliGemma</b>（3B，SigLIP 视觉编码器 + Gemma 语言模型），继承互联网规模的语义知识——「盘子是什么、水槽在哪、'清桌子'意味着什么」全归它管。</li>
+  <li><b>动作专家（action expert）</b>：另起炉灶、从零训练的约 <b>300M</b> 参数小网络，专职把「理解」翻译成连续动作。它和 VLM 共享同一个 Transformer 骨架，但<b>用自己独立的一套权重</b>处理动作相关 token——这种「同一层里两组专家权重」的结构类似混合专家（MoE）：前缀 token 走 VLM 权重，后缀 token 走动作专家权重。</li>
+</ul>
+
+<p>信息怎么流动？把一次推理的输入排成一条 token 序列，分成<b>前缀（prefix）</b>和<b>后缀（suffix）</b>两截：</p>
+
+<ul>
+  <li><b>前缀</b> = 多视角图像 token + 语言指令 token（VLM 权重处理，块内双向注意力）；</li>
+  <li><b>后缀</b> = 机器人状态 token + <b>带噪动作块</b> token（动作专家权重处理，块内全双向注意力），外加流匹配时间步 \(\tau\)；</li>
+  <li>注意力掩码是<b>块因果</b>（blockwise causal）的：后缀能 attend 到全部前缀（动作生成看得见场景和指令），前缀看不到后缀——论文原话的动机是「最小化与 VLM 预训练分布的偏移」，即别让互联网上学来的 VLM 突然看到「未来 token」。</li>
+</ul>
+
+<div class="fig">
+<svg viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="ar6" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 L2,4.5 z" fill="#64748b"/>
+    </marker>
+    <marker id="ar6b" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 L2,4.5 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="450" y="26" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">π0 架构：PaliGemma 3B（VLM 权重）+ 动作专家（~300M，独立权重），流匹配出 50 步动作块</text>
+
+  <!-- 顶层输出 -->
+  <rect x="240" y="48" width="420" height="52" rx="10" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="450" y="70" font-size="13" font-weight="bold" fill="#15803d" text-anchor="middle">输出：干净动作块 A（H=50 步 ≈ 1 秒 @ 50Hz）</text>
+  <text x="450" y="90" font-size="12" fill="#5a6272" text-anchor="middle">下发机器人 → 高频连续控制（叠衣服、清桌子…）</text>
+
+  <!-- 积分循环 -->
+  <rect x="240" y="126" width="420" height="56" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="450" y="148" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">10 步欧拉积分：A ← A + δ · vθ（δ=0.1）</text>
+  <text x="450" y="168" font-size="12" fill="#5a6272" text-anchor="middle">每步把速度场 vθ 叠加到动作块上，从纯噪声走向干净动作</text>
+  <line x1="450" y1="126" x2="450" y2="104" stroke="#16a34a" stroke-width="2.5" marker-end="url(#ar6)"/>
+  <path d="M 660,154 C 740,154 740,250 740,300 C 740,330 700,338 664,338" fill="none" stroke="#2456c4" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ar6b)"/>
+  <text x="790" y="234" font-size="12" fill="#2456c4" text-anchor="middle">带噪动作块</text>
+  <text x="790" y="252" font-size="12" fill="#2456c4" text-anchor="middle">回炉重算</text>
+
+  <!-- v_theta -->
+  <rect x="430" y="206" width="230" height="48" rx="10" fill="#fff" stroke="#2456c4"/>
+  <text x="545" y="228" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">速度场 vθ(A^τ, o_t)</text>
+  <text x="545" y="246" font-size="12" fill="#5a6272" text-anchor="middle">由动作专家最后一层投影输出</text>
+  <line x1="545" y1="206" x2="545" y2="186" stroke="#2456c4" stroke-width="2.5" marker-end="url(#ar6b)"/>
+
+  <!-- 两组权重 -->
+  <rect x="40" y="278" width="380" height="122" rx="12" fill="#fbfbfd" stroke="#2456c4" stroke-width="2"/>
+  <text x="230" y="300" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">前缀 prefix —— VLM 权重（PaliGemma 3B，预训练初始化）</text>
+  <g>
+    <rect x="60" y="316" width="26" height="26" rx="4" fill="#c3cdef"/><rect x="90" y="316" width="26" height="26" rx="4" fill="#c3cdef"/><rect x="120" y="316" width="26" height="26" rx="4" fill="#c3cdef"/><rect x="150" y="316" width="26" height="26" rx="4" fill="#c3cdef"/>
+    <text x="118" y="360" font-size="12" fill="#5a6272" text-anchor="middle">图像 token（多相机）</text>
+    <rect x="220" y="316" width="26" height="26" rx="4" fill="#dbe7fb"/><rect x="250" y="316" width="26" height="26" rx="4" fill="#dbe7fb"/><rect x="280" y="316" width="26" height="26" rx="4" fill="#dbe7fb"/>
+    <text x="263" y="360" font-size="12" fill="#5a6272" text-anchor="middle">指令 token ℓ</text>
+    <text x="352" y="326" font-size="12" fill="#94a3b8" text-anchor="middle">块内</text>
+    <text x="352" y="344" font-size="12" fill="#94a3b8" text-anchor="middle">双向</text>
+  </g>
+  <text x="230" y="388" font-size="12" fill="#94a3b8" text-anchor="middle">前缀看不到后缀（块因果掩码，保护 VLM 预训练分布）</text>
+
+  <rect x="440" y="278" width="200" height="122" rx="12" fill="#fbfbfd" stroke="#f59e0b" stroke-width="2"/>
+  <text x="540" y="300" font-size="13" font-weight="bold" fill="#b45309" text-anchor="middle">后缀 suffix —— 动作专家权重</text>
+  <g>
+    <rect x="458" y="316" width="26" height="26" rx="4" fill="#fde9c8"/>
+    <text x="471" y="360" font-size="12" fill="#5a6272" text-anchor="middle">状态 q_t</text>
+    <rect x="510" y="316" width="22" height="26" rx="4" fill="#fbd9a0"/><rect x="536" y="316" width="22" height="26" rx="4" fill="#fbd9a0"/><rect x="562" y="316" width="22" height="26" rx="4" fill="#fbd9a0"/><rect x="588" y="316" width="22" height="26" rx="4" fill="#fbd9a0"/>
+    <text x="560" y="360" font-size="12" fill="#5a6272" text-anchor="middle">带噪动作块 A^τ（50 token）+ τ</text>
+  </g>
+  <text x="540" y="388" font-size="12" fill="#94a3b8" text-anchor="middle">块内全双向注意力</text>
+
+  <!-- attention flow -->
+  <path d="M 452,308 C 430,296 424,296 412,300" fill="none" stroke="#2456c4" stroke-width="2.5" marker-end="url(#ar6b)"/>
+  <text x="450" y="428" font-size="12" font-weight="bold" fill="#2456c4" text-anchor="middle">动作 token attend 全部前缀 token（场景 + 指令 → 动作）</text>
+
+  <!-- 输入层 -->
+  <g>
+    <rect x="60" y="466" width="150" height="46" rx="8" fill="#fff" stroke="#e3e7ee"/>
+    <circle cx="82" cy="489" r="9" fill="#c3cdef"/><circle cx="82" cy="489" r="3.5" fill="#2456c4"/>
+    <text x="98" y="485" font-size="12" fill="#2a3040">多视角图像 I_t</text>
+    <text x="98" y="503" font-size="12" fill="#94a3b8">（手腕 + 外部相机）</text>
+    <rect x="230" y="466" width="170" height="46" rx="8" fill="#fff" stroke="#e3e7ee"/>
+    <text x="315" y="485" font-size="12" fill="#2a3040" text-anchor="middle">语言指令 ℓ</text>
+    <text x="315" y="503" font-size="12" fill="#94a3b8" text-anchor="middle">「把盘子放进水槽」</text>
+    <rect x="420" y="466" width="150" height="46" rx="8" fill="#fff" stroke="#e3e7ee"/>
+    <text x="495" y="485" font-size="12" fill="#2a3040" text-anchor="middle">机器人状态 q_t</text>
+    <text x="495" y="503" font-size="12" fill="#94a3b8" text-anchor="middle">关节角、夹爪开度…</text>
+    <rect x="590" y="466" width="180" height="46" rx="8" fill="#fff" stroke="#e3e7ee"/>
+    <text x="680" y="485" font-size="12" fill="#2a3040" text-anchor="middle">纯噪声 ε ~ N(0, I)</text>
+    <text x="680" y="503" font-size="12" fill="#94a3b8" text-anchor="middle">50 步 × 动作维度</text>
+  </g>
+  <line x1="135" y1="466" x2="150" y2="404" stroke="#64748b" stroke-width="2" marker-end="url(#ar6)"/>
+  <line x1="315" y1="466" x2="300" y2="404" stroke="#64748b" stroke-width="2" marker-end="url(#ar6)"/>
+  <line x1="495" y1="466" x2="510" y2="404" stroke="#64748b" stroke-width="2" marker-end="url(#ar6)"/>
+  <line x1="660" y1="466" x2="600" y2="404" stroke="#64748b" stroke-width="2" marker-end="url(#ar6)"/>
+
+  <!-- 推理工程注释 -->
+  <rect x="60" y="536" width="710" height="46" rx="10" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="415" y="556" font-size="12.5" font-weight="bold" fill="#9a7b1c" text-anchor="middle">推理工程：前缀（图像+指令）的 KV 缓存只算一次；10 个积分步里每步只重算 50 个动作 token 的后缀</text>
+  <text x="415" y="574" font-size="12" fill="#5a6272" text-anchor="middle">→ 3B VLM 的语义计算不随去噪步数翻倍，这是 π0 能在机器人上跑到 50Hz 的关键（论文第 III 节 + openpi 源码）</text>
+</svg>
+</div>
+<div class="cap"><b>图 4-6</b>｜π0 架构（依据论文图 3、附录 A-B 与官方开源实现 openpi 重绘）。左蓝框：图像/指令 token 走 VLM 权重（前缀）；右橙框：状态 + 带噪动作块 token 走动作专家权重（后缀）。蓝色粗箭头是跨权重的注意力流向（只有后缀 → 前缀，单向可见）；顶部虚线循环是 10 步欧拉积分——每步动作专家输出速度场 \(v_\theta\)，叠加到动作块上，直到雕出干净动作。</div>
+
+<h3>5.3 训练目标：动作专家学流匹配</h3>
+
+<p>π0 论文把动作块记作 \(\mathbf{A}_t\)（\(H=50\) 步），流匹配时间记作 \(\tau \in [0,1]\)。前向插值与训练目标（论文第 III-A 节记号）：</p>
+
+<div class="formula">
+\[ \mathbf{A}_t^\tau = \tau\, \mathbf{A}_t + (1-\tau)\, \epsilon, \qquad \mathbf{u}(\mathbf{A}_t^\tau \mid \mathbf{A}_t) = \epsilon - \mathbf{A}_t \]
+</div>
+
+<p><b>大白话：</b>第一式就是 §4 的直线路径——\(\tau\) 是「完成度」：论文记号下 \(\tau{=}0\) 纯噪声、\(\tau{=}1\) 纯动作，中间按线性比例混合。第二式是网络要学的目标速度场：「噪声减动作」，即从成品指回噪声的方向向量——注意它和 §4 教科书式 \(x_1-x_0\) 差一个符号，因为参数方向约定相反（见下面的推断框），走的时候反着走即可。损失照旧是 MSE：\(\|\mathbf{v}_\theta(\mathbf{A}_t^\tau, \mathbf{o}_t) - \mathbf{u}\|^2\)。训练时 \(\tau\) 从 Beta(1.5, 1) 分布采样——刻意偏向高噪声端，因为「从一坨纯噪声里定大方向」比「快完工时精修」更难学。</p>
+
+<div class="infer">π0 论文行文与官方代码 openpi 的参数方向约定相反：论文说「从 \(\tau{=}0\)（噪声）积分到 \(\tau{=}1\)（动作）」，而 openpi 源码（<code>src/openpi/models/pi0.py:226-228</code>）注释原话是「我们采用扩散文献更常见的约定：t=1 是噪声、t=0 是目标分布。是的，这和 π0 论文相反，抱歉」，代码里步长 <code>dt = -1.0 / num_steps</code>，从 t=1 往 t=0 积分。两种写法数学等价（同一条直线、同一个目标速度场 \(\epsilon - \mathbf{A}_t\)，只是行走方向的记号相反）；「论文此处是笔误还是刻意」属于我们的推断，工程上以代码为准即可。</div>
+
+<p>官方 openpi 实现（JAX，仓库 <code>Physical-Intelligence/openpi</code>，commit <code>215abfb</code>，2026-10-21 抓取）里，训练一步的全部数学就这几行：</p>
+
+<pre><code class="language-python"># openpi: src/openpi/models/pi0.py:192-214（节选）
+preprocess_rng, noise_rng, time_rng = jax.random.split(rng, 3)
+noise = jax.random.normal(noise_rng, actions.shape)          # ε ~ N(0, I)
+time = jax.random.beta(time_rng, 1.5, 1, batch_shape) * 0.999 + 0.001  # 偏向高噪声端的 t
+time_expanded = time[..., None, None]
+x_t = time_expanded * noise + (1 - time_expanded) * actions  # 直线插值（代码约定：t=1 是噪声）
+u_t = noise - actions                                        # 目标速度场：噪声 − 动作
+
+# prefix（图像+文本）与 suffix（状态+带噪动作）一次前向
+prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation)
+suffix_tokens, suffix_mask, suffix_ar_mask, adarms_cond = self.embed_suffix(observation, x_t, time)
+...
+v_t = self.action_out_proj(suffix_out[:, -self.action_horizon:])  # 动作专家投影出速度
+return jnp.mean(jnp.square(v_t - u_t), axis=-1)                # MSE 损失</code></pre>
+
+<p><b>逐段解释：</b>① 掷噪声 \(\epsilon\)、掷时刻 \(t\)（Beta 分布，和论文一致）；② 一行插值算出带噪动作块 \(x_t\)——就是公式 \(\mathbf{A}_t^\tau\) 的代码版；③ 目标速度 \(u_t = \epsilon - A\) 也是一行；④ 前缀后缀拼起来过一次 Transformer（前缀 token 用 VLM 权重、后缀 token 用动作专家权重，由 <code>embed_prefix</code> / <code>embed_suffix</code> 分别处理）；⑤ 取最后 50 个 token（<code>action_horizon</code>）的输出投影成速度 \(v_t\)，和 \(u_t\) 做 MSE。对照 §4 的公式三，没有任何超出「直线插值 + 猜速度」的东西。</p>
+
+<p>采样同样朴素：</p>
+
+<pre><code class="language-python"># openpi: src/openpi/models/pi0.py:222-278（节选）
+num_steps: int = 10                     # 默认 10 步积分
+# note that we use the convention ... t=1 is noise and t=0 is the target
+dt = -1.0 / num_steps                   # 每步走 -0.1（从噪声往动作走）
+...
+# first fill KV cache with a forward pass of the prefix
+_, kv_cache = self.PaliGemma.llm([prefix_tokens, None], mask=prefix_attn_mask, positions=positions)
+
+def step(carry):
+    x_t, time = carry
+    ...  # 只重算 suffix（状态+带噪动作 token），复用 kv_cache
+    v_t = self.action_out_proj(suffix_out[:, -self.action_horizon:])
+    return x_t + dt * v_t, time + dt    # 欧拉积分一步
+
+x_0, _ = jax.lax.while_loop(cond, step, (noise, 1.0))   # 从 t=1（纯噪声）循环到 t=0</code></pre>
+
+<p><b>逐段解释：</b>① 前缀只前向一次，把 KV 缓存（KV cache，第 3 讲讲过的注意力加速缓存）存下来；② 循环 10 次，每次只把状态 + 50 个带噪动作 token 送进动作专家，拿到速度就欧拉走一步（<code>x_t + dt * v_t</code>）；③ 走完得到干净动作块。图像和文本的重计算被 KV 缓存挡掉了——3B 的 VLM 只出一次力，出 50 步动作。</p>
+
+<h3>5.4 数据配方：预训练广、后训练精</h3>
+
+<p>π0 把 LLM 的「预训练 + 后训练」配方原样搬进了机器人（论文第 V 节，作者自述是刻意类比 LLM recipe）：</p>
+
+<table>
+  <tr><th>阶段</th><th>数据</th><th>规模（论文口径）</th><th>作用</th></tr>
+  <tr><td rowspan="2"><b>预训练</b></td><td>π 自采跨本体灵巧操作数据：移动操作平台、双臂灵巧手等</td><td>约 <b>10,000 小时</b>，<b>7 种机器人构型、68 个任务/环境</b>——论文自称当时规模最大的机器人操作数据</td><td>见多识广：覆盖多样物体、场景与失败恢复</td></tr>
+  <tr><td>开源数据：OXE（用「OXE Magic Soup」加权重混，覆盖 22 种机器人）+ DROID + Bridge</td><td>数十万轨迹级</td><td>跨本体泛化的底子</td></tr>
+  <tr><td><b>后训练</b></td><td>每任务高质量演示：叠衣服、清桌子、盘子进微波炉、鸡蛋装盒、组装纸箱、装购物袋、做咖啡等</td><td>每任务 5 小时到 100+ 小时不等</td><td>把「什么都会一点」磨成「长时程任务做得漂亮」</td></tr>
+</table>
+
+<div class="cap"><b>表 4-3</b>｜π0 两阶段数据配方（论文第 I、V 节与官方博客）。语言标签既有任务名也有约 2 秒粒度的分段标注——同一个模型因此既能接「fold laundry」也能接「pick up the shirt」级别的指令，为 π0.5 的分层推理埋下伏笔。注：官方博客称数据覆盖「8 种机器人」，论文口径为「7 种构型、68 个任务」，本表以论文为准。</div>
+
+<h3>5.5 结果亮点与意义</h3>
+
+<ul>
+  <li><b>离散 token 模型做不了的任务</b>：叠衣服要求长时程（从烘干机取衣 → 装筐 → 搬到折叠台 → 逐件折叠，整条流水线）、高频接触（布料状态毫秒级变化、双臂 50Hz 协调）——1~6Hz 的自回归离散模型连控制频率都跟不上，遑论布料的连续形变。π0 微调后完成了这条流水线（论文图 2），另有清桌子、装盒、做咖啡等演示（论文与官方博客）。</li>
+  <li><b>跨本体</b>：同一个预训练模型控制单臂、双臂、移动操作平台等不同动作空间的机器人（不同本体各自的动作维度做 padding 对齐）。</li>
+  <li><b>零样本 + 微调两用</b>：较简单的任务可零样本直接执行；复杂任务按后训练配方微调。论文报告的对比基线包括当时最强的开源/闭源 VLA 与非 VLM 初始化的消融版本。</li>
+</ul>
+
+<h2>6. FAST：离散路线的绝地反击</h2>
+
+<p>连续动作头高歌猛进时，PI 团队自己发了 <b>FAST</b>（Frequency-space Action Sequence Tokenization，频域动作序列分词，Pertsch et al. 2025，arXiv:2501.09747），回答的问题是：<b>自回归离散 token 路线是不是一开始就做错了？</b></p>
+
+<p>他们的诊断：RT-2 式「每维独立切 256 bin」的错不在「离散」，在<b>没压缩</b>。相邻时间步的动作高度相关（机械臂不会瞬移），逐维逐时间步地出 token，序列又长又冗余，模型把容量浪费在「预测下一个几乎一样的数」上，高频精细动作直接学不会（论文第 IV 节的案例研究：朴素质检式 tokenization 让模型去背相邻步之间的微小差值，训练又慢又差）。FAST 的修法借了 JPEG 图像压缩的思路：</p>
+
+<ol>
+  <li><b>DCT</b>（离散余弦变换）：把动作块从「时间域」（每步一个值）变换到「频率域」——平滑信号的能量集中在少数低频系数上，高频系数接近 0；</li>
+  <li><b>量化 + 归一化</b>成字节序列：低频系数留高精度，高频近零的直接丢掉；</li>
+  <li><b>BPE</b>（byte-pair encoding，GPT 词表用的那套「高频相邻字节组合并成一个 token」的算法）：把相关字节合并，一段动作块最终只要约几十个 token。</li>
+</ol>
+
+<div class="fig">
+<svg viewBox="0 0 900 250" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="ar7" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 L2,4.5 z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <text x="450" y="26" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">FAST：连续动作块 → 频域压缩 → 少量离散 token，喂给自回归 VLM</text>
+
+  <g>
+    <rect x="24" y="60" width="140" height="96" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+    <text x="94" y="86" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">动作块</text>
+    <text x="94" y="106" font-size="12" fill="#5a6272" text-anchor="middle">连续值，如 50 步</text>
+    <text x="94" y="124" font-size="12" fill="#5a6272" text-anchor="middle">相邻步高度相关</text>
+    <text x="94" y="144" font-size="12" fill="#94a3b8" text-anchor="middle">（逐维 256 bin 会爆炸）</text>
+
+    <rect x="204" y="60" width="140" height="96" rx="10" fill="#fff" stroke="#e3e7ee"/>
+    <text x="274" y="86" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">① DCT 变换</text>
+    <text x="274" y="106" font-size="12" fill="#5a6272" text-anchor="middle">时间域 → 频率域</text>
+    <text x="274" y="124" font-size="12" fill="#5a6272" text-anchor="middle">平滑信号的能量</text>
+    <text x="274" y="142" font-size="12" fill="#5a6272" text-anchor="middle">集中在低频系数</text>
+
+    <rect x="384" y="60" width="140" height="96" rx="10" fill="#fff" stroke="#e3e7ee"/>
+    <text x="454" y="86" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">② 量化字节化</text>
+    <text x="454" y="106" font-size="12" fill="#5a6272" text-anchor="middle">低频留高精度</text>
+    <text x="454" y="124" font-size="12" fill="#5a6272" text-anchor="middle">高频近零可丢弃</text>
+    <text x="454" y="142" font-size="12" fill="#5a6272" text-anchor="middle">（JPEG 同款思路）</text>
+
+    <rect x="564" y="60" width="140" height="96" rx="10" fill="#fff" stroke="#e3e7ee"/>
+    <text x="634" y="86" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">③ BPE 压缩</text>
+    <text x="634" y="106" font-size="12" fill="#5a6272" text-anchor="middle">高频字节组合并</text>
+    <text x="634" y="124" font-size="12" fill="#5a6272" text-anchor="middle">整段动作块</text>
+    <text x="634" y="142" font-size="12" fill="#5a6272" text-anchor="middle">→ 约几十个 token</text>
+
+    <rect x="744" y="60" width="132" height="96" rx="10" fill="#f0fdf4" stroke="#16a34a"/>
+    <text x="810" y="86" font-size="13" font-weight="bold" fill="#15803d" text-anchor="middle">自回归 VLM</text>
+    <text x="810" y="106" font-size="12" fill="#5a6272" text-anchor="middle">next-token 预测</text>
+    <text x="810" y="124" font-size="12" fill="#5a6272" text-anchor="middle">输出后反 BPE、</text>
+    <text x="810" y="142" font-size="12" fill="#5a6272" text-anchor="middle">反 DCT 还原动作</text>
+  </g>
+  <g stroke="#64748b" stroke-width="2">
+    <line x1="164" y1="108" x2="200" y2="108" marker-end="url(#ar7)"/>
+    <line x1="344" y1="108" x2="380" y2="108" marker-end="url(#ar7)"/>
+    <line x1="524" y1="108" x2="560" y2="108" marker-end="url(#ar7)"/>
+    <line x1="704" y1="108" x2="740" y2="108" marker-end="url(#ar7)"/>
+  </g>
+  <rect x="180" y="186" width="540" height="40" rx="8" fill="#fff8e8" stroke="#e6c96a"/>
+  <text x="450" y="211" font-size="12.5" fill="#9a7b1c" text-anchor="middle">FAST+：在约 100 万条真实机器人轨迹上预训练的通用 tokenizer，跨本体、跨控制频率即插即用</text>
+</svg>
+</div>
+<div class="cap"><b>图 4-7</b>｜FAST 压缩管线（依据 arXiv:2501.09747 第 V 节重绘）。核心洞察：机器人动作是<b>信号</b>，信号该用信号压缩（DCT）+ 语言压缩（BPE）处理，而不是逐维硬切格子。官方实现可见 openpi <code>src/openpi/models/tokenizer.py:51</code> 的 <code>FASTTokenizer</code>（commit <code>215abfb</code>：动作经 FAST tokenizer 压缩后，映射进 PaliGemma 词表尾部空闲 token 位，与文本共用一套自回归训练）。</div>
+
+<p>效果（论文口径）：换成 FAST token 后，<b>π0-FAST</b>（同一架构、动作头改自回归 token）在 10,000 小时数据规模上<b>训练时间最多省 5 倍</b>，性能追平流匹配版 π0；此前逐维 binning 完全学不会的高频灵巧任务也能学了。FAST+ 让不同本体的动作序列共享一套词表，跨本体联合训练（co-training）的收益更直接。</p>
+
+<table>
+  <tr><th></th><th>π0-FAST（频域压缩 token）</th><th>π0 流匹配版（连续动作头）</th></tr>
+  <tr><td><b>训练</b></td><td>就是 next-token prediction，简单、最多快 5 倍</td><td>需要独立的动作专家和流匹配损失，训练更贵</td></tr>
+  <tr><td><b>与文本/网页数据混训</b></td><td>天然兼容（都是 token），co-training 收益大——π0.5 预训练阶段用的就是 FAST token</td><td>动作是连续块，与离散文本目标要分开设计损失</td></tr>
+  <tr><td><b>推理延迟</b></td><td>仍要逐 token 自回归解码，高频实时控制吃亏</td><td>10 步积分一次出 50 步动作，50Hz 实时</td></tr>
+  <tr><td><b>适合</b></td><td>预训练、跨本体大规模混训</td><td>后训练、部署到真机做灵巧高频任务</td></tr>
+</table>
+
+<div class="cap"><b>表 4-4</b>｜FAST vs 流匹配的取舍（依据 arXiv:2501.09747 第 VI-E 节与 π0.5 论文第 IV 节的实际用法）。结论：「离散 vs 连续」没有一边倒——PI 自家的最终配方是<b>两者混用</b>：预训练用 FAST token 吃 co-training 红利，后训练/部署切流匹配吃实时红利。</div>
+
+<h2>7. π0.5：从「会做」到「会进陌生的家」</h2>
+
+<p><b>π0.5</b>（Physical Intelligence 2025，arXiv:2504.16054）把战场从实验室换到<b>开放世界</b>：让移动操作机器人走进<b>训练时从未见过的真实家庭</b>，完成「打扫厨房」「整理卧室」这类长时程任务——论文自称这是端到端学习系统首次做到。它回答的问题不再是「动作头怎么设计」，而是「<b>泛化从哪来</b>」。</p>
+
+<p><b>答案一：异构数据 co-training（联合训练）。</b>π0.5 的训练数据是多种性质完全不同的数据源混在一起（论文图 4）：</p>
+
+<table>
+  <tr><th>缩写</th><th>数据源</th><th>内容</th><th>阶段</th></tr>
+  <tr><td>MM</td><td>移动操作机器人家务数据</td><td>约 <b>400 小时</b>，采自约 <b>100 个真实家庭</b>——与评测场景同分布的「主菜」</td><td>预训练</td></tr>
+  <tr><td>ME</td><td>非移动机器人、多样环境</td><td>各种固定机械臂在多环境下的操作数据</td><td>预训练</td></tr>
+  <tr><td>CE</td><td>实验室跨本体数据</td><td>实验室条件下采集的跨机器人数据</td><td>预训练（后训练阶段去掉，聚焦任务相关数据）</td></tr>
+  <tr><td>HL</td><td>高层子任务预测</td><td>给观测，让模型输出「接下来该干什么」的文本（如 pick up the plate）——把规划能力本身也当监督信号训</td><td>预训练</td></tr>
+  <tr><td>WD</td><td>网页多模态数据</td><td>图文问答、物体定位等非机器人数据，保住 VLM 的语义底子</td><td>预训练</td></tr>
+  <tr><td>VI</td><td>口头指令</td><td>人类监督者实时下指令的交互数据</td><td>后训练</td></tr>
+</table>
+
+<div class="cap"><b>表 4-5</b>｜π0.5 的 co-training 配方（论文第 IV-C / IV-D 节）。预训练阶段动作目标用 FAST token（自回归、方便与文本混训）；后训练阶段切换到流匹配动作头（实时推理）。消融实验（论文第 V-C 节）显示：去掉任何一个数据源，陌生家庭里的成功率都下降——泛化是「混」出来的。</div>
+
+<p>另一个关键实验（论文第 V-B 节）：固定其他数据，只改变 MM 数据覆盖的家庭数（3、12、22、53、82、104 个），陌生环境泛化能力随「见过的环境数」稳步上升——<b>「见过多少个家」比「每个家练了多久」更重要</b>。</p>
+
+<p><b>答案二：分层推理——同一个模型先想后做。</b>部署时 π0.5 对每个决策点做两次推理：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 310" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="ar8b" markerWidth="9" markerHeight="9" refX="2" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L9,4.5 L0,9 L2,4.5 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="450" y="26" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle">π0.5 分层推理：同一套权重，先「说」出子任务，再「做」出动作块</text>
+
+  <!-- 高层 -->
+  <rect x="40" y="60" width="380" height="180" rx="12" fill="#eef3fc" stroke="#2456c4" stroke-width="2"/>
+  <text x="230" y="86" font-size="14" font-weight="bold" fill="#2456c4" text-anchor="middle">第一步：高层推理（规划器）</text>
+  <text x="230" y="112" font-size="12" fill="#5a6272" text-anchor="middle">输入：当前图像 + 总指令「clean the bedroom」</text>
+  <rect x="70" y="126" width="320" height="42" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="230" y="152" font-size="13" fill="#2a3040" text-anchor="middle">输出：语义子任务（离散文本 token）「pick up pillow」</text>
+  <text x="230" y="192" font-size="12" fill="#5a6272" text-anchor="middle">自回归生成文字——VLM 的老本行</text>
+  <text x="230" y="212" font-size="12" fill="#5a6272" text-anchor="middle">这一能力来自 HL 数据的 co-training</text>
+  <text x="230" y="232" font-size="12" fill="#94a3b8" text-anchor="middle">（论文消融：去掉高层推理，长时程任务显著变差）</text>
+
+  <!-- 箭头 -->
+  <path d="M 420,150 L 476,150" fill="none" stroke="#2456c4" stroke-width="3" marker-end="url(#ar8b)"/>
+  <text x="450" y="128" font-size="12" font-weight="bold" fill="#2456c4" text-anchor="middle">子任务文本</text>
+  <text x="450" y="180" font-size="12" fill="#5a6272" text-anchor="middle">作为上下文喂回去</text>
+
+  <!-- 低层 -->
+  <rect x="480" y="60" width="380" height="180" rx="12" fill="#fff8e8" stroke="#f59e0b" stroke-width="2"/>
+  <text x="670" y="86" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">第二步：低层控制（控制器）</text>
+  <text x="670" y="112" font-size="12" fill="#5a6272" text-anchor="middle">输入：图像 + 总指令 + 子任务「pick up pillow」</text>
+  <rect x="510" y="126" width="320" height="42" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="670" y="152" font-size="13" fill="#2a3040" text-anchor="middle">输出：动作块（流匹配，10 步积分，50Hz 连续动作）</text>
+  <text x="670" y="192" font-size="12" fill="#5a6272" text-anchor="middle">就是 π0 的动作专家那套（图 4-6）</text>
+  <text x="670" y="212" font-size="12" fill="#5a6272" text-anchor="middle">只是条件里多了自己刚「说」的子任务</text>
+
+  <text x="450" y="278" font-size="13" font-weight="bold" fill="#1e293b" text-anchor="middle">同一套权重兼任规划器与控制器：先想（说要做什么），再做（生成怎么做）</text>
+  <text x="450" y="298" font-size="12" fill="#5a6272" text-anchor="middle">「想」和「做」共享同一个 VLM 的语义理解——这是它与「外挂独立规划器」方案的本质区别</text>
+</svg>
+</div>
+<div class="cap"><b>图 4-8</b>｜π0.5 的分层推理（依据论文第 III、IV-B 节重绘）。高层输出离散文本子任务，低层以子任务为条件做流匹配动作生成；两步用的是同一个模型。这个「先想后做」的结构与 Figure Helix 的 System 2 / System 1 双系统思想同源——<a href="vla-t5-frontier.html">第 5 讲</a>展开。</div>
+
+<p>效果：在完全没见过的家庭里完成收拾厨房（关柜门、把碗碟放进水槽、擦台面）和整理卧室（捡衣服、收枕头）等由多个子任务串成的长时程任务；跨家庭泛化显著优于「只用单一环境数据训练」和「去掉高层推理」的消融版本（论文第 V-A、V-E 节）。</p>
+
+<h2>8. 动作头路线大对比：全系列枢纽表</h2>
+
+<p>把本讲和前几讲的路线放进一张表——这张表是全系列的枢纽：<a href="vla-t2-rt1-rt2.html">第 2 讲</a>、<a href="vla-t3-openvla.html">第 3 讲</a>讲过的路线在这里汇合，<a href="vla-t5-frontier.html">第 5 讲</a>的前沿模型从这里出发。</p>
+
+<table>
+  <tr><th>路线</th><th>动作表示</th><th>生成方式</th><th>频率 / 延迟</th><th>多模态能力</th><th>精度</th><th>训练复杂度</th><th>代表作</th></tr>
+  <tr>
+    <td><b>自回归离散 token</b></td>
+    <td>每维 256 bin，逐 token 输出</td>
+    <td>next-token prediction，逐维串行</td>
+    <td>约 1~6Hz（7 token/步）</td>
+    <td>交叉熵理论可表达，但逐 token 采样易拼出不连贯轨迹</td>
+    <td>量化误差约 0.4% 全范围，精细任务不够</td>
+    <td>最低——完全复用 LLM 训练管线，可与文本无缝 co-training</td>
+    <td>RT-2（<a href="vla-t2-rt1-rt2.html">第 2 讲</a>）、OpenVLA（<a href="vla-t3-openvla.html">第 3 讲</a>）</td>
+  </tr>
+  <tr>
+    <td><b>FAST（频域压缩 token）</b></td>
+    <td>DCT+BPE 压缩后的整块 token 序列</td>
+    <td>next-token prediction，整块串行</td>
+    <td>仍是自回归，部署频率受限</td>
+    <td>同上（token 级分布建模）</td>
+    <td>频域系数保住主要精度，高频灵巧任务可学</td>
+    <td>低——比流匹配 π0 最多快 5 倍，co-training 友好</td>
+    <td>π0-FAST、π0.5 预训练阶段</td>
+  </tr>
+  <tr>
+    <td><b>CVAE 回归</b></td>
+    <td>连续动作块</td>
+    <td>隐变量采样 + 一次解码</td>
+    <td>快（单次前向），ALOHA 50Hz</td>
+    <td>有（隐变量「选峰」），但分布形状受高斯先验限制</td>
+    <td>连续值，无量化误差</td>
+    <td>中——重建项与 KL 项要平衡，推理期还靠 temporal ensembling 打补丁（<a href="vla-t1-robot-learning.html">第 1 讲</a>）</td>
+    <td>ACT / ALOHA</td>
+  </tr>
+  <tr>
+    <td><b>扩散</b></td>
+    <td>连续动作块</td>
+    <td>迭代去噪（DDPM 100 步 / DDIM 10 步）</td>
+    <td>0.1s 级出整块（RTX 3080，DDIM 10 步）</td>
+    <td>强——迭代雕刻天然表达多峰分布</td>
+    <td>连续值，高</td>
+    <td>中——MSE 猜噪声很稳，但要调噪声时间表与步数</td>
+    <td>Diffusion Policy、DP3、RDT-1B</td>
+  </tr>
+  <tr>
+    <td><b>流匹配</b></td>
+    <td>连续动作块</td>
+    <td>学直线速度场，几步欧拉积分</td>
+    <td>整块一次出，π0 实测支持 50Hz 控制</td>
+    <td>强——与扩散同级的分布表达力</td>
+    <td>连续值，高</td>
+    <td>低——插值 + MSE + 欧拉循环三件套</td>
+    <td>π0 / π0.5（后训练）、GR00T N1、WALL-OSS（<a href="vla-t5-frontier.html">第 5 讲</a>）</td>
+  </tr>
+</table>
+
+<div class="cap"><b>表 4-6</b>｜五条动作头路线总对比。趋势一眼可见：动作表示从「离散格子」走向「连续块」，生成方式从「逐 token 串行」走向「整块并行迭代」；训练复杂度最低的两端（纯自回归、流匹配）恰好是 2025 年后最常用的组合——π0.5 干脆两个都要。</div>
+
+<h2>9. 小结：VLM 管懂世界，动作头管出手</h2>
+
+<div class="box">
+<span class="bt">心智模型</span>把 VLA 想成一个人：<b>VLM 主干是「脑子」</b>——看懂场景、听懂指令，这部分靠互联网预训练继承；<b>动作头是「小脑 + 手」</b>——把理解翻译成连贯、精细、多模态的肌肉动作，这部分靠机器人数据从头练。π0 的「VLM 权重 + 动作专家权重」双料结构，就是这个分工的字面实现：前缀 token 走脑子，后缀 token 走手，注意力把手接到脑子上。
+</div>
+
+<div class="box">
+<span class="bt">本讲要点回放</span>① 离散 token 三宗罪：精度（256 bin）、延迟（逐 token 自回归）、多模态（回归取均值撞墙）；② 扩散 = 「自己掺噪声、网络猜噪声、采样时反着减」，Diffusion Policy 用它做策略，12 任务平均 +46.9 个百分点；③ 流匹配 = 扩散的直线加速版，「插值 + 猜速度 + 欧拉积分」三件套，10 步出整块动作；④ π0 = PaliGemma 3B + 300M 流匹配动作专家，约 10,000 小时数据预训练，50Hz 叠衣服清桌子；⑤ FAST 用 DCT+BPE 救活离散路线（训练快 5 倍）；⑥ π0.5 用异构 co-training + 分层推理走进陌生家庭。
+</div>
+
+<div class="infer">「流匹配已是 2025–2026 新 VLA 动作头的默认选择」是我们基于本讲与<a href="vla-t5-frontier.html">第 5 讲</a>所列模型的归纳判断，不是某篇论文的统计结论：π0/π0.5（后训练）、NVIDIA GR00T N1（DiT + flow matching 动作头）、WALL-OSS 等新一代模型确实都用流匹配或其近亲；但 FAST 式离散 token 在预训练混训阶段仍有一席之地，Gemini Robotics 官方描述其动作侧为基于扩散的解码器（细节待第 5 讲核对官方资料），Figure Helix 的 System 1 也是扩散式高频策略（200Hz 连续力矩，据 Figure 官方博客口径）。「扩散系（含流匹配）动作头已成主流」这个方向性判断证据充分，「一统天下」则言之过早。</div>
+
+<p><b>下一讲预告：</b><a href="vla-t5-frontier.html">第 5 讲·前沿全景</a>——拿着本讲的「动作头」放大镜去看 2025–2026 的各家旗舰：Figure Helix 的双系统（7~9Hz 的 VLM System 2 + 200Hz 的扩散式 System 1）、NVIDIA GR00T N1、Google DeepMind 的 Gemini Robotics 系列……你会发现它们的「手」几乎都是本讲这两套数学的变体，差异主要在「脑子怎么接、数据怎么配」。</p>
+
+<h2>10. 自查清单</h2>
+
+<ol class="checklist">
+  <li>离散动作 token 的三宗罪是什么？各自的根源一句话。（答：精度——256 bin 量化；延迟——7 token 逐个自回归；多模态——回归/贪心输出落在分布峰间的均值）</li>
+  <li>写出 DDPM 的一步加噪公式，并说明 \(\bar\alpha_t\) 的物理含义。（答：\(x_t=\sqrt{\bar\alpha_t}x_0+\sqrt{1-\bar\alpha_t}\epsilon\)；\(\bar\alpha_t\) 是「第 t 步还剩多少信号」，从 1 递减到近 0）</li>
+  <li>扩散模型的训练损失是什么？为什么说它「稳」？（答：\(\|\epsilon-\epsilon_\theta(x_t,t,c)\|^2\)，MSE 猜自己掺的噪声，考题答案自给自足，无对抗训练）</li>
+  <li>Diffusion Policy 的 \(T_o/T_p/T_a\) 默认值和各自含义？为什么 \(T_a < T_p\)？（答：2/16/8；想得远保证动作连贯，走得短保证随时按新观测重划——receding horizon）</li>
+  <li>流匹配的直线路径、目标速度、训练损失各是什么？（答：\(x_t=(1-t)x_0+tx_1\)；\(v^*=x_1-x_0\)；\(\|v_\theta-(x_1-x_0)\|^2\)，注意 π0 论文/代码记号方向相反但等价）</li>
+  <li>π0 里哪部分参数走 VLM 权重、哪部分走动作专家权重？注意力掩码什么形状？（答：图像+指令前缀走 PaliGemma 3B；状态+带噪动作块后缀走 300M 动作专家；块因果掩码，块内双向，后缀可见前缀、前缀不见后缀）</li>
+  <li>π0 推理时 3B 的 VLM 前向几次？为什么能做到？（答：1 次——前缀 KV 缓存复用，10 个积分步只重算 50 个动作 token 的后缀）</li>
+  <li>FAST 的两个压缩步骤和它换来的好处？（答：DCT 频域变换 + BPE 字节合并；训练比流匹配 π0 最多快 5 倍、与文本数据 co-training 无缝，代价是推理仍自回归）</li>
+</ol>
+
+<h2>参考来源</h2>
+
+<ol class="refs">
+  <li>Ho, Jain, Abbeel. <b>Denoising Diffusion Probabilistic Models (DDPM)</b>. NeurIPS 2020. <a href="https://arxiv.org/abs/2006.11239">arXiv:2006.11239</a></li>
+  <li>Song, Meng, Ermon. <b>Denoising Diffusion Implicit Models (DDIM)</b>. ICLR 2021. <a href="https://arxiv.org/abs/2010.02502">arXiv:2010.02502</a></li>
+  <li>Chi, Feng, Du, Xu, Cousineau, Burchfiel, Song. <b>Diffusion Policy: Visuomotor Policy Learning via Action Diffusion</b>. RSS 2023 / IJRR 2024. <a href="https://arxiv.org/abs/2303.04137">arXiv:2303.04137</a>；官方代码 <a href="https://github.com/real-stanford/diffusion_policy">real-stanford/diffusion_policy</a>（commit <code>5ba07ac</code>，2026-10-21 抓取）</li>
+  <li>Ze, Zhang, Zhang, Mu, Zhu. <b>3D Diffusion Policy (DP3)</b>. RSS 2024. <a href="https://arxiv.org/abs/2403.03954">arXiv:2403.03954</a></li>
+  <li>Lipman, Chen, Ben-Hamu, Nickel, Le. <b>Flow Matching for Generative Modeling</b>. ICLR 2023. <a href="https://arxiv.org/abs/2210.02747">arXiv:2210.02747</a></li>
+  <li>Liu, Gong, Liu. <b>Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow</b>. ICLR 2023. <a href="https://arxiv.org/abs/2209.03003">arXiv:2209.03003</a></li>
+  <li>Black, Brown, Driess, …, Levine. <b>π0: A Vision-Language-Action Flow Model for General Robot Control</b>. Physical Intelligence, 2024. <a href="https://arxiv.org/abs/2410.24164">arXiv:2410.24164</a>；官方代码 <a href="https://github.com/Physical-Intelligence/openpi">Physical-Intelligence/openpi</a>（commit <code>215abfb</code>，2026-10-21 抓取，本讲引用 <code>src/openpi/models/pi0.py</code>、<code>src/openpi/models/tokenizer.py</code>）</li>
+  <li>Physical Intelligence 官方博客：<b>π0</b>. <a href="https://www.physicalintelligence.company/blog/pi0">physicalintelligence.company/blog/pi0</a>（现跳转 pi.website/blog/pi0，2026-10-21 访问）</li>
+  <li>Pertsch, Black, …, Levine. <b>FAST: Efficient Action Tokenization for Vision-Language-Action Models</b>. 2025. <a href="https://arxiv.org/abs/2501.09747">arXiv:2501.09747</a></li>
+  <li>Physical Intelligence. <b>π0.5: a Vision-Language-Action Model with Open-World Generalization</b>. 2025. <a href="https://arxiv.org/abs/2504.16054">arXiv:2504.16054</a></li>
+  <li>Zhao, Kumar, Levine, Finn. <b>Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware (ACT/ALOHA)</b>. RSS 2023. <a href="https://arxiv.org/abs/2304.13705">arXiv:2304.13705</a>（第 1 讲）</li>
+  <li>Brohan, Brown, …, Levine. <b>RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control</b>. CoRL 2023. <a href="https://arxiv.org/abs/2307.15818">arXiv:2307.15818</a>（第 2 讲）</li>
+  <li>Kim, Pertsch, …, Levine. <b>OpenVLA: An Open-Source Vision-Language-Action Model</b>. <a href="https://arxiv.org/abs/2406.09246">arXiv:2406.09246</a>；Kim et al. <b>OpenVLA-OFT</b>. <a href="https://arxiv.org/abs/2502.19645">arXiv:2502.19645</a>（第 3 讲）</li>
+  <li>Liu, Wu, … Zhu. <b>RDT-1B: A Diffusion Foundation Model for Bimanual Manipulation</b>. ICLR 2025. <a href="https://arxiv.org/abs/2410.07864">arXiv:2410.07864</a>（表 4-6 扩散路线代表作）</li>
+  <li>NVIDIA. <b>GR00T N1: An Open Foundation Model for Generalist Humanoid Robots</b>. 2025. <a href="https://arxiv.org/abs/2503.14734">arXiv:2503.14734</a>（第 5 讲预告，流匹配动作头）</li>
+</ol>
+
+<footer>本页为个人学习笔记 · 具身智能与 VLA 零基础七讲系列 · 生成于 2026-10-21 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准（openpi commit 215abfb、diffusion_policy commit 5ba07ac，均 2026-10-21 抓取），推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

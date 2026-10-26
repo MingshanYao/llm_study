@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>具身智能与 VLA 零基础七讲 · 第 5 讲：2025–2026 前沿全景——Helix、GR00T N1、Gemini Robotics 与世界模型</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+  .tbl-scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>具身智能与 VLA 零基础七讲 · 第 5 讲：2025–2026 前沿全景——Helix、GR00T N1、Gemini Robotics 与世界模型</h1>
+
+<div class="series-nav">
+  <a href="vla-t0-overview.html">0 全景地图</a>
+  <a href="vla-t1-robot-learning.html">1 机器人学习</a>
+  <a href="vla-t2-rt1-rt2.html">2 RT-1·RT-2</a>
+  <a href="vla-t3-openvla.html">3 OpenVLA</a>
+  <a href="vla-t4-diffusion-pi0.html">4 Diffusion·π0</a>
+  <a class="here">5 前沿全景</a>
+  <a href="vla-t6-roadmap.html">6 实战路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>具身智能与 VLA 零基础七讲（本篇为第 5 讲，「新闻 + 架构」混合讲：一半是 2025–2026 最前沿的模型盘点，一半是把三个标杆系统的架构讲透）</p>
+  <p style="margin:4px 0"><b>读者假设：</b>已读完前四讲——知道什么是动作空间、行为克隆（BC）、动作 tokenization、扩散/流匹配动作头和 π0。本讲信息截至 <b>2026-10-21</b>，所有时间、版本号、关键数字均经联网核实；核实不到或口径有争议的，用黄色「推断」框显式标出。</p>
+  <p style="margin:4px 0"><b>本讲目标：</b>读完你能 ① 凭记忆画出 Helix / GR00T / Gemini Robotics 的架构框图，说出各自的数据从哪来；② 看懂任何一条具身智能新闻属于哪条技术路线；③ 明白「世界模型」和 VLA 是什么关系、为什么 2025 年后它突然无处不在。</p>
+</div>
+
+<div class="tldr">
+<p><b>一句话总结：</b>2025 年起，VLA 进入「<b>双系统 + 流匹配动作头 + 数据引擎竞赛</b>」时代。<b>Figure Helix</b>（2025.02）让人形机器人第一次大规模用 VLA「干活」——7B 慢想 VLM + 80M 快动策略，控制全上身约 35 个自由度；<b>NVIDIA GR00T N1</b>（2025.03）把同一套双系统思想<b>全部开源</b>，还配了完整的仿真与造数据工具链；<b>Google Gemini Robotics</b>（2025.03 起）把最强闭源 VLM「具身化」，带来「先想后动」的 agentic 能力——机器人执行前先在语言空间里思考、执行中自我监控纠错。与此同时，<b>世界模型</b>（Cosmos、Genie 3、1X World Model）开始为 VLA 供数据、当考官、做规划。中国厂商（智元 GO-1/GO-2、清华 RDT-1B、自变量 WALL-OSS、银河通用 GraspVLA 等）在开源数据集与模型上贡献了关键拼图。</p>
+<p><b>本讲结构：</b>先看三条路线与时间线（§1），然后深讲三个标杆系统（§2 Helix、§3 GR00T、§4 Gemini Robotics），再概览中国与其他玩家（§5）、世界模型一线（§6），最后用七个趋势（§7）和一张大总表（§8）收尾。</p>
+</div>
+
+<h2>1. 开局图景：一个赛场，三条路线</h2>
+
+<p>第 4 讲结束时（π0，2024.10），VLA 还是「研究圈的新玩具」。2025 年 2 月 Figure 发布 Helix 之后，局面彻底变了：人形机器人公司、芯片巨头、互联网大厂、中国机器人厂商全部下场，两年内发布了二十多个重要系统。别看新闻眼花缭乱，整个赛场其实只有三条路线：</p>
+
+<table>
+  <tr><th style="width:16%">路线</th><th style="width:30%">代表玩家</th><th>商业逻辑与特点</th></tr>
+  <tr><td><b>闭源商业</b></td><td>Figure（Helix）、Tesla（Optimus）、Google DeepMind（Gemini Robotics）、1X（NEO）、Boston Dynamics × TRI</td><td>模型不外发，靠「机器人整机 + 服务」或「云 API」赚钱。迭代快、demo 震撼，但外界无法复现与审计——评测口径全靠官方。</td></tr>
+  <tr><td><b>开放研究平台</b></td><td>NVIDIA（Isaac GR00T、Cosmos、Isaac Lab/Sim、Newton）</td><td>不造机器人，卖 GPU。所以它的最优策略是把模型、仿真器、造数据管线<b>全部开源</b>，让所有机器人公司都在它的算力生态里开发——「卖铲子」路线。</td></tr>
+  <tr><td><b>开源社区 / 中国厂商</b></td><td>智元 AgiBot（AgiBot World 数据集、GO-1/GO-2）、清华（RDT-1B）、自变量 X Square（WALL-OSS）、银河通用 Galbot（GraspVLA）、BAAI（RoboBrain）、宇树（UnifoLM-WMA-0）、Physical Intelligence（π 系列部分开源）</td><td>用开源数据集与模型换生态位与人才。中国团队的特色是<b>真机数据规模</b>（智元百台机器人车队采集）与<b>合成数据</b>（银河通用十亿级仿真抓取）两条腿都很硬。</td></tr>
+</table>
+
+<div class="cap"><b>表 5-1</b>｜三条路线。同一家公司可能横跨多条（如 π 既发论文又部分开源权重，NVIDIA 既是平台又发论文），但「谁出钱、模型开不开源、靠什么赚钱」这三个问题基本能把任何新闻归位。</div>
+
+<p>下面这张时间线覆盖 2024.10–2026.08 的 26 个关键事件，颜色对应三条路线 + 世界模型线。建议先扫一眼建立时间感，再回来逐节细读：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 716" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="450" y="28" font-size="16" font-weight="bold" fill="#1a1f2e" text-anchor="middle">2024–2026 具身智能前沿时间线（26 个关键事件）</text>
+  <!-- legend -->
+  <circle cx="90" cy="50" r="5" fill="#2456c4"/><text x="102" y="54" font-size="12" fill="#5a6272">闭源商业</text>
+  <circle cx="260" cy="50" r="5" fill="#16a34a"/><text x="272" y="54" font-size="12" fill="#5a6272">开放平台 · NVIDIA</text>
+  <circle cx="440" cy="50" r="5" fill="#d97706"/><text x="452" y="54" font-size="12" fill="#5a6272">开源 / 中国厂商</text>
+  <circle cx="610" cy="50" r="5" fill="#7c3aed"/><text x="622" y="54" font-size="12" fill="#5a6272">世界模型线</text>
+  <!-- spine -->
+  <line x1="100" y1="84" x2="100" y2="700" stroke="#d7deea" stroke-width="3"/>
+  <!-- year labels -->
+  <text x="76" y="105" font-size="13" font-weight="bold" fill="#5a6272" text-anchor="end">2024</text>
+  <text x="76" y="175" font-size="13" font-weight="bold" fill="#5a6272" text-anchor="end">2025</text>
+  <text x="76" y="551" font-size="13" font-weight="bold" fill="#5a6272" text-anchor="end">2026</text>
+
+  <!-- rows: y = 100 + 23.5*i -->
+  <circle cx="100" cy="100" r="4.5" fill="#d97706"/><text x="118" y="104" font-size="12" font-weight="bold" fill="#5a6272">2024.10</text><text x="192" y="104" font-size="12" fill="#1a1f2e">RDT-1B：清华 1.2B 双臂扩散基础模型开源（ICLR 2025）</text>
+  <circle cx="100" cy="123.5" r="4.5" fill="#2456c4"/><text x="118" y="127.5" font-size="12" font-weight="bold" fill="#5a6272">2024.10</text><text x="192" y="127.5" font-size="12" fill="#1a1f2e">π0：Physical Intelligence 流匹配 VLA（第 4 讲已深讲）</text>
+  <circle cx="100" cy="147" r="4.5" fill="#7c3aed"/><text x="118" y="151" font-size="12" font-weight="bold" fill="#5a6272">2024.12</text><text x="192" y="151" font-size="12" fill="#1a1f2e">1X 世界模型：可「玩」的视频世界模型，用比特评估策略</text>
+  <circle cx="100" cy="170.5" r="4.5" fill="#7c3aed"/><text x="118" y="174.5" font-size="12" font-weight="bold" fill="#5a6272">2025.01</text><text x="192" y="174.5" font-size="12" fill="#1a1f2e">NVIDIA Cosmos：物理 AI 世界基础模型开源平台（CES）</text>
+  <circle cx="100" cy="194" r="4.5" fill="#2456c4"/><text x="118" y="198" font-size="12" font-weight="bold" fill="#5a6272">2025.02</text><text x="192" y="198" font-size="12" fill="#1a1f2e">Figure Helix 发布：7B 慢想 + 80M 快动的双系统 VLA</text>
+  <circle cx="100" cy="217.5" r="4.5" fill="#2456c4"/><text x="118" y="221.5" font-size="12" font-weight="bold" fill="#5a6272">2025.03</text><text x="192" y="221.5" font-size="12" fill="#1a1f2e">Google Gemini Robotics / ER：Gemini 2.0 具身化 + 具身推理模型</text>
+  <circle cx="100" cy="241" r="4.5" fill="#16a34a"/><text x="118" y="245" font-size="12" font-weight="bold" fill="#5a6272">2025.03</text><text x="192" y="245" font-size="12" fill="#1a1f2e">NVIDIA GR00T N1 开源（GTC）：Eagle-2 VLM + DiT 流匹配</text>
+  <circle cx="100" cy="264.5" r="4.5" fill="#d97706"/><text x="118" y="268.5" font-size="12" font-weight="bold" fill="#5a6272">2025.03</text><text x="192" y="268.5" font-size="12" fill="#1a1f2e">AgiBot World（百万+真机轨迹）与 GO-1（ViLLA 架构）</text>
+  <circle cx="100" cy="288" r="4.5" fill="#2456c4"/><text x="118" y="292" font-size="12" font-weight="bold" fill="#5a6272">2025.04</text><text x="192" y="292" font-size="12" fill="#1a1f2e">π0.5：开放世界家庭泛化；openpi 部分开源（第 4 讲）</text>
+  <circle cx="100" cy="311.5" r="4.5" fill="#7c3aed"/><text x="118" y="315.5" font-size="12" font-weight="bold" fill="#5a6272">2025.05</text><text x="192" y="315.5" font-size="12" fill="#1a1f2e">GR00T-Dreams / DreamGen：世界模型「做梦造数据」</text>
+  <circle cx="100" cy="335" r="4.5" fill="#d97706"/><text x="118" y="339" font-size="12" font-weight="bold" fill="#5a6272">2025.05</text><text x="192" y="339" font-size="12" fill="#1a1f2e">自变量 WALL-OSS 开源：从连续动作侧「点火」VLM</text>
+  <circle cx="100" cy="358.5" r="4.5" fill="#16a34a"/><text x="118" y="362.5" font-size="12" font-weight="bold" fill="#5a6272">2025.06</text><text x="192" y="362.5" font-size="12" fill="#1a1f2e">GR00T N1.5：冻结 VLM + FLARE 损失，真机成功率 83%</text>
+  <circle cx="100" cy="382" r="4.5" fill="#2456c4"/><text x="118" y="386" font-size="12" font-weight="bold" fill="#5a6272">2025.06</text><text x="192" y="386" font-size="12" fill="#1a1f2e">Gemini Robotics On-Device 亮相：本地离线跑的 VLA</text>
+  <circle cx="100" cy="405.5" r="4.5" fill="#7c3aed"/><text x="118" y="409.5" font-size="12" font-weight="bold" fill="#5a6272">2025.08</text><text x="192" y="409.5" font-size="12" fill="#1a1f2e">Google Genie 3：实时可交互世界生成（720p / 24fps）</text>
+  <circle cx="100" cy="429" r="4.5" fill="#2456c4"/><text x="118" y="433" font-size="12" font-weight="bold" fill="#5a6272">2025.08</text><text x="192" y="433" font-size="12" fill="#1a1f2e">Boston Dynamics × TRI：大行为模型 LBM 装上电动 Atlas</text>
+  <circle cx="100" cy="452.5" r="4.5" fill="#2456c4"/><text x="118" y="456.5" font-size="12" font-weight="bold" fill="#5a6272">2025.09</text><text x="192" y="456.5" font-size="12" fill="#1a1f2e">Gemini Robotics 1.5 + ER 1.5：「先想后动」agentic 架构</text>
+  <circle cx="100" cy="476" r="4.5" fill="#7c3aed"/><text x="118" y="480" font-size="12" font-weight="bold" fill="#5a6272">2025.09</text><text x="192" y="480" font-size="12" fill="#1a1f2e">宇树开源 UnifoLM-WMA-0：世界模型 + 动作框架</text>
+  <circle cx="100" cy="499.5" r="4.5" fill="#2456c4"/><text x="118" y="503.5" font-size="12" font-weight="bold" fill="#5a6272">2025.10</text><text x="192" y="503.5" font-size="12" fill="#1a1f2e">Figure 03 发布（面向家庭/量产）；1X NEO 开放预订</text>
+  <circle cx="100" cy="523" r="4.5" fill="#16a34a"/><text x="118" y="527" font-size="12" font-weight="bold" fill="#5a6272">2025.12</text><text x="192" y="527" font-size="12" fill="#1a1f2e">GR00T N1.6 开源（CoRL 发布，同批还有 Newton 物理引擎）</text>
+  <circle cx="100" cy="546.5" r="4.5" fill="#2456c4"/><text x="118" y="550.5" font-size="12" font-weight="bold" fill="#5a6272">2026.01</text><text x="192" y="550.5" font-size="12" fill="#1a1f2e">Helix 02：全身自主（含行走），新增 10M 参数 S0（1 kHz）</text>
+  <circle cx="100" cy="570" r="4.5" fill="#2456c4"/><text x="118" y="574" font-size="12" font-weight="bold" fill="#5a6272">2026.01</text><text x="192" y="574" font-size="12" fill="#1a1f2e">Skild AI C 轮 14 亿美元，估值超 140 亿美元</text>
+  <circle cx="100" cy="593.5" r="4.5" fill="#16a34a"/><text x="118" y="597.5" font-size="12" font-weight="bold" fill="#5a6272">2026.04</text><text x="192" y="597.5" font-size="12" fill="#1a1f2e">GR00T N1.7：开放推理 VLA（3B，2 万小时人类第一视角视频）</text>
+  <circle cx="100" cy="617" r="4.5" fill="#d97706"/><text x="118" y="621" font-size="12" font-weight="bold" fill="#5a6272">2026.04</text><text x="192" y="621" font-size="12" fill="#1a1f2e">智元 GO-2：动作思维链 + 异步双系统</text>
+  <circle cx="100" cy="640.5" r="4.5" fill="#2456c4"/><text x="118" y="644.5" font-size="12" font-weight="bold" fill="#5a6272">2026.05</text><text x="192" y="644.5" font-size="12" fill="#1a1f2e">Figure 24 小时+无人包裹分拣直播（商用能力展示）</text>
+  <circle cx="100" cy="664" r="4.5" fill="#2456c4"/><text x="118" y="668" font-size="12" font-weight="bold" fill="#5a6272">2026.07</text><text x="192" y="668" font-size="12" fill="#1a1f2e">Gemini Robotics 2 + ER 2：全身智能，ER 2 开放 API</text>
+  <circle cx="100" cy="687.5" r="4.5" fill="#2456c4"/><text x="118" y="691.5" font-size="12" font-weight="bold" fill="#5a6272">2026.08</text><text x="192" y="691.5" font-size="12" fill="#1a1f2e">Skild S1 基础模型发布</text>
+</svg>
+</div>
+<p class="cap"><b>图 5-1</b>｜2024–2026 前沿时间线。三条明显的节奏：2025 上半年「双系统元年」（Helix → Gemini Robotics → GR00T N1 → GO-1 在六周内扎堆）；2025 下半年「世界模型 + agentic 化」；2026 年「全身控制与数据规模竞赛」（Helix 02 的 S0、GR00T N1.7 的 2 万小时第一视角视频、Gemini Robotics 2 的全身智能）。来源：各官方公告与 arXiv，详见文末参考。</p>
+
+<div class="box">
+<span class="bt">读法提示</span>本讲对 Helix、GR00T、Gemini Robotics 三家「深讲」（目标是你能画出框图），对国内与其他玩家「概览」（目标是准确的一句话定位）。π0 / π0.5 / FAST 的架构数学在第 4 讲已经讲透，本讲只补公司动态，不重复——需要时点 <a href="vla-t4-diffusion-pi0.html">第 4 讲</a> 回看。
+</div>
+
+<h2>2. Figure Helix：第一次让人形机器人「干活」</h2>
+
+<h3>2.1 谁做的</h3>
+
+<p><b>Figure AI</b>（美国加州，2022 年成立，创始人 Brett Adcock）是一家「整机 + 模型」全栈自研的人形机器人公司：机器人本体（Figure 01/02/03）和 VLA 模型（Helix）都是自己做的。2025 年 2 月 20 日，Figure 用一篇官方博客（不是论文）发布了 <b>Helix</b>——官方称之为「首个能以高频率控制整个人形机器人上身的通用 VLA 模型」。这条博客是整个 2025 年具身智能热潮的起点：它第一次让公众看到人形机器人用「一个神经网络」流畅地整理杂货、叠放物品、两台机器人互相配合干活。</p>
+
+<h3>2.2 什么架构：双系统（本讲最重要的一张图）</h3>
+
+<p>Helix 的核心思想一句话就能说清：<b>把「理解世界」和「控制身体」拆成两个网络，各跑各的频率</b>。这借鉴了认知科学里「系统 1 / 系统 2」的说法（快直觉 vs 慢思考），也是你以后看所有前沿 VLA 的万能钥匙：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 448" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="450" y="26" font-size="15" font-weight="bold" fill="#1a1f2e" text-anchor="middle">双系统架构：慢想（System 2）+ 快动（System 1）</text>
+
+  <!-- inputs -->
+  <rect x="30" y="80" width="140" height="46" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="100" y="99" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">多视角相机</text>
+  <text x="100" y="117" font-size="12" fill="#5a6272" text-anchor="middle">头部 / 腕部 RGB</text>
+  <rect x="30" y="150" width="140" height="46" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="100" y="169" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">语言指令</text>
+  <text x="100" y="187" font-size="12" fill="#5a6272" text-anchor="middle">「把碗放进洗碗机」</text>
+  <rect x="30" y="300" width="140" height="46" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="100" y="319" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">本体感受状态</text>
+  <text x="100" y="337" font-size="12" fill="#5a6272" text-anchor="middle">关节角度 / 速度</text>
+
+  <!-- S2 -->
+  <rect x="250" y="60" width="330" height="110" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="415" y="86" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">System 2 · 慢想（语义系统）</text>
+  <text x="415" y="110" font-size="12" fill="#1a1f2e" text-anchor="middle">互联网预训练 VLM：物体/场景理解、语言、常识</text>
+  <text x="415" y="132" font-size="12" fill="#5a6272" text-anchor="middle">低频运行：Helix 7–9 Hz · GR00T N1 约 10 Hz</text>
+  <text x="415" y="152" font-size="12" fill="#5a6272" text-anchor="middle">规模：Helix 7B · GR00T N1 Eagle-2（1.34B）</text>
+
+  <!-- S1 -->
+  <rect x="250" y="260" width="330" height="110" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="415" y="286" font-size="13" font-weight="bold" fill="#2456c4" text-anchor="middle">System 1 · 快动（视觉运动系统）</text>
+  <text x="415" y="310" font-size="12" fill="#1a1f2e" text-anchor="middle">轻量视觉运动网络：高频闭环，直接输出关节动作</text>
+  <text x="415" y="332" font-size="12" fill="#5a6272" text-anchor="middle">高频运行：Helix 200 Hz · GR00T N1 120 Hz</text>
+  <text x="415" y="352" font-size="12" fill="#5a6272" text-anchor="middle">规模：Helix 80M · GR00T N1 DiT（流匹配，16 步动作块）</text>
+
+  <!-- S2 -> S1 -->
+  <line x1="415" y1="170" x2="415" y2="252" stroke="#2456c4" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="432" y="200" font-size="12" font-weight="bold" fill="#2456c4">latent vector（连续嵌入）</text>
+  <text x="432" y="220" font-size="12" fill="#5a6272">把「看到了什么、要做什么」当作语义条件</text>
+  <text x="432" y="238" font-size="12" fill="#5a6272">低频异步下发：S1 从不干等 S2</text>
+
+  <!-- input arrows -->
+  <line x1="170" y1="96" x2="243" y2="92" stroke="#2456c4" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="170" y1="115" x2="243" y2="288" stroke="#2456c4" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="170" y1="170" x2="243" y2="140" stroke="#2456c4" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="170" y1="325" x2="243" y2="330" stroke="#2456c4" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- robot -->
+  <rect x="640" y="230" width="230" height="160" rx="10" fill="#fff" stroke="#e3e7ee"/>
+  <circle cx="755" cy="266" r="14" fill="none" stroke="#2456c4" stroke-width="2"/>
+  <rect x="741" y="284" width="28" height="48" rx="4" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <line x1="741" y1="294" x2="712" y2="326" stroke="#2456c4" stroke-width="2"/>
+  <line x1="769" y1="294" x2="798" y2="326" stroke="#2456c4" stroke-width="2"/>
+  <text x="755" y="356" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="middle">人形机器人上身</text>
+  <text x="755" y="376" font-size="12" fill="#5a6272" text-anchor="middle">头 / 躯干 / 双臂 / 腕 / 手指</text>
+  <line x1="580" y1="315" x2="632" y2="310" stroke="#2456c4" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="606" y="298" font-size="12" font-weight="bold" fill="#2456c4" text-anchor="middle">关节指令</text>
+
+  <text x="30" y="422" font-size="12" fill="#1a1f2e">共同点：慢系统不碰电机，只给「语义条件」；快系统负责高频闭环。两者以不同频率异步运行——</text>
+  <text x="30" y="440" font-size="12" fill="#1a1f2e">Helix 与 GR00T 在这一点上思想同源，只是后者把全部结构、参数和数据配方公开了。</text>
+</svg>
+</div>
+<p class="cap"><b>图 5-2</b>｜双系统通用架构图。主体对应 Figure 官方博客对 Helix 的描述（S2 = 7B VLM @ 7–9 Hz，S1 = 80M 视觉运动策略 @ 200 Hz，两者以 latent vector 通信）；灰字同时标出 GR00T N1 论文（arXiv:2503.14734）的对应参数，方便对照。Gemini Robotics 的 ER + VLA 组合（§4）是同一思想的「外置版」。</p>
+
+<p>拆开讲，Helix 的两个系统是这样的：</p>
+
+<ul>
+  <li><b>System 2（S2，慢想）</b>：一个 <b>7B 的互联网预训练 VLM</b>（视觉语言模型，和第 2 讲 RT-2 用的那种主干是亲戚）。它读相机图像 + 语言指令，负责「这是什么、在哪、下一步该干嘛」这类语义理解，跑在机器人机载 GPU 上，频率只有 <b>7–9 Hz</b>——因为 7B 模型算一次就要一百多毫秒，这是物理规律，急不来。</li>
+  <li><b>System 1（S1，快动）</b>：一个只有 <b>80M 参数的视觉运动 Transformer</b>，接收相机图像、本体感受状态和 S2 给的 latent vector，直接输出<b>连续关节动作</b>，以 <b>200 Hz</b> 高频运行。200 Hz 是什么概念？人形机器人要保持平衡、手指要稳定抓握，控制回路必须毫秒级——这就是第 1 讲讲过的「为什么离散 token 动作头（RT-2 路线）难以控制人形全身」的答案：token 自回归解码太慢，而 80M 的小网络一次前向只要几毫秒。</li>
+  <li><b>通信方式：latent vector</b>。S2 不输出文字命令（「把碗放到第二层」这种），而是把自己的<b>连续嵌入向量</b>直接喂给 S1 当条件。语义信息以「向量」而非「语言」的形式流动，信息密度高得多——这正是第 4 讲 π0 里 VLM 前缀 + 动作专家的通信方式，也是 GO-1 latent action、GR00T 隐层特征对齐的同族思想。</li>
+  <li><b>控制范围</b>：Helix 是第一个控制人形<b>整个上身</b>（头、躯干、双臂、腕、手指，约 <b>35 个自由度</b>）的 VLA。之前的 VLA 大多只控一条或两条固定机械臂。</li>
+</ul>
+
+<h3>2.3 什么数据：互联网 + 合成标注 + 约 500 小时真机</h3>
+
+<p>Helix 的训练配方是第 1 讲「数据金字塔」的一次教科书式落地，官方博客给出了三类数据源：</p>
+
+<ol>
+  <li><b>互联网图文/视频</b>：用来预训练 S2（7B VLM），给它物体、场景、语言和人类活动的常识——这部分数据近乎无限；</li>
+  <li><b>合成数据（自动标注）</b>：用自动化标注管线批量生成场景理解训练数据，把 VLM「对准」机器人视角的任务；</li>
+  <li><b>约 500 小时真机遥操作数据</b>：操作员远程控制 Figure 02 干活录下来的（图像，动作）对，用来训练 S1。</li>
+</ol>
+
+<p>注意第 3 条：<b>约 500 小时</b>听起来不少，但和互联网数据比就是九牛一毛，而且贵得多（真机 + 人力）。Figure 的赌注是：只要 S2 从互联网学到了足够的常识，S1 只需要几百小时真机数据就能把「常识」翻译成「动作」。官方博客还强调，Helix 对从未遥操作过的日常物品表现出泛化（官方归因于 S2 预训练中吸收的人类活动视频先验——即「从人类视频学习」的迹象）。</p>
+
+<div class="infer">「约 500 小时」与「7B / 80M / 35 DoF」等数字全部来自 Figure 官方博客（2025-02-20），无论文、无第三方审计，此后官方也未系统更新过训练数据规模。外界无法核实其中真机数据的质量分布、遥操作干预率等关键口径。</div>
+
+<h3>2.4 亮点：它第一次证明了什么</h3>
+
+<ul>
+  <li><b>「拿起任何东西」</b>：对从未见过的日常物品（各种形状、材质、尺寸）零样本执行开放词汇指令；</li>
+  <li><b>双机器人零样本协作</b>：两台 Figure 02，一台取下杂货递给另一台、另一台放进收纳位置——协作行为没有被显式编程，而是从各自独立训练的策略中<b>涌现</b>的（官方口径）；</li>
+  <li><b>长时程与灵巧任务</b>：整理杂货、上架商品等连续多分钟任务；官方页面展示过拧开瓶盖、从药盒中挑出药片、用注射器精确推出 5 ml 液体、从杂乱盒子中挑金属件等灵巧性 demo；</li>
+  <li><b>全身高频控制</b>：200 Hz 覆盖约 35 DoF 上身，头、躯干、手臂、手指由同一个策略协调——这是之前所有 VLA 都没做到的。</li>
+</ul>
+
+<h3>2.5 2025–2026 更新：Figure 03、BotQ、Helix 02 与分拣直播</h3>
+
+<p>Helix 发布后的 20 个月，Figure 的动作值得按时间捋一遍（均已核实来源）：</p>
+
+<table>
+  <tr><th style="width:14%">时间</th><th style="width:22%">事件</th><th>要点</th></tr>
+  <tr><td>2025.03</td><td><b>BotQ 工厂</b></td><td>专产人形机器人的量产工厂亮相，首条产线设计产能 <b>12,000 台/年</b>，官方称将大幅扩产——「模型 + 量产」双轮驱动。</td></tr>
+  <tr><td>2025.09</td><td><b>Series C 融资</b></td><td>融资超 <b>10 亿美元</b>，投后估值 <b>390 亿美元</b>（官方公告），成为具身智能最贵的整机公司之一。</td></tr>
+  <tr><td>2025.10</td><td><b>Figure 03</b></td><td>面向<b>家庭与规模量产</b>设计的新一代本体：全新传感器套件（含掌心相机）、易清洁软体外壳、无线充电；官方明确「以进入家庭为目标」。</td></tr>
+  <tr><td>2026.01</td><td><b>Helix 02</b></td><td>从「上身」扩展到<b>全身自主</b>（含腿部行走与边走边操作）。关键变化：在 S2/S1 之下新增 <b>System 0（S0）</b>——一个仅 <b>10M 参数</b>、以 <b>1 kHz</b> 运行的全身控制器，用 <b>1,000+ 小时人类动作数据</b>训练；官方 demo 包括连续 4 分钟的端到端自主长任务与从洗碗机中卸餐具。双系统进化为「慢想—快动—反射」三层。</td></tr>
+  <tr><td>2026.05</td><td><b>24 小时分拣直播</b></td><td>多台机器人连续 24 小时以上无人干预分拣包裹的直播（媒体亦有「38 小时、超 10 万件」的说法），展示耐久、故障恢复与机队接力——从「demo」转向「商用能力证明」。</td></tr>
+  <tr><td>2026.06</td><td><b>BMW 项目重启</b></td><td>BMW 官方新闻稿宣布 <b>Figure 03 项目落地 Spartanburg 工厂</b>。此前 2024 年 Figure 02 曾在该厂试点，2025 年媒体报道首批机器人撤离产线（Figure 解释为等待新一代机型）。</td></tr>
+</table>
+
+<div class="cap"><b>表 5-2</b>｜Figure 2025–2026 大事记。来源：figure.ai/news（helix、helix-02、botq、introducing-figure-03、series-c）、BMW 官方新闻稿（2026-06-25）、humanoid.guide 分拣直播报道（2026-05-15）。</div>
+
+<div class="infer">两处口径提醒：① 分拣直播时长有「24 小时」与「38 小时」两种说法、「超 10 万件」出自社媒转述而非官方统计，本讲采用保守口径「24 小时以上」；② 2025 年「Figure 撤离 BMW 产线」为媒体报道，Figure 与 BMW 均未正面确认细节，2026 年 6 月 BMW 新闻稿只宣布 Figure 03 新项目，未评价旧项目结局。</div>
+
+<h3>2.6 局限与争议</h3>
+
+<ul>
+  <li><b>完全闭源、无论文</b>：Helix 只有博客 + 视频，没有 arXiv 论文、没有权重、没有评测协议。你无法知道 500 小时数据怎么采的、成功率怎么算的、demo 拍了多少条剪出一条。</li>
+  <li><b>评测口径不透明</b>：所有能力主张（零样本协作、泛化）都是官方自证，没有第三方基准数字。</li>
+  <li><b>视频 demo 的固有争议</b>：整个行业的 demo 视频都存在剪辑与挑选偏差问题，Helix 引发的讨论（「这是科学还是营销？」）在 1X NEO 的遥操作争议（§5.7）中再次爆发。</li>
+</ul>
+
+<div class="infer">外界对 Helix 的主要质疑集中在：无论文导致不可复现、demo 存在剪辑、遥操作干预率不明。本讲立场：Helix 的架构思想（双系统 + latent 通信）已被 GR00T 等开源系统独立实现并验证，可信度高；但具体能力数字应全部视为「厂商口径」。</div>
+
+<h2>3. NVIDIA GR00T N1 → N1.7：把双系统开源，把数据管线开源</h2>
+
+<h3>3.1 谁做的、什么定位</h3>
+
+<p><b>NVIDIA</b>，2025 年 3 月 18 日 GTC 大会发布 <b>Isaac GR00T N1</b>——「面向通用人形机器人的<b>开放</b>基础模型」（论文标题原文），配套论文 arXiv:2503.14734、GitHub 仓库 <code>NVIDIA/Isaac-GR00T</code>、HuggingFace 权重（GR00T-N1-2B）全部公开。NVIDIA 的定位很清楚：自己不造机器人，而是给所有造机器人的人提供「模型 + 仿真 + 造数据 + 芯片」的全栈工具箱——你开发得越欢，它 GPU 卖得越多。</p>
+
+<h3>3.2 什么架构：参数全部公开的双系统</h3>
+
+<p>GR00T N1 与 Helix 思想同源（图 5-2 的灰字就是它的参数），但每一层都写在论文里：</p>
+
+<table>
+  <tr><th style="width:20%">部件</th><th style="width:44%">GR00T N1（arXiv:2503.14734）</th><th>对照 Helix（官方博客）</th></tr>
+  <tr><td><b>System 2（慢想）</b></td><td>NVIDIA <b>Eagle-2</b> VLM，1.34B 参数（模型总参数 2.2B）；图像 224×224 输入 → 每帧 64 个视觉 token；取 LLM <b>第 12 层</b>隐层嵌入作为条件信号；约 <b>10 Hz</b>（L40 GPU）</td><td>7B 互联网预训练 VLM，7–9 Hz，输出 latent vector</td></tr>
+  <tr><td><b>System 1（快动）</b></td><td><b>Diffusion Transformer（DiT）+ 流匹配</b>（第 4 讲的数学原样登场）；带本体专属的状态/动作编码器-解码器（跨本体的关键）；cross-attend S2 的 token；一次生成 <b>H=16 步动作块</b>，仅 <b>4 步去噪</b>，63.9 ms 出一块，折合 <b>120 Hz</b> 控制输出</td><td>80M 视觉运动 Transformer，200 Hz，直接输出连续动作</td></tr>
+  <tr><td><b>耦合方式</b></td><td>两个模块均为 Transformer，<b>端到端联合训练</b>；推理时 S2 低频刷新条件、S1 高频出动作，互不等待</td><td>S2 嵌入喂给 S1 当条件；分阶段训练</td></tr>
+</table>
+
+<div class="cap"><b>表 5-3</b>｜GR00T N1 vs Helix。数字来源：GR00T N1 论文正文（已核实）与 Figure 官方博客。注意动作头差异：Helix S1 直接输出连续动作，GR00T S1 用流匹配生成动作块——后者正是第 4 讲 π0 动作专家的同款思路。</div>
+
+<h3>3.3 什么数据：数据金字塔的完整落地</h3>
+
+<p>GR00T N1 论文最大的贡献之一，是把「数据金字塔」从口号变成了带数字的配方（图 5-3）：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 430" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="450" y="26" font-size="15" font-weight="bold" fill="#1a1f2e" text-anchor="middle">GR00T N1 数据金字塔：三层燃料（论文口径）</text>
+
+  <!-- pyramid -->
+  <polygon points="290,60 356,153 224,153" fill="#2456c4"/>
+  <polygon points="224,153 356,153 424,247 156,247" fill="#5b83d8"/>
+  <polygon points="156,247 424,247 490,340 90,340" fill="#a9bfe8"/>
+  <text x="290" y="142" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">真机</text>
+  <text x="290" y="207" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">合成 / 仿真</text>
+  <text x="290" y="303" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">互联网图文 / 视频</text>
+
+  <!-- leader lines -->
+  <line x1="356" y1="120" x2="536" y2="103" stroke="#d7deea" stroke-width="1.5"/>
+  <line x1="424" y1="200" x2="536" y2="197" stroke="#d7deea" stroke-width="1.5"/>
+  <line x1="470" y1="300" x2="536" y2="297" stroke="#d7deea" stroke-width="1.5"/>
+
+  <!-- detail boxes -->
+  <rect x="540" y="62" width="330" height="80" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="556" y="84" font-size="12" font-weight="bold" fill="#2456c4">顶层 · 真机遥操作（量最小，含金量最高）</text>
+  <text x="556" y="105" font-size="12" fill="#1a1f2e">GR-1 人形遥操作 88 小时 · AgiBot-Alpha 14 万条轨迹</text>
+  <text x="556" y="125" font-size="12" fill="#1a1f2e">Open X-Embodiment 等开源真机数据集</text>
+
+  <rect x="540" y="158" width="330" height="80" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="556" y="180" font-size="12" font-weight="bold" fill="#2456c4">中层 · 合成与仿真（机器批量制造）</text>
+  <text x="556" y="201" font-size="12" fill="#1a1f2e">GR00T-Dreams「神经轨迹」：88h 遥操作 → 约 30 万条</text>
+  <text x="556" y="221" font-size="12" fill="#1a1f2e">DexMimicGen 仿真扩增：约 78 万条轨迹（≈6,500 小时）</text>
+
+  <rect x="540" y="254" width="330" height="88" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="556" y="276" font-size="12" font-weight="bold" fill="#2456c4">底层 · 互联网图文 / 人类视频（量最大）</text>
+  <text x="556" y="297" font-size="12" fill="#1a1f2e">Ego4D、EPIC-KITCHENS、HOI4D 等第一视角视频</text>
+  <text x="556" y="317" font-size="12" fill="#1a1f2e">VQ-VAE 潜在动作 + 逆动力学模型生成「伪动作标签」，</text>
+  <text x="556" y="335" font-size="12" fill="#1a1f2e">把无动作标注的视频对齐成统一训练格式</text>
+
+  <text x="90" y="378" font-size="12" fill="#1a1f2e">预训练自下而上混合三层（覆盖面广），后训练用顶层数据对准目标机器人——论文报告：</text>
+  <text x="90" y="398" font-size="12" fill="#1a1f2e">低数据后训练场景平均成功率 42.6%（对照组 Diffusion Policy 仅 10.2%）；足量数据 76.8% vs 46.4%。</text>
+  <text x="90" y="418" font-size="12" fill="#5a6272">这与第 1 讲的数据金字塔一脉相承；AgiBot GO-1 的 latent action（§5.1）走的是同一条「视频燃料」路线。</text>
+</svg>
+</div>
+<p class="cap"><b>图 5-3</b>｜GR00T N1 的数据金字塔，全部数字出自论文 arXiv:2503.14734 的数据章节（已核实）。核心技巧是<b>潜在动作（latent action）</b>：人类视频里没有机器人动作标签，就用 VQ-VAE 学一套「潜在动作码」+ 逆动力学模型推断伪动作，让视频数据也能进训练管线——「无动作标注的海量视频」从此变成燃料。</p>
+
+<h3>3.4 版本演进：N1 → N1.5 → N1.6 → N1.7（18 个月四连更）</h3>
+
+<table>
+  <tr><th style="width:12%">版本</th><th style="width:18%">时间</th><th>关键变化（官方口径）</th></tr>
+  <tr><td><b>N1</b></td><td>2025.03</td><td>首发：Eagle-2 VLM + DiT 流匹配，2.2B 参数，开放权重 + 全套数据管线。</td></tr>
+  <tr><td><b>N1.5</b></td><td>2025.06.11</td><td>预训练与微调阶段<b>冻结 VLM</b>；新增 <b>FLARE</b> 损失（Future LAtent Representation Alignment，让 S2 的表征对齐「未来会发生什么」）；简化视觉-语言适配器。效果：真机 GR-1 综合成功率升至 <b>83.0%</b>；「按语言指令摘指定水果」的语言遵循率从 46.6% 跳到 <b>93.3%</b>；用 1,000 条遥操作 episode 后训练即可让宇树 G1 达 98.8%。</td></tr>
+  <tr><td><b>N1.6</b></td><td>2025.09 发布（CoRL，与 Newton 物理引擎、Cosmos 更新同批）/ 2025.12.15 放出</td><td>更大的 DiT、改用<b>相对动作</b>表示，真机表现优于 N1.5（官方页面口径，细节披露有限）。</td></tr>
+  <tr><td><b>N1.7</b></td><td>2026.04.17（early access）</td><td>「<b>开放推理 VLA</b>」：总参数 3B，S2 换成 <b>Cosmos-Reason2-2B</b>（世界模型家族出身的物理推理 VLM，见 §6），S1 为 32 层 DiT；最大卖点是数据转向——用 <b>EgoScale 数据集 20,854 小时人类第一视角视频</b>直接学操作先验，并报告「灵巧度缩放定律」：第一视角数据从 1k 小时加到 20k 小时，任务完成率翻倍以上；支持 <b>22 DoF 灵巧手</b>的富接触任务；<b>商业许可</b>开放商用，官方验证本体含宇树 G1、AgiBot Genie-1 等。</td></tr>
+</table>
+
+<div class="cap"><b>表 5-4</b>｜GR00T 版本演进。来源：research.nvidia.com/labs/gear（N1.5、N1.6 官方页）、huggingface.co/blog/nvidia/gr00t-n1-7（N1.7 官方博客，2026-04-17）、arXiv:2503.14734。</div>
+
+<div class="box">
+<span class="bt">看懂 N1.7 的深意</span>N1 → N1.7 的演进轨迹 = 整个行业的缩影：动作头没变（还是流匹配 DiT），变的是<b>数据配方</b>（真机为主 → 人类第一视角视频为主）和<b>慢系统的脑子</b>（通用 VLM Eagle-2 → 懂物理常识的 Cosmos-Reason2）。架构趋同之后，竞赛焦点已经彻底移到数据引擎（§7 趋势③）。
+</div>
+
+<h3>3.5 开源生态：对你意味着什么</h3>
+
+<ul>
+  <li><b>Isaac-GR00T repo</b>：训练/微调/部署一条龙。官方示例里微调只需一张 GPU（<code>--num-gpus 1</code>），部署是 policy server + client 架构（<code>run_gr00t_server.py</code> 起服务，机器人端用 <code>PolicyClient</code> 拿动作）——<a href="vla-t6-roadmap.html">第 6 讲</a>会带你亲手跑一遍；</li>
+  <li><b>Isaac Lab / Isaac Sim</b>：GPU 并行仿真环境，GR00T-Mimic 在其中把少量演示扩增成海量仿真轨迹（DexMimicGen 同款思路）；</li>
+  <li><b>GR00T-Dreams</b>：世界模型造数据管线的开源实现（DreamGen 论文 arXiv:2505.12705，§6.2 细讲）；</li>
+  <li><b>Newton</b>：与 Google DeepMind、Disney Research 合作的开源机器人物理引擎（2025.09 CoRL 宣布），补齐仿真栈的最后一块。</li>
+</ul>
+
+<p>对开发者的意义一句话：<b>2025 年之前你没有任何合法途径拿到一个「工业级双系统 VLA」的全部细节；GR00T 之后，从数据配方到权重到仿真器全是公开的</b>。它不一定是效果最强的模型，但一定是最好的学习起点——这也是第 6 讲实操选它的原因。</p>
+
+<h2>4. Google Gemini Robotics：把最强闭源 VLM「具身化」</h2>
+
+<p>前两家的思路都是「为机器人训练一个模型」：Figure 从零搭双系统，NVIDIA 用开源件组装。Google DeepMind 的思路更激进——<b>不从头训练，直接把 Gemini 2.0 微调成机器人版</b>。技术报告的标题就是宣言：《Gemini Robotics: Bringing AI into the Physical World》（arXiv:2503.20020，2025-03-12 与博客同日发布）。它赌的是：通用大模型已经拥有了足够的物理常识与指令理解能力，机器人只是缺一个「身体适配层」。</p>
+
+<h3>4.1 起点：Gemini Robotics 与 ER（2025-03-12）</h3>
+
+<p>首发就是<b>两个模型</b>，这个分工贯穿了整条产品线：</p>
+
+<ul>
+  <li><b>Gemini Robotics</b>（VLA）：接收图像 + 语言指令，直接输出机器人动作块——「动手的」；</li>
+  <li><b>Gemini Robotics-ER</b>（Embodied Reasoning，具身推理）：只理解不动手——场景理解、空间关系推理、物体定位（能输出 pointing 坐标）、任务进度判断。「动脑的」。</li>
+</ul>
+
+<p>训练配方与 GR00T 的数据金字塔异曲同工（论文 §3）：网页数据 + 人类演示视频 + 仿真合成数据 + 真机遥操作数据（后者以 ALOHA 2 双臂平台的高精度操作为主）。官方报告的两个关键数字：</p>
+
+<ul>
+  <li><b>Few-shot 学习</b>：每个新任务只需约 <b>100 条</b>遥操作演示即可学会，并能零样本泛化到新物体、新指令、新背景；</li>
+  <li><b>多平台验证</b>：ALOHA 2 双臂、Franka 单臂、Apptronik Apollo 人形——同一个模型驱动三种完全不同的本体。</li>
+</ul>
+
+<p>发布 demo 里最令人印象深刻的是「语义推理 + 灵巧操作」的组合：穿线、打开内有障碍物的抽屉、用锅铲/锤子/螺丝刀等工具，以及「挑一份适合电影之夜的零食」这类需要常识的指令——这是纯机器人学背景的 VLA（如当时的 OpenVLA）完全做不到的。</p>
+
+<h3>4.2 Gemini Robotics 1.5：agentic 具身化（2025-09-17）</h3>
+
+<p>半年后的 1.5 版（arXiv:2510.03342）提出了本版最重要的概念——<b>agentic robot（代理化机器人）</b>：机器人不该是「刺激-反应」机器，而应该是会<b>先想后动、边做边查、失败自救</b>的 agent。具体拆成四个能力：</p>
+
+<ul>
+  <li><b>具身思考（embodied thinking）</b>：动手前先在语言空间里「想一遍」——分析场景、拆解任务、生成子目标。相当于把 CoT 从做题搬到了干活；</li>
+  <li><b>自我监控与纠错</b>：执行中持续对照预期与实际，检测到失败（比如物体滑落）会主动重试或换策略，而不是把错误执行到底；</li>
+  <li><b>工具调用</b>：遇到不认识的物体或指令，可以调用搜索等外部工具补知识再行动（官方例子：机器人查询垃圾分类信息后再正确投放）；</li>
+  <li><b>多机器人编排</b>：一个 ER 1.5 实例可以同时调度多个 VLA 实例（甚至不同机器人），拆解任务、分配执行、汇总进度。</li>
+</ul>
+
+<p>这些能力的载体就是「<b>thinker–mover</b>」（思考者-执行者）分工：ER 1.5 当 thinker（慢，负责推理与子目标），Gemini Robotics 1.5 当 mover（快，负责跟随子目标做控制）。注意这本质上<b>还是双系统</b>——只是 Figure/GR00T 把两个系统装进一个模型内部、用 latent vector 通信，Google 把它「外置」成两个独立模型、用<b>语言/子目标</b>通信（图 5-4）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 440" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="arr2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L8,4.5 L0,9 z" fill="#2456c4"/>
+    </marker>
+    <marker id="arr2g" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L8,4.5 L0,9 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- scene box -->
+  <rect x="40" y="170" width="150" height="72" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="115" y="198" text-anchor="middle" font-size="14" font-weight="700" fill="#334155">场景</text>
+  <text x="115" y="220" text-anchor="middle" font-size="12" fill="#64748b">相机 / 传感器观测</text>
+
+  <!-- ER thinker box -->
+  <rect x="280" y="56" width="340" height="96" rx="12" fill="#eef3fd" stroke="#2456c4" stroke-width="2"/>
+  <text x="450" y="84" text-anchor="middle" font-size="15" font-weight="700" fill="#1e3a8a">Gemini Robotics-ER 1.5（thinker）</text>
+  <text x="450" y="106" text-anchor="middle" font-size="12" fill="#334155">慢 · 具身推理：分析场景 → 拆解任务 → 生成子目标</text>
+  <text x="450" y="126" text-anchor="middle" font-size="12.5" fill="#334155">具身思考 / 工具调用 / 多机器人编排</text>
+
+  <!-- VLA mover box -->
+  <rect x="280" y="264" width="340" height="96" rx="12" fill="#ffffff" stroke="#2456c4" stroke-width="2"/>
+  <text x="450" y="292" text-anchor="middle" font-size="15" font-weight="700" fill="#1e3a8a">Gemini Robotics 1.5（mover）</text>
+  <text x="450" y="314" text-anchor="middle" font-size="12.5" fill="#334155">快 · 视觉运动策略：跟随子目标输出动作块</text>
+  <text x="450" y="334" text-anchor="middle" font-size="12.5" fill="#334155">跨本体（Apollo / Franka / UR5e / ALOHA 2）</text>
+
+  <!-- robot box -->
+  <rect x="710" y="170" width="150" height="72" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="785" y="198" text-anchor="middle" font-size="14" font-weight="700" fill="#334155">机器人</text>
+  <text x="785" y="220" text-anchor="middle" font-size="12" fill="#64748b">执行动作 · 改变世界</text>
+
+  <!-- arrow 1: scene -> ER -->
+  <path d="M190,188 C230,170 240,140 278,116" fill="none" stroke="#2456c4" stroke-width="2" marker-end="url(#arr2)"/>
+  <text x="150" y="130" font-size="12.5" font-weight="600" fill="#2456c4">① 观测场景</text>
+
+  <!-- arrow 2: ER -> VLA -->
+  <path d="M450,152 L450,262" fill="none" stroke="#2456c4" stroke-width="2.5" marker-end="url(#arr2)"/>
+  <text x="464" y="196" font-size="12.5" font-weight="600" fill="#2456c4">② 计划 / 语言子目标</text>
+  <text x="464" y="214" font-size="12" fill="#64748b">（对比图 5-2：latent 通信）</text>
+
+  <!-- arrow 3: VLA -> robot -->
+  <path d="M620,300 C660,290 670,260 708,232" fill="none" stroke="#2456c4" stroke-width="2" marker-end="url(#arr2)"/>
+  <text x="628" y="330" font-size="12.5" font-weight="600" fill="#2456c4">③ 动作块</text>
+
+  <!-- arrow 4: robot -> ER (feedback) -->
+  <path d="M785,170 C785,120 700,90 622,90" fill="none" stroke="#64748b" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr2g)"/>
+  <text x="668" y="66" font-size="12.5" font-weight="600" fill="#64748b">④ 反馈 · 监控进度</text>
+
+  <!-- arrow 5: self-correction loop at VLA -->
+  <path d="M280,296 C230,292 224,330 278,334" fill="none" stroke="#64748b" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr2g)"/>
+  <text x="96" y="304" font-size="12.5" font-weight="600" fill="#64748b">⑤ 自我监控</text>
+  <text x="96" y="322" font-size="12.5" font-weight="600" fill="#64748b">失败 → 纠正 · 重试</text>
+
+  <text x="450" y="404" text-anchor="middle" font-size="12.5" fill="#64748b">agentic 闭环：想（ER）→ 做（VLA）→ 看（反馈）→ 纠（重试/换策略/查工具）</text>
+  <text x="450" y="426" text-anchor="middle" font-size="12" fill="#94a3b8">依据：DeepMind 博客 Gemini Robotics 1.5（2025-09-17）与 arXiv:2510.03342</text>
+</svg>
+<p class="cap"><b>图 5-4</b>｜Gemini Robotics 1.5 的 thinker–mover agentic 闭环（对应 §4.2）。ER 1.5 负责具身推理与子目标生成，VLA 1.5 负责跟随执行；执行结果回流给 ER 做进度监控与纠错决策。这是双系统架构的「外置版」：两个独立模型、用语言/子目标通信，而不是一个模型内部的 latent vector。</p>
+</div>
+
+<h3>4.3 Motion transfer：技能跨本体迁移</h3>
+
+<p>1.5 版还带来一个对成本影响巨大的能力——<b>motion transfer（动作迁移）</b>：在 Apptronik Apollo 人形上示教/学会的技能，可以零演示地让 Franka 单臂甚至 UR5e 执行（官方博客的直接演示）。实现思路是训练时混合多平台数据，让模型学到「与本体无关」的任务级表征，执行时再按目标机器人的运动学重新落地。意义有二：① <b>数据效率</b>——一份演示喂多种机器人，采集成本被摊薄；② <b>产品化</b>——同一个模型可以适配客户手里已有的任意机械臂，不必为每种硬件重训。</p>
+
+<h3>4.4 ER 产品线：从实验室到云 API</h3>
+
+<p>ER 的演进轨迹值得单独看，因为它把「具身推理」做成了一件人人可用的商品：</p>
+
+<ul>
+  <li><b>ER</b>（2025.03）：随首发论文亮相，trusted tester 研究预览；</li>
+  <li><b>ER 1.5</b>（2025.09）：开放到 <b>Gemini API 与 AI Studio</b>——任何开发者都能调用一个「懂空间、懂机器人、懂任务进度」的推理模型，给视频打标注、做机器人任务规划、当仿真环境的考官；</li>
+  <li><b>ER 2</b>(2026-07-30)：随 Gemini Robotics 2 发布，上下文扩展到 128k token（可处理长视频/长任务），官方报告具身推理基准 moment recognition 91.3%、任务进度估计 57.4%（厂商口径*）。</li>
+</ul>
+
+<h3>4.5 On-Device：把模型塞进机器人本体（2025-06-24）</h3>
+
+<p>云端大模型再强，工厂和家庭的机器人也不能每个动作都等一次网络往返。Gemini Robotics On-Device 是从大模型<b>蒸馏</b>出的小型化版本，直接跑在机器人机载计算机上：<b>完全离线</b>、低延迟、数据不出机身，每个新任务只需 <b>50–100 条</b>演示微调。官方 demo：叠衣服、给午餐盒拉拉链、工业皮带装配。2025 年 9 月起随 Trusted Tester Program 向开发者开放。它与云端的 ER/VLA 构成「端云协同」：本体跑实时控制，云端跑重推理——和手机上的 Gemini Nano / Gemini Pro 分工如出一辙。</p>
+
+<h3>4.6 Gemini Robotics 2：全身控制（2026-07-30）</h3>
+
+<p>2026 年 7 月 30 日发布的 Gemini Robotics 2（媒体简称 GR2）把战线推进到<b>全身控制</b>：不再只是「手臂 + 夹爪」，而是 Apollo 2 人形机器人的躯干、双臂与 SharpaWave / Inspire 灵巧手协同完成长时序任务。官方公布的成功率（均为厂商自报*）：拧灯泡 <b>92%</b>、货架取物 <b>76.3%</b>、Franka 插装 <b>89.6%</b>。同期发布的 <b>On-Device 2</b> 把 few-shot 门槛进一步压低：不到 <b>200 条</b>演示即可让 SO101 廉价机械臂的成功率从 6.7% 提到 53.3%、Dexmate 夹爪从 24.4% 提到 75.6%（厂商自报*）——「买一个几千美元的臂 + 采一下午数据就能干活」正在变成现实。</p>
+
+<table>
+  <tr><th style="width:20%">版本</th><th style="width:14%">发布</th><th>关键变化</th></tr>
+  <tr><td><b>Gemini Robotics + ER</b></td><td>2025-03-12</td><td>Gemini 2.0 具身化；VLA（动手）+ ER（动脑）双模型；每任务约 100 条演示的 few-shot 学习；ALOHA 2 / Franka / Apollo 三平台验证（arXiv:2503.20020）</td></tr>
+  <tr><td><b>On-Device</b></td><td>2025-06-24</td><td>蒸馏小模型跑机载计算机，完全离线；每任务 50–100 条演示</td></tr>
+  <tr><td><b>1.5 + ER 1.5</b></td><td>2025-09-17</td><td>agentic 化：具身思考、自我监控纠错、工具调用、多机器人编排；motion transfer 跨本体迁移；ER 1.5 开放 Gemini API / AI Studio（arXiv:2510.03342）</td></tr>
+  <tr><td><b>On-Device 开发者版</b></td><td>2025-09</td><td>随 Trusted Tester Program 向开发者开放</td></tr>
+  <tr><td><b>GR2 + ER 2 + On-Device 2</b></td><td>2026-07-30</td><td>全身控制（Apollo 2 + SharpaWave/Inspire 灵巧手）；ER 2 上下文 128k token；On-Device 2 少于 200 条演示完成微调；官方成功率见 §4.6（厂商口径*）</td></tr>
+</table>
+<div class="cap"><b>表 5-5</b>｜Gemini Robotics 版本演进。来源：DeepMind 官方博客（2025-03-12、2025-06-24、2025-09-17、2026-07-30 四篇）、arXiv:2503.20020、arXiv:2510.03342。带 * 数字为厂商自报，无第三方复现。</div>
+
+<h3>4.7 局限与争议</h3>
+
+<ul>
+  <li><b>参数规模从未披露</b>：Gemini Robotics 的 VLA 有多大、On-Device 蒸馏到多小，官方博客与论文均无数字——你无法像对 GR00T 那样画出「带参数的架构图」，只能画出功能框图；</li>
+  <li><b>全部能力数字为厂商自报</b>：无论文级消融、无第三方基准、demo 视频的失败率与剪辑程度外界不可知；</li>
+  <li><b>硬件依赖合作伙伴</b>：Google 自己不造机器人，本体靠 Apptronik（Apollo）、Franka、ALOHA 等合作方——落地速度受制于伙伴。</li>
+</ul>
+
+<div class="infer">路线判断（推断）：Gemini Robotics 是「VLM 中心主义」——赌通用大模型的智能足够强，机器人只是它的一个外设，所以重心全在推理端（ER 越做越大，动作端反而越蒸越小）。Helix 则是「控制中心主义」——80M 的 S1 才是本体，7B VLM 只是给 S1 打拍子的。2025–2026 两条路线各自都拿出了漂亮结果（前者赢在语义与 agentic 能力，后者赢在高频精细控制），说明问题远未收敛；本讲倾向于认为最终形态是两者的合流：大脑用前沿 VLM、小脑用高频专用策略，边界只在通信协议（语言 vs latent）上继续竞争。</div>
+
+<h2>5. 其他重要玩家速览：中国与海外</h2>
+
+<p>三个标杆之外，赛场还有一大批重要玩家。本节的原则：<b>对开源生态有实质贡献的详讲</b>（智元、清华、自变量、银河通用——它们提供了数据集、权重或合成数据路线的关键拼图），<b>其余给准确的一句话定位</b>；π 系列的架构细节是<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>的主题，这里只讲公司动态。</p>
+
+<h3>5.1 智元机器人 AgiBot：用「数据车队」打出的百万轨迹</h3>
+
+<ul>
+  <li><b>AgiBot World 数据集</b>（arXiv:2503.06669，2025-03 发布）：上百台真机组成的采集车队，产出<b>超 100 万条真机轨迹</b>、覆盖 <b>217 个任务、5 大真实场景</b>（家居、零售、工业等），数据 + 基准 + 基线模型全开源，获 <b>IROS 2025 最佳论文奖</b>。这是全球规模最大的开源真机操作数据集之一，地位类似 NLP 界的「开源语料库」；</li>
+  <li><b>GO-1</b>（2025-03-10 发布）：<b>ViLLA</b>（Vision-Language-Latent-Action）架构——VLM 主干 + 潜在动作模型 + 扩散动作专家，用「潜在动作」把人类视频、仿真数据、真机数据三种来源接进同一训练管线（与 GR00T N1 的 latent action 思想同源，发布时间仅差一周）。模型闭源，数据集开源；</li>
+  <li><b>GO-2</b>（2026-04-09 发布）：引入<b>动作思维链</b>（Action Chain-of-Thought，先在语言空间推演动作序列再执行）+ <b>异步双系统</b>；官方宣称 LIBERO 基准 <b>98.5%</b>、自建仿真基准 GenieSim <b>82.9%</b>*；同时发布 Genie Studio 数据采集与训练工具链。模型闭源。</li>
+</ul>
+
+<div class="infer">GO-2 的架构细节与基准数字主要来自发布会及第三方媒体转述，截至本讲写作（2026-10-21）没有公开技术报告，「动作思维链」的具体实现与评测口径无法核实，请视为厂商口径。</div>
+
+<h3>5.2 清华 RDT-1B：学术派的十亿参数扩散 VLA</h3>
+
+<p>RDT-1B（arXiv:2410.07864，ICLR 2025）是学术界最早开放的<b>十亿参数级双臂操作扩散基础模型</b>（1.2B 参数，2024.10）。三个关键设计：① <b>统一物理可解释动作空间</b>——把单臂、双臂、移动操作等不同构型机器人的动作维度统一到同一格式，让跨本体预训练成为可能；② 数据配方「46 个公开数据集（合计百万级 episodes）预训练 + 6000+ 条自采双臂高精度数据微调」；③ 顺带提出 <b>PhysBench</b>，专门评测 VLM 对物理世界的理解短板。权重、代码、数据配方<b>全开源</b>——它是「复现门槛最低的十亿级 VLA」，第 6 讲的备选实操对象。</p>
+
+<h3>5.3 自变量机器人 X Square Robot：WALL-OSS</h3>
+
+<p>2025 年 5 月开源 <b>WALL-OSS</b>，号称「国内首个开源的具身智能端到端大模型」（权重开放，论文见 arXiv:2509.11766）；2026 年 5 月又放出升级版 <b>Wall-OSS-0.5</b>（arXiv:2605.30877）。意义在于姿态：中国创业公司不再只发 demo 视频，而是用开放权重换开发者生态——与 NVIDIA 的「卖铲子」逻辑不同，这是「用开源建标准」的打法。</p>
+
+<h3>5.4 银河通用 Galbot：GraspVLA 与合成数据路线</h3>
+
+<p>GraspVLA（arXiv:2505.03233，CoRL 2025）走了一条与所有人相反的路：<b>纯合成数据预训练</b>——在仿真里生成<b>十亿级</b>抓取图像做预训练，然后零样本迁移到真实世界，证明「抓取基础模型可以完全不依赖真机数据」。这与 §3 的数据金字塔互补：金字塔顶层（真机数据）最贵，GraspVLA 证明至少对抓取这类技能，底层（合成数据）就能撑起大半能力。公司层面：2025 年 6 月完成 <b>11 亿元</b>融资（当时中国具身智能赛道最大单笔之一）；2026 年 3 月在<b>无人药店</b>场景规模化落地（机器人夜间自主拣货打包）——是中国厂商里少数拿出「重复性商业交付」案例的。</p>
+
+<h3>5.5 其他中国玩家一览</h3>
+
+<table>
+  <tr><th style="width:14%">机构</th><th style="width:20%">模型 / 系统</th><th style="width:12%">时间</th><th>一句话定位</th><th style="width:12%">开源</th></tr>
+  <tr><td><b>北京智源 BAAI</b></td><td>RoboBrain 2.0 / 2.5、RoboOS</td><td>2025-07 / 2026-01 / 2025-05</td><td>「具身大脑」路线：跨本体统一大脑（空间推理、规划、进度判断，arXiv:2507.02029、2601.14352），RoboOS 是「大脑-小脑」协同的跨本体框架（arXiv:2505.03673）——对标 Gemini Robotics-ER</td><td>开源（权重 + 代码）</td></tr>
+  <tr><td><b>宇树 Unitree</b></td><td>UnifoLM-WMA-0</td><td>2025-09</td><td>「世界模型-动作」一体化系统：LLM 做任务分解 + 世界模型辅助 + 低层策略执行，主要在 Isaac Sim 中训练——人形硬件巨头的软件试水（详见 §6.2）</td><td>开源（GitHub）</td></tr>
+  <tr><td><b>星动纪元 Robot Era</b></td><td>ERA-42</td><td>2024-12</td><td>端到端人形机器人原生 VLA（不是 VLM 改造，从零用机器人数据训练），主打家务与零售场景；2026-04 在国际具身智能赛事中获三项冠军（媒体报道「击败 π 等团队」）</td><td>闭源</td></tr>
+  <tr><td><b>逐际动力 LimX</b></td><td>CL-1 + V³-0（COSA）</td><td>2023-12 / 2026-07</td><td>CL-1 全尺寸人形（以运动能力著称）；2026-07 发布人形 VLA V³-0，宣称「中国首个全自主完成长程家务的全尺寸人形」——全身移动 + 操作一体化路线</td><td>闭源（宣称口径）</td></tr>
+  <tr><td><b>穹彻智能 Noematrix</b></td><td>穹彻大脑</td><td>2025–2026</td><td>上交大团队，「机器人通用大脑」路线：软硬件一体化产品矩阵，大脑适配多种本体；2025-04 完成数亿元 Pre-A++ 轮、2025-10 获阿里投资、2026 年完成 A 轮</td><td>闭源</td></tr>
+</table>
+<div class="cap"><b>表 5-6</b>｜其他中国玩家。来源：各机构官网/官方博客、arXiv 论文、BAAI 社区（hub.baai.ac.cn）、财联社、阿里云创业频道等公开报道；「宣称」字样处均为厂商口径。</div>
+
+<h3>5.6 Tesla Optimus：最受关注的「黑箱」</h3>
+
+<p>Optimus 是舆论热度最高、技术信息最少的系统，只能按时间线陈述可查证的公开信息：</p>
+
+<ul>
+  <li><b>V3 难产</b>：2025 年 10 月 Musk 宣称 production-intent（量产意向）设计已定稿，但截至 2026 年 8 月 V3 <b>仍未正式公开亮相</b>，发布一再推迟；</li>
+  <li><b>产能与交付</b>：Fremont 工厂产线改造中；Musk 给出「2026 年 5 万台」产量目标，媒体报道实际量产交付可能推迟到 <b>2027 年底</b>；</li>
+  <li><b>工程难点</b>：V3 含约 <b>1 万个</b>独特零件；<b>手部与前臂的耐用性</b>是公认瓶颈（灵巧手是故障率最高的部件）；车端推理芯片 <b>AI5</b>（72GB 内存）计划同时服务汽车与 Optimus；</li>
+  <li><b>技术路线（宣称）</b>：端到端单一网络 + 视频数据预训练 + 生成式世界模拟器（让机器人「在梦里练习」）——全部出自 Musk 在财报会与社交媒体的表述。</li>
+</ul>
+
+<div class="infer">Optimus 没有任何技术报告、论文或可审计的 demo，上述所有数字（产量、零件数、交付时间）都来自 Musk 口径与媒体转述，且不同来源经常互相矛盾。本讲将其全部视为「传闻级信息」：可以确定 Tesla 在做、投入巨大、进度慢于宣传；无法确定其 VLA 架构的任何细节。读者不应基于本节内容做技术判断。</div>
+
+<h3>5.7 海外其他玩家一览</h3>
+
+<table>
+  <tr><th style="width:18%">机构</th><th style="width:18%">系统</th><th style="width:12%">时间</th><th>一句话定位</th></tr>
+  <tr><td><b>Toyota Research Institute</b></td><td>Large Behavior Models（LBM）</td><td>2025-03（arXiv:2503.02194）</td><td>「行为蒸馏」路线：把大量任务的专家策略蒸馏进一个大模型，实现跨任务跨本体迁移；2025-08 与 Boston Dynamics 合作，Atlas 人形借助 LBM 学习新操作任务的速度提升 3 倍*（厂商口径）</td></tr>
+  <tr><td><b>1X Technologies</b></td><td>NEO（家用人形）</td><td>2025-10-28 开订</td><td>首款瞄准家庭消费市场的人形：<b>$20,000 买断或 $499/月订阅</b>；自带「Expert Mode」人工远程接管，引发《华尔街日报》「到底是不是自主」的争议；2024-11 开源 1X World Model 用于策略评测（§6.2），2026-01 展示从人类视频学习的能力</td></tr>
+  <tr><td><b>Skild AI</b></td><td>Skild Brain / S1</td><td>2026-01 / 2026-08</td><td>「机器人大脑」路线（通用软件，不绑定自研硬件）：2026-01 完成 <b>$1.4B C 轮、估值超 $14B</b>——具身智能赛道最高估值之一；2026-08 发布 S1</td></tr>
+  <tr><td><b>Physical Intelligence</b></td><td>π0 / π0.5</td><td>2024-10 / 2025-04</td><td>流匹配动作头的开创者（<b>架构详见<a href="vla-t4-diffusion-pi0.html">第 4 讲</a></b>）；π0.5（arXiv:2504.16054）实现开放世界泛化——在从未见过的真实家庭里打扫厨房与卧室；2025-11 融资 $600M（估值 $5.6B），2026-03-27 Bloomberg 报道正洽谈以 <b>$11B+ 估值</b>再融 $1B</td></tr>
+</table>
+<div class="cap"><b>表 5-7</b>｜海外其他玩家。来源：TRI 论文 arXiv:2503.02194 与 Boston Dynamics 官方视频（2025-08）、1x.tech 官网（NEO 定价页）、WSJ 报道（2025-10）、Skild 官方公告与媒体报道（2026-01/08）、π 官网与 Bloomberg（2026-03-27）。带 * 为厂商口径。</div>
+
+<h2>6. 世界模型：VLA 的数据引擎、考官与规划器</h2>
+
+<p>2025 年下半年开始，「世界模型（world model）」突然无处不在：NVIDIA 的 Cosmos、DeepMind 的 Genie 3、1X World Model、宇树 UnifoLM-WMA-0……它和 VLA 是什么关系？先把定义钉死：</p>
+
+<h3>6.1 定义与三大用途总览</h3>
+
+<div class="box">
+<span class="bt">什么是世界模型（一句话）</span>学会了「<b>世界在动作影响下如何演变</b>」的生成模型：给定当前观测与一个候选动作，它能预测（生成）接下来的状态——相当于在模型内部装了一台「游戏引擎 + 物理引擎」，粗略对应学习 \(p(s_{t+1} \mid s_t, a_t)\)。它与 VLA 的区别只在方向：VLA 学「看到状态该怎么做」（策略 \(p(a_t \mid s_t)\)），世界模型学「做了之后世界会怎么变」（环境）。二者天然互补——而互补点恰好砸在 VLA 的三大痛点上（图 5-5）。
+</div>
+
+<p>为什么 2025 年后它突然爆发？因为 VLA 的最大瓶颈被证明是<b>数据</b>（回看 §3 数据金字塔：真机数据每条都要人握着遥操作杆采，人类视频海量却没有动作标签）。世界模型是目前最有希望的「数据工厂」——它能生成「带动作语义」的视频，理论上不限量。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 440" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="arr3" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L8,4.5 L0,9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <text x="450" y="28" text-anchor="middle" font-size="15" font-weight="700" fill="#334155">世界模型 × VLA：三大用途</text>
+
+  <!-- use 1: data factory -->
+  <rect x="40" y="50" width="320" height="112" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="200" y="76" text-anchor="middle" font-size="14" font-weight="700" fill="#5b21b6">① 造数据：「神经轨迹」工厂</text>
+  <text x="200" y="100" text-anchor="middle" font-size="12.5" fill="#334155">世界模型生成新任务 / 新物体的视频</text>
+  <text x="200" y="120" text-anchor="middle" font-size="12.5" fill="#334155">逆动力学模型提取伪动作标签</text>
+  <text x="200" y="142" text-anchor="middle" font-size="12" fill="#7c3aed">代表：DreamGen / GR00T-Dreams</text>
+
+  <!-- use 2: evaluator -->
+  <rect x="540" y="50" width="320" height="112" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="700" y="76" text-anchor="middle" font-size="14" font-weight="700" fill="#5b21b6">② 当考官：评比特，不评原子</text>
+  <text x="700" y="100" text-anchor="middle" font-size="12.5" fill="#334155">策略先在世界模型里「跑分」</text>
+  <text x="700" y="120" text-anchor="middle" font-size="12.5" fill="#334155">通过者才部署到真机（安全 + 便宜）</text>
+  <text x="700" y="142" text-anchor="middle" font-size="12" fill="#7c3aed">代表：1X World Model / UniSim</text>
+
+  <!-- center VLA pill -->
+  <rect x="370" y="180" width="160" height="80" rx="36" fill="#2456c4"/>
+  <text x="450" y="214" text-anchor="middle" font-size="16" font-weight="700" fill="#ffffff">VLA 策略</text>
+  <text x="450" y="238" text-anchor="middle" font-size="12" fill="#dbe6fb">π0 / GR00T / Helix …</text>
+
+  <!-- use 3: planner -->
+  <rect x="290" y="322" width="320" height="100" rx="12" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="450" y="348" text-anchor="middle" font-size="14" font-weight="700" fill="#5b21b6">③ 当规划器：三思而后行</text>
+  <text x="450" y="372" text-anchor="middle" font-size="12.5" fill="#334155">在「脑中」推演多个候选动作、比较想象结果，</text>
+  <text x="450" y="392" text-anchor="middle" font-size="12.5" fill="#334155">选最优者再执行</text>
+  <text x="450" y="413" text-anchor="middle" font-size="12" fill="#7c3aed">代表：WorldVLA / model-based planning</text>
+
+  <!-- arrow: data factory -> VLA -->
+  <path d="M268,162 C300,178 330,192 366,206" fill="none" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arr3)"/>
+  <text x="200" y="208" font-size="12" font-weight="600" fill="#7c3aed">训练数据（离线）</text>
+
+  <!-- arrow: VLA <-> evaluator -->
+  <path d="M532,198 C562,186 596,176 630,164" fill="none" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arr3)" marker-start="url(#arr3)"/>
+  <text x="584" y="216" text-anchor="middle" font-size="12" font-weight="600" fill="#7c3aed">送策略 / 回评分</text>
+
+  <!-- arrow: VLA <-> planner -->
+  <path d="M450,260 L450,320" fill="none" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arr3)" marker-start="url(#arr3)"/>
+  <text x="464" y="284" font-size="12" font-weight="600" fill="#7c3aed">候选动作 →</text>
+  <text x="464" y="304" font-size="12" font-weight="600" fill="#7c3aed">← 想象推演后的最优动作</text>
+</svg>
+<p class="cap"><b>图 5-5</b>｜世界模型对 VLA 的三大用途（细节见 §6.2）。注意时间尺度差异：①② 都发生在<b>离线</b>（训练前造数据、部署前跑分），已经落地；③ 发生在<b>在线推理</b>（每个动作前都要推演），受限于世界模型的推理速度与物理保真度，尚未在真机上规模化——这也是 §6.3 路线之争的焦点。</p>
+</div>
+
+<h3>6.2 用途一（造数据）：DreamGen 四阶段管线</h3>
+
+<p>DreamGen（arXiv:2505.12705，2025-05，NVIDIA GEAR 实验室）把「世界模型造数据」做成了可复现的完整管线，四步：</p>
+
+<ol>
+  <li><b>适配</b>：用目标机器人仅有的 <b>88 小时</b>真机视频，微调 Cosmos 视频世界模型，让它「会梦见这台机器人」；</li>
+  <li><b>做梦</b>：给它新任务、新物体的文本提示，批量生成机器人执行新行为的视频——论文称之为「<b>神经轨迹（neural trajectories）</b>」，共生成 <b>741 小时</b>；</li>
+  <li><b>贴标签</b>：用逆动力学模型（IDM）从生成视频中逐帧推断「这两帧之间机器人做了什么动作」，得到伪动作标签；</li>
+  <li><b>训练</b>：真机数据 + 神经轨迹混合，训练 VLA。</li>
+</ol>
+
+<p>结果：训练数据从 88 小时膨胀到 <b>827 小时（约 30 万条轨迹）</b>，模型学会了 <b>22 种真机数据里从未出现过的新行为</b>，多数任务成功率超过纯真机数据训练的基线（论文口径*）。整套管线已随论文开源为 <b>GR00T-Dreams</b>——这正是 §3.5 提到的官方 repo，也是 GR00T 后续版本数据配方的组成部分。</p>
+
+<h3>6.3 用途二（当考官）与用途三（当规划器）</h3>
+
+<p><b>当考官</b>：1X World Model（2024-11 开源）的口号是「<b>Evaluating bits, not atoms</b>（评测比特，而非原子）」——真机评测又贵又慢又危险，不如把候选策略放进世界模型里跑：给相同的初始场景与指令，看生成的视频里任务是否完成。1X 把评测协议公开并办了社区比赛，参赛策略全部在世界模型内打分排名。学术先驱是 UniSim（arXiv:2310.06114，ICLR 2024 杰出论文）：动作条件视频生成的「通用模拟器」，任何 agent 都可以在里面训练与评测。</p>
+
+<p><b>当规划器</b>：WorldVLA（arXiv:2506.21539，2025-06）用单一自回归框架统一世界模型与动作模型，二者互为背景、互相增强——动作理解帮助预测世界，世界预测帮助生成动作，是「先想象未来再行动」的初步尝试。更完整的形态是 model-based RL 的老梦想：策略完全在世界模型内部「做梦」训练与规划（Dreamer 一脉），但 sim-to-real（这里是 dream-to-real）的物理保真度仍是硬约束。</p>
+
+<table>
+  <tr><th style="width:20%">系统</th><th style="width:14%">发布</th><th style="width:18%">出处</th><th>定位与要点</th><th style="width:12%">开源</th></tr>
+  <tr><td><b>NVIDIA Cosmos</b></td><td>2025-01（CES）</td><td>arXiv:2501.03575</td><td>「世界基础模型」开放平台：扩散 + 自回归两族预训练世界模型，专做机器人合成数据与策略评测底座；配套 Cosmos Reason1（物理常识推理 VLM，arXiv:2503.15558，2025-03，已成为 GR00T N1.6 起的主干）与 Cosmos Predict2（arXiv:2511.00062，2025-10）</td><td>开源（模型 + 管线）</td></tr>
+  <tr><td><b>DeepMind Genie 3</b></td><td>2025-08-05</td><td>官方博客（无论文）</td><td>实时<b>可交互</b>通用世界模型：文本提示即时生成可探索 3D 世界，720p / 24fps / 分钟级时间一致性，支持「可提示世界事件」实时改剧情；与 SIMA 具身 agent 联动训练；research preview</td><td>封闭预览</td></tr>
+  <tr><td><b>1X World Model</b></td><td>2024-11</td><td>官方技术报告（无 arXiv）</td><td>用 1X 真机遥操作数据训练，专职策略评测；开放评测协议、举办公开社区比赛——「世界模型当考官」的首个规模化实践</td><td>开源（权重 + 代码）</td></tr>
+  <tr><td><b>Unitree UnifoLM-WMA-0</b></td><td>2025-09</td><td>GitHub</td><td>世界模型-动作一体化系统：LLM 任务分解 + 世界模型预测 + 低层策略执行，Isaac Sim 中训练，人形硬件厂商的软件试水</td><td>开源</td></tr>
+  <tr><td><b>UniSim</b></td><td>2023-10</td><td>arXiv:2310.06114</td><td>动作条件视频生成的「通用模拟器」，ICLR 2024 杰出论文——三大用途的学术共同源头</td><td>学术项目</td></tr>
+  <tr><td><b>WorldVLA</b></td><td>2025-06</td><td>arXiv:2506.21539</td><td>自回归框架下世界模型 × 动作模型互相增强的统一模型——「规划器」方向的早期代表</td><td>开源代码</td></tr>
+</table>
+<div class="cap"><b>表 5-8</b>｜代表性世界模型。注意与 VLA 的分工：世界模型学「世界怎么变」，VLA 学「该怎么做」；前者给后者供数据、当考官、（未来）做规划器。1X World Model 无 arXiv 版本，技术报告在 1x.tech 官网。</div>
+
+<div class="infer">路线之争（推断）：业界对世界模型的态度分裂成两派。「反应式策略派」（Figure、π 等）认为真实世界太复杂，生成视频存在物理瑕疵（物体恒存性、接触动力学经常崩坏），端到端 BC + 海量真机数据更稳；「基于模型派」（DeepMind、多数学术界）认为显式世界模型 + 规划才有样本效率与泛化的上限。截至 2026-10 的证据状态：造数据已被验证并进入官方管线（DreamGen → GR00T-Dreams），当考官在试点（1X），当规划器还没上真机（推理慢 + 误差累积 + 物理保真度）。本讲判断：三年内世界模型的主战场在<b>离线</b>（造数据与评测），在线规划要等推理速度与物理一致性的突破；「在世界模型里练成再上真机」是全行业的圣杯，但还没人做到。</div>
+
+<h2>7. 七个趋势：这个赛场正在往哪走</h2>
+
+<div class="box">
+<span class="bt">一句话收束</span>架构竞赛已基本结束——<b>双系统 + 流匹配动作头</b>成为事实标准；真正的竞争转移到了三个「场外」变量：<b>数据引擎、本体化程度（全身）、生态开放度</b>。以下七个趋势是 §1–§6 全部证据的压缩总结。
+</div>
+
+<table>
+  <tr><th style="width:20%">趋势</th><th style="width:44%">证据（本讲章节）</th><th>对你意味着什么</th></tr>
+  <tr><td><b>① 双系统成为事实标准</b></td><td>Helix S2/S1（Helix 02 再加 S0 成三层）、GR00T System 2/System 1、Gemini 的 ER + VLA「外置双系统」、GO-2 异步双系统（§2–§5）</td><td>看任何新架构图，先找「慢-快边界」在哪、两层用什么通信（latent vector vs 语言子目标）</td></tr>
+  <tr><td><b>② 流匹配/扩散动作头成为默认</b></td><td>π0、GR00T 的 DiT（H=16 动作块、4 步去噪）、GO-1 扩散动作专家、RDT-1B；唯一大例外是 Helix S1 的直接连续输出（§2–§5）</td><td>第 4 讲学的那套公式，就是 2025–2026 所有新模型动作端的通行证</td></tr>
+  <tr><td><b>③ 数据引擎是主战场</b></td><td>AgiBot World 百万级轨迹、DreamGen 88→827 小时神经轨迹、GR00T N1.7 的 20,854 小时第一视角视频、GraspVLA 十亿级合成（§3、§5、§6）</td><td>读新闻时，「数据从哪来、多少小时、标签怎么打」比「又刷高了 2% 成功率」重要得多</td></tr>
+  <tr><td><b>④ 跨本体与全身控制</b></td><td>RDT 统一物理动作空间、Gemini motion transfer、GR00T 跨本体微调（G1/GR-1/Genie-1）、Helix 02 的 S0 全身 1 kHz、GR2 全身 + 灵巧手（§2、§4、§5）</td><td>「一个模型、多种身体」已是产品卖点；动作空间设计决定迁移上限</td></tr>
+  <tr><td><b>⑤ agentic 化：先想后动</b></td><td>Gemini Robotics 1.5 的具身思考/自我纠错/工具调用、GO-2 动作思维链、N1.7 自称「开放推理 VLA」（§3–§5）</td><td>评测重心正从「成功率」转向「失败恢复率」；VLA 与 LLM agent 两个社区在合流</td></tr>
+  <tr><td><b>⑥ 开源与闭源双线并进</b></td><td>开源：GR00T、RDT、WALL-OSS、GraspVLA、RoboBrain、UnifoLM；闭源：Helix、Gemini Robotics、Optimus、GO-2（§1–§5）</td><td>学习与复现走开源线（第 6 讲实操）；判断前沿看闭源 demo，但一切数字按厂商口径打折</td></tr>
+  <tr><td><b>⑦ 评测与安全成为瓶颈</b></td><td>LIBERO / GenieSim 等仿真基准、PhysBench 物理理解评测、1X 用世界模型「评比特不评原子」、NEO Expert Mode 引发的自主性争议（§5、§6）</td><td>真机评测至今没有行业公认基准——看到「全球领先」先问评测协议；安全与部署细节见<a href="vla-t6-roadmap.html">第 6 讲</a></td></tr>
+</table>
+<div class="cap"><b>表 5-9</b>｜2025–2026 七个趋势。每条趋势的证据都可在对应章节找到原始来源。</div>
+
+<h2>8. 一张大总表带走</h2>
+
+<p>本讲出现的全部重要系统汇总如下（建议截图收藏；π0/π0.5 的架构细节见<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>）。<b>*</b> 表示厂商/官方口径数字，未经第三方核实；「未披露」表示截至 2026-10-21 官方从未公布。</p>
+
+<div class="tbl-scroll">
+<table>
+  <tr>
+    <th>模型</th><th>机构</th><th>发布</th><th>主干与参数</th><th>动作头</th><th>控制频率</th><th>双系统？</th><th>数据规模</th><th>开源情况</th><th>一句话亮点</th>
+  </tr>
+  <tr><td><b>Helix</b></td><td>Figure</td><td>2025-02-20</td><td>S2：7B 互联网预训练 VLM</td><td>S1：80M 视觉运动网络，直接输出连续动作</td><td>S2 7–9 Hz / S1 200 Hz</td><td>✅ 同模型内，latent vector 通信</td><td>约 500 h 真机遥操作 + 网页/人类视频*</td><td>闭源</td><td>第一次让人形机器人全上身（约 35 DoF）用 VLA「干活」</td></tr>
+  <tr><td><b>Helix 02</b></td><td>Figure</td><td>2026-01</td><td>Helix 基础上新增 S0：10M 全身控制器</td><td>三层：S2 慢想 → S1 快动 → S0 反射</td><td>S1 200 Hz / S0 1 kHz</td><td>✅ 进化为三层</td><td>1,000+ h 人类动作数据*</td><td>闭源</td><td>从上身到全身自主；4 分钟连续长任务、24 h+ 分拣直播*</td></tr>
+  <tr><td><b>GR00T N1</b></td><td>NVIDIA</td><td>2025-03</td><td>Eagle-2 VLM（S2），总计 2.2B</td><td>DiT 流匹配（S1）：H=16 动作块、4 步去噪、63.9 ms/块</td><td>S1 120 Hz</td><td>✅ 论文级完整披露</td><td>数据金字塔：网页/人类视频 + 仿真合成 + 真机遥操作</td><td>权重 + 代码 + 数据管线全开源</td><td>把双系统与数据配方变成行业公共品（arXiv:2503.14734）</td></tr>
+  <tr><td><b>GR00T N1.5</b></td><td>NVIDIA</td><td>2025-06-11</td><td>冻结 VLM + FLARE 未来表征对齐</td><td>流匹配 DiT（简化适配器）</td><td>120 Hz</td><td>✅</td><td>金字塔配方扩充真机占比</td><td>开源</td><td>真机综合成功率 83.0%*；语言遵循 46.6%→93.3%*</td></tr>
+  <tr><td><b>GR00T N1.6</b></td><td>NVIDIA</td><td>2025-09（12-15 放出）</td><td>更大 DiT、相对动作表示</td><td>流匹配 DiT</td><td>—</td><td>✅</td><td>—</td><td>开源</td><td>向 Cosmos 主干过渡的版本</td></tr>
+  <tr><td><b>GR00T N1.7</b></td><td>NVIDIA</td><td>2026-04-17</td><td>S2：Cosmos-Reason2-2B；总计 3B</td><td>32 层 DiT 流匹配；支持 22 DoF 灵巧手</td><td>—</td><td>✅（自称「开放推理 VLA」）</td><td>EgoScale 20,854 h 人类第一视角视频</td><td>开源 + 商业许可</td><td>灵巧度缩放定律：第一视角数据 1k→20k h，任务完成率翻倍以上*</td></tr>
+  <tr><td><b>Gemini Robotics</b></td><td>Google DeepMind</td><td>2025-03-12</td><td>Gemini 2.0 具身微调（参数未披露）</td><td>动作块输出（细节未披露）</td><td>未披露</td><td>外置版：ER（想）+ VLA（动）</td><td>网页 + 人类视频 + 仿真 + 真机遥操作（ALOHA 2 等）</td><td>闭源（trusted tester）</td><td>最强闭源 VLM 走进物理世界；每任务约 100 条演示 few-shot（arXiv:2503.20020）</td></tr>
+  <tr><td><b>Gemini Robotics 1.5</b></td><td>Google DeepMind</td><td>2025-09-17</td><td>agentic 升级（参数未披露）</td><td>同上</td><td>未披露</td><td>✅ 外置 thinker–mover</td><td>同上 + 多平台混合（motion transfer）</td><td>VLA 闭源；ER 1.5 开放 Gemini API / AI Studio</td><td>具身思考、自我监控纠错、工具调用、多机器人编排（arXiv:2510.03342）</td></tr>
+  <tr><td><b>Gemini Robotics On-Device</b></td><td>Google DeepMind</td><td>2025-06-24（09 开发者开放）</td><td>蒸馏小模型（参数未披露）</td><td>动作块输出</td><td>机载低延迟</td><td>端上独立运行（与云端 ER 协同）</td><td>每任务 50–100 条演示微调</td><td>闭源</td><td>完全离线跑在机载计算机上，数据不出机身</td></tr>
+  <tr><td><b>Gemini Robotics 2（GR2）</b></td><td>Google DeepMind</td><td>2026-07-30</td><td>全身控制版 + ER 2（128k 上下文）</td><td>未披露</td><td>未披露</td><td>✅ 外置</td><td>未披露</td><td>闭源</td><td>Apollo 2 全身 + SharpaWave/Inspire 灵巧手；拧灯泡 92%* / 货架取物 76.3%* / 插装 89.6%*</td></tr>
+  <tr><td><b>GO-1</b></td><td>智元 AgiBot</td><td>2025-03-10</td><td>ViLLA：VLM + 潜在动作模型</td><td>扩散动作专家</td><td>未披露</td><td>✅（ViLLA 分层）</td><td>AgiBot World 100 万+ 真机轨迹 + 人类视频 + 仿真</td><td>模型闭源；数据集开源</td><td>latent action 接通三种数据源，与 GR00T N1 同月发布</td></tr>
+  <tr><td><b>GO-2</b></td><td>智元 AgiBot</td><td>2026-04-09</td><td>动作思维链（Action CoT）</td><td>未披露</td><td>未披露</td><td>✅ 异步双系统</td><td>Genie Studio 工具链采集</td><td>闭源</td><td>LIBERO 98.5%* / 自建 GenieSim 82.9%*</td></tr>
+  <tr><td><b>RDT-1B</b></td><td>清华 THUML</td><td>2024-10（ICLR 2025）</td><td>1.2B 扩散基础模型</td><td>统一物理可解释动作空间 + 扩散头</td><td>未披露</td><td>✗（单模型）</td><td>46 个公开数据集（百万级 episodes）+ 6k+ 自采双臂</td><td>权重 + 代码全开源</td><td>复现门槛最低的十亿级双臂 VLA；附带 PhysBench（arXiv:2410.07864）</td></tr>
+  <tr><td><b>WALL-OSS</b></td><td>自变量 X Square</td><td>2025-05</td><td>端到端 VLA（细节见 arXiv:2509.11766）</td><td>—</td><td>未披露</td><td>—</td><td>自采 + 开源数据</td><td>开源权重</td><td>号称国内首个开源具身端到端大模型；2026-05 迭代 Wall-OSS-0.5（arXiv:2605.30877）</td></tr>
+  <tr><td><b>GraspVLA</b></td><td>银河通用 Galbot</td><td>2025-05（CoRL 2025）</td><td>合成数据预训练抓取基础模型</td><td>抓取动作空间</td><td>—</td><td>✗</td><td>十亿级仿真合成图像（纯真机数据为零）</td><td>开源（arXiv:2505.03233）</td><td>证明抓取可以不靠真机数据；2026-03 无人药店规模落地</td></tr>
+  <tr><td><b>RoboBrain 2.0 / 2.5</b></td><td>北京智源 BAAI</td><td>2025-07 / 2026-01</td><td>具身大脑：空间推理、规划、进度判断</td><td>不直接输出低层动作（配 RoboOS 小脑）</td><td>—</td><td>「大脑」侧</td><td>多源具身数据</td><td>开源（arXiv:2507.02029 / 2601.14352）</td><td>中国版 Gemini Robotics-ER</td></tr>
+  <tr><td><b>ERA-42</b></td><td>星动纪元 Robot Era</td><td>2024-12</td><td>端到端人形原生 VLA（非 VLM 改造）</td><td>未披露</td><td>未披露</td><td>—</td><td>自采</td><td>闭源</td><td>全身操作 + 移动一体；2026-04 国际赛事三项冠军（媒体报道）</td></tr>
+  <tr><td><b>V³-0（COSA 0.5）</b></td><td>逐际动力 LimX</td><td>2026-07</td><td>人形全身 VLA</td><td>未披露</td><td>未披露</td><td>—</td><td>自采</td><td>闭源</td><td>宣称中国首个全自主完成长程家务的全尺寸人形（CL-1）</td></tr>
+  <tr><td><b>UnifoLM-WMA-0</b></td><td>宇树 Unitree</td><td>2025-09</td><td>LLM + 世界模型 + 低层策略</td><td>世界模型辅助（WMA 一体化）</td><td>—</td><td>✅（分层）</td><td>Isaac Sim 仿真训练</td><td>开源（GitHub）</td><td>人形硬件巨头的「世界模型-动作」软件试水</td></tr>
+  <tr><td><b>Optimus V3</b></td><td>Tesla</td><td>2025-10 定稿（截至 2026-08 未亮相）</td><td>端到端单一网络（宣称）</td><td>宣称生成式世界模拟器辅助</td><td>未披露（AI5 芯片 72GB）</td><td>未披露</td><td>视频数据（宣称）</td><td>闭源</td><td>热度最高、透明度最低——全部信息为传闻级</td></tr>
+  <tr><td><b>LBM</b></td><td>TRI × Boston Dynamics</td><td>2025-03（论文）/ 2025-08（Atlas）</td><td>Large Behavior Models（行为蒸馏）</td><td>跨任务通用策略</td><td>未披露</td><td>✗（单一大模型）</td><td>大规模多任务演示</td><td>闭源（论文公开，arXiv:2503.02194）</td><td>Atlas 借 LBM 学新操作任务提速 3 倍*</td></tr>
+  <tr><td><b>NEO</b></td><td>1X Technologies</td><td>2025-10-28 开订</td><td>自研 VLA（细节未公开）</td><td>未披露</td><td>未披露</td><td>—</td><td>1X 真机遥操作数据（也用于其世界模型）</td><td>闭源（$20,000 买断 / $499 月订）</td><td>首款消费级家用人形；Expert Mode 远程接管引发自主性争议</td></tr>
+  <tr><td><b>π0 / π0.5</b></td><td>Physical Intelligence</td><td>2024-10 / 2025-04</td><td>PaliGemma 3B + 约 300M 动作专家（<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>详解）</td><td>流匹配动作专家（开创者）</td><td>50 Hz 动作块</td><td>✗（单模型双流）</td><td>10,000+ 小时跨本体数据（论文口径）</td><td>π0 代码/权重经 openpi 开放；π0.5 论文公开</td><td>π0.5 在从未见过的真实家庭打扫厨房卧室（arXiv:2504.16054）</td></tr>
+  <tr><td><b>Skild S1</b></td><td>Skild AI</td><td>2026-08</td><td>通用「机器人大脑」（未披露）</td><td>未披露</td><td>未披露</td><td>—</td><td>未披露</td><td>闭源</td><td>2026-01 完成 $1.4B C 轮（估值 $14B+）——资本对纯软件大脑路线的豪赌</td></tr>
+  <tr><td><b>Cosmos / Genie 3 等世界模型</b></td><td>NVIDIA / DeepMind 等</td><td>2024-11 起</td><td>视频生成 / 交互式世界模型</td><td>（不输出动作——给 VLA 供数据、当考官、做规划）</td><td>Genie 3 实时 24fps</td><td>—</td><td>见 §6 表 5-8</td><td>Cosmos / 1X WM / UnifoLM 开源；Genie 3 封闭预览</td><td>VLA 的「数据引擎 + 评测场」，详见 §6</td></tr>
+</table>
+</div>
+<div class="cap"><b>表 5-10</b>｜2024–2026 前沿大总表（按机构与发布顺序混排）。* = 厂商/官方口径，未经第三方核实；「未披露」= 截至 2026-10-21 官方从未公布。本表是本讲的「一页纸版本」，每行的细节与来源见对应章节。</div>
+
+<div class="box">
+<span class="bt">事实核查注（网上常传错的 arXiv 编号）</span>写作本讲时逐条核对过编号，四个常见讹传在此更正：① Gemini Robotics 1.5 的论文是 <b>arXiv:2510.03342</b>——不少二手资料写成 2506.21539，那其实是 WorldVLA；② WALL-OSS 的技术报告是 <b>arXiv:2509.11766</b>（2505.21864 是 DexUMI，另一项灵巧手工作）；③ RoboBrain 2.0 是 <b>arXiv:2507.02029</b>；④ 1X World Model <b>没有 arXiv 版本</b>（2410.13232 是《Web Agents with World Models》，完全不同领域），其技术报告只在 1x.tech 官网。引用时请以本讲文末参考来源为准。
+</div>
+
+<div class="box">
+<span class="bt">下一讲</span><a href="vla-t6-roadmap.html">第 6 讲：实战路线图</a>——盘点完前沿，该动手了：从环境搭建、开源模型选型（GR00T / RDT / π0 / OpenVLA），到用 Isaac Lab 仿真、LeRobot 真机微调，再到评测协议与安全边界，给出一条「零基础到跑通第一个 VLA」的最短路径。
+</div>
+
+<h2>参考来源</h2>
+
+<ol class="refs">
+  <li>Figure AI. <i>Helix: A General-Purpose Brain for Humanoid Robots</i>. 官方博客, 2025-02-20. <a href="https://www.figure.ai/news/helix">figure.ai/news/helix</a></li>
+  <li>Figure AI. <i>Helix 02: A Giant Leap for Whole-Body Autonomy</i>. 官方博客, 2026-01. <a href="https://www.figure.ai/news/helix-02">figure.ai/news/helix-02</a></li>
+  <li>Figure AI. <i>BotQ</i>、<i>Introducing Figure 03</i>、<i>Figure Raises Over $1B in Series C</i>. 官方博客, 2025-03 / 2025-10 / 2025-09. <a href="https://www.figure.ai/news">figure.ai/news</a></li>
+  <li>BMW Group. Figure 03 落地 Spartanburg 工厂新闻稿, 2026-06-25. <a href="https://www.press.bmwgroup.com/">press.bmwgroup.com</a></li>
+  <li>humanoid.guide. Figure 24 小时分拣直播报道, 2026-05-15.</li>
+  <li>Bjorck et al. <i>GR00T N1: An Open Foundation Model for Generalist Humanoid Robots</i>. arXiv:2503.14734, 2025-03. <a href="https://arxiv.org/abs/2503.14734">arxiv.org/abs/2503.14734</a></li>
+  <li>NVIDIA GEAR Lab. GR00T N1.5 / N1.6 官方页, 2025-06 / 2025-12. <a href="https://research.nvidia.com/labs/gear/">research.nvidia.com/labs/gear</a></li>
+  <li>NVIDIA. <i>GR00T N1.7: Open Reasoning VLA</i>. Hugging Face 博客, 2026-04-17. <a href="https://huggingface.co/blog/nvidia/gr00t-n1-7">huggingface.co/blog/nvidia/gr00t-n1-7</a></li>
+  <li>GitHub: <a href="https://github.com/NVIDIA/Isaac-GR00T">NVIDIA/Isaac-GR00T</a>（训练/微调/部署官方代码）、<a href="https://github.com/NVIDIA/GR00T-Dreams">NVIDIA/GR00T-Dreams</a>（世界模型造数据管线）</li>
+  <li>Gemini Robotics Team (Google DeepMind). <i>Gemini Robotics: Bringing AI into the Physical World</i>. arXiv:2503.20020, 2025-03. <a href="https://arxiv.org/abs/2503.20020">arxiv.org/abs/2503.20020</a></li>
+  <li>Google DeepMind. <i>Gemini Robotics</i>（2025-03-12）、<i>Gemini Robotics On-Device</i>（2025-06-24）、<i>Gemini Robotics 1.5: Pushing the frontier of agentic robotics</i>（2025-09-17）、Gemini Robotics 2 / ER 2 / On-Device 2（2026-07-30）. 官方博客. <a href="https://deepmind.google/discover/blog/">deepmind.google/discover/blog</a>；另见 <a href="https://blog.google/">blog.google</a> 同步公告</li>
+  <li>Gemini Robotics Team. <i>Gemini Robotics 1.5 &amp; ER 1.5</i>. arXiv:2510.03342, 2025-09. <a href="https://arxiv.org/abs/2510.03342">arxiv.org/abs/2510.03342</a></li>
+  <li>Google AI for Developers. Gemini Robotics-ER 1.5 API 文档（Gemini API / AI Studio）. <a href="https://ai.google.dev/">ai.google.dev</a></li>
+  <li>RoboZaps. Gemini Robotics 2 发布详报（GR2/ER2/On-Device 2 成功率数字来源）, 2026-07-30. <a href="https://blog.robozaps.com/">blog.robozaps.com</a></li>
+  <li>AgiBot World Team. <i>AgiBot World Colosseo: A Large-scale Manipulation Platform for Scalable and Intelligent Robot Systems</i>. arXiv:2503.06669, 2025-03（IROS 2025 最佳论文）. <a href="https://arxiv.org/abs/2503.06669">arxiv.org/abs/2503.06669</a>；GitHub: <a href="https://github.com/OpenDriveLab/AgiBot-World">OpenDriveLab/AgiBot-World</a></li>
+  <li>智元机器人. GO-1 发布（2025-03-10）、GO-2 发布与 Genie Studio（2026-04-09）. 官方发布及媒体报道.</li>
+  <li>Liu et al. <i>RDT-1B: A Diffusion Foundation Model for Bimanual Manipulation</i>. arXiv:2410.07864, ICLR 2025. <a href="https://arxiv.org/abs/2410.07864">arxiv.org/abs/2410.07864</a>；GitHub: <a href="https://github.com/thu-ml/RoboticsDiffusionTransformer">thu-ml/RoboticsDiffusionTransformer</a></li>
+  <li>X Square Robot 自变量机器人. WALL-OSS 开源发布, 2025-05；<i>WALL-X</i> 技术报告 arXiv:2509.11766；Wall-OSS-0.5 arXiv:2605.30877, 2026-05. <a href="https://arxiv.org/abs/2509.11766">arxiv.org/abs/2509.11766</a>；GitHub: <a href="https://github.com/x-square-robot/wall-x">x-square-robot/wall-x</a></li>
+  <li>Chen et al. <i>GraspVLA: A Grasping Foundation Model Pre-trained on Billion-scale Synthetic Action Data</i>. arXiv:2505.03233, CoRL 2025. <a href="https://arxiv.org/abs/2505.03233">arxiv.org/abs/2505.03233</a>；银河通用 11 亿元融资（2025-06）与无人药店落地（2026-03）：36 氪、雷峰网等公开报道</li>
+  <li>BAAI 北京智源. <i>RoboBrain 2.0</i> arXiv:2507.02029（2025-07）；<i>RoboBrain 2.5</i> arXiv:2601.14352（2026-01）；<i>RoboOS</i> arXiv:2505.03673（2025-05）. GitHub: <a href="https://github.com/BAAI-DCAI/RoboBrain2.0">BAAI-DCAI/RoboBrain2.0</a></li>
+  <li>Unitree 宇树. UnifoLM-WMA-0, 2025-09. GitHub: <a href="https://github.com/unitreerobotics/unifolm-wma-0">unitreerobotics/unifolm-wma-0</a></li>
+  <li>星动纪元 Robot Era. ERA-42 官方发布（2024-12）. <a href="https://www.robotera.com/">robotera.com</a>；BAAI 社区《星动纪元登顶具身奥林匹克，狂揽三项全球冠军》（2026-04-11）. <a href="https://hub.baai.ac.cn/view/53862">hub.baai.ac.cn/view/53862</a></li>
+  <li>逐际动力 LimX Dynamics. <i>COSA 0.5 发布：人形 VLA V³-0 的全身能力升级</i>（2026-07-15）. <a href="https://www.limxdynamics.com/cosa05v3/">limxdynamics.com/cosa05v3</a>；CL-1 动态测试（2023-12）. <a href="https://www.limxdynamics.com/zh/news">limxdynamics.com/zh/news</a></li>
+  <li>穹彻智能 Noematrix. 《穹彻智能获阿里投资》（2025-10）. <a href="https://www.noematrix.ai/news/noematrix-alibaba">noematrix.ai/news/noematrix-alibaba</a>；Pre-A++ 轮数亿元（2025-04，阿里云创业频道）；A 轮与产品矩阵（2026）. <a href="https://www.noematrix.ai/news/Noematrix-A%20series%202026">noematrix.ai</a>；财联社报道</li>
+  <li>Tesla. 2025 年 Q3 财报电话会 Musk 发言（Optimus V3、AI5 芯片、产量目标）；humanoidsdaily、Teslarati 等对 V3 推迟与产能的跟踪报道（2025-10 ~ 2026-08）——本讲均标注为传闻级</li>
+  <li>Toyota Research Institute. <i>Large Behavior Models for Physical AI</i>. arXiv:2503.02194, 2025-03. <a href="https://arxiv.org/abs/2503.02194">arxiv.org/abs/2503.02194</a>；Boston Dynamics × TRI「Atlas Gets a Grip」官方视频（2025-08）. <a href="https://bostondynamics.com/">bostondynamics.com</a></li>
+  <li>1X Technologies. NEO 官网定价页与 Expert Mode 说明（2025-10-28 开订）. <a href="https://www.1x.tech/">1x.tech</a>；《华尔街日报》对远程接管的报道（2025-10）；<i>1X World Model</i> 技术报告与开源仓库（2024-11，无 arXiv 版本）. <a href="https://github.com/1x-technologies/1xgpt">github.com/1x-technologies/1xgpt</a>；视频学习演示（2026-01）</li>
+  <li>Skild AI. C 轮 $1.4B、估值超 $14B 官方公告（2026-01）与 S1 发布（2026-08）. <a href="https://www.skild.ai/">skild.ai</a>；TechCrunch 等报道</li>
+  <li>Physical Intelligence. <i>π0.5: A Vision-Language-Action Model with Open-World Generalization</i>. arXiv:2504.16054, 2025-04. <a href="https://arxiv.org/abs/2504.16054">arxiv.org/abs/2504.16054</a>；官方融资公告（2025-11，$600M @ $5.6B）. <a href="https://www.physicalintelligence.company/">physicalintelligence.company</a>；Bloomberg：洽谈以 $11B+ 估值融资 $1B（2026-03-27）</li>
+  <li>Mandi et al. <i>DreamGen: Unlocking Generalization in Robot Learning Through Neural Trajectories</i>. arXiv:2505.12705, 2025-05. <a href="https://arxiv.org/abs/2505.12705">arxiv.org/abs/2505.12705</a></li>
+  <li>NVIDIA. <i>Cosmos World Foundation Model Platform for Physical AI</i>. arXiv:2501.03575, 2025-01. <a href="https://arxiv.org/abs/2501.03575">arxiv.org/abs/2501.03575</a>；<i>Cosmos-Reason1</i> arXiv:2503.15558（2025-03）；<i>Cosmos-Predict2</i> arXiv:2511.00062（2025-10）. GitHub: <a href="https://github.com/NVIDIA/Cosmos">NVIDIA/Cosmos</a></li>
+  <li>Google DeepMind. <i>Genie 3: A New Frontier for World Models</i>. 官方博客, 2025-08-05. <a href="https://deepmind.google/discover/blog/genie-3-a-new-frontier-for-world-models/">deepmind.google</a></li>
+  <li>Yang et al. <i>Learning Interactive Real-World Simulators (UniSim)</i>. arXiv:2310.06114, ICLR 2024 杰出论文. <a href="https://arxiv.org/abs/2310.06114">arxiv.org/abs/2310.06114</a></li>
+  <li>Xie et al. <i>WorldVLA: Towards Autoregressive Action World Model</i>. arXiv:2506.21539, 2025-06. <a href="https://arxiv.org/abs/2506.21539">arxiv.org/abs/2506.21539</a></li>
+</ol>
+
+<footer>生成于 2026-10-21 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

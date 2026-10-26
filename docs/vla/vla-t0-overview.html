@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>具身智能与 VLA 零基础七讲 · 第 0 讲：全景图——具身智能是什么，VLA 为什么突然爆发</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>具身智能与 VLA 零基础七讲 · 第 0 讲：全景图——具身智能是什么，VLA 为什么突然爆发</h1>
+
+<div class="series-nav">
+  <a class="here">0 全景地图</a>
+  <a href="vla-t1-robot-learning.html">1 机器人学习</a>
+  <a href="vla-t2-rt1-rt2.html">2 RT-1·RT-2</a>
+  <a href="vla-t3-openvla.html">3 OpenVLA</a>
+  <a href="vla-t4-diffusion-pi0.html">4 Diffusion·π0</a>
+  <a href="vla-t5-frontier.html">5 前沿全景</a>
+  <a href="vla-t6-roadmap.html">6 实战路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>具身智能与 VLA 零基础七讲（本篇为第 0 讲，<b>零数学</b>，只搭全景、定地图）</p>
+  <p style="margin:4px 0"><b>读者假设：</b>不需要任何机器人学或控制论知识；知道 LLM 大概是什么（Transformer、token、自回归、微调）就够了。所有机器人行话第一次出现都会解释。</p>
+  <p style="margin:4px 0"><b>系列目标：</b>读完七讲，你能看懂主流 VLA（RT-2 / OpenVLA / π0 / Helix / GR00T）的架构图与论文行话，并知道怎么动手实践、往哪里继续深入。</p>
+</div>
+
+<div class="tldr">
+<p><b>一句话版本：</b>具身智能（Embodied AI）= 让 AI 有身体，在物理世界里「感知 → 决策 → 行动」；VLA（Vision-Language-Action，视觉-语言-动作模型）= 用一个见过互联网海量图文的 VLM 当大脑，接上一个「动作头」，把摄像头画面和一句人话直接翻译成机器人的电机指令。</p>
+<p><b>为什么是现在爆发：</b>2022–2023 年，Google 证明了「大模型可以直接输出动作」（RT-2 正式提出 VLA 一词）；2024 年，OpenVLA 和 π0 把这条路开源化、并把动作头升级为连续生成；2025–2026 年，Figure、NVIDIA、Google DeepMind、智元等全部下场，VLA 从论文变成产品。逻辑和 LLM 一模一样：<b>拿一个预训练好的大模型，换掉它的输出层，用新数据微调</b>——只不过输出的不再是文字，而是动作。</p>
+<p><b>本讲做什么：</b>不碰任何数学，只把地图画好——什么是具身智能、为什么难、机器人学怎么一路走到 VLA、四年时间线上发生了谁、VLA 长什么样、怎么给它们分类，最后一张全景表 + 一张术语表，供你在后面六讲随时回来查。</p>
+</div>
+
+<h2>1. 什么是具身智能：给 AI 装上身体</h2>
+
+<p>ChatGPT 这类大模型活在「纯文本世界」里：你输入文字，它输出文字，一来一回，任务结束。<b>具身智能（Embodied AI）</b>要解决的是完全不同的问题——让 AI 拥有一个物理身体（机械臂、轮式底盘、人形机器人），通过摄像头和传感器<b>感知</b>真实世界，为了一个目标做出<b>决策</b>，再驱动电机<b>行动</b>，行动又改变世界，改变后的世界再次被感知……如此循环，直到任务完成。「具身」二字的意思就是：智能必须<b>通过身体与环境交互</b>才算数，光说不练不行。</p>
+
+<p>用一个类比：ChatGPT 像一位博学的顾问，隔着电话给你出主意，说错了可以重说；具身智能像一位上门干活的家政师傅，他不仅要想，还要动手，打碎了杯子就是真打碎了。这个差别是本质性的：</p>
+
+<table>
+  <tr><th style="width:22%">维度</th><th>ChatGPT（纯文本 LLM）</th><th>具身智能（机器人 + VLA）</th></tr>
+  <tr><td><b>输出是什么</b></td><td>文字 / 图片——信息</td><td>电机指令——物理运动，世界真的被改变</td></tr>
+  <tr><td><b>交互模式</b></td><td>单轮或几轮问答，答完即止</td><td>闭环控制：每秒感知-决策-行动几十次，不能停</td></tr>
+  <tr><td><b>犯错代价</b></td><td>答错了重新生成一次就好</td><td>抓歪了、撞上了、打碎了——物理世界没有 Ctrl+Z</td></tr>
+  <tr><td><b>怎么算成功</b></td><td>人读一遍答案就能评</td><td>要看真实/仿真环境里任务是否完成，评测又慢又贵</td></tr>
+  <tr><td><b>训练数据</b></td><td>互联网文本，近乎无限</td><td>机器人动作数据，要靠真机一条条采，极其稀缺</td></tr>
+</table>
+<div class="cap"><b>表 0-1</b>｜LLM 与具身智能的本质区别。后三行的每一行，都是这个领域的一道难题（第 2 节展开）。</div>
+
+<div class="box">
+<span class="bt">Moravec 悖论</span>AI 领域有个著名的反差：让计算机<b>下棋、做数学题很容易</b>（1997 年深蓝就击败了国际象棋世界冠军），让它<b>像一岁小孩一样端茶倒水、叠衣服却极难</b>。原因是：推理是人类几千年文明里「新发明」的、可以写成规则的少数能力；而感知与运动是几亿年进化打磨出来的「底层技能」，复杂到我们自己都意识不到——你伸手拿杯子时，大脑在毫秒间完成了测距、预判轨迹、调配几十块肌肉，但你毫无感觉。具身智能补的正是这块「进化的功课」。
+</div>
+
+<p>把「感知-决策-行动」画成图，就是具身智能的全部骨架。请记住这个闭环——后面所有模型（RT-2、OpenVLA、π0、Helix……）都是在给闭环中间那个「决策」格子换大脑：</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L8,4.5 L0,9 Z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="450" y="34" font-size="16" font-weight="bold" fill="#1a1f2e" text-anchor="middle">具身智能 = 一个不停转的闭环</text>
+  <text x="450" y="58" font-size="12" fill="#5a6272" text-anchor="middle">感知 → 决策 → 行动 → 环境被改变 → 再感知……每秒重复几十次</text>
+
+  <!-- 感知 -->
+  <rect x="80" y="90" width="210" height="92" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="185" y="118" font-size="14" font-weight="bold" fill="#2456c4" text-anchor="middle">① 感知</text>
+  <text x="185" y="142" font-size="12" fill="#2a3040" text-anchor="middle">摄像头画面、激光雷达</text>
+  <text x="185" y="160" font-size="12" fill="#2a3040" text-anchor="middle">关节角度、触觉 / 力反馈</text>
+
+  <!-- 决策 -->
+  <rect x="350" y="90" width="210" height="92" rx="10" fill="#eef3fc" stroke="#2456c4" stroke-width="2.5"/>
+  <text x="455" y="118" font-size="14" font-weight="bold" fill="#2456c4" text-anchor="middle">② 决策（大脑）</text>
+  <text x="455" y="142" font-size="12" fill="#2a3040" text-anchor="middle">看懂画面 + 听懂指令</text>
+  <text x="455" y="160" font-size="12" fill="#2a3040" text-anchor="middle">决定接下来做什么动作</text>
+  <text x="455" y="178" font-size="12" font-weight="bold" fill="#2456c4" text-anchor="middle">VLA 模型就住在这个格子里</text>
+
+  <!-- 行动 -->
+  <rect x="620" y="90" width="210" height="92" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="725" y="118" font-size="14" font-weight="bold" fill="#2456c4" text-anchor="middle">③ 行动</text>
+  <text x="725" y="142" font-size="12" fill="#2a3040" text-anchor="middle">把数字变成物理运动：</text>
+  <text x="725" y="160" font-size="12" fill="#2a3040" text-anchor="middle">电机转关节、夹爪开合</text>
+  <text x="725" y="178" font-size="12" fill="#2a3040" text-anchor="middle">轮子 / 腿移动位置</text>
+
+  <!-- 顶部横向箭头 -->
+  <line x1="290" y1="136" x2="344" y2="136" stroke="#2456c4" stroke-width="2" marker-end="url(#ar)"/>
+  <line x1="560" y1="136" x2="614" y2="136" stroke="#2456c4" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="317" y="126" font-size="12" fill="#5a6272" text-anchor="middle">观察</text>
+  <text x="587" y="126" font-size="12" fill="#5a6272" text-anchor="middle">指令</text>
+
+  <!-- 环境 -->
+  <rect x="280" y="280" width="350" height="82" rx="10" fill="#fff" stroke="#e3e7ee" stroke-width="2"/>
+  <text x="455" y="308" font-size="14" font-weight="bold" fill="#1a1f2e" text-anchor="middle">物理环境</text>
+  <text x="455" y="330" font-size="12" fill="#2a3040" text-anchor="middle">桌子、杯子、门把手、正在走近的人……</text>
+  <text x="455" y="350" font-size="12" fill="#5a6272" text-anchor="middle">它既是「考题」，也是唯一的「判卷人」</text>
+
+  <!-- 环境 -> 感知 -->
+  <polyline points="280,321 185,321 185,190" fill="none" stroke="#2456c4" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="228" y="312" font-size="12" fill="#5a6272" text-anchor="middle">被观察</text>
+  <!-- 行动 -> 环境 -->
+  <polyline points="725,190 725,321 636,321" fill="none" stroke="#2456c4" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="684" y="312" font-size="12" fill="#5a6272" text-anchor="middle">被改变</text>
+
+  <text x="450" y="392" font-size="12" fill="#1a1f2e" text-anchor="middle">闭环的含义：动作改变了环境，新的画面又流回感知——错一步，下一步就得基于「错了的世界」继续走。</text>
+</svg>
+</div>
+<p class="cap"><b>图 0-1</b>｜感知-决策-行动闭环。LLM 只做「决策」格子里的一小段文字工作；具身智能必须把三格全部跑通，而且要在物理环境这个「判卷人」面前实时跑。</p>
+
+<h2>2. 具身智能为什么难：五道坎</h2>
+
+<p>既然闭环骨架这么简单，为什么机器人至今还做不到「像人一样干家务」？因为每一格都埋着一道坎。下面五条，每一条都会对应后面某一讲给出的解法——现在只需要建立直觉。</p>
+
+<h3>坎一：动作是连续的高维数字流，不是有限的词表</h3>
+<p>LLM 的输出空间是一个固定词表（比如 15 万个 token），每一步从中挑一个就行。机器人不一样：一条 7 自由度（DOF，指能独立运动的方向数，人的整条手臂大约就是 7 个）的机械臂，<b>每一个控制时刻</b>都要给出 7 个实数（每个关节转多少）；双臂人形机器人再加上躯干、手指，一步就是几十个连续数字，每秒还要出几十次。生活化类比：让 LLM 干活像「打字」——从键盘上有限的键里选；让机器人干活像「弹钢琴还要即兴」——几十个手指以毫秒精度连续运动。「动作到底怎么表示」成了 VLA 设计的分水岭（第 2 讲和第 4 讲的两条路线之争就源于此）。</p>
+
+<h3>坎二：毫秒级实时性</h3>
+<p>你问 ChatGPT 一个问题，它想 30 秒你能等；机器人手臂抓到一半停 0.5 秒，杯子就滑下去了。底层电机控制通常要 100~1000 次/秒，而几十亿参数的大模型算一次要几百毫秒——<b>大模型天生「想得太慢」</b>。这就是 2025 年 Figure 的 Helix、NVIDIA 的 GR00T 采用「双系统」结构（大模型慢想 + 小网络快动）的直接原因（第 5 讲细讲）。</p>
+
+<h3>坎三：动作数据极度稀缺</h3>
+<p>互联网上的文本和图片近乎无限，LLM 的训练数据是「免费捡来的」；但「(画面, 指令, 正确动作)」三元组互联网上不存在，必须让真机器人一条一条做出来——人拿着遥控器示范，或在仿真里生成。全球最大的一次「拼数据」行动（Open X-Embodiment，2023）联合 22 家机构才凑出约 100 万条机器人轨迹，听起来不少，但和 LLM 训练用的万亿级 token 相比差了三四个数量级。类比：学游泳却只能看几千段教学视频，且每段都只有几十秒。数据的稀缺与采集方式是第 1 讲的主题。</p>
+
+<h3>坎四：安全与不可逆</h3>
+<p>文本模型说错话可以重新生成；机器人做错动作，打碎的杯子无法撤销，失控的机械臂可能伤人。这带来两个连锁后果：① 不敢放手让机器人在真实世界里试错（强化学习——靠试错和奖励学习的方法——因此很难直接在真机上用）；② 评测又慢又贵，每次都要在物理环境里真跑一遍。「让机器人从经验中安全地学习」直到 2025 年底（π*0.6）才有了像样的方案（第 5 讲）。</p>
+
+<h3>坎五：sim2real gap（仿真与现实的差距）</h3>
+<p>既然真机数据贵，一个自然的想法是在仿真器里训练——虚拟机器人摔一万次也不心疼。但仿真终究是近似：摩擦力、布料和液体的形变、光照反射、电机延迟，都和真实世界有微妙差异。在仿真里练成的策略搬到真机上常常「水土不服」，这个差距行话叫 <b>sim2real gap</b>。类比：在驾校模拟器上考了满分，第一次上路遇到下雨还是会慌。怎么缩小这个差距是第 1 讲的收尾话题。</p>
+
+<div class="box">
+<span class="bt">小结</span>五道坎其实是一句话：<b>物理世界连续、实时、昂贵、不可逆，而且不给数据</b>。VLA 的全部设计——用 VLM 继承互联网知识（对抗数据稀缺）、动作分块与连续动作头（对抗连续高维）、双系统（对抗实时性）、模仿学习为主（对抗不可逆）——都是在逐一回应这五道坎。
+</div>
+
+<h2>3. 机器人学简史：从「手工管线」到「基础模型」</h2>
+
+<p>要理解 VLA 为什么是现在爆发的，得先看机器人学的三个时代。这段历史也回答了一个常见疑问：「机器人研究搞了六七十年，怎么突然就火了？」——因为前两个时代各缺一块拼图，直到大模型出现才凑齐。</p>
+
+<h3>时代一：模块化管线（约 1980s–2010s）——手工设计，脆弱</h3>
+<p>传统做法把机器人软件拆成四个独立模块，像流水线一样串起来：<b>感知</b>（识别物体在哪）→ <b>建图/预测</b>（世界是什么样、会怎么变）→ <b>规划</b>（算出一条无碰撞路径）→ <b>控制</b>（让电机精确跟踪路径）。每个模块由专家手工设计、分别优化。仓储机器人、扫地机、早期自动驾驶都是这条路线的产物。它的优点是每一步可解释、可调试；缺点是<b>误差逐级传递</b>——像接力赛，感知模块把透明玻璃杯漏检了，后面三个模块再精妙也全白搭。而且换个场景（从工厂换到家庭厨房）几乎要重写：现实世界的物体、光照、布局千变万化，手工规则写不完。</p>
+
+<h3>时代二：学习方法（约 2013–2022）——会学了，但没常识</h3>
+<p>深度学习崛起后，研究者开始让机器人<b>从数据里学</b>，而不是从规则里推。两大代表方法：<b>行为克隆</b>（behavior cloning，人示范几千次，模型学着「在这个画面下输出那样的动作」——本质就是监督学习）和<b>强化学习</b>（RL，让机器人自己试错，做好了给奖励）。这个时代的辉煌在<b>移动</b>（locomotion，腿/轮子怎么动）：ETH 的 ANYmal 机器狗、波士顿动力的电动 Atlas 靠 RL 学会了后空翻、跑酷、被踹一脚还能站稳——因为仿真里可以摔几百万次，摔了不疼。但<b>操作</b>（manipulation，用手抓、放、拧、叠）始终没被攻克：接触物理太复杂（捏豆腐和拧瓶盖完全是两种力学）、物体千差万别、真机试错太贵。更根本的瓶颈是：<b>每个模型都从零学起，学完只会一件事，毫无常识</b>——一个花了三个月学会开门的模型，不知道「门」是什么，也不知道开门之后该干嘛。</p>
+
+<h3>时代三：基础模型（2022– ）——常识从天而降</h3>
+<p>转折点是 LLM/VLM 的出现：它们在互联网规模的图文上预训练，<b>免费自带了常识与语义</b>——知道杯子会碎、水往低处流、「把红色的放左边」是什么意思。机器人学者立刻意识到两件事：① 时代二证明了「观察→动作」可以端到端地学；② 时代三提供了一个已经「懂世界」的大脑。把两者拼起来——<b>拿预训练 VLM 当主干，接一个动作输出头，用机器人数据微调</b>——就是 VLA。这个思路对 LLM 读者应该非常熟悉：它本质上和「拿 Llama 换成分类头做情感分析」是同一种操作，只不过输出头换成了「电机指令」。</p>
+
+<table>
+  <tr><th style="width:18%">时代</th><th>核心思路</th><th>代表</th><th>致命短板</th></tr>
+  <tr><td><b>模块化管线</b></td><td>感知→建图→规划→控制，专家手工设计每个模块</td><td>仓储机器人、扫地机、早期自动驾驶</td><td>误差逐级传递，换场景就失效</td></tr>
+  <tr><td><b>学习方法</b></td><td>行为克隆 + 强化学习，从数据里端到端地学</td><td>ANYmal / Atlas 跑酷、ALOHA 双臂叠衣</td><td>每个模型从零学起，只会一件事，没常识</td></tr>
+  <tr><td><b>基础模型</b></td><td>预训练 VLM 当大脑 + 动作头，机器人数据微调</td><td>RT-2、OpenVLA、π0、Helix、GR00T</td><td>仍在解决：数据规模、实时性、可靠性</td></tr>
+</table>
+<div class="cap"><b>表 0-2</b>｜三个时代不是替代关系而是叠加关系：VLA = 时代二的「端到端学习」+ 时代三的「互联网常识」。行为克隆 / RL / 遥操作数据的细节见<a href="vla-t1-robot-learning.html">第 1 讲</a>。</div>
+
+<h2>4. VLA 爆发时间线：2022 → 2026 发生了什么</h2>
+
+<p>下面这张时间线是本讲最重要的一张图，也是全系列的「年表骨架」。先看图，再看四段叙事。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 900" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <text x="450" y="32" font-size="16" font-weight="bold" fill="#1a1f2e" text-anchor="middle">VLA 五年：从「LLM 出主意」到「VLM 直接开电机」</text>
+  <text x="450" y="54" font-size="12" fill="#5a6272" text-anchor="middle">★ = 本系列会精读的里程碑（第 2~5 讲）；实心蓝点为当年最重要的节点</text>
+
+  <line x1="118" y1="72" x2="118" y2="848" stroke="#c8d4ec" stroke-width="3"/>
+
+  <!-- rows: y = 92 + i*35 -->
+  <!-- 2022.04 SayCan -->
+  <circle cx="118" cy="88" r="5" fill="#9db4de"/>
+  <text x="100" y="92" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2022.04</text>
+  <text x="140" y="92" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">SayCan（Google）</tspan>——LLM 出主意、机器人给可行性打分：脑与身仍是两个模块</text>
+  <!-- 2022.12 RT-1 -->
+  <circle cx="118" cy="123" r="5" fill="#9db4de"/>
+  <text x="100" y="127" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2022.12</text>
+  <text x="140" y="127" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">RT-1（Google）</tspan>——13 台机器人 17 个月 13 万条真机演示喂出的首个大规模策略网络</text>
+  <!-- 2023.03 PaLM-E -->
+  <circle cx="118" cy="158" r="5" fill="#9db4de"/>
+  <text x="100" y="162" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2023.03</text>
+  <text x="140" y="162" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">PaLM-E（Google）</tspan>——把图像塞进 562B 大模型：具身多模态的「大杂烩」尝试</text>
+  <!-- 2023.03 Diffusion Policy -->
+  <circle cx="118" cy="193" r="5" fill="#9db4de"/>
+  <text x="100" y="197" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2023.03</text>
+  <text x="140" y="197" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">Diffusion Policy（哥大/TRI 等）</tspan>——动作生成 = 从噪声里去噪出轨迹，连续动作头源头</text>
+  <!-- 2023.07 RT-2 -->
+  <circle cx="118" cy="228" r="6" fill="#2456c4"/>
+  <text x="100" y="232" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2023.07</text>
+  <text x="140" y="232" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">★ RT-2（Google DeepMind）</tspan>——正式提出「VLA」：VLM 像输出文字一样直接输出动作</text>
+  <!-- 2023.10 OXE -->
+  <circle cx="118" cy="263" r="6" fill="#2456c4"/>
+  <text x="100" y="267" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2023.10</text>
+  <text x="140" y="267" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">★ Open X-Embodiment / RT-X</tspan>——22 种机器人本体拼出 100 万+ 真机轨迹的数据联盟</text>
+  <!-- 2024.05 Octo -->
+  <circle cx="118" cy="298" r="5" fill="#9db4de"/>
+  <text x="100" y="302" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2024.05</text>
+  <text x="140" y="302" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">Octo（UC Berkeley 等）</tspan>——首个开源通才策略：只有 93M，扩散动作头</text>
+  <!-- 2024.06 OpenVLA -->
+  <circle cx="118" cy="333" r="6" fill="#2456c4"/>
+  <text x="100" y="337" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2024.06</text>
+  <text x="140" y="337" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">★ OpenVLA（斯坦福等）</tspan>——7B 开放权重、97 万条真机数据，人人可微调的 VLA 基线</text>
+  <!-- 2024.10 pi0 -->
+  <circle cx="118" cy="368" r="6" fill="#2456c4"/>
+  <text x="100" y="372" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2024.10</text>
+  <text x="140" y="372" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">★ π0（Physical Intelligence）</tspan>——流匹配连续动作头，叠衣服级别的高频灵巧操作</text>
+  <!-- 2024.10 RDT-1B -->
+  <circle cx="118" cy="403" r="5" fill="#9db4de"/>
+  <text x="100" y="407" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2024.10</text>
+  <text x="140" y="407" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">RDT-1B（清华）</tspan>——1.2B 双臂操作扩散基座模型，国内早期代表作</text>
+  <!-- 2025.01 FAST -->
+  <circle cx="118" cy="438" r="5" fill="#9db4de"/>
+  <text x="100" y="442" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2025.01</text>
+  <text x="140" y="442" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">FAST（PI）</tspan>——把动作压成「频域 token」，证明自回归路线也能高频控制</text>
+  <!-- 2025.02 Helix -->
+  <circle cx="118" cy="473" r="6" fill="#2456c4"/>
+  <text x="100" y="477" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2025.02</text>
+  <text x="140" y="477" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">★ Helix（Figure）</tspan>——双系统定型：7B VLM 慢想（7~9Hz）+ 80M 小网络快动（200Hz）</text>
+  <!-- 2025.03 trio -->
+  <circle cx="118" cy="508" r="6" fill="#2456c4"/>
+  <text x="100" y="512" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2025.03</text>
+  <text x="140" y="512" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">★ 大厂月：GR00T N1（NVIDIA）· Gemini Robotics（Google）· GO-1（智元）</tspan></text>
+  <!-- 2025.04 pi0.5 -->
+  <circle cx="118" cy="543" r="6" fill="#2456c4"/>
+  <text x="100" y="547" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2025.04</text>
+  <text x="140" y="547" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">★ π0.5（PI）</tspan>——开放世界泛化：走进从没见过的普通家庭，收拾厨房卧室</text>
+  <!-- 2025.05 WALL-OSS -->
+  <circle cx="118" cy="578" r="5" fill="#9db4de"/>
+  <text x="100" y="582" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2025.05</text>
+  <text x="140" y="582" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">WALL-OSS（自变量机器人）</tspan>——国内首批开放权重的 VLA 之一</text>
+  <!-- 2025.06 On-Device -->
+  <circle cx="118" cy="613" r="5" fill="#9db4de"/>
+  <text x="100" y="617" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2025.06</text>
+  <text x="140" y="617" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">Gemini Robotics On-Device（Google）</tspan>——VLA 小型化，跑上端侧算力并进 API</text>
+  <!-- 2025.09 GR 1.5 -->
+  <circle cx="118" cy="648" r="5" fill="#9db4de"/>
+  <text x="100" y="652" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2025.09</text>
+  <text x="140" y="652" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">Gemini Robotics 1.5（Google）</tspan>——agentic：先思考再行动 + 跨本体「动作转移」</text>
+  <!-- 2025.10 Figure 03 -->
+  <circle cx="118" cy="683" r="5" fill="#9db4de"/>
+  <text x="100" y="687" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2025.10</text>
+  <text x="140" y="687" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">Figure 03（Figure）</tspan>——为量产和 Helix 而设计的新人形本体：软硬件共同进化</text>
+  <!-- 2025.11 pi*0.6 -->
+  <circle cx="118" cy="718" r="6" fill="#2456c4"/>
+  <text x="100" y="722" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2025.11</text>
+  <text x="140" y="722" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">★ π*0.6（PI）</tspan>——RECAP：VLA 靠真实世界 RL 从经验中自我改进</text>
+  <!-- 2025.12 N1.6 -->
+  <circle cx="118" cy="753" r="5" fill="#9db4de"/>
+  <text x="100" y="757" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2025.12</text>
+  <text x="140" y="757" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">GR00T N1.6（NVIDIA）</tspan>——升级 3B 开放权重，推理与泛化增强，接入 Cosmos 推理</text>
+  <!-- 2026.04 GO-2 + N1.7 -->
+  <circle cx="118" cy="788" r="5" fill="#9db4de"/>
+  <text x="100" y="792" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2026.04</text>
+  <text x="140" y="792" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">GO-2（智元）· GR00T N1.7 早期访问</tspan>——「知行合一」基座 /「开放推理 VLA」</text>
+  <!-- 2026.07 GR2 -->
+  <circle cx="118" cy="823" r="5" fill="#9db4de"/>
+  <text x="100" y="827" font-size="12" font-weight="bold" fill="#1a1f2e" text-anchor="end">2026.07</text>
+  <text x="140" y="827" font-size="12.5" fill="#2a3040"><tspan font-weight="bold">Gemini Robotics 2（Google）</tspan>——全身智能 + 多机器人团队协作</text>
+
+  <text x="140" y="872" font-size="12" fill="#5a6272">注：2025 下半年起节奏明显加快，上表只列代表性节点；国内还有 SmolVLA（HuggingFace 社区路线）等未逐一列出。</text>
+</svg>
+</div>
+<p class="cap"><b>图 0-2</b>｜VLA 发展时间线（2022.04–2026.07）。时间线与全景表中的 2025–2026 事件均经官方博客 / arXiv 核实（见文末参考文献），无法完全核实的细节在正文以「推断」框标注。</p>
+
+<h3>2022–2023 上半年：前奏——大脑与身体还没合体</h3>
+<p><b>SayCan</b>（2022.04）是著名的第一步：LLM 负责「说什么靠谱」（把「给我拿点喝的」分解成候选步骤），一个单独的打分器负责「哪步真能做」（评估机器人当前技能库里的可行性），两者相乘选动作。注意此时 LLM 并不直接碰电机——它是军师，不是操盘手。<b>RT-1</b>（2022.12）则证明：用 13 台机器人 17 个月采的 13 万条真机演示，可以端到端训练一个 Transformer 策略，泛化到 700 多个任务。<b>PaLM-E</b>（2023.03）把图像 token 塞进 562B 的语言模型，验证了「多模态大模型能直接做具身推理」。这三步分别解决了「常识从哪来」「动作能不能端到端学」「图文能不能进同一个模型」——万事俱备。这段前奏史在<a href="vla-t2-rt1-rt2.html">第 2 讲</a>开头细讲。</p>
+
+<h3>2023 下半年：命名与数据联盟</h3>
+<p><b>RT-2</b>（2023.07）是公认的「VLA 元年」：Google DeepMind 把动作离散成 token，让 VLM（PaLI-X / PaLM-E）像续写文字一样续写动作，并首次正式使用 <b>VLA（Vision-Language-Action）</b>这个词。最惊艳的发现是<b>语义泛化</b>：训练时从没见过的指令（「把灭绝的动物拿起来」→ 它去抓了恐龙玩具），靠互联网知识也能做对——这是任何行为克隆模型都做不到的。三个月后，<b>Open X-Embodiment</b>（2023.10）把 22 种不同机器人本体的 100 万+ 轨迹拼成一个公开数据集，训出的 RT-X 在陌生机器人上也能干活，第一次证明了<b>跨本体</b>（cross-embodiment，不同机器人共享一个模型）的可行性。这两件事详见<a href="vla-t2-rt1-rt2.html">第 2 讲</a>。</p>
+
+<h3>2024：开源化 + 连续动作头</h3>
+<p>两条主线同时推进。主线一是<b>开源</b>：<b>Octo</b>（93M）和 <b>OpenVLA</b>（7B，Llama 2 + 融合视觉编码器，97 万条 OXE 数据训练）先后放出权重，学术界和普通开发者第一次能亲手把玩、微调一个 VLA——OpenVLA 至今仍是开源事实基线（<a href="vla-t3-openvla.html">第 3 讲</a>整讲解剖它）。主线二是<b>动作表示革命</b>：Discrete token 有个天然缺陷——把连续动作硬切成 256 个格子，既损失精度又只能一步一 token 地慢慢吐。<b>π0</b>（Physical Intelligence，2024.10）改用<b>流匹配</b>（flow matching，扩散模型的近亲）直接「一次生成一整段连续动作」，配合 3B 的 VLM 主干，做到了叠衣服这种需要高频灵巧控制的任务；同期清华的 <b>RDT-1B</b> 在双臂操作上也走了扩散路线。连续 vs 离散的路线之争贯穿 2025 年至今（<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>的主角）。</p>
+
+<h3>2025–2026：大厂全部下场，「学经验」成为新前沿</h3>
+<p>2025 年 2 月 <b>Helix</b>（Figure）用「双系统」回答了实时性问题：System 2 是 7B VLM，以 7~9Hz 慢速理解场景；System 1 是 80M 的视觉运动小网络，以 200Hz 高频控制电机——慢脑想「拿哪个」，快脑管「怎么拿稳」。3 月成为「大厂月」：NVIDIA 发布开放权重的人形基座 <b>GR00T N1</b>（arXiv:2503.14734）、Google DeepMind 发布基于 Gemini 2.0 的 <b>Gemini Robotics</b>（arXiv:2503.20020）、智元发布基于 <b>AgiBot World</b> 百万级真机数据集的 <b>GO-1</b>。4 月 <b>π0.5</b> 证明 VLA 可以走进从没见过的普通家庭做清洁——「开放世界泛化」第一次有了像样的演示。下半年节奏更快：Gemini Robotics 出 On-Device 端侧版（6 月）和 agentic 化的 1.5（9 月，「先想后动」+ 跨本体动作转移）；Figure 03 发布（10 月）；11 月 <b>π*0.6</b> 用 RECAP 方法把 RL 带回 VLA——机器人在真实世界边干边学，官方称数小时自主经验后吞吐量翻倍、失败率降半；12 月 GR00T N1.6 升级至 3B。进入 2026：智元发布 GO-2（4 月），NVIDIA 推出「开放推理 VLA」GR00T N1.7 早期访问（4 月），Google 发布 Gemini Robotics 2（7 月，全身智能 + 多机器人协作）。这一整段群雄逐鹿的详情是<a href="vla-t5-frontier.html">第 5 讲</a>的内容。</p>
+
+<div class="box">
+<span class="bt">一条暗线</span>把时间线读薄，其实是三个问题的接力：<b>常识从哪来？</b>（2022–23：从互联网预训练的 VLM 来）→ <b>动作怎么表示？</b>（2023–24：离散 token vs 连续生成）→ <b>数据从哪来、能力怎么继续涨？</b>（2025–26：跨本体拼数据、仿真金字塔、从真实经验里做 RL）。七讲就是沿这条暗线展开的。
+</div>
+
+<h2>5. VLA 是什么：VLM + 动作头</h2>
+
+<div class="box">
+<span class="bt">定义</span><b>VLA（Vision-Language-Action model，视觉-语言-动作模型）：输入摄像头图像 + 语言指令（+ 机器人自身状态），直接输出未来一小段机器人动作序列的大一统模型。</b>它几乎总是从一个预训练好的 VLM 出发（继承互联网知识），再装上一个「动作头」并在机器人数据上微调（学会动手）。
+</div>
+
+<p>对 LLM 读者，最好的心智模型是把 VLA 理解成一次「换头手术」：LLM 的自回归循环是「读入 token 序列 → 预测下一个 token」；VLA 把输入换成「视觉 token + 指令 token + 状态」，把输出换成「动作」——离散路线（RT-2 / OpenVLA）真的把动作编成 token、逐个吐出来，就像说话；连续路线（π0 / GR00T）则让一个专门的小网络一次性「画」出整段平滑动作，就像 Diffusion 画图。两种路线的第 6 节会再对比。</p>
+
+<div class="fig">
+<svg viewBox="0 0 900 430" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="ar2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L8,4.5 L0,9 Z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="450" y="32" font-size="16" font-weight="bold" fill="#1a1f2e" text-anchor="middle">VLA 极简架构：VLM 当大脑，动作头当小脑</text>
+
+  <!-- 输入 -->
+  <rect x="40" y="70" width="175" height="58" rx="9" fill="#fff" stroke="#e3e7ee" stroke-width="2"/>
+  <text x="127" y="94" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">摄像头图像</text>
+  <text x="127" y="114" font-size="12" fill="#5a6272" text-anchor="middle">1~3 路 RGB 画面</text>
+  <rect x="40" y="144" width="175" height="58" rx="9" fill="#fff" stroke="#e3e7ee" stroke-width="2"/>
+  <text x="127" y="168" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">语言指令</text>
+  <text x="127" y="188" font-size="12" fill="#5a6272" text-anchor="middle">「把杯子放进水槽」</text>
+  <rect x="40" y="218" width="175" height="58" rx="9" fill="#fff" stroke="#e3e7ee" stroke-width="2"/>
+  <text x="127" y="242" font-size="13" font-weight="bold" fill="#1a1f2e" text-anchor="middle">机器人状态</text>
+  <text x="127" y="262" font-size="12" fill="#5a6272" text-anchor="middle">关节角度、夹爪开合</text>
+
+  <line x1="215" y1="99" x2="272" y2="150" stroke="#2456c4" stroke-width="2" marker-end="url(#ar2)"/>
+  <line x1="215" y1="173" x2="272" y2="185" stroke="#2456c4" stroke-width="2" marker-end="url(#ar2)"/>
+  <line x1="215" y1="247" x2="272" y2="222" stroke="#2456c4" stroke-width="2" marker-end="url(#ar2)"/>
+
+  <!-- VLM 主干 -->
+  <rect x="280" y="90" width="250" height="200" rx="12" fill="#eef3fc" stroke="#2456c4" stroke-width="2.5"/>
+  <text x="405" y="118" font-size="14" font-weight="bold" fill="#2456c4" text-anchor="middle">VLM 主干（大脑）</text>
+  <rect x="300" y="132" width="210" height="40" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="405" y="157" font-size="12" fill="#2a3040" text-anchor="middle">视觉编码器：图像 → 视觉 token</text>
+  <rect x="300" y="184" width="210" height="40" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="405" y="209" font-size="12" fill="#2a3040" text-anchor="middle">LLM：融合图文，理解与推理</text>
+  <text x="405" y="252" font-size="12" fill="#5a6272" text-anchor="middle">预训练自互联网图文——</text>
+  <text x="405" y="272" font-size="12" fill="#5a6272" text-anchor="middle">认识杯子、懂「放进」是什么意思</text>
+
+  <line x1="530" y1="190" x2="592" y2="190" stroke="#2456c4" stroke-width="2" marker-end="url(#ar2)"/>
+  <text x="561" y="178" font-size="12" fill="#5a6272" text-anchor="middle">内部表示</text>
+
+  <!-- 动作头 -->
+  <rect x="600" y="90" width="255" height="200" rx="12" fill="#fff" stroke="#2456c4" stroke-width="2.5"/>
+  <text x="727" y="118" font-size="14" font-weight="bold" fill="#2456c4" text-anchor="middle">动作头（小脑）</text>
+  <rect x="615" y="132" width="225" height="50" rx="8" fill="#eef3fc" stroke="#e3e7ee"/>
+  <text x="727" y="152" font-size="12.5" font-weight="bold" fill="#1a1f2e" text-anchor="middle">路线 A：离散动作 token</text>
+  <text x="727" y="172" font-size="12" fill="#5a6272" text-anchor="middle">像吐字一样自回归输出（RT-2 / OpenVLA）</text>
+  <rect x="615" y="192" width="225" height="50" rx="8" fill="#eef3fc" stroke="#e3e7ee"/>
+  <text x="727" y="212" font-size="12.5" font-weight="bold" fill="#1a1f2e" text-anchor="middle">路线 B：连续动作向量</text>
+  <text x="727" y="232" font-size="12" fill="#5a6272" text-anchor="middle">扩散 / 流匹配一次生成（π0 / GR00T）</text>
+  <text x="727" y="270" font-size="12" fill="#5a6272" text-anchor="middle">「动作怎么表示」是 VLA 的分水岭</text>
+
+  <!-- 输出 -->
+  <polyline points="727,290 727,326" fill="none" stroke="#2456c4" stroke-width="2" marker-end="url(#ar2)"/>
+  <rect x="280" y="332" width="575" height="58" rx="10" fill="#fff" stroke="#e3e7ee" stroke-width="2"/>
+  <text x="567" y="356" font-size="12.5" font-weight="bold" fill="#1a1f2e" text-anchor="middle">输出：动作块（action chunk）——未来约 1 秒、几十步的关节目标序列</text>
+  <text x="567" y="378" font-size="12" fill="#5a6272" text-anchor="middle">机器人执行 → 环境改变 → 新画面进来，闭环滚动（图 0-1）</text>
+
+  <text x="450" y="420" font-size="12.5" fill="#1a1f2e" text-anchor="middle">心智模型：VLA = VLM（继承互联网知识的大脑） + 动作头（把想法翻译成电机指令的小脑）</text>
+</svg>
+</div>
+<p class="cap"><b>图 0-3</b>｜VLA 极简架构。真实模型（OpenVLA 的词表设计、π0 的动作专家网络）各有细节，但都逃不出这张图的骨架；第 3、4 讲分别精读路线 A 与路线 B 的代表作。</p>
+
+<p>为什么要费这么大劲用 VLM 当主干，而不是从零训一个机器人专用网络？因为 VLM 肚子里装着三样机器人最缺的东西：<b>常识</b>（玻璃杯易碎、鸡蛋要轻拿）、<b>语义</b>（听得懂「把脏的盘子收走」里「脏」指什么）、<b>开放词汇</b>（训练时没见过的物体和指令也能应付几分）。这正是 RT-2 论文标题「互联网规模的机器人控制」的含义，也是时代二「每个模型从零学起」短板的解药。</p>
+
+<h2>6. 给 VLA 分类：四根坐标轴</h2>
+
+<p>2026 年的 VLA 已经有几十个，名字起得一个比一个科幻（π、Helix、GR00T、GO……）。别慌，它们都在四根坐标轴上占一个位置。记住这四根轴，后面每一讲读到的模型你都能对号入座：</p>
+
+<table>
+  <tr><th style="width:16%">坐标轴</th><th style="width:36%">选项与含义</th><th style="width:30%">代表模型</th><th>哪讲细讲</th></tr>
+  <tr>
+    <td><b>① 动作头类型</b><br>（最核心的一根轴）</td>
+    <td><b>自回归离散 token</b>：把每个动作维度切成若干格子，动作变成「词」，像说话一样逐个吐出<br><b>扩散 / 流匹配连续动作</b>：从随机噪声出发，迭代「去噪」出一整段平滑的连续动作<br><b>直接回归</b>：网络直接输出动作数值（最简单，精度有限）</td>
+    <td>离散：RT-2、OpenVLA、FAST<br>连续：Diffusion Policy、π0、RDT-1B、GR00T<br>回归：Helix 的 System 1（高频小网络）</td>
+    <td><a href="vla-t2-rt1-rt2.html">第 2 讲</a>（离散）<br><a href="vla-t4-diffusion-pi0.html">第 4 讲</a>（连续）</td>
+  </tr>
+  <tr>
+    <td><b>② 系统结构</b></td>
+    <td><b>端到端单模型</b>：一个 VLA 从像素管到电机<br><b>双系统（System 2 + System 1）</b>：大 VLM 低频「慢想」（理解场景、定意图），小网络高频「快动」（毫秒级控制）——像人的「深思」与「肌肉记忆」分工</td>
+    <td>单模型：RT-2、OpenVLA、π0<br>双系统：Helix（7B+80M）、GR00T N1；Gemini Robotics 1.5 的「编排器 + ER + VLA」是更松散的层级化变体</td>
+    <td><a href="vla-t5-frontier.html">第 5 讲</a></td>
+  </tr>
+  <tr>
+    <td><b>③ 任务域</b></td>
+    <td><b>操作</b>（manipulation，用手抓放拧叠——本系列重点）<br><b>移动</b>（locomotion，腿和轮子——RL 主导，与 VLA 交集小）<br><b>全身 / 人形</b>（walking + manipulation 合体，难度最高）</td>
+    <td>操作：OpenVLA、π0、RDT-1B<br>移动：ANYmal、Atlas（RL 路线）<br>全身人形：Helix、GR00T、Gemini Robotics 2</td>
+    <td><a href="vla-t1-robot-learning.html">第 1 讲</a>（本体与动作空间）</td>
+  </tr>
+  <tr>
+    <td><b>④ 开放性</b></td>
+    <td><b>闭源</b>：只有博客和演示视频，权重不公开<br><b>开放权重</b>：模型可下载、可微调、可复现——学习和研究的主战场</td>
+    <td>闭源：Helix、Gemini Robotics、GO-1 权重<br>开放：OpenVLA、π0/π0.5（openpi）、GR00T、RDT-1B、WALL-OSS、SmolVLA</td>
+    <td><a href="vla-t3-openvla.html">第 3 讲</a>、<a href="vla-t6-roadmap.html">第 6 讲</a></td>
+  </tr>
+</table>
+<div class="cap"><b>表 0-3</b>｜VLA 的四根分类坐标轴。任何一篇 VLA 论文/博客，先问这四个问题，就能把它放进地图。</div>
+
+<h2>7. 主流模型全景表</h2>
+
+<p>下面这张表是全系列的「人物关系表」，建议收藏，读到任何一讲遇到陌生名字就回来查。数字均以论文或官方发布为准，出处见文末参考文献。</p>
+
+<table>
+  <tr><th>模型</th><th>机构 · 时间</th><th>规模</th><th>动作头</th><th>开源</th><th>一句话特点</th></tr>
+  <tr><td><b>RT-1</b></td><td>Google · 2022.12</td><td>35M</td><td>离散动作分箱</td><td>论文+数据，权重未开放</td><td>首个大规模真机数据（13 万条）的机器人 Transformer 策略</td></tr>
+  <tr><td><b>RT-2</b></td><td>Google DeepMind · 2023.07</td><td>12B / 55B</td><td>自回归动作 token</td><td>闭源</td><td>「VLA」一词的出处；互联网知识带来语义泛化</td></tr>
+  <tr><td><b>Octo</b></td><td>UC Berkeley 等 · 2024.05</td><td>27M / 93M</td><td>扩散头</td><td>开放权重</td><td>首个开源通才策略，小而快，可换头微调</td></tr>
+  <tr><td><b>OpenVLA</b></td><td>斯坦福等 · 2024.06</td><td>7B</td><td>自回归离散 token（每维 256 格）</td><td>开放权重</td><td>开源 VLA 事实基线；Llama 2 + 双视觉编码器，LoRA 微调友好</td></tr>
+  <tr><td><b>RDT-1B</b></td><td>清华 · 2024.10</td><td>1.2B</td><td>扩散</td><td>开放权重</td><td>面向双臂（bimanual）操作的扩散基座模型</td></tr>
+  <tr><td><b>π0</b></td><td>Physical Intelligence · 2024.10</td><td>3B 主干 + 约 300M 动作专家</td><td>流匹配（连续）</td><td>2025.02 经 openpi 开源</td><td>叠衣服级灵巧操作；50Hz 高频控制；商业 VLA 的标杆</td></tr>
+  <tr><td><b>Helix</b></td><td>Figure · 2025.02</td><td>S2 7B + S1 80M</td><td>S1 连续回归（200Hz）</td><td>闭源</td><td>双系统结构的定型之作；人形全上身控制、多机协作</td></tr>
+  <tr><td><b>GO-1</b></td><td>智元机器人 · 2025.03</td><td>见推断注</td><td>ViLLA：隐式推理 + 生成式动作</td><td>数据集 AgiBot World 开放</td><td>站在百万级真机数据集（AgiBot World）肩膀上的国内基座</td></tr>
+  <tr><td><b>Gemini Robotics</b></td><td>Google DeepMind · 2025.03</td><td>基于 Gemini 2.0</td><td>见推断注</td><td>研究者限量开放</td><td>与 ER（具身推理）模型配套：一个动脑想步骤，一个动手出动作</td></tr>
+  <tr><td><b>GR00T N1 → N1.6/N1.7</b></td><td>NVIDIA · 2025.03 → 2026</td><td>2B → 3B</td><td>双系统：VLM + 扩散 Transformer</td><td>开放权重（可商用）</td><td>人形机器人基座 + Isaac 仿真生态 + 「数据金字塔」方法论</td></tr>
+  <tr><td><b>π0.5</b></td><td>PI · 2025.04</td><td>同 π0 架构</td><td>流匹配 + 分层推理</td><td>开放权重（openpi）</td><td>开放世界泛化：在从没见过的普通家庭里收拾厨房卧室</td></tr>
+  <tr><td><b>WALL-OSS</b></td><td>自变量机器人 · 2025.05</td><td>3B</td><td>隐式动作路线（基于 UniVLA）</td><td>开放权重</td><td>国内首批开放权重 VLA 之一</td></tr>
+  <tr><td><b>SmolVLA</b></td><td>HuggingFace · 2025.06</td><td>450M</td><td>流匹配</td><td>开放权重</td><td>社区路线：消费级 GPU 可训，配百元级开源机械臂（SO-101）</td></tr>
+  <tr><td><b>Gemini Robotics On-Device / 1.5</b></td><td>Google DeepMind · 2025.06 / 09</td><td>基于 Gemini 2.5</td><td>agentic：ER 1.5 思考 + VLA 行动</td><td>On-Device 进 Gemini API</td><td>「先想后动」+ 跨本体动作转移（motion transfer）</td></tr>
+  <tr><td><b>π*0.6</b></td><td>PI · 2025.11</td><td>未公开</td><td>流匹配 + RECAP（RL）</td><td>论文与技术报告公开</td><td>VLA 从真实世界经验中 RL 自我改进；官方称吞吐翻倍、失败率降半</td></tr>
+  <tr><td><b>GO-2</b></td><td>智元 · 2026.04</td><td>见推断注</td><td>见推断注</td><td>见推断注</td><td>官方口径「知行合一」：认知与行动耦合的第二代具身基座</td></tr>
+  <tr><td><b>Gemini Robotics 2</b></td><td>Google DeepMind · 2026.07</td><td>基于 Gemini</td><td>未公开细节</td><td>限量开放</td><td>全身智能（whole-body）+ 多机器人团队协作</td></tr>
+</table>
+<div class="cap"><b>表 0-4</b>｜主流 VLA 全景（2022.12–2026.07）。「规模」指模型参数量；「开源」以官方发布口径为准。第 2~5 讲会逐列展开。</div>
+
+<div class="infer">全景表与时间线中，绝大多数条目已对照论文摘要或官方博客核实（文末参考文献逐条给出）；以下几处公开信息有限，属于「存疑/待核」而非确证事实：① GO-1 的确切参数量与权重开放范围（官方仅确认数据集 AgiBot World 开放）；② Gemini Robotics 系列动作头的内部细节——技术报告对动作解码器的描述较笼统，表中「基于 Gemini 2.0/2.5」为官方博客口径；③ GO-2（2026.04）的架构、参数与开源计划——发布时官方披露有限，「知行合一」为新闻通稿口径，本表不做进一步断言；④ WALL-OSS 的「3B、基于 UniVLA 隐式动作路线」来自其开源仓库自述，未见正式论文逐项验证。第 5 讲撰写时会用一手资料复核这些格子。
+</div>
+
+<h2>8. 术语表：把行话一次说清</h2>
+
+<p>下面这些词会贯穿全系列。混个脸熟即可，忘了随时回来查——每条都给了「哪讲细讲」：</p>
+
+<table>
+  <tr><th style="width:24%">术语</th><th>大白话解释</th><th style="width:12%">哪讲细讲</th></tr>
+  <tr><td><b>具身智能</b>（Embodied AI）</td><td>有身体的 AI：在物理世界里感知-决策-行动，而不是只输出文字</td><td>本讲</td></tr>
+  <tr><td><b>策略</b>（policy，常写作 π）</td><td>「看到什么就做什么」的映射函数，即机器人的大脑本体；训练机器人 = 学一个好策略</td><td>第 1 讲</td></tr>
+  <tr><td><b>动作空间</b>（action space）</td><td>机器人所有可能动作的集合；7 自由度机械臂每步输出 7 个数</td><td>第 1 讲</td></tr>
+  <tr><td><b>自由度</b>（DOF）</td><td>能独立运动的方向数。人的整条手臂约 7 个：肩 3 + 肘 1 + 腕 3</td><td>第 1 讲</td></tr>
+  <tr><td><b>末端执行器</b>（end-effector）</td><td>手臂末端的「手」：二指夹爪、灵巧手、吸盘都算</td><td>第 1 讲</td></tr>
+  <tr><td><b>遥操作</b>（teleoperation）</td><td>人拿着主手/戴 VR 手柄示范，机器人实时跟随——真机动作数据的主要来源</td><td>第 1 讲</td></tr>
+  <tr><td><b>本体感知</b>（proprioception）</td><td>机器人对自身姿态的感知：关节角度、速度、受力。你闭着眼也知道手在哪，就是这个</td><td>第 1 讲</td></tr>
+  <tr><td><b>动作分块</b>（action chunking）</td><td>一次预测未来 0.5~1 秒的整段动作而非单步——动作更连贯，也抗抖动</td><td>第 1 讲</td></tr>
+  <tr><td><b>模仿学习</b>（imitation learning）</td><td>看示范学动作的总称；当今 VLA 的主训练范式</td><td>第 1 讲</td></tr>
+  <tr><td><b>行为克隆</b>（behavior cloning）</td><td>最朴素的模仿：把「观察→示范动作」当监督学习来训，像抄老师的板书</td><td>第 1 讲</td></tr>
+  <tr><td><b>强化学习</b>（RL）</td><td>试错学习：做对了给奖励、做错了给惩罚；π*0.6 用它让 VLA 从真实经验里继续进步</td><td>第 1、5 讲</td></tr>
+  <tr><td><b>sim2real</b></td><td>仿真训好的模型搬到真机会「水土不服」，这个差距及缩小它的手段</td><td>第 1 讲</td></tr>
+  <tr><td><b>VLM</b>（视觉-语言模型）</td><td>能看图 + 读文的多模态大模型，如 GPT-4V、PaLI、PaliGemma；VLA 的「大脑毛坯」</td><td>第 2 讲</td></tr>
+  <tr><td><b>VLA</b>（视觉-语言-动作模型）</td><td>VLM + 动作头：看图、听指令、直接输出机器人动作</td><td>第 2 讲</td></tr>
+  <tr><td><b>动作头</b>（action head）</td><td>把 VLM 内部表示翻译成电机指令的输出模块；离散 token 与连续生成两条路线</td><td>第 3、4 讲</td></tr>
+  <tr><td><b>co-fine-tuning</b></td><td>RT-2 的技巧：训动作时把原互联网图文数据掺着一起训，防止「学了新本事、忘了老常识」</td><td>第 2 讲</td></tr>
+  <tr><td><b>跨本体</b>（cross-embodiment）</td><td>不同机器人身体（单臂/双臂/人形）共享数据或共享一个模型；Open X-Embodiment 开创</td><td>第 2、5 讲</td></tr>
+  <tr><td><b>双系统</b>（System 2 / System 1）</td><td>借自心理学的分工：大 VLM 低频慢想（干什么），小网络高频快动（怎么动稳）</td><td>第 5 讲</td></tr>
+</table>
+
+<h2>9. 系列地图：七讲怎么读</h2>
+
+<table>
+  <tr><th style="width:20%">讲次</th><th>主题</th><th>读完你能</th></tr>
+  <tr><td><b>第 0 讲</b>（本篇）</td><td>全景地图：定义、闭环、五道坎、简史、时间线、分类坐标</td><td>听懂行话，把任何 VLA 新闻放进地图</td></tr>
+  <tr><td><b><a href="vla-t1-robot-learning.html">第 1 讲</a></b></td><td>机器人学习基础：本体与动作空间、行为克隆与 RL、遥操作、ACT/ALOHA、数据金字塔、Open X-Embodiment、sim2real</td><td>明白「机器人数据从哪来、策略怎么学」——VLA 的地基</td></tr>
+  <tr><td><b><a href="vla-t2-rt1-rt2.html">第 2 讲</a></b></td><td>SayCan/PaLM-E 前奏 + RT-1/RT-2 精读：动作 tokenization、co-fine-tuning、语义泛化、RT-X</td><td>看懂「VLA 是怎么被发明出来的」，理解离散动作 token 路线</td></tr>
+  <tr><td><b><a href="vla-t3-openvla.html">第 3 讲</a></b></td><td>OpenVLA 7B 解剖：融合视觉编码器、动作词表、OXE 97 万条训练、LoRA 微调、OpenVLA-OFT、开源生态</td><td>逐层读懂一个真实开源 VLA，并知道怎么微调它</td></tr>
+  <tr><td><b><a href="vla-t4-diffusion-pi0.html">第 4 讲</a></b></td><td>连续动作头：扩散模型速成、Diffusion Policy、flow matching 速成、π0/π0.5/FAST 精读、动作头对比</td><td>理解 2024 年后的主流路线「为什么连续动作头赢了大半」</td></tr>
+  <tr><td><b><a href="vla-t5-frontier.html">第 5 讲</a></b></td><td>前沿全景：Helix、GR00T N1 系列、Gemini Robotics 系列、国内 GO-1/RDT-1B/WALL-OSS、世界模型、趋势总结</td><td>跟得上 2025–2026 的军备竞赛，看懂双系统与 agentic 架构</td></tr>
+  <tr><td><b><a href="vla-t6-roadmap.html">第 6 讲</a></b></td><td>实战路线图：LeRobot/openpi、仿真基准、动手项目、微调工程要点、学习资源、四阶段成长路线</td><td>知道自己动手该装什么、跑什么、按什么顺序进阶</td></tr>
+</table>
+
+<p><b>为什么按这个顺序：</b>第 1 讲补「机器人学习」的地基（没有它，后面所有模型都是空中楼阁）；第 2 讲回到历史现场看 VLA 如何诞生（离散路线的源头）；第 3 讲解剖一个完整开源模型把知识落地（OpenVLA 结构最「标准」，适合逐层看）；第 4 讲学第二代动作头（扩散/流匹配，π0 一系的前提）；第 5 讲把 2025–2026 的前沿串成网；第 6 讲收束为动手路线。难度曲线刻意做成「先平后陡再回落」。</p>
+
+<p><b>小白推荐阅读方式：</b>① 默认顺序读，每讲开头都有回顾衔接；② 第 4 讲数学浓度全系列最高（扩散与流匹配的原理），如果卡住可以先只看每节的「直觉段」和图，跳到第 5 讲，之后回补——不影响看懂前沿模型；③ 只有 LLM 背景、完全没接触过机器人的读者，第 1 讲请务必读完再往后；④ 每讲末尾都有自查清单，答不上来就回去翻对应小节；⑤ 术语忘了随时回本页第 8 节查。</p>
+
+<h2>10. 自查清单</h2>
+
+<p>下面 8 个问题都能答上来，第 0 讲就过关了：</p>
+
+<ol class="checklist">
+  <li>具身智能和 ChatGPT 的三个本质区别是什么？（答：输出物理动作而非文字、闭环控制而非单轮问答、错误不可撤销而非可以重答）</li>
+  <li>Moravec 悖论说的是什么？（答：下棋推理容易、端茶倒水难——感知运动是几亿年进化的底层技能，恰恰最难复制）</li>
+  <li>VLA 难的五道坎是哪些？（答：连续高维动作、毫秒级实时、动作数据稀缺、安全不可逆、sim2real gap）</li>
+  <li>「VLA」这个词是哪篇论文正式提出的？（答：RT-2，Google DeepMind，2023.07，arXiv:2307.15818）</li>
+  <li>用一句话说 VLA 的架构心智模型？（答：VLA = VLM 大脑（继承互联网知识）+ 动作头小脑（把想法翻译成电机指令））</li>
+  <li>动作头的两条路线各举两个代表？（答：自回归离散 token——RT-2、OpenVLA；扩散/流匹配连续——Diffusion Policy、π0、GR00T、RDT-1B）</li>
+  <li>双系统结构解决的是五道坎中的哪一道？各系统的频率量级？（答：实时性；System 2 大 VLM 约 7~9Hz 慢想，System 1 小网络约 200Hz 快动）</li>
+  <li>Open X-Embodiment 证明了什么可行性？（答：跨本体——22 种机器人的数据合训一个模型，在陌生机器人上也有效）</li>
+</ol>
+
+<div class="box">
+<span class="bt">下一篇</span><a href="vla-t1-robot-learning.html">第 1 讲：机器人学习基础</a>——把本讲一笔带过的地基打完：机器人的「身体」由什么构成（本体、自由度、末端执行器），动作空间怎么定义，数据怎么来（遥操作、ALOHA、数据金字塔），策略怎么学（行为克隆、RL、动作分块），以及 sim2real 为什么让人头疼。读完第 1 讲，你看任何 VLA 论文的实验设置部分都不再是天书。
+</div>
+
+<h2>参考文献</h2>
+
+<ol class="refs">
+  <li>SayCan: Do As I Can, Not As I Say（Google, 2022.04）：<a href="https://arxiv.org/abs/2204.01691">arXiv:2204.01691</a></li>
+  <li>RT-1: Robotics Transformer（Google, 2022.12）：<a href="https://arxiv.org/abs/2212.06817">arXiv:2212.06817</a></li>
+  <li>PaLM-E: An Embodied Multimodal Language Model（Google, 2023.03）：<a href="https://arxiv.org/abs/2303.03378">arXiv:2303.03378</a></li>
+  <li>Diffusion Policy（Chi et al., 2023.03）：<a href="https://arxiv.org/abs/2303.04137">arXiv:2303.04137</a></li>
+  <li>RT-2: Vision-Language-Action Models（Google DeepMind, 2023.07）：<a href="https://arxiv.org/abs/2307.15818">arXiv:2307.15818</a></li>
+  <li>Open X-Embodiment / RT-X（22 机构联合, 2023.10）：<a href="https://arxiv.org/abs/2310.08864">arXiv:2310.08864</a></li>
+  <li>Octo: An Open-Source Generalist Robot Policy（2024.05）：<a href="https://arxiv.org/abs/2405.12213">arXiv:2405.12213</a></li>
+  <li>OpenVLA: An Open-Source Vision-Language-Action Model（2024.06）：<a href="https://arxiv.org/abs/2406.09246">arXiv:2406.09246</a></li>
+  <li>RDT-1B: a Diffusion Foundation Model for Bimanual Manipulation（清华, 2024.10）：<a href="https://arxiv.org/abs/2410.07864">arXiv:2410.07864</a></li>
+  <li>π0: A Vision-Language-Action Flow Model（Physical Intelligence, 2024.10）：<a href="https://arxiv.org/abs/2410.24164">arXiv:2410.24164</a></li>
+  <li>FAST: Efficient Action Tokenization for VLA Models（PI, 2025.01）：<a href="https://arxiv.org/abs/2501.09747">arXiv:2501.09747</a>；开源博客：<a href="https://www.pi.website/blog/openpi">Open Sourcing π0（openpi, 2025.02）</a></li>
+  <li>Helix: A Vision-Language-Action Model for Generalist Humanoid Control（Figure, 2025.02）：<a href="https://www.figure.ai/news/helix">官方博客</a>；Figure 03 发布（2025.10）：<a href="https://www.figure.ai/news/introducing-figure-03">官方博客</a></li>
+  <li>GR00T N1: An Open Foundation Model for Generalist Humanoid Robots（NVIDIA, 2025.03）：<a href="https://arxiv.org/abs/2503.14734">arXiv:2503.14734</a>；N1.6：<a href="https://research.nvidia.com/labs/gear/gr00t-n1_6/">官方项目页（2025.12）</a>；N1.7：<a href="https://huggingface.co/blog/nvidia/gr00t-n1-7">HuggingFace 博客（2026.04 早期访问）</a></li>
+  <li>Gemini Robotics（Google DeepMind, 2025.03）：<a href="https://arxiv.org/abs/2503.20020">arXiv:2503.20020</a>；On-Device（2025.06）：<a href="https://developers.googleblog.com/gemini-25-for-robotics-and-embodied-intelligence/">官方博客</a>；1.5（2025.09）：<a href="https://deepmind.google/blog/gemini-robotics-15-brings-ai-agents-into-the-physical-world/">官方博客</a>；Gemini Robotics 2（2026.07）：<a href="https://deepmind.google/blog/gemini-robotics-2-brings-whole-body-intelligence-to-robots/">官方博客</a></li>
+  <li>GO-1 / ViLLA 与 AgiBot World（智元, 2025.03）：<a href="https://arxiv.org/abs/2503.06669">arXiv:2503.06669</a> · <a href="https://agibot-world.cn/blog/go1">官方博客</a>；GO-2 发布（2026.04.09）：<a href="https://www.cls.cn/detail/2338870">财联社报道</a></li>
+  <li>π0.5: a VLA with Open-World Generalization（PI, 2025.04）：<a href="https://arxiv.org/abs/2504.16054">arXiv:2504.16054</a></li>
+  <li>π*0.6: a VLA That Learns From Experience / RECAP（PI, 2025.11）：<a href="https://arxiv.org/abs/2511.14759">arXiv:2511.14759</a> · <a href="https://www.pi.website/download/pistar06.pdf">官方技术报告 PDF</a></li>
+  <li>SmolVLA（HuggingFace, 2025.06）：<a href="https://arxiv.org/abs/2506.01844">arXiv:2506.01844</a>；openpi 代码仓库：<a href="https://github.com/Physical-Intelligence/openpi">github.com/Physical-Intelligence/openpi</a></li>
+</ol>
+
+<footer>生成于 2026-10-21 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

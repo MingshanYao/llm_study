@@ -379,6 +379,79 @@ var REPORTS = [
     "arxiv": "https://arxiv.org/abs/2603.05451",
     "repo": "https://github.com/Dao-AILab/flash-attention（main@e7a6402，2026-10-19 抓取）",
     "group": "misc"
+  },
+  {
+    "slug": "misc/triton-cutlass-cute-dsl",
+    "title": "GPU Kernel 三条开发路线对比：Triton JIT、CUTLASS C++ 模板与 CuTe DSL",
+    "date": "2026-10-20",
+    "paper": "Triton v3.6–3.8 release notes · CUTLASS 4.8.1 · NVIDIA CuTe DSL 官方博客（2025-11）",
+    "repo": "https://github.com/NVIDIA/cutlass · https://github.com/triton-lang/triton（2026-10-20 抓取）",
+    "group": "misc"
+  },
+  {
+    "slug": "misc/deepinfer",
+    "title": "DeepInfer 框架解读：DeepSeek 生产级推理引擎的 C++ 调度器、ZOS 异步流水线与确定性推理",
+    "date": "2026-10-21",
+    "paper": "DeepInfer 官方仓库与部署 Q&A（doc/inference_deployment_qa.md）· 模型：DeepSeek-V4.1-Flash（paper/deepseek_v41.pdf）",
+    "repo": "https://github.com/deepseek-ai/deepinfer（main@774ce24，2026-10-21 抓取）",
+    "group": "misc"
+  },
+  {
+    "slug": "vla/vla-t0-overview",
+    "title": "具身智能与 VLA 零基础七讲 · 第 0 讲：全景图——具身智能是什么，VLA 为什么突然爆发（术语表与系列地图）",
+    "date": "2026-10-21",
+    "group": "vla"
+  },
+  {
+    "slug": "vla/vla-t1-robot-learning",
+    "title": "具身智能与 VLA 零基础七讲 · 第 1 讲：机器人学习基础——动作空间、模仿与强化学习、ACT 动作分块与数据金字塔",
+    "date": "2026-10-21",
+    "paper": "ACT/ALOHA (arXiv:2304.13705) · Open X-Embodiment (arXiv:2310.08864) · UMI (arXiv:2402.10329)",
+    "arxiv": "https://arxiv.org/abs/2304.13705",
+    "group": "vla"
+  },
+  {
+    "slug": "vla/vla-t2-rt1-rt2",
+    "title": "具身智能与 VLA 零基础七讲 · 第 2 讲：VLA 的诞生——RT-1 与 RT-2：动作变成 token、VLM 直接输出动作与语义泛化",
+    "date": "2026-10-21",
+    "paper": "RT-1 (arXiv:2212.06817) · RT-2 (arXiv:2307.15818) · SayCan (arXiv:2204.01691) · PaLM-E (arXiv:2303.03378)",
+    "arxiv": "https://arxiv.org/abs/2307.15818",
+    "group": "vla"
+  },
+  {
+    "slug": "vla/vla-t3-openvla",
+    "title": "具身智能与 VLA 零基础七讲 · 第 3 讲：OpenVLA 与开源生态——7B 开放 VLA 架构解剖、动作离散化词表、LoRA 微调与 OFT 变体",
+    "date": "2026-10-21",
+    "paper": "OpenVLA (arXiv:2406.09246) · OpenVLA-OFT (arXiv:2502.19645) · Octo (arXiv:2405.12213)",
+    "arxiv": "https://arxiv.org/abs/2406.09246",
+    "repo": "https://github.com/openvla/openvla",
+    "group": "vla"
+  },
+  {
+    "slug": "vla/vla-t4-diffusion-pi0",
+    "title": "具身智能与 VLA 零基础七讲 · 第 4 讲：连续动作头——Diffusion Policy 与 π0：扩散/流匹配取代自回归 token，50Hz 灵巧操作",
+    "date": "2026-10-21",
+    "paper": "Diffusion Policy (arXiv:2303.04137) · π0 (arXiv:2410.24164) · π0.5 (arXiv:2504.16054) · FAST (arXiv:2501.09747) · Flow Matching (arXiv:2210.02747)",
+    "arxiv": "https://arxiv.org/abs/2410.24164",
+    "repo": "https://github.com/Physical-Intelligence/openpi",
+    "group": "vla"
+  },
+  {
+    "slug": "vla/vla-t5-frontier",
+    "title": "具身智能与 VLA 零基础七讲 · 第 5 讲：2025–2026 前沿全景——Helix、GR00T N1、Gemini Robotics：双系统架构、世界模型与数据引擎",
+    "date": "2026-10-21",
+    "paper": "Helix (Figure 博客) · GR00T N1 (arXiv:2503.14734) · Gemini Robotics (arXiv:2503.20020) · GO-1 (arXiv:2503.06669) · RDT-1B (arXiv:2410.07864) · WALL-OSS (arXiv:2505.21864)",
+    "arxiv": "https://arxiv.org/abs/2503.14734",
+    "repo": "https://github.com/NVIDIA/Isaac-GR00T",
+    "group": "vla"
+  },
+  {
+    "slug": "vla/vla-t6-roadmap",
+    "title": "具身智能与 VLA 零基础七讲 · 第 6 讲：实战与成长路线图——LeRobot、仿真基准复现、四个动手项目与四阶段专家路线",
+    "date": "2026-10-21",
+    "paper": "LeRobot · LIBERO (arXiv:2306.03310) · SimplerEnv (arXiv:2405.05941) · ManiSkill3 (arXiv:2410.00425) · RoboCasa (arXiv:2406.02523)",
+    "repo": "https://github.com/huggingface/lerobot",
+    "group": "vla"
   }
 ];
 
@@ -436,7 +509,8 @@ var TOPICS = [
           "deepseek-v4/v4pro-ridge-point"
         ]
       },
-      { "name": "投机解码", "slugs": ["deepseek-v4/dspark-speculative-decoding"] }
+      { "name": "投机解码", "slugs": ["deepseek-v4/dspark-speculative-decoding"] },
+      { "name": "DeepInfer 框架解读", "slugs": ["misc/deepinfer"] }
     ]
   },
   {
@@ -455,7 +529,17 @@ var TOPICS = [
     "hub": "hub/hardware.html",
     "collections": [
       { "name": "FlashAttention v1→v4 演进", "slugs": ["misc/flash-attention-v1-to-v4"] },
+      { "name": "Kernel 开发路线对比", "slugs": ["misc/triton-cutlass-cute-dsl"] },
       { "name": "Verilog 速成", "slugs": ["misc/verilog-crash-course"] }
+    ]
+  },
+  {
+    "id": "embodied",
+    "name": "具身智能与 VLA",
+    "desc": "面向零基础的具身智能主线：从机器人学习基础到 RT-1/RT-2、OpenVLA、π0 与 2025–2026 前沿，落到实战与成长路线图",
+    "hub": "hub/embodied.html",
+    "collections": [
+      { "name": "具身智能与 VLA 零基础七讲", "group": "vla" }
     ]
   }
 ];

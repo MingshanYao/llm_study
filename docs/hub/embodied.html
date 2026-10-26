@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>具身智能与 VLA · 阅读路线 — LLM 论文研究报告</title>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.7; font-size: 16px;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+  .back { font-size: 0.9em; margin-bottom: 20px; }
+  .back a { color: var(--accent); text-decoration: none; }
+  .back a:hover { text-decoration: underline; }
+  h1 { font-size: 1.7em; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 30px; font-size: 0.95em; }
+  h2.series {
+    font-size: 1.15em; margin: 36px 0 4px; padding-bottom: 6px; border-bottom: 2px solid var(--line);
+  }
+  .step {
+    display: flex; gap: 16px; background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 22px; margin: 14px 0;
+  }
+  .step .no {
+    flex: none; width: 30px; height: 30px; border-radius: 999px; background: var(--accent-soft);
+    color: var(--accent); font-weight: 700; font-size: 0.95em;
+    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .step h3 { font-size: 1.02em; margin: 0 0 6px; font-weight: 600; }
+  .step h3 a { color: var(--accent); text-decoration: none; }
+  .step h3 a:hover { text-decoration: underline; }
+  .step p { margin: 4px 0; color: var(--muted); font-size: 0.9em; }
+  ul.extend { padding-left: 22px; margin: 14px 0; }
+  ul.extend li { margin: 8px 0; font-size: 0.93em; color: #2a3040; }
+  ul.extend a { color: var(--accent); text-decoration: none; }
+  ul.extend a:hover { text-decoration: underline; }
+  .tag { color: var(--muted); font-size: 0.85em; }
+</style>
+</head>
+<body>
+<main>
+  <p class="back"><a href="../index.html">← 返回全部主题</a></p>
+  <h1>具身智能与 VLA</h1>
+  <p class="sub">零基础主线 · 从机器人学习基础到主流 VLA 架构（RT-2 / OpenVLA / π0 / Helix / GR00T），落到实战与成长路线图</p>
+
+  <h2 class="series">推荐阅读路线</h2>
+  <div class="step">
+    <span class="no">1</span>
+    <div>
+      <h3><a href="../vla/vla-t0-overview.html">第 0 讲 · 全景图</a></h3>
+      <p>具身智能是什么、和 ChatGPT 有什么区别、为什么难；VLA 发展时间线（SayCan → RT-1 → RT-2 → OpenVLA/π0 → Helix/GR00T）、分类坐标轴、全景表与术语表。零数学，只搭全景、定地图。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">2</span>
+    <div>
+      <h3><a href="../vla/vla-t1-robot-learning.html">第 1 讲 · 机器人学习基础</a></h3>
+      <p>机器人怎么被表示（关节空间 vs 任务空间、控制频率）、怎么学会（行为克隆 vs 强化学习、covariate shift）；ACT 动作分块精读、遥操作数据采集与「数据金字塔」、Open X-Embodiment 与 sim2real。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">3</span>
+    <div>
+      <h3><a href="../vla/vla-t2-rt1-rt2.html">第 2 讲 · RT-1 与 RT-2</a></h3>
+      <p>VLA 的诞生：RT-1 用 Transformer + 13 万真机数据吃下 700+ 任务；RT-2 把动作写成文本 token 让 VLM 直接输出，co-fine-tuning 带来语义泛化与涌现能力——「动作 = token」是读懂一切 VLA 的钥匙。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">4</span>
+    <div>
+      <h3><a href="../vla/vla-t3-openvla.html">第 3 讲 · OpenVLA</a></h3>
+      <p>最有影响力的开源 VLA：Llama 2 7B + DINOv2/SigLIP 融合视觉编码器，OXE 970k 轨迹训练；LoRA 单卡微调实操、OpenVLA-OFT 的并行解码与连续动作改造，以及开源生态一览。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">5</span>
+    <div>
+      <h3><a href="../vla/vla-t4-diffusion-pi0.html">第 4 讲 · Diffusion Policy 与 π0</a></h3>
+      <p>连续动作头主线：离散 token 的三宗罪、扩散模型与 flow matching 十分钟速成（公式全部配大白话）、Diffusion Policy 与 π0/π0.5/FAST 精读，以及五条动作头路线的对比表。全系列数学最多的一讲，可先跳过后面回补。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">6</span>
+    <div>
+      <h3><a href="../vla/vla-t5-frontier.html">第 5 讲 · 2025–2026 前沿全景</a></h3>
+      <p>Figure Helix、NVIDIA GR00T N1、Google Gemini Robotics 三大路线深讲（双系统：慢想 VLM + 快动策略），国内 GO-1/RDT-1B/WALL-OSS 等概览，世界模型如何为 VLA 造数据、当考官，以及七大技术趋势。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">7</span>
+    <div>
+      <h3><a href="../vla/vla-t6-roadmap.html">第 6 讲 · 实战与成长路线图</a></h3>
+      <p>零硬件也能动手：LeRobot/openpi/Isaac GR00T 软件栈、LIBERO/SimplerEnv 仿真基准、四个由浅入深的动手项目（跑通 ACT → LoRA 微调 OpenVLA → 复现 π0 微调 → 自采数据），微调工程要点清单与四阶段成长路线。</p>
+    </div>
+  </div>
+
+  <h2 class="series">跨主题延伸</h2>
+  <ul class="extend">
+    <li>第 1 讲的模仿学习 vs 强化学习与 <a href="training.html">训练</a> 主题的 <a href="../rl/rl-t0-foundation.html">RL 训练工程师零基础七讲</a> 互补——想深挖策略梯度与 RL 后训练，直接去 RL 系列。</li>
+    <li>第 3、4 讲的 VLM 主干（Llama 2、PaliGemma）与注意力/量化等底层机制，可在 <a href="architecture.html">架构专题</a> 与 <a href="inference.html">推理与系统</a> 中回补（VLA 实时部署离不开推理加速与量化）。</li>
+    <li>第 0 讲的全景与术语表适合作为向他人介绍具身智能的速查材料；读完全系列后可按第 6 讲路线图开始动手。</li>
+  </ul>
+</main>
+</body>
+</html>

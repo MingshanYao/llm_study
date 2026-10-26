@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>具身智能与 VLA 零基础七讲 · 第 6 讲：实战与成长路线图——LeRobot、仿真基准与四个动手项目</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .series-nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; font-size: 0.9em; }
+  .series-nav a {
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; color: var(--accent);
+  }
+  .series-nav a.here { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .series-nav a:hover { text-decoration: none; border-color: var(--accent); }
+  .box {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; margin: 14px 0;
+  }
+  .box .bt { font-weight: 700; color: var(--accent); margin-right: 8px; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .checklist li { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>具身智能与 VLA 零基础七讲 · 第 6 讲：实战与成长路线图——LeRobot、仿真基准与四个动手项目</h1>
+
+<div class="series-nav">
+  <a href="vla-t0-overview.html">0 全景地图</a>
+  <a href="vla-t1-robot-learning.html">1 机器人学习</a>
+  <a href="vla-t2-rt1-rt2.html">2 RT-1·RT-2</a>
+  <a href="vla-t3-openvla.html">3 OpenVLA</a>
+  <a href="vla-t4-diffusion-pi0.html">4 Diffusion·π0</a>
+  <a href="vla-t5-frontier.html">5 前沿全景</a>
+  <a class="here">6 实战路线图</a>
+</div>
+
+<div class="meta">
+  <p style="margin:4px 0"><b>系列：</b>具身智能与 VLA 零基础七讲（本篇为第 6 讲，实战收官）</p>
+  <p style="margin:4px 0"><b>前置：</b>前五讲的全部词汇——VLA 概念（第 0/1 讲）、RT-2（第 2 讲）、OpenVLA 与 LoRA（第 3 讲）、Diffusion Policy 与 π0（第 4 讲）、Helix/GR00T/前沿全景（第 5 讲）。本讲不重讲原理，数学量全系列最低。</p>
+  <p style="margin:4px 0"><b>本讲地位：</b>只回答一个问题——「今天就能动手做什么」。所有工具、仓库、价格、显存数字均于 2026-10 联网核实（以官方 README 与文档为准），推断处逐条标注。</p>
+</div>
+
+<div class="tldr">
+<p><b>不需要买机器人也能入门具身智能。</b>Hugging Face 的 <b>LeRobot</b> 加上 LIBERO 等仿真基准，让你在一块消费级 GPU（甚至 Colab/按秒租卡）上跑通「采数据 → 训策略 → 评测成功率」的完整闭环：训一个 ACT 策略最快只要半小时，微调 π0.5 级别的 VLA 用 LoRA 一张 RTX 4090 也放得下。本讲给出：三档投入的实践路线、一张 2026 年软件栈地图、四个由浅入深的动手项目（零硬件可做前三个）、一份微调工程排查清单、核实过链接的学习资源，以及从「跑 demo」到「做研究」的四阶段成长路线图。</p>
+</div>
+
+<h2>1. 实践路线总览：三档投入</h2>
+
+<p>很多人以为入门具身智能要先买一条机械臂——错。2024–2026 年这个领域发生的最大变化之一，就是<b>入门成本坍缩到了「一块 GPU + 开源数据集」</b>。按投入从低到高，实践路线分三档：</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 460" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5 L0,10 L2.5,5 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="440" y="30" font-size="16" font-weight="bold" fill="#1a1f2e" text-anchor="middle">实践路线总览：三档投入，从 ¥0 起步</text>
+
+  <!-- 档0 -->
+  <rect x="20" y="52" width="254" height="330" rx="10" fill="#fff" stroke="#e3e7ee"/>
+  <path d="M20,62 a10,10 0 0 1 10,-10 h234 a10,10 0 0 1 10,10 v34 h-254 z" fill="#2456c4"/>
+  <text x="147" y="76" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">档 0 · 零硬件</text>
+  <text x="147" y="92" font-size="12" fill="#dbe6fb" text-anchor="middle">自有 4090 / Colab / HF Jobs</text>
+  <text x="34" y="122" font-size="12" font-weight="bold" fill="#1a1f2e">能做</text>
+  <text x="36" y="144" font-size="12" fill="#2a3040">· 复现 ACT / Diffusion / SmolVLA</text>
+  <text x="36" y="164" font-size="12" fill="#2a3040">· LIBERO 微调与评测（项目 1–3）</text>
+  <text x="36" y="184" font-size="12" fill="#2a3040">· SimplerEnv real2sim 评测</text>
+  <text x="36" y="204" font-size="12" fill="#2a3040">· 读源码、复现论文曲线</text>
+  <text x="34" y="236" font-size="12" font-weight="bold" fill="#1a1f2e">局限</text>
+  <text x="36" y="258" font-size="12" fill="#5a6272">· 感受不到 sim2real 差距</text>
+  <text x="36" y="278" font-size="12" fill="#5a6272">· 缺标定、采集等硬件环节</text>
+  <text x="36" y="298" font-size="12" fill="#5a6272">· 没有真机部署排障经验</text>
+  <line x1="34" y1="318" x2="260" y2="318" stroke="#e3e7ee"/>
+  <text x="36" y="340" font-size="12" fill="#2456c4">算力：按秒计费，数据集全开源</text>
+  <text x="36" y="360" font-size="12" fill="#5a6272">推荐所有人从这里起步</text>
+
+  <!-- 档1 -->
+  <rect x="313" y="52" width="254" height="330" rx="10" fill="#fff" stroke="#e3e7ee"/>
+  <path d="M313,62 a10,10 0 0 1 10,-10 h234 a10,10 0 0 1 10,10 v34 h-254 z" fill="#2456c4"/>
+  <text x="440" y="76" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">档 1 · 低成本硬件</text>
+  <text x="440" y="92" font-size="12" fill="#dbe6fb" text-anchor="middle">SO-101 总线舵机臂（约 $100 起/条）</text>
+  <text x="327" y="122" font-size="12" font-weight="bold" fill="#1a1f2e">能做</text>
+  <text x="329" y="144" font-size="12" fill="#2a3040">· 自组 SO-101（3D 打印/套件）</text>
+  <text x="329" y="164" font-size="12" fill="#2a3040">· 主从臂遥操作采集数据</text>
+  <text x="329" y="184" font-size="12" fill="#2a3040">· 项目 4 全流程：采→训→部署</text>
+  <text x="329" y="204" font-size="12" fill="#2a3040">· 向社区发布自己的数据集</text>
+  <text x="327" y="236" font-size="12" font-weight="bold" fill="#1a1f2e">局限</text>
+  <text x="329" y="258" font-size="12" fill="#5a6272">· 舵机精度与负载有限</text>
+  <text x="329" y="278" font-size="12" fill="#5a6272">· 以单臂为主、无力反馈</text>
+  <text x="329" y="298" font-size="12" fill="#5a6272">· 难支撑论文级真机实验</text>
+  <line x1="327" y1="318" x2="553" y2="318" stroke="#e3e7ee"/>
+  <text x="329" y="340" font-size="12" fill="#2456c4">整套预算：数百美元级</text>
+  <text x="329" y="360" font-size="12" fill="#5a6272">采自己的数据时才需要升级</text>
+
+  <!-- 档2 -->
+  <rect x="606" y="52" width="254" height="330" rx="10" fill="#fff" stroke="#e3e7ee"/>
+  <path d="M606,62 a10,10 0 0 1 10,-10 h234 a10,10 0 0 1 10,10 v34 h-254 z" fill="#2456c4"/>
+  <text x="733" y="76" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">档 2 · 研究级</text>
+  <text x="733" y="92" font-size="12" fill="#dbe6fb" text-anchor="middle">实验室 / 公司（数万美元起）</text>
+  <text x="620" y="122" font-size="12" font-weight="bold" fill="#1a1f2e">能做</text>
+  <text x="622" y="144" font-size="12" fill="#2a3040">· ALOHA 2 / Mobile ALOHA 双臂</text>
+  <text x="622" y="164" font-size="12" fill="#2a3040">· Franka / xArm + GELLO 遥操作</text>
+  <text x="622" y="184" font-size="12" fill="#2a3040">· UMI 手持夹爪野外采集</text>
+  <text x="622" y="204" font-size="12" fill="#2a3040">· 人形平台（GR00T + Unitree G1）</text>
+  <text x="620" y="236" font-size="12" font-weight="bold" fill="#1a1f2e">局限</text>
+  <text x="622" y="258" font-size="12" fill="#5a6272">· 个人预算难以承担</text>
+  <text x="622" y="278" font-size="12" fill="#5a6272">· 场地、安全、维护成本高</text>
+  <text x="622" y="298" font-size="12" fill="#5a6272">· 硬件生态与驱动门槛高</text>
+  <line x1="620" y1="318" x2="846" y2="318" stroke="#e3e7ee"/>
+  <text x="622" y="340" font-size="12" fill="#2456c4">Mobile ALOHA 自建约 $32k（官网口径）</text>
+  <text x="622" y="360" font-size="12" fill="#5a6272">发表级真机结果的主战场</text>
+
+  <line x1="278" y1="210" x2="309" y2="210" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="571" y1="210" x2="602" y2="210" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <text x="440" y="412" font-size="12" fill="#5a6272" text-anchor="middle">投入与能力上限逐级上升 —— 建议路线：档 0 做完项目 1–3，需要采自己的数据时再升档 1</text>
+  <text x="440" y="436" font-size="12" fill="#5a6272" text-anchor="middle">三档用的软件栈完全相同（LeRobotDataset / openpi / LeRobot 训练脚本），换硬件不换代码</text>
+</svg>
+</div>
+<p class="cap"><b>图 6-1</b>｜三档投入路线。关键观察：三档共享同一套软件栈——你在档 0 学会的一切（数据格式、训练命令、评测协议）在档 1/2 原样复用，这正是 LeRobot 生态的价值。</p>
+
+<h3>1.1 每档细账</h3>
+
+<table>
+  <tr><th style="width:14%">档位</th><th>典型配置</th><th>能做什么</th><th>不能做什么</th></tr>
+  <tr>
+    <td><b>档 0<br>零硬件</b></td>
+    <td>一块 24GB 消费卡（4090/3090）或 Colab / <a href="https://huggingface.co/docs/hub/jobs">HF Jobs</a> 按秒租卡（LeRobot 的 <code>lerobot-train --job.target</code> 可直接把训练提交到 T4/L4/A10G/A100）</td>
+    <td>项目 1–3 全部：在 <code>lerobot/pusht</code>、<code>lerobot/libero</code> 等开源数据集上训练 ACT / Diffusion Policy / SmolVLA，LoRA 微调 OpenVLA 与 π0.5，在 LIBERO / SimplerEnv / MetaWorld 上评测并对比论文数字；读 OpenVLA / openpi / GR00T 源码</td>
+    <td>体会 sim2real 差距；练相机标定、舵机总线排障这类「手上功夫」；产生可发表的真机结果</td>
+  </tr>
+  <tr>
+    <td><b>档 1<br>低成本硬件</b></td>
+    <td>SO-101 从臂 + 主臂（Feetech STS3215 总线舵机、3D 打印结构件，<a href="https://github.com/TheRobotStudio/SO-ARM100">TheRobotStudio BOM</a>）+ 2 个 USB 相机。TechCrunch 报道 SO-101 起价约 <b>$100/条</b>；Seeed / Hiwonder / WowRobo 等零售套件与组装版更贵</td>
+    <td>项目 4 全流程：组装 → 标定（<code>lerobot-calibrate</code>）→ 主从遥操作（<code>lerobot-teleoperate</code>）→ 采 50–100 条演示（<code>lerobot-record</code>）→ 训 ACT/SmolVLA/π0 → 部署回真机（<code>lerobot-rollout</code>）；数据可发布到 HF Hub 社区</td>
+    <td>高精度装配、大负载搬运、双臂协同（需两套）、力控任务；总线舵机的重复定位精度撑不起论文级真机对比实验</td>
+  </tr>
+  <tr>
+    <td><b>档 2<br>研究级</b></td>
+    <td>ALOHA 2 / <a href="https://mobile-aloha.github.io/">Mobile ALOHA</a>（官网口径自建约 $32k）、Franka / xArm + GELLO / SpaceMouse 遥操作、<a href="https://umi-gripper.github.io/">UMI</a> 手持采集器、<a href="https://droid-dataset.github.io/">DROID</a> 平台、Isaac GR00T + Unitree G1 人形</td>
+    <td>发表级真机实验；双臂精细任务（叠衣服、开笔盖——π0 官方就放出了 ALOHA 微调 checkpoint）；高频控制（GR00T N1.7 在 RTX PRO 6000 上 ~40Hz）；人形 loco-manipulation</td>
+    <td>个人预算基本不可及；需要场地、安全流程与硬件维护能力</td>
+  </tr>
+</table>
+
+<div class="infer">档 1 的整套预算（主臂 + 从臂 + 2 相机 + 电源 + 打印耗材）大约在 $250–600 区间，取决于自打印还是买套件、买哪家；单条臂「$100 起」有 TechCrunch 报道背书，但整套价格随渠道波动大，下单前以当期店铺价为准。</div>
+
+<h2>2. 软件栈盘点（2026-10 核实）</h2>
+
+<p>这个领域工具迭代极快，下表全部按 2026 年 10 月的官方 README / 文档核实。<b>新手只需要第一行（LeRobot）就能开始</b>，其余按需取用。</p>
+
+<table>
+  <tr><th style="width:17%">工具</th><th style="width:14%">维护方</th><th>用途与现状（核实时间 2026-10）</th><th style="width:9%">上手难度</th><th style="width:16%">链接</th></tr>
+  <tr>
+    <td><b>LeRobot</b></td>
+    <td>Hugging Face</td>
+    <td>机器人学习的「全家桶」：LeRobotDataset 数据格式（MP4 视频 + Parquet 状态/动作，v3.0，托管 HF Hub）＋ 训练/评测 CLI ＋ 硬件方案（SO-100/SO-101、Koch、LeKiwi、Unitree G1、Reachy2 等）＋ 策略库（ACT、Diffusion、VQ-BeT、HIL-SERL，VLA 类有 π0/π0-FAST/π0.5、SmolVLA、GR00T N1.7 等十余个）＋ LIBERO/MetaWorld 评测。约 28.5k star，Apache 2.0，ICLR 2026 论文（arXiv:2602.22818）</td>
+    <td>低</td>
+    <td><a href="https://github.com/huggingface/lerobot">github.com/huggingface/lerobot</a></td>
+  </tr>
+  <tr>
+    <td><b>openpi</b></td>
+    <td>Physical Intelligence</td>
+    <td>π0 / π0-FAST / π0.5 开放权重与微调代码（预训练于 1 万+ 小时机器人数据）。Apache 2.0；显存要求官方口径：推理 &gt;8GB、LoRA 微调 &gt;22.5GB（4090 可）、全量微调 &gt;70GB（A100 80G/H100）。2025-09 起支持 PyTorch 训练路线（JAX 为主）；带 LIBERO/ALOHA/DROID/UR5 微调示例与 policy server</td>
+    <td>中</td>
+    <td><a href="https://github.com/Physical-Intelligence/openpi">github.com/Physical-Intelligence/openpi</a></td>
+  </tr>
+  <tr>
+    <td><b>OpenVLA / OpenVLA-OFT</b></td>
+    <td>Stanford / UC Berkeley / TRI 等（学术）</td>
+    <td>7B 开源 VLA 基准线（arXiv:2406.09246）。官方 repo 提供 LoRA 微调脚本（<code>vla-scripts/finetune.py</code>，支持 4-bit 量化 LoRA）与 LIBERO 复现说明；OFT 配方（arXiv:2502.19645，repo <code>moojink/openvla-oft</code>）推理提速 25–50×、成功率更高。呼应<a href="vla-t3-openvla.html">第 3 讲</a></td>
+    <td>中</td>
+    <td><a href="https://github.com/openvla/openvla">github.com/openvla/openvla</a></td>
+  </tr>
+  <tr>
+    <td><b>NVIDIA Isaac GR00T</b></td>
+    <td>NVIDIA</td>
+    <td>人形机器人 VLA 基础模型。现为 <b>N1.7 GA</b>（Apache 2.0）：Cosmos-Reason2-2B（Qwen3-VL 架构）backbone + flow-matching DiT 动作头，相对 EEF 动作空间跨本体，20K 小时 EgoScale 人类视频预训练；推理 16GB+、微调建议 40GB+；ONNX/TensorRT 部署，Jetson Thor ~28Hz。数据用「LeRobot v2 风味 + modality.json」；可经 LeRobot 的 <code>groot</code> policy 训练。旧版 N1.5/N1.6 在独立分支。呼应<a href="vla-t5-frontier.html">第 5 讲</a></td>
+    <td>中高</td>
+    <td><a href="https://github.com/NVIDIA/Isaac-GR00T">github.com/NVIDIA/Isaac-GR00T</a></td>
+  </tr>
+  <tr>
+    <td><b>AgiBot World / GO-1</b></td>
+    <td>智元机器人 + OpenDriveLab 等</td>
+    <td>百万级真机轨迹数据集（Beta 版 1,003,672 条轨迹、~43.8TB）+ GO-1 基础模型（ViLLA 架构：latent planner + action expert），2025-09 开源 GO-1 与轻量版 GO-1 Air；IROS 2025 最佳论文；数据/代码 CC BY-NC-SA 4.0（非商用）</td>
+    <td>高</td>
+    <td><a href="https://github.com/OpenDriveLab/AgiBot-World">github.com/OpenDriveLab/AgiBot-World</a></td>
+  </tr>
+  <tr>
+    <td><b>RDT-1B</b></td>
+    <td>清华 THU-ML</td>
+    <td>1B 参数双臂扩散 Transformer（ICLR 2025，arXiv:2410.07864），1M+ 多机器人 episode 预训练，主打 ALOHA 双臂；提供省显存的 RDT-170M</td>
+    <td>中高</td>
+    <td><a href="https://github.com/thu-ml/RoboticsDiffusionTransformer">github.com/thu-ml/RoboticsDiffusionTransformer</a></td>
+  </tr>
+  <tr>
+    <td><b>ManiSkill3</b></td>
+    <td>UCSD Hao Su Lab 等</td>
+    <td>GPU 并行仿真 + 渲染（RSS 2025，arXiv:2410.00425）：4090 上 RGBD 采集 30,000+ FPS，内置演示数据生成、real2sim 评测（比 CPU 版快 100×）；有免费 Colab 入门 notebook</td>
+    <td>中</td>
+    <td><a href="https://github.com/mani-skill/ManiSkill">github.com/mani-skill/ManiSkill</a></td>
+  </tr>
+  <tr>
+    <td><b>Genesis World</b></td>
+    <td>Genesis AI（学术项目起家）</td>
+    <td>统一多物理仿真平台 + Nyx 渲染器 + Quadrants 跨平台编译器（CUDA/ROCm/Metal/Vulkan/CPU），2024-12 以学术项目发布后现由公司支持，PyPI 包名 <code>genesis-world</code>；定位为「快、通用、可读」的仿真新基建</td>
+    <td>中</td>
+    <td><a href="https://github.com/Genesis-Embodied-AI/genesis-world">github.com/Genesis-Embodied-AI/genesis-world</a></td>
+  </tr>
+</table>
+
+<h3>2.1 为什么第一个工具是 LeRobot</h3>
+
+<p>LeRobot 值得单独展开，因为它同时解决新手最头疼的三件事：</p>
+
+<ul>
+  <li><b>数据格式碎片化</b>：机器人数据有 RLDS、HDF5、rosbag 等一堆格式。LeRobotDataset（现行为 <a href="https://huggingface.co/docs/lerobot/lerobot-dataset-v3">v3.0</a>）统一为「同步的 MP4 视频 + Parquet 状态/动作 + 元信息」，托管在 HF Hub 上可搜索、可流式加载、可在线可视化；Hub 上已有数千个社区数据集，<a href="https://huggingface.co/datasets/lerobot/pusht">lerobot/pusht</a>（2D 推方块）就是给新手的第一份教材数据。</li>
+  <li><b>训练脚本碎片化</b>：一条 <code>lerobot-train</code> 命令切换任意策略（<code>--policy.type=act / diffusion / smolvla / pi0 / pi05 / groot ...</code>），配置自动适配你数据里的相机数与动作维度；一条 <code>lerobot-eval</code> 在 LIBERO / MetaWorld 等标准环境评测；<code>lerobot-record / replay / rollout</code> 覆盖真机采集、回放与部署。没有 GPU 也能玩：<code>--job.target=a10g-small</code> 直接把训练提交到 HF 的按秒计费 GPU。</li>
+  <li><b>硬件遥不可及</b>：SO-100/SO-101 是官方设计的 3D 打印总线舵机臂，从买件、打印、装机、设电机 ID、标定到遥操作，文档一步步带做（<a href="https://huggingface.co/docs/lerobot/so101">SO-101 指南</a>）；中文用户还有同济子豪兄的 <a href="https://zihao-ai.feishu.cn/wiki/space/7589642043471924447">SO-ARM101 中文教程</a>（LeRobot 官方 README 推荐）。另有浏览器操作界面 <a href="https://github.com/huggingface/leLab">LeLab</a> 与免费的 <a href="https://huggingface.co/spaces/lerobot/robot-learning-tutorial">Robot Learning Tutorial</a> 交互课程。</li>
+</ul>
+
+<p>2025–2026 的关键更新（官方 README / 文档核实）：数据集格式升到 v3.0；策略库大幅扩容——除 ACT/Diffusion 外，新增 π0/π0-FAST/π0.5、SmolVLA（450M 小 VLA，arXiv:2506.01844）、GR00T N1.7、HIL-SERL（人在环强化学习）乃至世界模型类策略（VLA-JEPA、FastWAM 等）；评测侧原生接入 LIBERO 与 MetaWorld；训练可一键提交 HF Jobs；发布 ICLR 2026 库论文。可以说它已经从「小玩具库」长成了开源具身智能的事实标准入口。</p>
+
+<h3>2.2 其余工具一句话定位</h3>
+
+<ul>
+  <li><b>openpi</b>：想微调 π0/π0.5 本体（而不是 LeRobot 里的移植版）就用它——JAX 血统、官方 checkpoint 全、LIBERO 示例最完整；π0.5-LIBERO 微调 checkpoint 官方称达到该基准 SOTA。</li>
+  <li><b>OpenVLA(-OFT)</b>：学术界最常引用的 7B 开源 VLA 基线，LoRA 微调脚本是理解「VLM → VLA 微调」的最佳教材（<a href="vla-t3-openvla.html">第 3 讲</a>详解）。</li>
+  <li><b>Isaac GR00T</b>：做人形/跨本体、要 TensorRT 部署、要用 Isaac Lab 仿真与 GR00T-Mimic/GR00T-Dreams 数据生成管线时的主栈。</li>
+  <li><b>AgiBot GO-1、RDT</b>：双臂与百万级数据方向的参考实现，读论文价值大于上手价值（个人算力难全量复现）。</li>
+  <li><b>ManiSkill3 / Genesis World</b>：要 GPU 并行采样（RL 后训练、大规模数据生成）选 ManiSkill3；要多物理场与跨平台渲染选 Genesis。</li>
+</ul>
+
+<h2>3. 仿真环境与基准：在哪里练、在哪里比</h2>
+
+<h3>3.1 仿真环境</h3>
+
+<table>
+  <tr><th style="width:16%">环境</th><th style="width:16%">维护方</th><th>特点（核实 2026-10）</th><th style="width:24%">适合谁</th></tr>
+  <tr><td><b>Isaac Lab / Isaac Sim</b></td><td>NVIDIA</td><td>GPU 并行物理 + 照片级渲染，人形机器人支持最好；GR00T 的官方仿真评测与数据生成（GR00T-Mimic 数据放大、GR00T-Dreams 世界模型合成轨迹）都建在其上</td><td>做人形/全身控制、有 NVIDIA GPU、要工业级渲染</td></tr>
+  <tr><td><b>ManiSkill3</b></td><td>UCSD 等</td><td>基于 SAPIEN 的 GPU 并行仿真（arXiv:2410.00425，RSS 2025）：4090 上 30,000+ FPS 视觉数据、异构并行场景、演示数据生成、real2sim 评测；免费 Colab 可跑</td><td>要大规模并行采样（RL、数据生成）、桌面操作研究</td></tr>
+  <tr><td><b>SAPIEN</b></td><td>UCSD 等</td><td>铰接物体（articulated object）物理与渲染引擎，ManiSkill 系列的底座；PartNet-Mobility 资产库</td><td>需要精细铰接/接触物理时直接使用</td></tr>
+  <tr><td><b>RoboCasa</b></td><td>UT Austin 主导多机构</td><td>厨房场景规模化仿真（arXiv:2406.02523，RSS 2024）+ MimicGen 式演示数据放大；2026-02 发布 <b>RoboCasa365 v1.0</b>：365 个任务、2500+ 厨房场景、2200+ 小时演示数据与基准支持；代码 MIT</td><td>家务级长时程任务、数据放大管线研究</td></tr>
+  <tr><td><b>MuJoCo</b></td><td>Google DeepMind</td><td>轻量、接触物理精确的 CPU 仿真器，robosuite/LIBERO 的底座；无头服务器用 <code>MUJOCO_GL=egl</code> 渲染</td><td>几乎所有人（间接使用）；轻量 RL 控制</td></tr>
+  <tr><td><b>Genesis World</b></td><td>Genesis AI</td><td>统一多物理（刚体/流体/软体）+ Nyx 渲染 + Quadrants 跨平台编译（含 Apple Metal）；宣称极快的仿真速度，生态较新</td><td>想要多物理场、非 NVIDIA 平台、新工具尝鲜</td></tr>
+</table>
+
+<h3>3.2 评测基准</h3>
+
+<table>
+  <tr><th style="width:16%">基准</th><th style="width:20%">论文</th><th>内容与地位（核实 2026-10）</th></tr>
+  <tr>
+    <td><b>LIBERO</b></td>
+    <td><a href="https://arxiv.org/abs/2306.03310">arXiv:2306.03310</a>（NeurIPS 2023 D&amp;B）</td>
+    <td><b>VLA 圈事实标准</b>：130 个语言条件桌面任务，分 5 个套件——LIBERO-Spatial / Object / Goal / Long（各 10 任务）+ LIBERO-90；VLA 论文惯用前 4 个十任务套件报数（共 40 任务、400 episode 协议）。OpenVLA（均值 76.5%）、π0.5（openpi 报 96.85%、LeRobot 复现 97.5%）、GR00T N1.7 都在其上评测；MuJoCo/robosuite 底座，LeRobot 与 openpi 均原生支持</td>
+  </tr>
+  <tr>
+    <td><b>SimplerEnv</b></td>
+    <td><a href="https://arxiv.org/abs/2405.05941">arXiv:2405.05941</a></td>
+    <td><b>real2sim 评测</b>：把 Google Robot 与 WidowX（Bridge）的真实场景重建进仿真，验证了仿真成功率与真机成功率的排序相关性，可低成本评 RT-1/RT-1-X/Octo/OpenVLA 等真机策略；基于 ManiSkill3 的 GPU 并行分支比 CPU 版快 10–15×；GR00T N1.7 也报 SimplerEnv 结果</td>
+  </tr>
+  <tr>
+    <td><b>CALVIN</b></td>
+    <td><a href="https://arxiv.org/abs/2112.03227">arXiv:2112.03227</a></td>
+    <td>语言条件<b>长时程</b>基准：34 个任务，指标是「一条指令链连续完成几个子任务」（ABC→D 划分测跨环境泛化）；语言跟随与长程组合能力的经典考场</td>
+  </tr>
+  <tr>
+    <td><b>Meta-World</b></td>
+    <td><a href="https://arxiv.org/abs/1910.10897">arXiv:1910.10897</a></td>
+    <td>50 个桌面操作任务的多任务/元强化学习基准（MT10/MT50 等划分）；状态输入为主、轻量快速，LeRobot 评测已支持 MetaWorld</td>
+  </tr>
+</table>
+
+<div class="box">
+<span class="bt">警示：基准成功率 ≠ 真机能力</span>读 VLA 论文的排行榜数字时，记住四件事。① <b>协议差异巨大</b>：同样叫「LIBERO 成功率」，有人 3 seeds × 500 rollouts（OpenVLA 论文口径），有人单 seed × 每任务 10 次；初始状态用不用固定文件、软重置还是硬重置，都能差出几个点（LeRobot 官方文档明确提醒软/硬重置结果不比特）。② <b>cherry-pick 空间大</b>：只报最强的套件、只报最好 seed、场景与光照挑过——都常见。③ <b>仿真-真机鸿沟</b>：LIBERO 分数再高也不保证真机能用，SimplerEnv 这类 real2sim 基准存在的意义就是量化这条鸿沟。④ <b>基准会饱和</b>：π0.5 一代已把 LIBERO 四个套件推到 96%+，区分度快速消失，前沿工作正转向 RoboCasa365、真机评测等更难的口径。
+</div>
+
+<div class="infer">实用辨别法：看论文附录的评测协议——每任务 rollout 数 ≥10、seed ≥3、报 mean±std、写明初始状态来源与重置方式，才算严谨；若只报单一大数字且比 SOTA 恰好高 1–2 个点，先怀疑协议再怀疑模型。</div>
+
+<h2>4. 四个动手项目（由浅入深）</h2>
+
+<p>四个项目共享同一条主线：<b>数据 → 策略 → 评测</b>。项目 1–3 零硬件可做，项目 4 需要档 1 硬件。每个项目给出目标、前置、步骤、预期结果与常见坑。</p>
+
+<h3>项目 1：LeRobot 跑通 ACT / Diffusion Policy（零硬件，第一晚）</h3>
+
+<p><span class="pill">难度 ★</span><span class="pill">时间 半天–2 天</span><span class="pill">显存 2–14GB</span></p>
+
+<ul>
+  <li><b>目标</b>：用官方示例数据集在单卡上完成「下载数据 → 训练 → 看成功率」，建立对模仿学习全流程的手感。</li>
+  <li><b>前置</b>：Python 3.10+；任一 NVIDIA GPU（ACT 峰值约 2–6GB @BS8，Diffusion 约 8–14GB，官方硬件指南数字）；没有 GPU 用 Colab 的 ACT notebook 或 <code>--job.target=t4-small</code> 提交 HF Jobs；Mac（Apple Silicon MPS）也能训 ACT，只是慢（官方估计 ~6–14h）。</li>
+</ul>
+
+<pre><code class="language-bash"># 1) 安装并自检
+pip install lerobot
+lerobot-info
+
+# 2) 训练 ACT：PushT 是 2D「推方块到目标区」示例任务
+lerobot-train \
+  --policy.type=act \
+  --dataset.repo_id=lerobot/pusht \
+  --policy.device=cuda \
+  --output_dir=outputs/train/act_pusht \
+  --job_name=act_pusht \
+  --wandb.enable=true          # 可选：wandb login 后看训练曲线
+
+# 3) 评测：在 PushT 仿真环境里跑 N 个 episode 统计成功率
+lerobot-eval \
+  --policy.path=outputs/train/act_pusht/checkpoints/last/pretrained_model \
+  --env.type=pusht \
+  --eval.n_episodes=50</code></pre>
+
+<ul>
+  <li><b>预期结果</b>：4090 上 ACT 训练几十分钟量级收敛（官方指南：50 episode 数据集约 30–60 分钟）；评测成功率应明显高于随机策略且随训练步数上升。想加码就换 <code>--policy.type=diffusion</code>（第 4 讲原理）或用社区 SO-101 数据集（如 <code>lerobot/svla_so101_pickplace</code>）训 SmolVLA（~10–16GB）。</li>
+  <li><b>常见坑</b>：① 视频解码后端缺失——LeRobotDataset v3 用 MP4 存图像，需 <code>torchcodec</code> 或 <code>pyav</code>；② 成功率长期为 0——先确认 <code>--policy.device</code> 与数据 fps 没配错，再缩短 LR decay（官方指南：短训要同步缩短 <code>scheduler_decay_steps</code>，否则学习率一直停在峰值）；③ Windows 原生支持有限，建议 WSL2/Linux。</li>
+</ul>
+
+<h3>项目 2：LIBERO + OpenVLA(-OFT) LoRA 微调（零硬件，一周）</h3>
+
+<p><span class="pill">难度 ★★★</span><span class="pill">时间 3–7 天</span><span class="pill">显存 16–72GB（见下表）</span></p>
+
+<ul>
+  <li><b>目标</b>：在 VLA 圈事实标准基准上跑通「官方 baseline 评测 → 小数据 LoRA 微调 → 成功率对比」，亲手体验<a href="vla-t3-openvla.html">第 3 讲</a>讲的 LoRA 微调。</li>
+  <li><b>前置</b>：Linux + NVIDIA GPU；磁盘 ≥50GB（LIBERO RLDS 数据 ~10GB + 7B checkpoint）；<code>export MUJOCO_GL=egl</code>（无头渲染）。</li>
+</ul>
+
+<p><b>显存需求表</b>（官方 README 口径 + 推断标注）：</p>
+
+<table>
+  <tr><th>操作</th><th>BF16</th><th>4-bit / 量化选项</th><th>RTX 4090（24GB）</th><th>A100（80GB）</th></tr>
+  <tr><td>OpenVLA-OFT LIBERO 评测（官方 checkpoint）</td><td colspan="2">~16GB（OFT README：LIBERO 任务 ~16GB，ALOHA ~18GB）</td><td>✅ 可</td><td>✅</td></tr>
+  <tr><td>OpenVLA LoRA 微调（<code>vla-scripts/finetune.py</code>）</td><td>≥27GB（小 batch）；bs16 需 ~72GB</td><td>官方支持 <code>use_quantization</code>（bitsandbytes NF4 4-bit + LoRA）</td><td>BF16 ❌；4-bit LoRA 大概率可（官方未给数字，见下方推断）</td><td>✅</td></tr>
+  <tr><td>OpenVLA 全参微调</td><td>官方推荐 8×A100（FSDP）</td><td>—</td><td>❌</td><td>单卡不够，需多卡</td></tr>
+  <tr><td>OFT 配方训练</td><td>1–8 卡、27–80GB（OFT README）</td><td>—</td><td>紧张</td><td>✅</td></tr>
+  <tr><td>LeRobot 路线：SmolVLA 训 LIBERO</td><td>~10–16GB @BS8（硬件指南）</td><td>—</td><td>✅</td><td>✅</td></tr>
+  <tr><td>LeRobot 路线：π0/π0.5 训 LIBERO</td><td>~24–40GB（硬件指南；24GB 卡 batch=1 很紧张）</td><td>—</td><td>勉强/❌</td><td>✅（官方复现用 8×H100）</td></tr>
+</table>
+
+<div class="infer">「4090 跑 4-bit 量化 LoRA」一行：官方 finetune.py 确实内置 NF4 量化 LoRA（仅 LoRA 模式可用），但 README 只给了 BF16 的 ~27GB 下限，未公布量化后的具体占用；按 7B 模型 4-bit 权重 ~4GB + LoRA/优化器开销估计 24GB 卡可跑小 batch，请以实测为准。</div>
+
+<p><b>步骤概要</b>（两条路线，二选一或都跑）：</p>
+
+<pre><code class="language-bash"># 路线 A：LeRobot 原生（新手推荐，环境最省事）
+pip install -e ".[libero]"            # 在 lerobot 仓库内安装 LIBERO 额外依赖
+export MUJOCO_GL=egl
+
+# A1) 先评官方复现的 π0.5 baseline（需 ~24-40GB；显存不够跳到 A2）
+lerobot-eval \
+  --policy.path=lerobot/pi05_libero_finetuned \
+  --env.type=libero \
+  --env.task=libero_spatial,libero_object,libero_goal,libero_10 \
+  --eval.n_episodes=10 --eval.batch_size=1
+
+# A2) 24GB 卡方案：自己训 SmolVLA（数据仅 1.9GB，lerobot/libero）
+lerobot-train --policy.type=smolvla --policy.load_vlm_weights=true \
+  --dataset.repo_id=lerobot/libero --dataset.video_backend=torchcodec \
+  --output_dir=./outputs/libero_smolvla --steps=100000 --batch_size=64   # 卡小就减 batch/steps
+
+# 路线 B：OpenVLA-OFT 官方 repo
+git clone https://github.com/moojink/openvla-oft && cd openvla-oft
+# 按其 LIBERO.md：下载 openvla/modified_libero_rlds（~10GB）→
+# 评测预训练 checkpoint moojink/openvla-7b-oft-finetuned-libero-spatial
+#   （unnorm_key=libero_spatial_no_noops，~16GB）→ LoRA 微调单套件 → 对比成功率</code></pre>
+
+<ul>
+  <li><b>预期结果</b>：路线 B 应能对上论文口径——OpenVLA 微调后 LIBERO 四套件均值 76.5%（3 seeds × 500 rollouts），OFT 更高且推理快 25–50×；路线 A 的 π0.5 复现均值 97.5%（LeRobot 文档数字，与 openpi 官方 96.85% 一致量级）。个人单卡请缩水协议（每任务 10 episode、1–3 seed），只看<b>相对</b>提升。</li>
+  <li><b>常见坑</b>：① robosuite/mujoco 版本地狱——严格按 repo 的 conda/pip 步骤，别混装；② <code>unnorm_key</code> 或 <code>--env.control_mode</code>（relative/absolute）与 checkpoint 不匹配 → 动作尺度错乱、机械臂乱飞；③ LIBERO-Long 成功率天然最低（长时程），别慌；④ 报结果时 pin 数据版本（<code>--dataset.revision</code>），Hub 数据集可能被重传；⑤ 复现榜单数字必须用硬重置（官方文档明示软重置结果会漂移）。</li>
+</ul>
+
+<h3>项目 3：openpi 复现 π0.5 微调（零硬件，一到两周）</h3>
+
+<p><span class="pill">难度 ★★★★</span><span class="pill">时间 1–2 周</span><span class="pill">显存 LoRA &gt;22.5GB / 全量 &gt;70GB</span></p>
+
+<ul>
+  <li><b>目标</b>：用 Physical Intelligence 官方栈微调 π0.5，走一遍工业级 VLA 微调的完整管线：数据转换 → 归一化统计 → 训练 → policy server → 仿真评测。呼应<a href="vla-t4-diffusion-pi0.html">第 4 讲</a>的 π0 原理。</li>
+  <li><b>前置</b>：Ubuntu 22.04（官方只测了这个）、<a href="https://docs.astral.sh/uv/">uv</a>、一张 4090（LoRA）或 A100/H100（全量）；磁盘余量充足（base checkpoint 数十 GB）。</li>
+</ul>
+
+<pre><code class="language-bash"># 1) 安装（注意子模块与 GIT_LFS_SKIP_SMUDGE）
+git clone --recurse-submodules https://github.com/Physical-Intelligence/openpi.git
+cd openpi && GIT_LFS_SKIP_SMUDGE=1 uv sync && GIT_LFS_SKIP_SMUDGE=1 uv pip install -e .
+
+# 2) 归一化统计量——训练前必须算（LIBERO 配置指向预转换好的数据集，跳过数据转换）
+uv run scripts/compute_norm_stats.py --config-name pi05_libero
+
+# 3) 微调（JAX；LoRA 或全量由 config 决定；多卡用 --fsdp-devices）
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 \
+  uv run scripts/train.py pi05_libero --exp-name=my_experiment --overwrite
+
+# 4) 起 policy server，再按 examples/libero/README 的 Docker 工作流跑评测
+uv run scripts/serve_policy.py policy:checkpoint \
+  --policy.config=pi05_libero \
+  --policy.dir=checkpoints/pi05_libero/my_experiment/20000
+
+# 无机器人/无仿真时验证推理链路：examples/simple_client（随机观测打通 server）</code></pre>
+
+<p><b>换成自己的数据</b>：以 <code>examples/libero/convert_libero_data_to_lerobot.py</code> 为模板把数据转成 LeRobotDataset；在 <code>src/openpi/policies/</code> 定义你的输入/输出变换（观测键名、动作维度映射），在 <code>training/config.py</code> 添加 DataConfig 与 TrainConfig；重算 norm stats。若你的机器人本体在 π0 预训练混合里，可按 <code>docs/norm_stats.md</code> 复用预训练的归一化统计。</p>
+
+<ul>
+  <li><b>预期结果</b>：跑通后即可对比官方 π0.5-LIBERO 数字（openpi README 称 SOTA，LeRobot 侧复现均值 97.5%）；用自己数据微调时，成功判据回到项目 4 的数据质量清单。</li>
+  <li><b>常见坑</b>（多数来自官方 troubleshooting 表）：① 忘跑 <code>compute_norm_stats</code> → 直接报 missing norm stats；② loss 发散 → 检查 <code>norm_stats.json</code> 的 q01/q99/std：很少用到的维度区间过窄，归一化后数值爆炸，可手工修正；③ OOM → 设 <code>XLA_PYTHON_CLIENT_MEM_FRACTION=0.9</code>、加 <code>--fsdp-devices</code>、关 EMA；④ PyTorch 路线（<code>train_pytorch.py</code>）暂不支持 LoRA/混合精度/FSDP，想用 LoRA 请走 JAX；⑤ checkpoint 从 <code>gs://openpi-assets</code> 自动下载，缓存位置可用 <code>OPENPI_DATA_HOME</code> 改。</li>
+</ul>
+
+<h3>项目 4（可选，需硬件）：自采数据训练自己的 VLA</h3>
+
+<p><span class="pill">难度 ★★★★★</span><span class="pill">时间 2–4 周</span><span class="pill">预算 数百美元</span></p>
+
+<ul>
+  <li><b>目标</b>：完成真正的具身智能闭环——自己采 50–100 条演示，训练/微调策略，在你的桌面上让机器人自主完成任务。</li>
+  <li><b>前置</b>：SO-101 从臂 + 主臂（或整套零售套件）、2 个 USB 相机（一个看场景、一个装腕部）、能跑项目 1 的电脑；替代方案：无臂用 <a href="https://umi-gripper.github.io/">UMI</a> 式手持夹爪 + GoPro 在野外采数据（arXiv:2402.10329）。</li>
+</ul>
+
+<p><b>步骤概要</b>（全部命令来自 LeRobot 官方文档）：</p>
+
+<pre><code class="language-bash"># 1) 组装 + 电机配置 + 标定（按 SO-101 文档：找端口→设电机ID→标定）
+pip install "lerobot[feetech]"
+lerobot-find-port
+lerobot-setup-motors --robot.type=so101_follower --robot.port=/dev/ttyACM0
+lerobot-calibrate   --robot.type=so101_follower --robot.port=/dev/ttyACM0 \
+                    --robot.id=my_arm        # 主臂同理；id 之后必须全程一致
+
+# 2) 遥操作练手（先不录数据，练到动作平滑）
+lerobot-teleoperate --robot.type=so101_follower --robot.port=/dev/ttyACM0 \
+  --robot.id=my_arm --teleop.type=so101_leader --teleop.port=/dev/ttyACM1 \
+  --teleop.id=my_leader --display_data=true
+
+# 3) 采集 50 条演示并上传 Hub（键盘 r 键可当场重录坏 episode）
+lerobot-record \
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_arm \
+  --robot.cameras='{front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}}' \
+  --teleop.type=so101_leader --teleop.port=/dev/ttyACM1 --teleop.id=my_leader \
+  --dataset.repo_id=${HF_USER}/my_pick_place --dataset.num_episodes=50 \
+  --dataset.single_task="Put the cube into the box"
+
+# 4) 训练（ACT 起步；数据够多、卡够大可上 smolvla / pi0）
+lerobot-train --policy.type=act --dataset.repo_id=${HF_USER}/my_pick_place \
+  --output_dir=outputs/train/act_my_task --policy.device=cuda
+
+# 5) 部署回真机评测（慢速 VLA 加 --inference.type=rtc 平滑执行）
+lerobot-rollout --strategy.type=base --policy.path=${HF_USER}/my_policy \
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_arm \
+  --task="Put the cube into the box" --duration=60</code></pre>
+
+<p><b>数据质量清单</b>（官方「Tips for gathering data」+ 通行实践）：</p>
+<ul class="checklist">
+  <li>☐ <b>相机固定死</b>：位置、角度、曝光全程不动；「只看相机画面你自己能完成任务」是官方给的合格线；</li>
+  <li>☐ <b>帧率一致</b>：采集、训练、部署用同一 fps（SO-101 惯用 30fps）；</li>
+  <li>☐ <b>动作平滑</b>：先遥操作练熟再开录，抖动/犹豫的 episode 当场按 <code>r</code> 重录；</li>
+  <li>☐ <b>数量与覆盖</b>：≥50 条起步；官方建议每类物体位置 10 条、位置铺满工作空间；变化逐步加（先位置→再光照→再物体→再背景），一次只加一种；</li>
+  <li>☐ <b>指令标注多样</b>：同一任务准备多种说法（训 VLA 时用英文指令并做同义改写，π0.5/OpenVLA-OFT 都用语言增广提升泛化）；</li>
+  <li>☐ <b>成功判据明确</b>：「方块进盒」这种可二值判定的任务最容易起步；模糊任务先拆短；</li>
+  <li>☐ <b>失败数据取舍</b>：纯模仿学习（ACT/DP/π0 微调）以成功演示为主，明显失败的 episode 建议删除或重录；失败轨迹另有价值——留给 RL 后训练（HIL-SERL 的 <code>dagger</code> 策略）或做恢复动作数据，但别混进 BC 数据集。</li>
+</ul>
+
+<ul>
+  <li><b>预期结果</b>：50–100 条高质量演示 + ACT，在「抓取-放置」级任务上真机成功率可观（社区大量 SO-101 案例；HF 官方的叠 T 恤实验证明该生态上限很高）；换成微调 SmolVLA/π0 可检验语言泛化。</li>
+  <li><b>常见坑</b>：① 标定文件的 <code>id</code> 在遥操作/录制/部署间不一致 → 动作错位；② Linux 串口权限（<code>sudo chmod 666 /dev/ttyACM*</code>）；③ Waveshare 控制板跳线要拨到 B（USB）通道；④ 换过任何电机必须重新 <code>lerobot-setup-motors</code> + 标定；⑤ 部署时训练用腕部相机而现场没装（或反之）——观测键必须与数据集完全一致。</li>
+</ul>
+
+<h2>5. 微调工程要点清单</h2>
+
+<p>四个项目跑下来，你会反复遇到同一批工程问题。这份清单把它们收拢——每一条都对应过某家官方文档的 troubleshooting。</p>
+
+<ul class="checklist">
+  <li><b>动作空间选择</b>：delta EE（末端增量，OpenVLA/SimplerEnv 的 7 维 = 6D 位姿增量 + 夹爪）对相机-机器人标定误差更鲁棒、跨场景泛化好；关节绝对位置（ACT 在 SO-101 上的默认）简单直接、适合固定平台。<b>铁律：采集、训练、部署三处定义必须一致</b>。趋势参考：GR00T N1.7 全面转向「相对 EEF」动作空间，正是为了跨本体（人类视频与不同机器人）共享同一动作定义。</li>
+  <li><b>归一化统计量</b>：均值/方差或分位数（openpi 用 q01/q99）二选一后<b>训练与推理必须用同一份</b>；换数据集要重算（<code>compute_norm_stats</code>）；小心几乎不动的维度导致区间过窄、归一化爆炸（openpi 官方 troubleshooting 原话级坑）。</li>
+  <li><b>图像预处理一致性</b>：分辨率、resize/crop 方式、RGB 通道序、多相机的键名与顺序，训练与推理逐项对齐；LIBERO 在 LeRobot 中强制 <code>observation.images.*</code> 命名约定，键名编码在归一化层里，改名即错位。</li>
+  <li><b>指令增广</b>：同一演示配多种语言说法（同义改写），显著提升语言泛化——OpenVLA-OFT 与 π0.5 的训练配方都包含语言增广；自采数据时用模板批量生成改写。</li>
+  <li><b>动作分块与执行长度</b>：预测 chunk 长度（一次预测多少步）与执行长度（实际执行多少步再重新推理）是两个旋钮；执行太长 → 反应迟钝，太短 → 推理频率跟不上控制频率。慢 VLA 用异步推理补偿（LeRobot 的 <code>--inference.type=rtc</code>；GR00T N1.7 甚至把该参数更名为 <code>--execution-horizon</code> 以强调这一区分）。</li>
+  <li><b>评测协议</b>：固定 N 次 rollout（LIBERO 通行 10 episode/任务）、≥3 个随机种子、报 mean±std、写明初始状态来源与软/硬重置；对比两个策略用同一 <code>--seed</code> 与同一数据 revision。</li>
+  <li><b>控制频率核对</b>：数据集 fps、仿真控制频率（SimplerEnv：Google Robot 3Hz / WidowX 5Hz）、真机控制环频率三者对齐，否则策略「手感」全变。</li>
+</ul>
+
+<p><b>常见失败模式速查表</b>：</p>
+
+<table>
+  <tr><th style="width:22%">症状</th><th style="width:34%">最可能原因</th><th>排查方向</th></tr>
+  <tr><td>机械臂高频抖动 / 震荡</td><td>归一化不一致；控制频率与数据 fps 不匹配；action chunk 切换处不连续</td><td>对比训练/部署的 norm stats 与 fps；开启 temporal ensembling 或 RTC 异步推理；检查 chunk 执行边界</td></tr>
+  <tr><td>轨迹漂移、总是差一点到不了</td><td>covariate shift：测试初始分布超出训练覆盖；delta/absolute 动作模式配错；相机被动过</td><td>补采对应区域数据；核对 <code>control_mode</code>/<code>unnorm_key</code>；重新标定与固定相机</td></tr>
+  <tr><td>夹爪开合时机错（抓到空气 / 放不下）</td><td>执行长度与预测 chunk 不匹配；夹爪维度被当连续量归一化（实为 0/1 离散）</td><td>调 <code>n_action_steps</code> / execution horizon；单独检查夹爪通道的归一化与阈值化</td></tr>
+  <tr><td>完全不跟语言指令</td><td>LoRA 没训到 VLM 相关层；指令多样性不足；图像预处理不一致导致视觉输入失效</td><td>扩大 LoRA target modules / 提高 rank；指令同义改写增广；逐项核对图像管线</td></tr>
+  <tr><td>微调后反而崩了（不如预训练）</td><td>学习率过高灾难性遗忘；norm stats 没重算；多本体数据混合未加权</td><td>降 lr / 改 LoRA；重跑 <code>compute_norm_stats</code>；按数据集设混合权重（GR00T 的 <code>ds_weights_alpha</code> 即为此设）</td></tr>
+  <tr><td>loss 发散 / NaN</td><td>某些动作维度 q01≈q99 或 std≈0，归一化后数值爆炸</td><td>手工修正 norm_stats.json（openpi 官方建议）；剔除全零维度</td></tr>
+  <tr><td>仿真很快、真机很卡</td><td>推理延迟与网络往返；相机掉帧</td><td>OFT/TensorRT 加速（GR00T N1.7：RTX PRO 6000 上 ~40Hz、Jetson Thor ~28Hz）；policy server 走本地网；检查相机实际 fps</td></tr>
+</table>
+
+<h2>6. 学习资源（链接均已核实）</h2>
+
+<h3>6.1 论文阅读顺序（对应本系列七讲）</h3>
+
+<table>
+  <tr><th style="width:14%">对应讲次</th><th>论文</th><th style="width:12%">优先级</th></tr>
+  <tr><td rowspan="3"><a href="vla-t2-rt1-rt2.html">第 2 讲</a></td><td>RT-2：VLA 范式的起点（<a href="https://arxiv.org/abs/2307.15818">arXiv:2307.15818</a>）</td><td><b>必读</b></td></tr>
+  <tr><td>RT-1：Transformer 机器人控制的规模化前奏（<a href="https://arxiv.org/abs/2212.06817">arXiv:2212.06817</a>）</td><td>选读</td></tr>
+  <tr><td>Open X-Embodiment：跨本体数据混合的开山（<a href="https://arxiv.org/abs/2310.08864">arXiv:2310.08864</a>）</td><td>选读</td></tr>
+  <tr><td rowspan="3"><a href="vla-t3-openvla.html">第 3 讲</a></td><td>OpenVLA（<a href="https://arxiv.org/abs/2406.09246">arXiv:2406.09246</a>）</td><td><b>必读</b></td></tr>
+  <tr><td>OpenVLA-OFT：微调配方工程化的范本（<a href="https://arxiv.org/abs/2502.19645">arXiv:2502.19645</a>）</td><td><b>必读</b></td></tr>
+  <tr><td>Octo：轻量开源通才策略（<a href="https://arxiv.org/abs/2405.12213">arXiv:2405.12213</a>）</td><td>选读</td></tr>
+  <tr><td rowspan="5"><a href="vla-t4-diffusion-pi0.html">第 4 讲</a></td><td>ACT / ALOHA：动作分块 + 低成本双臂（<a href="https://arxiv.org/abs/2304.13705">arXiv:2304.13705</a>）</td><td><b>必读</b></td></tr>
+  <tr><td>Diffusion Policy（<a href="https://arxiv.org/abs/2303.04137">arXiv:2303.04137</a>）</td><td><b>必读</b></td></tr>
+  <tr><td>π0（<a href="https://arxiv.org/abs/2410.24164">arXiv:2410.24164</a>）与 π0.5（<a href="https://arxiv.org/abs/2504.16054">arXiv:2504.16054</a>）</td><td><b>必读</b></td></tr>
+  <tr><td>FAST：动作 tokenizer（<a href="https://arxiv.org/abs/2501.09747">arXiv:2501.09747</a>）</td><td>选读</td></tr>
+  <tr><td>RDT-1B：双臂扩散基础模型（<a href="https://arxiv.org/abs/2410.07864">arXiv:2410.07864</a>）</td><td>选读</td></tr>
+  <tr><td rowspan="4"><a href="vla-t5-frontier.html">第 5 讲</a></td><td>GR00T N1（<a href="https://arxiv.org/abs/2503.14734">arXiv:2503.14734</a>）</td><td><b>必读</b></td></tr>
+  <tr><td>SmolVLA：消费级小 VLA（<a href="https://arxiv.org/abs/2506.01844">arXiv:2506.01844</a>）</td><td>选读</td></tr>
+  <tr><td>AgiBot World / GO-1（<a href="https://arxiv.org/abs/2503.06669">arXiv:2503.06669</a>）</td><td>选读</td></tr>
+  <tr><td>π*0.6 与 RECAP：从经验中学习（<a href="https://arxiv.org/abs/2511.14759">arXiv:2511.14759</a>）</td><td>选读</td></tr>
+  <tr><td rowspan="4">本讲</td><td>LIBERO（<a href="https://arxiv.org/abs/2306.03310">arXiv:2306.03310</a>）与 SimplerEnv（<a href="https://arxiv.org/abs/2405.05941">arXiv:2405.05941</a>）</td><td>LIBERO <b>必读</b>，SimplerEnv 选读</td></tr>
+  <tr><td>ManiSkill3（<a href="https://arxiv.org/abs/2410.00425">arXiv:2410.00425</a>）、RoboCasa（<a href="https://arxiv.org/abs/2406.02523">arXiv:2406.02523</a>）</td><td>选读</td></tr>
+  <tr><td>UMI：无机器人采集（<a href="https://arxiv.org/abs/2402.10329">arXiv:2402.10329</a>）</td><td>选读</td></tr>
+  <tr><td>VLA 的 RL 后训练：SimpleVLA-RL（<a href="https://arxiv.org/abs/2509.09674">arXiv:2509.09674</a>，ICLR 2026）、iRe-VLA（<a href="https://arxiv.org/abs/2501.16664">arXiv:2501.16664</a>）、RIPT-VLA（<a href="https://arxiv.org/abs/2505.17016">arXiv:2505.17016</a>）</td><td>阶段三必读</td></tr>
+</table>
+
+<h3>6.2 课程与教程</h3>
+<ul>
+  <li><b>Berkeley CS285: Deep Reinforcement Learning</b>（Sergey Levine）——RL 基础的标准公开课，<a href="https://rail.eecs.berkeley.edu/deeprlcourse/">课程主页</a> + YouTube 全套录像；做 VLA 的 RL 后训练前必备。</li>
+  <li><b>LeRobot Robot Learning Tutorial</b>——HF 官方免费交互课程（<a href="https://huggingface.co/spaces/lerobot/robot-learning-tutorial">HF Space</a>），从概念到上手。</li>
+  <li><b>同济子豪兄《LeRobot + SO-ARM101 中文教程》</b>——组装/遥操作/数据/训练/部署全流程中文文档（<a href="https://zihao-ai.feishu.cn/wiki/space/7589642043471924447">飞书 wiki</a>，LeRobot 官方 README 推荐）；Seeed 亦有<a href="https://wiki.seeedstudio.com/cn/lerobot_so100m_new/">中文入门教程</a>。</li>
+  <li><b>HIL-SERL 文档</b>（LeRobot 内置）——人在环强化学习微调真机策略的完整教程，项目 4 之后的进阶方向。</li>
+</ul>
+
+<h3>6.3 博客与技术报告</h3>
+<ul>
+  <li><a href="https://www.pi.website/blog">Physical Intelligence Blog</a>——π0、π0.5、FAST、Knowledge Insulation、π*0.6/RECAP 的第一手叙述，VLA 工程视角的最佳博客。</li>
+  <li>NVIDIA 技术博客——GR00T 系列发布与<a href="https://developer.nvidia.com/blog/enhance-robot-learning-with-synthetic-trajectory-data-generated-by-world-foundation-models/">世界模型合成轨迹数据</a>（GR00T-Dreams/DreamGen）。</li>
+  <li><a href="https://www.figure.ai/news/helix">Figure Helix 博客</a>——工业界双系统 VLA 的代表叙述（<a href="vla-t5-frontier.html">第 5 讲</a>详解）。</li>
+  <li><a href="https://lilianweng.github.io/">Lil'Log（Lilian Weng）</a>——RL 与深度学习基础的高质量长文，补内功首选。</li>
+</ul>
+
+<h3>6.4 社区</h3>
+<ul>
+  <li><b>LeRobot Discord</b>（官方 README 入口）——SO-101 装机排障、数据集求助最活跃的地方；GitHub issues（openpi / openvla / Isaac-GR00T）是排错第一检索源。</li>
+  <li><b>HF Hub <code>lerobot</code> 组织</b>——数千社区数据集与模型（<code>lerobot/pusht</code>、<code>lerobot/libero</code>、<code>lerobot/pi05_libero_finetuned</code>……），「找数据」先搜这里。</li>
+  <li>中文社区：知乎上有多篇持续更新的 VLA/RL+VLA 论文汇总（如<a href="https://zhuanlan.zhihu.com/p/1934548224154264264">「强化+VLA 工作汇总」</a>）。</li>
+</ul>
+
+<h2>7. 四阶段成长路线图</h2>
+
+<p>仿照本站<a href="../quantization/quant-t6-qat-roadmap.html">量化系列第 6 讲</a>的写法：每阶段有明确动作与<b>可展示的产出物</b>——产出物比「学过什么」重要得多。</p>
+
+<table>
+  <tr><th style="width:16%">阶段</th><th>做什么</th><th>产出物（可写进简历/主页）</th></tr>
+  <tr><td><b>① 入门</b><br>1–2 个月</td><td>读完本系列七讲；完成项目 1（LeRobot + PushT/SO-101 数据集训 ACT 与 Diffusion Policy）；对照第 3.2 节读懂 LIBERO 榜单上 OpenVLA/π0.5/GR00T 的数字与协议差异</td><td>一份训练-评测日志（wandb 链接）+ 一页「LIBERO 各家数字与口径对比」笔记</td></tr>
+  <tr><td><b>② 进阶</b><br>3–6 个月</td><td>完成项目 2 与 3（LIBERO 上 LoRA 微调 OpenVLA-OFT、openpi 微调 π0.5）；精读 OpenVLA 的 <code>finetune.py</code> 与 openpi 的 config/transform 源码；有硬件者完成项目 4，采一次自己的数据</td><td>微调前后成功率对比报告 + 自己发布的 LeRobotDataset（HF Hub 链接）</td></tr>
+  <tr><td><b>③ 深入</b><br>6–12 个月</td><td>设计数据引擎与训练配方：数据配比（多数据集混合权重）、co-training（人类视频/网络数据与机器人数据混合——GR00T N1.7 的 EgoScale、π0.5 的异构混合都是范例）、后训练（Knowledge Insulation、RECAP）；实践 VLA 上的 RL/偏好优化（SimpleVLA-RL、RIPT-VLA、HIL-SERL）；完整复现一篇论文的主结果</td><td>一篇可公开的复现报告 + 开源仓库（这是求职/申请最硬的敲门砖）</td></tr>
+  <tr><td><b>④ 前沿研究</b><br>不限时</td><td>从下方开放问题清单里挑一个深挖：提出方法 → 在 LIBERO/RoboCasa/SimplerEnv 或真机上验证 → 写作投稿（CoRL/RSS/ICRA/NeurIPS/ICLR）</td><td>论文或落地系统；加入一线团队（PI、NVIDIA GEAR、Figure、智元……）或社区成为某工具的核心贡献者</td></tr>
+</table>
+
+<div class="fig">
+<svg viewBox="0 0 880 450" xmlns="http://www.w3.org/2000/svg">
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+  <defs>
+    <marker id="arr2" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5 L0,10 L2.5,5 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <text x="440" y="28" font-size="16" font-weight="bold" fill="#1a1f2e" text-anchor="middle">四阶段成长路线：从跑 demo 到做研究</text>
+
+  <!-- 阶段4 (最高) -->
+  <rect x="668" y="80" width="196" height="150" rx="10" fill="#fff" stroke="#e3e7ee"/>
+  <path d="M668,90 a10,10 0 0 1 10,-10 h176 a10,10 0 0 1 10,10 v36 h-196 z" fill="#2456c4"/>
+  <text x="766" y="102" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">阶段 ④ 前沿研究</text>
+  <text x="766" y="119" font-size="12" fill="#dbe6fb" text-anchor="middle">不设时限</text>
+  <text x="682" y="148" font-size="12" fill="#2a3040">· 数据配方·scaling law</text>
+  <text x="682" y="168" font-size="12" fill="#2a3040">· 长时程·跨本体·安全</text>
+  <text x="682" y="188" font-size="12" fill="#2a3040">· 选一个问题深挖到底</text>
+  <line x1="682" y1="200" x2="850" y2="200" stroke="#e3e7ee"/>
+  <text x="682" y="220" font-size="12" font-weight="bold" fill="#2456c4">产出｜论文或落地系统</text>
+
+  <!-- 阶段3 -->
+  <rect x="452" y="128" width="196" height="150" rx="10" fill="#fff" stroke="#e3e7ee"/>
+  <path d="M452,138 a10,10 0 0 1 10,-10 h176 a10,10 0 0 1 10,10 v36 h-196 z" fill="#2456c4"/>
+  <text x="550" y="150" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">阶段 ③ 深入</text>
+  <text x="550" y="167" font-size="12" fill="#dbe6fb" text-anchor="middle">6–12 个月</text>
+  <text x="466" y="196" font-size="12" fill="#2a3040">· 数据配方与混合训练</text>
+  <text x="466" y="216" font-size="12" fill="#2a3040">· VLA 的 RL 后训练</text>
+  <text x="466" y="236" font-size="12" fill="#2a3040">· 复现一篇论文主结果</text>
+  <line x1="466" y1="248" x2="634" y2="248" stroke="#e3e7ee"/>
+  <text x="466" y="268" font-size="12" font-weight="bold" fill="#2456c4">产出｜复现报告+开源repo</text>
+
+  <!-- 阶段2 -->
+  <rect x="236" y="176" width="196" height="150" rx="10" fill="#fff" stroke="#e3e7ee"/>
+  <path d="M236,186 a10,10 0 0 1 10,-10 h176 a10,10 0 0 1 10,10 v36 h-196 z" fill="#2456c4"/>
+  <text x="334" y="198" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">阶段 ② 进阶</text>
+  <text x="334" y="215" font-size="12" fill="#dbe6fb" text-anchor="middle">3–6 个月</text>
+  <text x="250" y="244" font-size="12" fill="#2a3040">· 完成项目 2/3 微调</text>
+  <text x="250" y="264" font-size="12" fill="#2a3040">· 读穿 OpenVLA/π0 源码</text>
+  <text x="250" y="284" font-size="12" fill="#2a3040">· 采一次自己的数据</text>
+  <line x1="250" y1="296" x2="418" y2="296" stroke="#e3e7ee"/>
+  <text x="250" y="316" font-size="12" font-weight="bold" fill="#2456c4">产出｜对比报告+数据集</text>
+
+  <!-- 阶段1 -->
+  <rect x="20" y="224" width="196" height="150" rx="10" fill="#fff" stroke="#e3e7ee"/>
+  <path d="M20,234 a10,10 0 0 1 10,-10 h176 a10,10 0 0 1 10,10 v36 h-196 z" fill="#2456c4"/>
+  <text x="118" y="246" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">阶段 ① 入门</text>
+  <text x="118" y="263" font-size="12" fill="#dbe6fb" text-anchor="middle">1–2 个月</text>
+  <text x="34" y="292" font-size="12" fill="#2a3040">· 读完本系列七讲</text>
+  <text x="34" y="312" font-size="12" fill="#2a3040">· 跑通项目 1（PushT）</text>
+  <text x="34" y="332" font-size="12" fill="#2a3040">· 看懂 LIBERO 榜单</text>
+  <line x1="34" y1="344" x2="202" y2="344" stroke="#e3e7ee"/>
+  <text x="34" y="364" font-size="12" font-weight="bold" fill="#2456c4">产出｜训练日志+评测表</text>
+
+  <!-- 上升箭头 -->
+  <line x1="220" y1="252" x2="244" y2="204" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <line x1="436" y1="204" x2="460" y2="156" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+  <line x1="652" y1="156" x2="676" y2="108" stroke="#2456c4" stroke-width="1.6" marker-end="url(#arr2)"/>
+
+  <line x1="20" y1="404" x2="856" y2="404" stroke="#2456c4" stroke-width="1.4" stroke-dasharray="6,4" marker-end="url(#arr2)"/>
+  <text x="440" y="428" font-size="12" fill="#5a6272" text-anchor="middle">时间 →（时长按每周投入 10–15 小时估计，因人而异）· 每个阶段都以「可展示的产出物」收尾</text>
+</svg>
+</div>
+<p class="cap"><b>图 6-2</b>｜四阶段成长路线。与量化系列路线图同构：入门靠跑通、进阶靠源码与数据、深入靠复现、前沿靠选题——每阶段的产出物是下一阶段的入场券。</p>
+
+<div class="infer">各阶段时长（1–2 / 3–6 / 6–12 个月）按每周投入 10–15 小时估计，个体差异极大；全职投入可大致减半，纯周末玩家则可能翻倍。阶段划分本身是经验框架而非行业共识。</div>
+
+<h3>7.1 阶段四的选题地图：八个开放问题</h3>
+
+<p>到了阶段四，你需要一个「值得深挖的问题」。下面八个是当前（2026）社区公认没解决的方向，每个附「为什么难 + 目前思路」：</p>
+
+<ol>
+  <li><b>数据 scaling law</b>：机器人数据贵、脏、异构，「多少数据换多少能力」至今没有 LLM 那样清晰的曲线。目前思路：人类视频预训练（GR00T N1.7 用 20K 小时 EgoScale 视频）、世界模型合成数据（GR00T-Dreams/DreamGen）、百万级真机数据集（AgiBot World）三线并进，但配比规律仍是黑箱。</li>
+  <li><b>长时程任务与记忆</b>：VLA 单次推理只看得到几帧，多步任务（做一杯咖啡）误差逐步累积、超出上下文就「失忆」。目前思路：分层架构（GO-1 的 latent planner、Helix 的 System1/System2、π0.5 的高层子任务预测）、语言作为中间记忆、外部场景记忆模块。</li>
+  <li><b>泛化 vs 专用</b>：通才模型在单任务上常不如专才，专用微调又会灾难性遗忘。目前思路：base + 轻量微调的双层体系、Knowledge Insulation（π0.5：隔离知识通道防遗忘）、LoRA 式按任务挂载。</li>
+  <li><b>评测方法学</b>：LIBERO 已饱和（96%+），真机评测贵且不可比，仿真评测有 sim2real 偏差。目前思路：real2sim（SimplerEnv）、更大更难的新基准（RoboCasa365 的 365 任务）、标准化报告协议（种子数/rollout 数/方差）——这也是普通研究者最容易做出贡献的方向。</li>
+  <li><b>安全与可靠性</b>：与人和易碎物接触的策略没有行为保证，失败模式不可预测。目前思路：人在环 RL（HIL-SERL）、力/速度硬限制、不确定度估计与拒动、RECAP 式从失败经验中改进。</li>
+  <li><b>世界模型与 VLA 融合</b>：世界模型会「想象」但推理慢，VLA 反应快但缺乏预见。目前思路：世界模型当数据引擎（DreamGen 生成训练轨迹）、当规划器（想象多步再选动作）、或直接统一架构（LeRobot 已收录 VLA-JEPA 等世界模型策略）。</li>
+  <li><b>loco-manipulation（全身控制）</b>：行走平衡与手臂操作耦合，人形「边走边干活」远比定基座难。目前思路：Unitree G1 等廉价人形 + GR00T 类跨本体基础模型、上下层分频控制（第 5 讲 Helix 的分层即此思路）。</li>
+  <li><b>跨本体统一动作空间</b>：不同机器人自由度、标定、频率全不同，动作定义无法直接共享。目前思路：相对 EEF 动作（GR00T N1.7，人类视频与机器人共用）、归一化关节空间（RDT 的统一 tokenizer）、FAST 频域动作 token、embodiment tag 分头路由。</li>
+</ol>
+
+<h2>8. 结语：地图在手，路在脚下</h2>
+
+<p>七讲走完，可以把整个系列收束成一句话：<b>VLA = VLM 的大脑（第 2、3 讲）+ 连续动作头的手（第 4 讲）+ 数据引擎的粮食（第 1、5 讲）</b>。而本讲补上了最后一块：这些组件今天全部有开源实现、开放权重、免费数据与标准考场——这个领域的入门门槛，已经降到了「一块 GPU + 一个周末」。</p>
+
+<div class="box">
+<span class="bt">今晚就能做的一件事</span>装好 LeRobot，把 PushT 上的 ACT 训起来：
+<pre style="margin:10px 0 4px"><code>pip install lerobot
+lerobot-train --policy.type=act --dataset.repo_id=lerobot/pusht --policy.device=cuda</code></pre>
+没有 GPU？用 Colab 的 ACT notebook，或者加 <code>--job.target=t4-small</code> 提交到 HF Jobs 按秒计费。半小时后你会看到第一条属于自己的成功率曲线——具身智能之路，就从那条曲线开始。全系列完，祝动手愉快。
+</div>
+
+<h2>参考来源</h2>
+
+<ol class="refs">
+  <li>LeRobot（GitHub, Apache 2.0）：<a href="https://github.com/huggingface/lerobot">github.com/huggingface/lerobot</a>；官方文档：<a href="https://huggingface.co/docs/lerobot/index">SO-101 指南</a> · <a href="https://huggingface.co/docs/lerobot/so101">so101</a> · <a href="https://huggingface.co/docs/lerobot/hardware_guide">Compute Hardware Guide</a> · <a href="https://huggingface.co/docs/lerobot/libero">LIBERO 评测</a> · <a href="https://huggingface.co/docs/lerobot/il_robots">真机教程 il_robots</a> · <a href="https://huggingface.co/docs/lerobot/lerobot-dataset-v3">LeRobotDataset v3.0</a>（2026-10-21 抓取）</li>
+  <li>Cadene et al., <i>LeRobot: An Open-Source Library for End-to-End Robot Learning</i>, ICLR 2026：<a href="https://arxiv.org/abs/2602.22818">arXiv:2602.22818</a></li>
+  <li>Physical Intelligence openpi（GitHub, Apache 2.0）：<a href="https://github.com/Physical-Intelligence/openpi">github.com/Physical-Intelligence/openpi</a>（显存表、微调流程、troubleshooting 均引自其 README，2026-10-21 抓取）</li>
+  <li>Physical Intelligence Blog：<a href="https://www.pi.website/blog">π0</a> · <a href="https://arxiv.org/abs/2410.24164">arXiv:2410.24164</a>；π0.5 <a href="https://arxiv.org/abs/2504.16054">arXiv:2504.16054</a>；FAST <a href="https://arxiv.org/abs/2501.09747">arXiv:2501.09747</a>；π*0.6/RECAP <a href="https://arxiv.org/abs/2511.14759">arXiv:2511.14759</a></li>
+  <li>Kim et al., <i>OpenVLA: An Open-Source Vision-Language-Action Model</i>：<a href="https://arxiv.org/abs/2406.09246">arXiv:2406.09246</a>；repo：<a href="https://github.com/openvla/openvla">github.com/openvla/openvla</a>（LoRA ~27GB、bs16 ~72GB、LIBERO 结果表引自 README）</li>
+  <li>Kim et al., <i>Fine-Tuning Vision-Language-Action Models: Optimizing Speed and Success</i>（OpenVLA-OFT）：<a href="https://arxiv.org/abs/2502.19645">arXiv:2502.19645</a>；<a href="https://openvla-oft.github.io/">项目页</a>；repo：<a href="https://github.com/moojink/openvla-oft">github.com/moojink/openvla-oft</a>（评测 ~16GB、训练 27–80GB 引自 README）</li>
+  <li>NVIDIA Isaac GR00T（GitHub, Apache 2.0）：<a href="https://github.com/NVIDIA/Isaac-GR00T">github.com/NVIDIA/Isaac-GR00T</a>（N1.7 GA、Cosmos-Reason2-2B backbone、相对 EEF、EgoScale 20K 小时、40Hz/28Hz 部署数字均引自 README，2026-10-21 抓取）；GR00T N1 论文：<a href="https://arxiv.org/abs/2503.14734">arXiv:2503.14734</a></li>
+  <li>NVIDIA GR00T-Dreams（DreamGen）：<a href="https://github.com/nvidia/gr00t-dreams">github.com/nvidia/gr00t-dreams</a>；NVIDIA 开发者博客：<a href="https://developer.nvidia.com/blog/enhance-robot-learning-with-synthetic-trajectory-data-generated-by-world-foundation-models/">世界模型合成轨迹数据</a></li>
+  <li>AgiBot World Colosseo / GO-1：<a href="https://arxiv.org/abs/2503.06669">arXiv:2503.06669</a>（IROS 2025 Best Paper）；repo：<a href="https://github.com/OpenDriveLab/AgiBot-World">github.com/OpenDriveLab/AgiBot-World</a>（GO-1/GO-1 Air 2025-09 开源、Beta 1,003,672 轨迹引自 README）</li>
+  <li>Liu et al., <i>RDT-1B: a Diffusion Foundation Model for Bimanual Manipulation</i>, ICLR 2025：<a href="https://arxiv.org/abs/2410.07864">arXiv:2410.07864</a>；repo：<a href="https://github.com/thu-ml/RoboticsDiffusionTransformer">github.com/thu-ml/RoboticsDiffusionTransformer</a></li>
+  <li>Tao et al., <i>ManiSkill3</i>, RSS 2025：<a href="https://arxiv.org/abs/2410.00425">arXiv:2410.00425</a>；repo：<a href="https://github.com/mani-skill/ManiSkill">github.com/mani-skill/ManiSkill</a>（30,000+ FPS、real2sim 100× 引自 README）</li>
+  <li>Nasiriany et al., <i>RoboCasa</i>, RSS 2024：<a href="https://arxiv.org/abs/2406.02523">arXiv:2406.02523</a>；repo：<a href="https://github.com/robocasa/robocasa">github.com/robocasa/robocasa</a>（RoboCasa365 v1.0：2026-02-18 发布，365 任务/2500+ 场景/2200+ 小时数据，引自 README）；<a href="https://robocasa.ai/">robocasa.ai</a></li>
+  <li>Genesis World：<a href="https://github.com/Genesis-Embodied-AI/genesis-world">github.com/Genesis-Embodied-AI/genesis-world</a>；<a href="https://genesis-world.readthedocs.io/en/latest/">文档</a>（Nyx/Quadrants、Genesis AI 公司支持，引自 README）</li>
+  <li>Liu et al., <i>LIBERO</i>, NeurIPS 2023 D&amp;B：<a href="https://arxiv.org/abs/2306.03310">arXiv:2306.03310</a>；repo：<a href="https://github.com/Lifelong-Robot-Learning/LIBERO">github.com/Lifelong-Robot-Learning/LIBERO</a>；<a href="https://libero-project.github.io/main.html">项目页</a>；数据集：<a href="https://huggingface.co/datasets/lerobot/libero">lerobot/libero</a> · <a href="https://huggingface.co/datasets/openvla/modified_libero_rlds">openvla/modified_libero_rlds</a></li>
+  <li>Li et al., <i>Evaluating Real-World Robot Manipulation Policies in Simulation</i>（SimplerEnv）：<a href="https://arxiv.org/abs/2405.05941">arXiv:2405.05941</a>；repo：<a href="https://github.com/simpler-env/SimplerEnv">github.com/simpler-env/SimplerEnv</a>（ManiSkill3 GPU 分支快 10–15×、控制频率 3Hz/5Hz 引自 README）</li>
+  <li>Meier et al., <i>CALVIN</i>：<a href="https://arxiv.org/abs/2112.03227">arXiv:2112.03227</a>；Yu et al., <i>Meta-World</i>：<a href="https://arxiv.org/abs/1910.10897">arXiv:1910.10897</a></li>
+  <li>Marzocca et al., <i>SmolVLA</i>：<a href="https://arxiv.org/abs/2506.01844">arXiv:2506.01844</a>；权重：<a href="https://huggingface.co/lerobot/smolvla_base">lerobot/smolvla_base</a>；复现模型：<a href="https://huggingface.co/lerobot/pi05_libero_finetuned">lerobot/pi05_libero_finetuned</a>（97.5% 均值，LeRobot LIBERO 文档）</li>
+  <li>Chi et al., <i>Diffusion Policy</i>：<a href="https://arxiv.org/abs/2303.04137">arXiv:2303.04137</a>；Zhao et al., <i>Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware</i>（ACT/ALOHA）：<a href="https://arxiv.org/abs/2304.13705">arXiv:2304.13705</a>；<a href="https://tonyzhaozh.github.io/aloha/">ALOHA 项目页</a> · <a href="https://aloha-2.github.io/">ALOHA 2</a> · <a href="https://mobile-aloha.github.io/">Mobile ALOHA（~$32k 自建口径）</a></li>
+  <li>Chi et al., <i>Universal Manipulation Interface</i>（UMI）：<a href="https://arxiv.org/abs/2402.10329">arXiv:2402.10329</a>；<a href="https://umi-gripper.github.io/">umi-gripper.github.io</a>；DROID：<a href="https://droid-dataset.github.io/">droid-dataset.github.io</a>；Open X-Embodiment：<a href="https://arxiv.org/abs/2310.08864">arXiv:2310.08864</a>；RT-1：<a href="https://arxiv.org/abs/2212.06817">arXiv:2212.06817</a>；RT-2：<a href="https://arxiv.org/abs/2307.15818">arXiv:2307.15818</a>；Octo：<a href="https://arxiv.org/abs/2405.12213">arXiv:2405.12213</a></li>
+  <li>VLA 的 RL 后训练：SimpleVLA-RL <a href="https://arxiv.org/abs/2509.09674">arXiv:2509.09674</a>（ICLR 2026，<a href="https://github.com/PRIME-RL/SimpleVLA-RL">repo</a>）；iRe-VLA <a href="https://arxiv.org/abs/2501.16664">arXiv:2501.16664</a>；RIPT-VLA <a href="https://arxiv.org/abs/2505.17016">arXiv:2505.17016</a>；中文汇总：<a href="https://zhuanlan.zhihu.com/p/1934548224154264264">知乎「强化+VLA 工作汇总」</a></li>
+  <li>SO-100/SO-101 硬件：TheRobotStudio BOM <a href="https://github.com/TheRobotStudio/SO-ARM100">github.com/TheRobotStudio/SO-ARM100</a>；TechCrunch 报道（起价 $100）：<a href="https://techcrunch.com/2025/04/28/hugging-face-releases-a-3d-printed-robotic-arm-starting-at-100/">链接</a>；零售套件：<a href="https://wiki.seeedstudio.com/cn/lerobot_so100m_new/">Seeed 中文教程</a> · WowRobo/Hiwonder/RobotShop 等渠道</li>
+  <li>课程与博客：Berkeley CS285 <a href="https://rail.eecs.berkeley.edu/deeprlcourse/">rail.eecs.berkeley.edu/deeprlcourse</a>；LeRobot <a href="https://huggingface.co/spaces/lerobot/robot-learning-tutorial">Robot Learning Tutorial</a> 与 <a href="https://github.com/huggingface/leLab">LeLab</a>；同济子豪兄<a href="https://zihao-ai.feishu.cn/wiki/space/7589642043471924447">中文教程</a>；<a href="https://www.figure.ai/news/helix">Figure Helix</a>；<a href="https://lilianweng.github.io/">Lil'Log</a>；<a href="https://www.physicalintelligence.company/research/knowledge_insulation">Knowledge Insulation</a></li>
+</ol>
+
+<footer>生成于 2026-10-21 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以官方 README/文档与论文为准（2026-10 核实），推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
