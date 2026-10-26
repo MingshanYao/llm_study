@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU Kernel 三条开发路线对比：Triton JIT、CUTLASS C++ 模板与 CuTe DSL</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>GPU Kernel 三条开发路线对比：Triton JIT、CUTLASS C++ 模板与 CuTe DSL</h1>
+<div class="meta">
+  <b>主题</b>：GPU kernel 的三种主流写法——Python 块级 JIT（Triton）、C++ 模板库（CUTLASS）、Python 内嵌 eDSL（CUTLASS CuTe DSL）——的编程模型、性能上限、硬件跟进与选型建议。<br>
+  <b>资料</b>：Triton release notes（v3.6.0 / v3.7.0 / v3.8.0）、NVIDIA/cutlass（4.8.1，2026-10 抓取）、NVIDIA CuTe DSL 官方博客（2025-11）、Spheron 对比文（2026-09）；FA4 与 FlashMLA 的工具链归属已与本站 <a href="flash-attention-v1-to-v4.html">FlashAttention v1→v4 报告</a>、<a href="mla-training-inference.html">MLA 报告</a>交叉核对。
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：三条路线的差别本质是「<b>谁来管 tiling、布局、流水线和指令发射</b>」。Triton 把这些都交给编译器（块级 Python，JIT，迭代最快）；CUTLASS C++ 让你自己管但给你最强的抽象工具箱（模板元编程，静态编译，天花板最高）；CuTe DSL 是后者的 Python 化——把 CuTe 的 layout 代数、TMA、tcgen05、warp 特化原样搬进 Python + JIT（官方称编译时间较 C++ 流程最多省约 100×，性能与 C++ 同级）。</p>
+  <p><b>选型直觉</b>：长尾/融合算子、跨厂商、要接 torch 生态 → Triton；要枚举大量配置变体、打进 C++ 库 → CUTLASS C++；单配置追 Blackwell 新原语、又要 Python 迭代速度 → CuTe DSL。FA4（B200 上 1613 TFLOPS BF16，本站 FA 报告确认其为 CuTe-DSL 写成）是第三条路线的标志性实证。</p>
+</div>
+
+<h2>1. 三条路线各自是什么</h2>
+
+<p>先把三者的「身份」说清楚，避免把两个 CUTLASS 混为一谈：</p>
+
+<table>
+  <tr><th></th><th>Triton（JIT 路线）</th><th>CUTLASS C++（模板库）</th><th>CuTe DSL（Python eDSL）</th></tr>
+  <tr>
+    <td><b>是什么</b></td>
+    <td>OpenAI 的开源语言/编译器栈：在 Python 里写「块级张量运算」，编译器负责分解到线程、选指令、排流水</td>
+    <td>NVIDIA 的 C++ 模板库：用模板元编程在编译期生成 GEMM/卷积/attention kernel，3.x 起内含 CuTe C++（layout 代数）</td>
+    <td>CUTLASS 4.0（2025-03）起提供的 Python 内嵌 DSL：把 CuTe 的抽象原样暴露成 Python API，运行时 JIT</td>
+  </tr>
+  <tr>
+    <td><b>心智模型</b></td>
+    <td>「我描述一个 tile 上做什么，编译器管怎么跑」</td>
+    <td>「我选型 + 组装，库和模板管生成」</td>
+    <td>「我用 Python 写 CUTLASS C++ 级别的 kernel」</td>
+  </tr>
+  <tr>
+    <td><b>编译方式</b></td>
+    <td>JIT：首次调用编译并缓存；也是 <code>torch.compile</code>/Inductor 的默认代码生成后端</td>
+    <td>静态编译：CMake/nvcc，模板展开慢（分钟级），产物 AOT</td>
+    <td>JIT：官方称编译时间较 C++ 流程最多省约 100×（见 <a href="https://developer.nvidia.com/blog/achieve-cutlass-c-performance-with-python-apis-using-cute-dsl/">NVIDIA 博客</a>）</td>
+  </tr>
+  <tr>
+    <td><b>硬件边界</b></td>
+    <td>NVIDIA + AMD ROCm 等多后端</td>
+    <td>仅 NVIDIA（当前 4.8.1，CUDA 12.8+，Hopper/Blackwell）</td>
+    <td>仅 NVIDIA，随 CUTLASS 主线（4.8.1）</td>
+  </tr>
+</table>
+
+<p>三者的抽象层级关系如下图：从左到右，编译器管的越来越少、你管的越来越多。绿色 = 编译器/运行时托管，蓝色 = 显式控制但有抽象层（layout 代数、原子、builder），灰色 = 作者代码本身（三条路线都要写的那部分业务逻辑）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 770 460" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <rect x="20" y="24" width="148" height="32" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="94" y="45" font-size="12" fill="#5a6272" text-anchor="middle">关注点 ↓</text>
+  <rect x="180" y="24" width="180" height="32" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="270" y="45" font-size="12" fill="#2456c4" font-weight="600" text-anchor="middle">Triton · 块级 JIT</text>
+  <rect x="372" y="24" width="180" height="32" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="462" y="45" font-size="12" fill="#2456c4" font-weight="600" text-anchor="middle">CuTe DSL · Python JIT</text>
+  <rect x="564" y="24" width="180" height="32" rx="8" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="654" y="45" font-size="12" fill="#e8862a" font-weight="600" text-anchor="middle">CUTLASS C++ · 模板</text>
+
+  <text x="160" y="103" font-size="11" fill="#1a1f2e" text-anchor="end">算子逻辑（做什么）</text>
+  <text x="160" y="169" font-size="11" fill="#1a1f2e" text-anchor="end">tiling 与流水线</text>
+  <text x="160" y="235" font-size="11" fill="#1a1f2e" text-anchor="end">内存布局与搬移</text>
+  <text x="160" y="301" font-size="11" fill="#1a1f2e" text-anchor="end">Tensor Core 指令</text>
+  <text x="160" y="367" font-size="11" fill="#1a1f2e" text-anchor="end">warp 调度与同步</text>
+
+  <rect x="180" y="70" width="180" height="56" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="270" y="103" font-size="11" fill="#1a1f2e" text-anchor="middle">Python 块级张量</text>
+  <rect x="372" y="70" width="180" height="56" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="462" y="103" font-size="11" fill="#1a1f2e" text-anchor="middle">Python 函数</text>
+  <rect x="564" y="70" width="180" height="56" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="654" y="103" font-size="11" fill="#1a1f2e" text-anchor="middle">C++ 模板 · collective</text>
+
+  <rect x="180" y="136" width="180" height="56" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="270" y="169" font-size="11" fill="#1a1f2e" text-anchor="middle">编译器自动（meta 可调）</text>
+  <rect x="372" y="136" width="180" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="462" y="169" font-size="11" fill="#1a1f2e" text-anchor="middle">显式 · layout 代数</text>
+  <rect x="564" y="136" width="180" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="654" y="169" font-size="11" fill="#1a1f2e" text-anchor="middle">模板参数枚举</text>
+
+  <rect x="180" y="202" width="180" height="56" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="270" y="235" font-size="11" fill="#1a1f2e" text-anchor="middle">编译器 / Gluon 可手动</text>
+  <rect x="372" y="202" width="180" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="462" y="235" font-size="11" fill="#1a1f2e" text-anchor="middle">显式 · TMA 原子</text>
+  <rect x="564" y="202" width="180" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="654" y="235" font-size="11" fill="#1a1f2e" text-anchor="middle">显式 · CuTe C++</text>
+
+  <rect x="180" y="268" width="180" height="56" rx="8" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="270" y="301" font-size="11" fill="#1a1f2e" text-anchor="middle">tl.dot 自动选型</text>
+  <rect x="372" y="268" width="180" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="462" y="301" font-size="11" fill="#1a1f2e" text-anchor="middle">显式 · tcgen05 mma</text>
+  <rect x="564" y="268" width="180" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="654" y="301" font-size="11" fill="#1a1f2e" text-anchor="middle">显式 · MMA 原子</text>
+
+  <rect x="180" y="334" width="180" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="270" y="367" font-size="11" fill="#1a1f2e" text-anchor="middle">编译器 / Gluon 手动</text>
+  <rect x="372" y="334" width="180" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="462" y="367" font-size="11" fill="#1a1f2e" text-anchor="middle">显式 · warp 特化手排</text>
+  <rect x="564" y="334" width="180" height="56" rx="8" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="654" y="367" font-size="11" fill="#1a1f2e" text-anchor="middle">显式 · 手排流水线</text>
+
+  <rect x="180" y="410" width="14" height="14" rx="3" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="202" y="421" font-size="10.5" fill="#5a6272">编译器 / 运行时托管</text>
+  <rect x="380" y="410" width="14" height="14" rx="3" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="402" y="421" font-size="10.5" fill="#5a6272">显式控制（有抽象层）</text>
+  <rect x="560" y="410" width="14" height="14" rx="3" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="582" y="421" font-size="10.5" fill="#5a6272">作者代码（三线一致）</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>｜三条路线对各层关注点的管理方式。注意两个时间敏感点：Triton 在 v3.7（2026-05）引入 Gluon 底层方言后，warp 调度与内存布局也开始「可手动」，正在向右移动；CUTLASS C++ 一列的「模板参数枚举」指 3.x/4.x 的 CollectiveBuilder——你选模板参数，库帮你组装 mainloop/epilogue。</p>
+
+<h2>2. 同一个 kernel 的三种写法</h2>
+
+<p>用一个「BF16 GEMM」看三条路线的代码形态差异。以下均为<b>简化示意</b>（省略了真实代码中的 pipeline/epilogue 细节），重点看「作者显式声明了什么」。</p>
+
+<h3>2.1 Triton：块级张量，无下标循环</h3>
+
+<pre><code class="language-python">import triton
+import triton.language as tl
+
+@triton.jit                                        # 首次调用时 JIT 编译并缓存
+def fused_add_scale(x_ptr, y_ptr, o_ptr, n, scale, BLOCK: tl.constexpr):
+    pid  = tl.program_id(0)                        # 网格由启动端 grid= 决定
+    offs = pid * BLOCK + tl.arange(0, BLOCK)
+    mask = offs &lt; n
+    x = tl.load(x_ptr + offs, mask=mask)
+    y = tl.load(y_ptr + offs, mask=mask)
+    tl.store(o_ptr + offs, x * scale + y, mask=mask)   # 块级运算：不写线程循环
+
+fused_add_scale[(triton.cdiv(n, 1024),)](x, y, o, n, s, BLOCK=1024)
+# autotune 装饰器可在多组 (BLOCK, num_warps, num_stages) 中试出最优配置</code></pre>
+<p class="cap">特征：<code>tl.arange / tl.load / tl.dot</code> 一切以「块」为单位；TMA、warp 排布、MMA 指令选择都不出现——这就是它快的原因，也是它性能天花板受限的原因。</p>
+
+<h3>2.2 CuTe DSL：Python 里写 CUTLASS 级的声明</h3>
+
+<pre><code class="language-python">import cutlass
+import cutlass.cute as cute
+
+@cute.jit                                          # 与 Triton 同样的 JIT 体验
+def gemm_bf16(mA: cute.Tensor, mB: cute.Tensor, mC: cute.Tensor):
+    # layout 代数显式声明：shape / stride / swizzle 全部作者负责
+    tiler  = (128, 128, 64)
+    gA = cute.local_tile(mA, tiler, ...)           # 按 tile 切分逻辑坐标
+    # 显式 TMA 原子：描述符、gmem→smem 拷贝的每一环都写明
+    tma_a = cute.nvgpu.cp.make_tma_atom(..., gA, ...)
+    # 显式 tcgen05 MMA 原子：Blackwell 第五代 Tensor Core 的指令形状
+    mma_op = cutlass.nvgpu.tcgen05.MmaF16BF16Op(...)
+    # 多级流水线：producer / consumer warp 的分工由作者排
+    ...                                            # （节选自官方 dense_gemm.py 风格）</code></pre>
+<p class="cap">特征：有 <code>cute.local_tile / TMA 原子 / mma 原子</code> 这些「有抽象层的显式控制」——比手写 PTX 高一层，比 Triton 低一层。PyCharm 断点、print、单元测试都可用，这是相对 C++ 模板的实际开发体验差异。</p>
+
+<h3>2.3 CUTLASS C++：模板选型，编译期生成</h3>
+
+<pre><code class="language-cpp">using Mainloop = typename cutlass::gemm::collective::CollectiveBuilder&lt;
+    cutlass::arch::Sm90, cutlass::gemm::OpClassTensorOp,        // 架构 / 算类
+    cutlass::bfloat16_t, cutlass::layout::RowMajor,    8,       // A：类型/布局/对齐
+    cutlass::bfloat16_t, cutlass::layout::ColumnMajor, 8,       // B：类型/布局/对齐
+    float, cutlass::gemm::TagToShapeC&lt;128, 128, 64&gt;::type       // 累加器 / tile
+  &gt;::CollectiveOp;                                              // 编译期组装 mainloop
+
+using Kernel = cutlass::gemm::kernel::GemmUniversal&lt;
+    Shape&lt;int, int, int, int&gt;, Mainloop, DefaultEpilogue&gt;;
+
+// 换一对模板参数 = 一种新配置；3.x 的 TMA + warp 特化主循环已由库封装，
+// 作者负责「选型 + 组装 + epilogue 定制」，不逐 warp 手排（也可以，那就是 CuTe C++）</code></pre>
+<p class="cap">特征：库把 Hopper/Blackwell 的最佳实践封装成 builder，作者通过模板参数「点菜」；代价是编译慢、报错深、需要 C++ 模板功底。它的真正优势在<b>批量枚举</b>：tile × cluster × epilogue 的组合矩阵由编译器静态展开成几十个特化 kernel，供运行时按问题规模挑。</p>
+
+<h2>3. 逐维度对比</h2>
+
+<table>
+  <tr><th>维度</th><th>Triton（JIT）</th><th>CUTLASS C++（模板）</th><th>CuTe DSL（Python JIT）</th></tr>
+  <tr><td><b>性能上限</b></td><td>中高：标准算子通常能到峰值的 80–95%；极致 GEMM/attention 需要下沉到更底层</td><td>天花板：SOTA GEMM/conv/attention 的「母体」</td><td>与 C++ CUTLASS 同级：官方称 Blackwell/Ampere parity；FA4 在 B200 上 1613 TFLOPS BF16（约为同场景 Triton attention 的 2.7×，Spheron 2026-09 引述）</td></tr>
+  <tr><td><b>开发 / 迭代速度</b></td><td>最快：Python 循环内改完即跑</td><td>最慢：改一行模板 → 分钟级重编译，报错信息深</td><td>快：JIT 改完即跑；Python 断点/print 可用</td></tr>
+  <tr><td><b>编译时间</b></td><td>JIT + 缓存，秒级</td><td>模板展开，分钟级；大量变体时构建系统复杂</td><td>JIT；官方称较 C++ 流程最多省约 100×</td></tr>
+  <tr><td><b>硬件特性跟进</b></td><td>跟进快但偏晚：tcgen05 在 v3.6（2026-01），warp 特化/Gluon 在 v3.7（2026-05），Rubin MMAv5 在 v3.8（2026-08）</td><td>最早最深：Hopper WGMMA/TMA（3.x 起）、Blackwell tcgen05（4.0 起）与硬件同期</td><td>与 CUTLASS 主线同步（随 4.x 版本走）</td></tr>
+  <tr><td><b>控制粒度</b></td><td>tile 级；线程级以下托管（Gluon 之后部分开放）</td><td>layout/atom 级，可下探到指令与 warp 排布</td><td>同 CUTLASS（CuTe 语义同构）</td></tr>
+  <tr><td><b>跨厂商</b></td><td>AMD ROCm 官方支持，另有社区后端</td><td>仅 NVIDIA</td><td>仅 NVIDIA</td></tr>
+  <tr><td><b>生态位</b></td><td>torch.compile 默认后端；vLLM/Unsloth/Liger 的长尾算子主力</td><td>cuBLAS/CUDNN 级产品的底层母体；用户库 CUTLASS 包含大量现成 kernel</td><td>年轻（2025-03 随 4.0 发布），官方示例与文档快速成长中</td></tr>
+  <tr><td><b>调试体验</b></td><td>数值对比、print 直接有效</td><td>模板报错陡峭；printf 调试 GPU 代码</td><td>Python 层可调试；进 GPU 后仍难（与所有 kernel 相同）</td></tr>
+  <tr><td><b>适合谁</b></td><td>算法工程师、研究原型、长尾/融合算子</td><td>库作者、性能团队、要 AOT 交付的产品</td><td>要 CUTLASS 级控制又想留在 Python 的 kernel 工程师</td></tr>
+</table>
+
+<div class="infer">「80–95% 峰值」与「2.7×」是引述第三方（Spheron 2026-09）与社区经验量级，非本文实测；CUTLASS 编译「分钟级」、CuTe DSL「省 100×」分别来自官方博客与社区普遍反馈。选型时应以自己的 kernel 形状实测为准。</div>
+
+<h2>4. 硬件特性跟进时间线</h2>
+
+<p>新一代硬件的红利属于「最先吃透新原语」的路线。Hopper 的 TMA/WGMMA、Blackwell 的 tcgen05（第五代 Tensor Core + tensor memory）、Rubin 的 MMAv5，三者的消化速度大致是：CUTLASS 同期 → CuTe DSL 随主线 → Triton 半年到一年后，且 Triton 需要额外的 Gluon 才够得着最底层。</p>
+
+<div class="fig">
+<svg viewBox="0 0 770 470" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <line x1="470" y1="58" x2="470" y2="428" stroke="#c9d2e0" stroke-dasharray="5,4"/>
+  <line x1="682" y1="58" x2="682" y2="428" stroke="#c9d2e0" stroke-dasharray="5,4"/>
+  <text x="476" y="44" font-size="10" fill="#5a6272">Blackwell（2025-03）</text>
+  <text x="688" y="44" font-size="10" fill="#5a6272">Rubin</text>
+
+  <text x="12" y="124" font-size="12" font-weight="600" fill="#2f9e63">CUTLASS C++</text>
+  <line x1="150" y1="120" x2="730" y2="120" stroke="#c9d2e0" stroke-width="2"/>
+  <circle cx="175" cy="120" r="4" fill="#2f9e63"/>
+  <line x1="175" y1="120" x2="175" y2="108" stroke="#2f9e63"/>
+  <text x="175" y="102" font-size="10" fill="#1a1f2e" text-anchor="middle">3.x：CuTe C++ · TMA</text>
+  <circle cx="470" cy="120" r="4" fill="#2f9e63"/>
+  <line x1="470" y1="120" x2="470" y2="108" stroke="#2f9e63"/>
+  <text x="470" y="102" font-size="10" fill="#1a1f2e" text-anchor="middle">4.0：CuTe DSL + tcgen05</text>
+  <circle cx="700" cy="120" r="4" fill="#2f9e63"/>
+  <line x1="700" y1="120" x2="700" y2="132" stroke="#2f9e63"/>
+  <text x="700" y="146" font-size="10" fill="#1a1f2e" text-anchor="middle">4.8.1：双入口主线</text>
+
+  <text x="12" y="224" font-size="12" font-weight="600" fill="#e8862a">Triton</text>
+  <line x1="150" y1="220" x2="730" y2="220" stroke="#c9d2e0" stroke-width="2"/>
+  <circle cx="373" cy="220" r="4" fill="#e8862a"/>
+  <line x1="373" y1="220" x2="373" y2="208" stroke="#e8862a"/>
+  <text x="373" y="202" font-size="10" fill="#1a1f2e" text-anchor="middle">v3.0：Hopper 初支持</text>
+  <circle cx="597" cy="220" r="4" fill="#e8862a"/>
+  <line x1="597" y1="220" x2="597" y2="208" stroke="#e8862a"/>
+  <text x="597" y="202" font-size="10" fill="#1a1f2e" text-anchor="middle">v3.6：tcgen05</text>
+  <circle cx="682" cy="220" r="4" fill="#e8862a"/>
+  <line x1="682" y1="220" x2="682" y2="208" stroke="#e8862a"/>
+  <text x="682" y="202" font-size="10" fill="#1a1f2e" text-anchor="middle">v3.8：Rubin</text>
+  <circle cx="646" cy="220" r="4" fill="#e8862a"/>
+  <line x1="646" y1="220" x2="646" y2="232" stroke="#e8862a"/>
+  <text x="646" y="246" font-size="10" fill="#1a1f2e" text-anchor="middle">v3.7：Gluon · warp 特化</text>
+
+  <text x="12" y="324" font-size="12" font-weight="600" fill="#2456c4">CuTe DSL</text>
+  <line x1="150" y1="320" x2="730" y2="320" stroke="#c9d2e0" stroke-width="2"/>
+  <circle cx="470" cy="320" r="4" fill="#2456c4"/>
+  <line x1="470" y1="320" x2="470" y2="308" stroke="#2456c4"/>
+  <text x="470" y="302" font-size="10" fill="#1a1f2e" text-anchor="middle">随 CUTLASS 4.0 发布</text>
+  <circle cx="573" cy="320" r="4" fill="#2456c4"/>
+  <line x1="573" y1="320" x2="573" y2="332" stroke="#2456c4"/>
+  <text x="573" y="346" font-size="10" fill="#1a1f2e" text-anchor="middle">FA4：B200 1613 TFLOPS</text>
+  <circle cx="646" cy="320" r="4" fill="#2456c4"/>
+  <line x1="646" y1="320" x2="646" y2="308" stroke="#2456c4"/>
+  <text x="646" y="302" font-size="10" fill="#1a1f2e" text-anchor="middle">4.5：API 趋稳</text>
+
+  <line x1="150" y1="430" x2="730" y2="430" stroke="#1a1f2e" stroke-width="1.5"/>
+  <line x1="150" y1="425" x2="150" y2="435" stroke="#1a1f2e"/>
+  <line x1="295" y1="425" x2="295" y2="435" stroke="#1a1f2e"/>
+  <line x1="440" y1="425" x2="440" y2="435" stroke="#1a1f2e"/>
+  <line x1="585" y1="425" x2="585" y2="435" stroke="#1a1f2e"/>
+  <line x1="730" y1="425" x2="730" y2="435" stroke="#1a1f2e"/>
+  <text x="150" y="452" font-size="11" fill="#5a6272" text-anchor="middle">2023</text>
+  <text x="295" y="452" font-size="11" fill="#5a6272" text-anchor="middle">2024</text>
+  <text x="440" y="452" font-size="11" fill="#5a6272" text-anchor="middle">2025</text>
+  <text x="585" y="452" font-size="11" fill="#5a6272" text-anchor="middle">2026</text>
+  <text x="730" y="452" font-size="11" fill="#5a6272" text-anchor="middle">2027</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>｜硬件新原语的消化时间线（事件日期取自各仓库 release notes：Triton v3.6.0 = 2026-01、v3.7.0 = 2026-05、v3.8.0 = 2026-08；CUTLASS 4.0 = 2025-03、4.8.1 = 2026-10）。FA4 日期为本站 FlashAttention 报告所记的 CuTe-DSL 版本发布口径。</p>
+
+<h2>5. 真实世界的路线选择</h2>
+
+<table>
+  <tr><th>项目 / Kernel</th><th>路线</th><th>为什么</th></tr>
+  <tr><td><code>torch.compile</code>（Inductor）</td><td>Triton</td><td>用户算子图不可预知，必须 JIT + 跨算子泛化，Python 直接生成</td></tr>
+  <tr><td>vLLM 的长尾算子</td><td>Triton</td><td>数量多、单算子收益有限，JIT 迭代成本最低（见 <a href="../vllm/vllm-t9-ops.html">vLLM 第 9 讲</a>）</td></tr>
+  <tr><td>vLLM / 推理引擎主干</td><td>CUTLASS / CUDA</td><td>GEMM、attention 主干要 AOT 编译进发布包，性能与稳定性优先</td></tr>
+  <tr><td>FlashAttention-3</td><td>CUTLASS C++ / CuTe C++</td><td>Hopper WGMMA + warp 特化，逐指令压榨</td></tr>
+  <tr><td>FlashAttention-4</td><td><b>CuTe DSL</b></td><td>Blackwell tcgen05；B200 1613 TFLOPS BF16；本站 FA 报告确认「CuTe-DSL 写成、零 CUDA C++」</td></tr>
+  <tr><td>FlashMLA</td><td>CUTLASS / CuTe C++</td><td>decode kernel 要 3000 GB/s 级访存（见 <a href="mla-training-inference.html">MLA 报告</a>）</td></tr>
+  <tr><td>DeepGEMM</td><td>CUDA C++（自研 JIT）</td><td>FP8 GEMM 特化，模板 + 运行时编译配置</td></tr>
+</table>
+
+<p>规律很清晰：<b>批量、多变、要贴着 PyTorch 生态的 → Triton；少而精、要进库、压榨硬件的 → CUTLASS 系</b>。而 FA4 证明了第三种可能：性能不输 C++，但留在 Python 里迭代。</p>
+
+<h2>6. 怎么选</h2>
+
+<div class="fig">
+<svg viewBox="0 0 770 430" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+  <rect x="265" y="24" width="240" height="44" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="385" y="51" font-size="13" fill="#1a1f2e" text-anchor="middle">要写一个 GPU kernel</text>
+  <line x1="385" y1="68" x2="180" y2="106" stroke="#5a6272"/>
+  <line x1="385" y1="68" x2="590" y2="106" stroke="#5a6272"/>
+
+  <rect x="40" y="110" width="280" height="64" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="180" y="136" font-size="12" fill="#1a1f2e" text-anchor="middle">性能要求：能跑就行</text>
+  <text x="180" y="158" font-size="11" fill="#5a6272" text-anchor="middle">或要快速落地 / 长尾算子多</text>
+  <rect x="450" y="110" width="280" height="64" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="590" y="136" font-size="12" fill="#1a1f2e" text-anchor="middle">性能要求：SOTA / 进库级</text>
+  <text x="590" y="158" font-size="11" fill="#5a6272" text-anchor="middle">（GEMM · attention 主干）</text>
+
+  <line x1="180" y1="174" x2="125" y2="296" stroke="#5a6272"/>
+  <line x1="590" y1="174" x2="385" y2="296" stroke="#5a6272"/>
+  <line x1="590" y1="174" x2="645" y2="296" stroke="#5a6272"/>
+  <text x="100" y="242" font-size="10" fill="#5a6272" text-anchor="middle">跨厂商 · 融合</text>
+  <text x="430" y="232" font-size="10" fill="#5a6272" text-anchor="middle">单配置 · 追新原语</text>
+  <text x="685" y="232" font-size="10" fill="#5a6272" text-anchor="middle">枚举变体 · 进 C++ 库</text>
+
+  <rect x="20" y="300" width="210" height="72" rx="10" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="125" y="328" font-size="13" font-weight="600" fill="#1a1f2e" text-anchor="middle">Triton（JIT）</text>
+  <text x="125" y="352" font-size="10.5" fill="#5a6272" text-anchor="middle">长尾融合 · 跨厂商 · torch 生态</text>
+  <rect x="280" y="300" width="210" height="72" rx="10" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="385" y="328" font-size="13" font-weight="600" fill="#1a1f2e" text-anchor="middle">CuTe DSL（JIT）</text>
+  <text x="385" y="352" font-size="10.5" fill="#5a6272" text-anchor="middle">单配置追新原语 · Python 迭代</text>
+  <rect x="540" y="300" width="210" height="72" rx="10" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="645" y="328" font-size="13" font-weight="600" fill="#1a1f2e" text-anchor="middle">CUTLASS C++（模板）</text>
+  <text x="645" y="352" font-size="10.5" fill="#5a6272" text-anchor="middle">枚举大量变体 · AOT 进库</text>
+
+  <text x="385" y="408" font-size="11" fill="#5a6272" text-anchor="middle">先问一句：torch.compile 或现成库已覆盖的，就先别手写</text>
+</svg>
+</div>
+<p class="cap"><b>图 3</b>｜选型决策。右支的两个终点并非互斥——FA4 的实践是「CuTe DSL 写 kernel、必要时回落 CUTLASS C++ 组件」；Triton 与 CUTLASS 产物也常在同一个推理引擎里共存（长尾归 Triton，主干归 CUTLASS/CUDA）。</p>
+
+<h3>6.1 三个具体的建议</h3>
+
+<ul>
+  <li><b>研究/原型场景</b>：直接 Triton。它的 autotune + JIT 让你一小时内就能对着 <code>torch</code> 基线做数值对比；等到某个算子成为瓶颈，再考虑下沉。</li>
+  <li><b>要把 kernel 打进产品/库</b>：CUTLASS C++ 仍是默认答案——AOT 产物、几十种配置的静态枚举、cuBLAS 级的复用边界，这些都依赖编译期生成。</li>
+  <li><b>在 Blackwell 上做新 attention/GEMM 变体</b>：认真评估 CuTe DSL。tcgen05、TMA、warp 特化全部可用，而迭代周期从「分钟级编译」缩到「秒级 JIT」；FA4 已经把这条路走通（本站 <a href="flash-attention-v1-to-v4.html">FA v1→v4 报告</a>）。</li>
+</ul>
+
+<h2>7. 趋势：三条线在合流</h2>
+
+<p>把图 1 和图 2 连起来看，三条路线正在互相靠近：</p>
+
+<ul>
+  <li><b>Triton 在下探</b>：Gluon（v3.7）把 layout、warp 排布这些底层控制开放给用户，v3.8 紧跟 Rubin——它承认「块级抽象」不够用了，开始借 CUTLASS 的思路。</li>
+  <li><b>CUTLASS 在上浮</b>：CuTe DSL 把模板库的全部控制力搬进 Python + JIT，官方明确以「CUTLASS C++ 级性能 + Python 开发效率」为目标。</li>
+  <li><b>C++ 模板的护城河在「库」</b>：AOT、批量枚举、与构建系统的集成，这些是产品化 kernel 的刚需，短期没有替代。</li>
+</ul>
+
+<p>合流点是「<b>JIT 的迭代速度 + CuTe 级的控制力</b>」。今天你必须三选一；两年后这个问题可能不复存在——就像 <code>torch.compile</code> 让大多数人不再手写 Triton 一样。</p>
+
+<h2>参考</h2>
+
+<ol class="refs">
+  <li>NVIDIA/cutlass（4.8.1）：CUDA Templates and Python DSLs，<a href="https://github.com/NVIDIA/cutlass">github.com/NVIDIA/cutlass</a>（2026-10-20 抓取）</li>
+  <li>NVIDIA 开发者博客：Achieve CUTLASS C++ Performance with Python APIs using CuTe DSL（2025-11），<a href="https://developer.nvidia.com/blog/achieve-cutlass-c-performance-with-python-apis-using-cute-dsl/">developer.nvidia.com/blog</a></li>
+  <li>Triton release notes（v3.6.0 / v3.7.0 / v3.8.0），<a href="https://github.com/triton-lang/triton/releases">github.com/triton-lang/triton/releases</a></li>
+  <li>Triton Gluon：Warp Specialization 教程，<a href="https://triton-lang.org/main/getting-started/tutorials/gluon/warp-specialization.html">triton-lang.org</a></li>
+  <li>PyTorch 博客：Enabling advanced GPU features in PyTorch – Warp Specialization（2025-02），<a href="https://pytorch.org/blog/warp-specialization/">pytorch.org/blog</a></li>
+  <li>Spheron：CUTLASS vs Triton Kernel Authoring — CuTe DSL Guide（2026-09），<a href="https://www.spheron.network/blog/cutlass-cute-dsl-writing-gpu-kernels-in-python-2026/">spheron.network/blog</a>（FA4 1613 TFLOPS / 2.7× Triton 量级引述）</li>
+  <li>本站交叉核对：<a href="flash-attention-v1-to-v4.html">FlashAttention v1→v4 演进全解</a>（FA4 为 CuTe-DSL 写成）、<a href="mla-training-inference.html">MLA 训练与推理全细节</a>（FlashMLA 使用 CUTLASS FMHA 内核）、<a href="../vllm/vllm-t9-ops.html">vLLM 第 9 讲</a>（推理引擎的算子接入）</li>
+</ol>
+
+<footer>生成于 2026-10-20 · 代码高亮由 highlight.js 11.9.0 提供 · 代码片段为简化示意，API 以各仓库当前文档为准 · 版本与日期类事实以官方 release notes 为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
