@@ -397,6 +397,14 @@ var REPORTS = [
     "group": "misc"
   },
   {
+    "slug": "misc/flash-dwc-tensor-core",
+    "title": "Flash-DWC 解读：Depthwise 卷积如何被 Tensor Core 加速（GEMV→Toeplitz GEMM 的 56.25% 密度映射，附 benchmark 独立复核）",
+    "date": "2026-10-26",
+    "paper": "Flash-DWC: Making Depthwise Convolution Compute-Efficient on GPUs（ACM TACO 2026, 23(4), DOI 10.1145/3837088；正文被 Cloudflare 拦截未获取，取材为 Crossref 完整摘要 + 官方源码全文）",
+    "repo": "https://github.com/GilgameshXYZ123/Flash-DWC（main，2026-10-26 抓取）",
+    "group": "misc"
+  },
+  {
     "slug": "vla/vla-t0-overview",
     "title": "具身智能与 VLA 零基础七讲 · 第 0 讲：全景图——具身智能是什么，VLA 为什么突然爆发（术语表与系列地图）",
     "date": "2026-10-21",
@@ -529,6 +537,7 @@ var TOPICS = [
     "hub": "hub/hardware.html",
     "collections": [
       { "name": "FlashAttention v1→v4 演进", "slugs": ["misc/flash-attention-v1-to-v4"] },
+      { "name": "Flash-DWC：Depthwise 卷积上 Tensor Core", "slugs": ["misc/flash-dwc-tensor-core"] },
       { "name": "Kernel 开发路线对比", "slugs": ["misc/triton-cutlass-cute-dsl"] },
       { "name": "Verilog 速成", "slugs": ["misc/verilog-crash-course"] }
     ]

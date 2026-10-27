@@ -1,0 +1,2150 @@
+<!DOCTYPE html>
+<!-- paper-research 报告模板：复制本文件，替换 {{TITLE}} / {{DATE}} / {{CONTENT}} 三个占位符后写入 docs/<系列子目录>/<slug>.html
+     （系列子目录：deepseek-v4 / deepseek-v41 / moe / quantization / rl / misc，单篇专题解读放 deepseek-v4，无法归系列的放 misc）。
+     head 中的内联 CSS 与钉死版本 + SRI 的 CDN 引用必须原样保留，不得更换 CDN、升级版本或去掉 integrity/crossorigin。 -->
+<!-- 跨报告链接写相对路径：同系列直接文件名，跨系列用 ../<目录>/<文件>.html；新增报告需同步 docs/reports.js。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flash-DWC 解读：Depthwise 卷积如何被 Tensor Core 加速（GEMV→Toeplitz GEMM 的 56.25% 密度映射）</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap {
+    color: var(--muted); font-size: 0.85em; margin: -6px 0 18px;
+  }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  nav.toc { background: var(--accent-soft); border: 1px solid var(--line); border-radius: 10px; padding: 14px 22px; margin: 22px 0; }
+  nav.toc ol { list-style: none; margin: 6px 0; padding-left: 0; }
+  nav.toc li { margin: 7px 0; }
+  nav.toc .sub { color: var(--muted); font-size: 0.92em; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Flash-DWC 解读：Depthwise 卷积如何被 Tensor Core 加速</h1>
+<p class="meta">
+<b>论文</b>：Flash-DWC: Making Depthwise Convolution Compute-Efficient on GPUs ·
+<b>出处</b>：ACM Transactions on Architecture and Code Optimization (TACO), 2026, Vol. 23, Issue 4, pp. 1–25 ·
+<a href="https://dl.acm.org/doi/10.1145/3837088">DOI 10.1145/3837088</a>（CC-BY 4.0）<br>
+<b>作者</b>：Zhiyi Zhang, Yang Zhao, Jingwei Sun, Liang Qiao, Junshi Chen, Jun Shi, Hong An（中国科学技术大学 / 崂山实验室）<br>
+<b>代码</b>：<a href="https://github.com/GilgameshXYZ123/Flash-DWC">github.com/GilgameshXYZ123/Flash-DWC</a>（Apache-2.0，本报告基于 2026-10-26 抓取的 main 快照）<br>
+<b>复算脚本</b>：<code>scripts/flash_dwc_roofline.py</code>（roofline 与临界 F）· <code>scripts/flash_dwc_bench.py</code>（§6 的加速比与峰值效率）· <code>scripts/flash_dwc_regs.py</code>（表 7 的配对寄存器分析）· <code>scripts/flash_dwc_audit.py</code>（§6.6 的数据完整性审计）
+</p>
+
+<div class="infer">
+本篇<b>没有拿到论文正文</b>。ACM DL 对脚本请求返回 403（Cloudflare 拦截），PDF 无法归档到 <code>paper/</code>。
+因此本文的事实来源是两层：<b>(a)</b> 通过 Crossref 取到的<b>完整摘要</b>与全部书目元数据；<b>(b)</b> 官方开源 CUDA 实现的<b>全文源码</b>（46k 行，91 个 <code>.cuh</code>）。
+凡带 <code>文件:行号</code> 的结论都直接来自源码，可复核；论文正文才有的内容（图表编号、消融实验、评测方法学、逐条 speedup 的分布）本文<b>不做陈述</b>。
+摘要口径的数字（5.09× / 9.01× / 1.03–14.18×）会明确标注为「摘要口径」。源码引用除特别说明外均相对 <code>FlashDWC_cuda/src/</code>。
+</div>
+
+<nav class="toc">
+<b>目录</b>
+<ol>
+<li><a href="#s0">§0 摘要原文与本文的对应关系</a></li>
+<li><a href="#s1">§1 为什么 Depthwise 卷积喂不进 Tensor Core</a><br>
+<span class="sub"><a href="#s1-1">1.1 算子形态：每个通道一张 filter</a> · <a href="#s1-2">1.2 算术强度只由 filter 尺寸决定</a> · <a href="#s1-3">1.3 Tensor-Core mismatch 到底 mismatch 在哪</a></span></li>
+<li><a href="#s2">§2 核心变换：把 filter 铺成 Toeplitz 矩阵，塞进 mma 的 N 轴</a><br>
+<span class="sub"><a href="#s2-1">2.1 源码开头的三行纲领</a> · <a href="#s2-2">2.2 一条 mma 指令算的是什么</a> · <a href="#s2-3">2.3 56.25% 是怎么来的</a> · <a href="#s2-4">2.4 三个空间 tile 变体</a></span></li>
+<li><a href="#s3">§3 CTA 内部的工程：访存、流水与寄存器复用</a><br>
+<span class="sub"><a href="#s3-1">3.1 matrix compression</a> · <a href="#s3-2">3.2 coalesced 128-byte 访问</a> · <a href="#s3-3">3.3 dual-path split-GEMM 流水</a> · <a href="#s3-4">3.4 register-based input reuse</a> · <a href="#s3-5">3.5 CLIP 跳行</a> · <a href="#s3-6">3.6 epilogue 借 Xs 转置</a></span></li>
+<li><a href="#s4">§4 反向传播：Tensor Core 只覆盖了 dX，dW 是另一套完全不同的工程</a><br>
+<span class="sub"><a href="#s4-1">4.1 两条反向路、两个库</a> · <a href="#s4-2">4.2 dW 为什么没上 Tensor Core</a> · <a href="#s4-3">4.3 dW 的 GEMM 形态</a> · <a href="#s4-4">4.4 split-K 与裸 atomicAdd</a> · <a href="#s4-5">4.5 True_FP16 的收益是寄存器压力</a> · <a href="#s4-6">4.6 matrix compression 在反向</a> · <a href="#s4-7">4.7 dual-path 在反向要修正表述</a> · <a href="#s4-8">4.8 工程代价与 3 个真实缺陷</a> · <a href="#s4-9">4.9 精度验证口径</a></span></li>
+<li><a href="#s5">§5 端到端：从 PyTorch 张量到 PTX 的四级分发</a><br>
+<span class="sub"><a href="#s5-1">5.1 channel-last 是唯一入口</a> · <a href="#s5-2">5.2 Tensor-Core 路径适用域最窄</a> · <a href="#s5-3">5.3 Python → FW → IC → IW 四级分发</a> · <a href="#s5-4">5.4 mega kernel：相反解法</a> · <a href="#s5-5">5.5 BN + 激活融合</a> · <a href="#s5-6">5.6 源码层面的负面结论</a></span></li>
+<li><a href="#s6">§6 效果与代价：用仓库自带的 benchmark 数据独立复核</a><br>
+<span class="sub"><a href="#s6-1">6.1 数据形态与 FLOP 口径</a> · <a href="#s6-2">6.2 加速比复算 vs 摘要</a> · <a href="#s6-3">6.3 峰值效率现实检验</a> · <a href="#s6-4">6.4 9-tap 分块锯齿</a> · <a href="#s6-5">6.5 cuDNN 换 FFT，加速比收窄</a> · <a href="#s6-6">6.6 数据完整性审计</a> · <a href="#s6-7">6.7 benchmark 覆盖 torch 够不到的 FW</a> · <a href="#s6-8">6.8 代价小结</a></span></li>
+<li><a href="#s7">§7 复算脚本</a><br>
+<span class="sub"><a href="#s7-1">7.1 flash_dwc_roofline.py</a> · <a href="#s7-2">7.2 flash_dwc_bench.py</a> · <a href="#s7-3">7.3 flash_dwc_regs.py</a> · <a href="#s7-4">7.4 flash_dwc_audit.py</a> · <a href="#s7-5">7.5 无法复算的部分</a></span></li>
+<li><a href="#s8">参考</a></li>
+</ol>
+</nav>
+
+<div class="tldr">
+<p><b>一句话</b>：Depthwise 卷积（DWC）天生是「每个通道一张 filter」的 GEMV，塞不进 Tensor Core；Flash-DWC 的办法是把 <b>8 个相邻输出像素放进 mma 的 N 轴</b>，并把 filter 铺成一张 <b>Toeplitz 矩阵</b> \(B[k][n]=W[k-n]\) 当 B 操作数——于是一条 <code>m16n8k8</code> 指令就能算完「1 个通道 × 128 个输出像素 × 8 个 tap」。</p>
+<p><b>关键数字 1（为什么值得做）</b>：DWC 的算术强度有个极干净的闭式 \(\mathrm{AI}=\dfrac{F_H F_W}{2}\) FLOP/byte，<b>与 N、H、W、C 全都无关</b>。3×3 只有 4.5，而 A100 的 ridge point 是 153 → 小 filter 的 DWC 是彻底的访存瓶颈，Tensor Core 再快也白搭；到 13×13 以上才翻到计算瓶颈侧。</p>
+<p><b>关键数字 2（做到了什么程度）</b>：Toeplitz B 是下三角的，非零 \(36/64=\mathbf{56.25\%}\)。对照两种朴素映射（逐通道 GEMV 直塞 12.5%、按通道拼块对角 GEMM 1.56%），密度提升 <b>4.5× / 36×</b>。这就是摘要里 "compact high-density GEMMs on Tensor Cores" 的量化含义。</p>
+<p><b>关键数字 3（收益随 filter 变大而变大）</b>：源码内联 benchmark 显示同一 shape 下从 5×5 的 4035 GFlop/s 一路涨到 53×53 的 14860 GFlop/s——正好呼应摘要最后一句「让 DWC 变得 compute-efficient，从而鼓励使用更大、更有表达力的 filter」。</p>
+<p><b>诚实的边界</b>：Tensor Core 路径（源码里叫 <b>Flash-DWC-T</b>）只支持 <b>stride=1 + same padding</b>，且<b>只有 FP16</b>；<code>tf32_MMA_*</code> 宏虽然定义了，但全仓库<b>从未被调用</b>。FP32 与一般 padding/stride 仍走 CUDA-Core GEMV 路径。<b>另外</b>：仓库内联 benchmark 的 RTX 4090 段<b>在物理上不成立</b>（4 行报告的<i>有用</i>吞吐就已超过 AD102 的原始峰值），另有 86 行的 shape 标注自相矛盾——§6.6 逐条量化了这些问题，并重算了受影响的统计量；本文所有基于绝对吞吐的结论都只锚定 A100 与 RTX 3060 Ti 两段干净数据。</p>
+</div>
+
+<h2 id="s0">§0 摘要原文与本文的对应关系</h2>
+
+<p>先把唯一拿到的论文原文（Crossref 抓取的完整摘要）拆开，后面每一节回答其中一条主张：</p>
+
+<table>
+<thead><tr><th style="width:44%">摘要主张</th><th>本文对应</th></tr></thead>
+<tbody>
+<tr><td>DWC 在 GPU 上「远低于其 FLOPs 暗示的效率」，原因有三：<i>low arithmetic intensity</i>、<i>Tensor-Core mismatch</i>、<i>inefficient memory access</i></td><td>§1（前两条，含 \(\mathrm{AI}=F_HF_W/2\) 闭式与 roofline 表）；§3.2（第三条）</td></tr>
+<tr><td><i>GEMV-based dataflow co-design</i>，联合优化 data reuse / access order / layout / workload tiling，提升 AI 同时保持 access contiguity 与 <b>coalesced 128-byte memory accesses</b></td><td>§3.2（128 B 合并访存的确切来源）、§3.5（三种空间 tile 按 <code>IW</code> 整除性选择）</td></tr>
+<tr><td>把 DWC 的 GEMV <b>变换成 compact high-density GEMM 放到 Tensor Core 上</b>，实现 mixed-precision 加速</td><td>§2 全节（Toeplitz 映射的完整推导 + 56.25% 密度）</td></tr>
+<tr><td><i>matrix compression</i>、<i>dual-path split-GEMM pipeline</i>、<i>register-based input reuse</i> 释放片上资源、隐藏访存延迟、提升 occupancy</td><td>§3.1（Toeplitz buffer 即压缩）、§3.3（L/H 双路 cp.async 流水）、§3.4（一次 <code>half8</code> 载入喂 8 条 mma）、§3.6（epilogue 复用 Xs，零额外 smem）</td></tr>
+<tr><td>扩展到前向与反向，支持端到端训练</td><td>§4（<code>FlashDWCBFC_cuda/</code> 反向路径）</td></tr>
+<tr><td>对最快 cuDNN DWC 算法：CUDA-Core GEMV 路径 <b>5.09×</b>、Tensor-Core GEMM 路径 <b>9.01×</b> 平均加速；CNN 训练 <b>1.03×–14.18×</b>；ImageNet-1K 收敛与 PyTorch 一致</td><td>§6.2（用源码内联 benchmark 独立复算，得到 9.10× geomean / 9.84× mean 与 4.45× / 4.76×）+ §6.6（数据完整性审计与修正后重算）+ §7.5（哪些声明无法复算）</td></tr>
+</tbody>
+</table>
+
+<h2 id="s1">§1 为什么 Depthwise 卷积喂不进 Tensor Core</h2>
+
+<h3 id="s1-1">1.1 算子形态：每个通道一张 filter</h3>
+
+<p>标准卷积的一个输出元素要在 <code>IC</code> 个输入通道上求和；DWC 把这条求和砍掉了——通道 \(c\) 的输出只依赖通道 \(c\) 的输入：</p>
+
+<div class="formula">
+\[ Y[n,\,oh,\,ow,\,c] \;=\; \sum_{fh=0}^{F_H-1}\sum_{fw=0}^{F_W-1} W[fh,\,fw,\,c]\cdot X[n,\,oh+fh-\tfrac{F_H-1}{2},\; ow+fw-\tfrac{F_W-1}{2},\; c] \]
+</div>
+
+<p>源码里的布局约定与此完全一致（<code>Torch_Impl_fp16.cuh:149-151</code>）：输入 <code>X[N, IH, IW, IC]</code>、filter <code>W[FH, FW, IC]</code>、输出 <code>Y[N, OH, OW, IC]</code>——都是 <b>channel-last（NHWC）</b>，因为「Flash-DWC kernels access contiguous channel segments」（<code>python/flashdwc/ops.py:141-143</code>）。输出维度的换算见 <code>micro_Gemm.cuh:11</code>：</p>
+
+<pre><code class="language-c">#define GET_OUT_DIM(inDim, kernelDim, padding, step) (((inDim) + 2 * (padding) - (kernelDim)) / (step) + 1)</code></pre>
+
+<p>固定住通道 \(c\)，上式就是一条 <b>GEMV</b>：把 \(M=N\cdot OH\cdot OW\) 个输出像素排成一列，reduction 维 \(K=F_H\cdot F_W\) 只有 filter 的 tap 数。源码把这个形状写死在三个宏里（<code>micro_Gemm.cuh:6-8</code>）：</p>
+
+<pre><code class="language-c">#define GET_GN(OC)          (OC)                    // GEMM 的 N 维 = 输出通道数
+#define GET_GM(N, OH, OW)   ((N)*(OH)*(OW))         // GEMM 的 M 维 = 所有输出像素
+#define GET_GK(FH, FW, IC)  ((FH)*(FW)*(IC))        // GEMM 的 K 维 = tap 数（× 通道）</code></pre>
+
+<p>对 DWC 而言 <code>OC == IC</code>，且通道之间不耦合，所以 <code>GET_GK</code> 里的 <code>IC</code> 因子实际上把 GEMM 切成了 <code>IC</code> 个互不相干的 GEMV——这正是 Tensor Core 无法直接吃下的原因。</p>
+
+<h3 id="s1-2">1.2 第一条病根：算术强度只由 filter 尺寸决定</h3>
+
+<p>先算账。前向、same padding、stride 1（Tensor Core 路径唯一支持的形态，见 §5.2）下：</p>
+
+<div class="formula">
+\[ F_{\text{useful}} = 2\cdot N\cdot OH\cdot OW\cdot C\cdot F_H F_W \qquad\text{（每 MAC 记 2 FLOP）} \]
+\[ B_{\text{act}} = \underbrace{2\cdot N\cdot IH\cdot IW\cdot C}_{X\text{ 读一次}} + \underbrace{2\cdot N\cdot OH\cdot OW\cdot C}_{Y\text{ 写一次}} \;\approx\; 4\,N H W C,\qquad B_w = 2\,F_H F_W\,C \]
+</div>
+
+<p>\(B_w\) 与 \(N,H,W\) 无关且小到可以忽略（53×53、C=256 时约 1.4 MB，而 \(B_{\text{act}}\) 是 268 MB 量级）。于是 \(N\cdot H\cdot W\cdot C\) <b>整体约掉</b>：</p>
+
+<div class="formula">
+\[ \boxed{\;\mathrm{AI}_{\text{useful}} \;=\; \frac{F_{\text{useful}}}{B_{\text{act}}+B_w}\;\approx\;\frac{F_H F_W}{2}\quad[\text{FLOP/byte}]\;} \]
+</div>
+
+<p>这个闭式很有解释力：<b>DWC 的算术强度对 batch、分辨率、通道数完全不敏感，只随 filter 面积线性增长</b>。所以「加大 batch 来提高 DWC 效率」是无效的——这跟 GEMM 完全不同（GEMM 的 AI 随 M/N/K 增长）。下表由 <code>scripts/flash_dwc_roofline.py --gpu a100-sxm</code> 生成：</p>
+
+<table>
+<thead><tr><th>\(F\times F\th><th>taps</th><th>\(\mathrm{AI}_{\text{useful}}\)</th><th>AI / ridge</th><th>瓶颈判定</th><th>可达有效算力（TFLOPS）</th><th>mma / warp / fh</th></tr></thead>
+<tbody>
+<tr><td>3×3</td><td>9</td><td>4.5</td><td>0.03</td><td>访存</td><td>7.3</td><td>32</td></tr>
+<tr><td>5×5</td><td>25</td><td>12.5</td><td>0.08</td><td>访存</td><td>20.4</td><td>32</td></tr>
+<tr><td>7×7</td><td>49</td><td>24.5</td><td>0.16</td><td>访存</td><td>40.0</td><td>32</td></tr>
+<tr><td>9×9</td><td>81</td><td>40.5</td><td>0.26</td><td>访存</td><td>66.1</td><td>32</td></tr>
+<tr><td>13×13</td><td>169</td><td>84.5</td><td>0.55</td><td>临界</td><td>122.8</td><td>64</td></tr>
+<tr><td>17×17</td><td>289</td><td>144.5</td><td>0.94</td><td>临界</td><td>122.8</td><td>64</td></tr>
+<tr><td>21×21</td><td>441</td><td>220.5</td><td>1.44</td><td>临界</td><td>122.8</td><td>96</td></tr>
+<tr><td>27×27</td><td>729</td><td>364.5</td><td>2.38</td><td>计算</td><td>122.8</td><td>96</td></tr>
+<tr><td>31×31</td><td>961</td><td>480.5</td><td>3.14</td><td>计算</td><td>122.8</td><td>128</td></tr>
+<tr><td>45×45</td><td>2025</td><td>1012.5</td><td>6.62</td><td>计算</td><td>122.8</td><td>160</td></tr>
+<tr><td>53×53</td><td>2809</td><td>1404.5</td><td>9.18</td><td>计算</td><td>122.8</td><td>192</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 1</b>：A100 SXM4 80GB（FP16 Tensor Core + FP32 累加 dense 峰值 312 TFLOPS，HBM2e 2039 GB/s，ridge = 153 FLOP/byte）。「可达有效算力」= min(312×0.70×0.5625, 2039×0.80×AI)，即把 §2 的 56.25% Toeplitz 密度和常规效率折扣都算进去后的<b>有用</b>算力<b>上限</b>——它是屋顶线，不是预期值。§6.3 表 20 的实测给出落差：仓库自带 benchmark 里 A100 80GB 最好的一行只有 49.5 TF/s 有用吞吐，即<b>这个 122.8 TF/s 上界的 40%</b>、datasheet 峰值的 28.2%。<code>mma/warp/fh</code> 是源码实际发射的指令数：<code>32 × ceil(FW/9)</code>（<code>FP16_dwconv3D_Gemm_mma_kernel_ruse.cuh:15</code> 的注释 <code>Loop: FH * ((FW + 8) / 9)</code> 与 :210-258 的两个 16-mma 阶段）。56.25% 只是 \(F_W\ge 8\) 的极限值，小 filter 的真实密度更低（§6.3 表 19）；但表 1 中 \(F\le 9\) 的几行本来就压在带宽屋顶上，密度修正不改变判定。</p>
+
+<p>换 GPU 只移动 ridge，不移动 \(\mathrm{AI}=F_HF_W/2\)。临界 filter 尺寸（令 \(\mathrm{AI}_{\text{useful}} = 0.5625\times\text{ridge}\)，即 \(F^2 > 1.125\,\text{ridge}\)）：</p>
+
+<table>
+<thead><tr><th>GPU</th><th>FP16 TC 峰值（FP32 累加，dense）</th><th>HBM 带宽</th><th>ridge</th><th>翻到计算瓶颈所需 \(F\)</th></tr></thead>
+<tbody>
+<tr><td>A100 SXM4 80GB</td><td>312 TFLOPS</td><td>2.039 TB/s</td><td>153</td><td>\(F>13.1\)</td></tr>
+<tr><td>H100 SXM5 80GB</td><td>989 TFLOPS</td><td>3.35 TB/s</td><td>295</td><td>\(F>18.2\)</td></tr>
+<tr><td>RTX 4090</td><td>82.6 TFLOPS</td><td>1.008 TB/s</td><td>82</td><td>\(F>9.6\)</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 2</b>：厂商 datasheet 的 dense 峰值（非可达吞吐）。这条线解释了 Flash-DWC 的选题：<b>只有大 filter DWC 才值得上 Tensor Core</b>，而摘要开篇正好说「Recent models increasingly employ large-filter DWC to capture long-range dependencies」。源码支持的 filter 宽度是 3–51 的<b>奇数</b>，分 5 个模板组（<code>FP16_dwconv3D_Gemm_mma.cuh:240-274</code>，开关见 <code>frame.cuh:31-35</code>），53×53 只出现在 benchmark 注释里。</p>
+
+<h3 id="s1-3">1.3 第二条病根：Tensor-Core mismatch 到底 mismatch 在哪</h3>
+
+<p>Ampere 起，FP16 走 Tensor Core 的最小指令是 <code>mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32</code>——一条指令算 \(16\times 8\) 的 C 块，reduction 维 8。源码里就有这个宏（<code>micro_ptx.cuh:113-116</code>）：</p>
+
+<pre><code class="language-c">#define fp16_accu32_MMA_16_8_8_V(RD, RA, RB, RC)\
+    asm volatile("mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32 {%0, %1, %2, %3}, {%4, %5}, {%6}, {%7, %8, %9, %10};\n" \
+                 : "=r"(RD[0]), "=r"(RD[1]), "=r"(RD[2]), "=r"(RD[3]) \
+                 :  "r"(RA[0]), "r"(RA[1]), "r"(RB[0]), "r"(RC[0]), "r"(RC[1]), "r"(RC[2]), "r"(RC[3]))</code></pre>
+
+<p>三个操作数的形状是固定的：A 是 \(16\times8\) 行主序，B 是 \(8\times8\) 列主序（\(K\times N\)），C 是 \(16\times8\)。问题出在 <b>N 轴只有 8</b>：</p>
+
+<ul>
+<li><b>逐通道 GEMV 直塞</b>：一个通道一次只产出「1 个输出列」，N 轴 8 格里只有 1 格有用 → 密度 \(8/64=12.5\%\)。</li>
+<li><b>把 64 个通道拼成一个真 GEMM</b>：因为 DWC 通道间不耦合，这个 \(K\times N\) 矩阵是<b>块对角</b>的，一个 64 通道的 tile 里只有 \(1/64\) 的位置有用 → 密度 \(1.56\%\)。</li>
+</ul>
+
+<p>两条路都比 CUDA Core 上的 FMA 更差——Tensor Core 的峰值优势被密度直接抵消掉。这就是摘要说的 <i>Tensor-Core mismatch</i>。</p>
+
+<div class="fig">
+<svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif">
+<text x="40" y="26" font-size="13" fill="#1a1f2e">同一条 mma.sync.m16n8k8 的 B 操作数（K×N = 8×8），有多少格在做有效计算？</text>
+
+<!-- panel A -->
+<text x="128" y="52" font-size="12" fill="#1a1f2e" text-anchor="middle">① 逐通道 GEMV 直塞</text>
+<g fill="#f6f8fa" stroke="#c9d2e0" stroke-width="1">
+<rect x="40" y="70" width="22" height="22"/><rect x="62" y="70" width="22" height="22"/><rect x="84" y="70" width="22" height="22"/><rect x="106" y="70" width="22" height="22"/><rect x="128" y="70" width="22" height="22"/><rect x="150" y="70" width="22" height="22"/><rect x="172" y="70" width="22" height="22"/><rect x="194" y="70" width="22" height="22"/>
+<rect x="40" y="92" width="22" height="22"/><rect x="62" y="92" width="22" height="22"/><rect x="84" y="92" width="22" height="22"/><rect x="106" y="92" width="22" height="22"/><rect x="128" y="92" width="22" height="22"/><rect x="150" y="92" width="22" height="22"/><rect x="172" y="92" width="22" height="22"/><rect x="194" y="92" width="22" height="22"/>
+<rect x="40" y="114" width="22" height="22"/><rect x="62" y="114" width="22" height="22"/><rect x="84" y="114" width="22" height="22"/><rect x="106" y="114" width="22" height="22"/><rect x="128" y="114" width="22" height="22"/><rect x="150" y="114" width="22" height="22"/><rect x="172" y="114" width="22" height="22"/><rect x="194" y="114" width="22" height="22"/>
+<rect x="40" y="136" width="22" height="22"/><rect x="62" y="136" width="22" height="22"/><rect x="84" y="136" width="22" height="22"/><rect x="106" y="136" width="22" height="22"/><rect x="128" y="136" width="22" height="22"/><rect x="150" y="136" width="22" height="22"/><rect x="172" y="136" width="22" height="22"/><rect x="194" y="136" width="22" height="22"/>
+<rect x="40" y="158" width="22" height="22"/><rect x="62" y="158" width="22" height="22"/><rect x="84" y="158" width="22" height="22"/><rect x="106" y="158" width="22" height="22"/><rect x="128" y="158" width="22" height="22"/><rect x="150" y="158" width="22" height="22"/><rect x="172" y="158" width="22" height="22"/><rect x="194" y="158" width="22" height="22"/>
+<rect x="40" y="180" width="22" height="22"/><rect x="62" y="180" width="22" height="22"/><rect x="84" y="180" width="22" height="22"/><rect x="106" y="180" width="22" height="22"/><rect x="128" y="180" width="22" height="22"/><rect x="150" y="180" width="22" height="22"/><rect x="172" y="180" width="22" height="22"/><rect x="194" y="180" width="22" height="22"/>
+<rect x="40" y="202" width="22" height="22"/><rect x="62" y="202" width="22" height="22"/><rect x="84" y="202" width="22" height="22"/><rect x="106" y="202" width="22" height="22"/><rect x="128" y="202" width="22" height="22"/><rect x="150" y="202" width="22" height="22"/><rect x="172" y="202" width="22" height="22"/><rect x="194" y="202" width="22" height="22"/>
+<rect x="40" y="224" width="22" height="22"/><rect x="62" y="224" width="22" height="22"/><rect x="84" y="224" width="22" height="22"/><rect x="106" y="224" width="22" height="22"/><rect x="128" y="224" width="22" height="22"/><rect x="150" y="224" width="22" height="22"/><rect x="172" y="224" width="22" height="22"/><rect x="194" y="224" width="22" height="22"/>
+</g>
+<g fill="#eef3fc" stroke="#2456c4" stroke-width="1">
+<rect x="40" y="70" width="22" height="22"/><rect x="40" y="92" width="22" height="22"/><rect x="40" y="114" width="22" height="22"/><rect x="40" y="136" width="22" height="22"/><rect x="40" y="158" width="22" height="22"/><rect x="40" y="180" width="22" height="22"/><rect x="40" y="202" width="22" height="22"/><rect x="40" y="224" width="22" height="22"/>
+</g>
+<text x="128" y="268" font-size="12" fill="#2456c4" text-anchor="middle">有效 8/64 = 12.5%</text>
+<text x="128" y="290" font-size="11" fill="#5a6272" text-anchor="middle">N 轴只装 1 个输出列</text>
+
+<!-- panel B -->
+<text x="380" y="52" font-size="12" fill="#1a1f2e" text-anchor="middle">② 按通道拼块对角 GEMM</text>
+<g fill="#f6f8fa" stroke="#c9d2e0" stroke-width="1">
+<rect x="292" y="70" width="22" height="22"/><rect x="314" y="70" width="22" height="22"/><rect x="336" y="70" width="22" height="22"/><rect x="358" y="70" width="22" height="22"/><rect x="380" y="70" width="22" height="22"/><rect x="402" y="70" width="22" height="22"/><rect x="424" y="70" width="22" height="22"/><rect x="446" y="70" width="22" height="22"/>
+<rect x="292" y="92" width="22" height="22"/><rect x="314" y="92" width="22" height="22"/><rect x="336" y="92" width="22" height="22"/><rect x="358" y="92" width="22" height="22"/><rect x="380" y="92" width="22" height="22"/><rect x="402" y="92" width="22" height="22"/><rect x="424" y="92" width="22" height="22"/><rect x="446" y="92" width="22" height="22"/>
+<rect x="292" y="114" width="22" height="22"/><rect x="314" y="114" width="22" height="22"/><rect x="336" y="114" width="22" height="22"/><rect x="358" y="114" width="22" height="22"/><rect x="380" y="114" width="22" height="22"/><rect x="402" y="114" width="22" height="22"/><rect x="424" y="114" width="22" height="22"/><rect x="446" y="114" width="22" height="22"/>
+<rect x="292" y="136" width="22" height="22"/><rect x="314" y="136" width="22" height="22"/><rect x="336" y="136" width="22" height="22"/><rect x="358" y="136" width="22" height="22"/><rect x="380" y="136" width="22" height="22"/><rect x="402" y="136" width="22" height="22"/><rect x="424" y="136" width="22" height="22"/><rect x="446" y="136" width="22" height="22"/>
+<rect x="292" y="158" width="22" height="22"/><rect x="314" y="158" width="22" height="22"/><rect x="336" y="158" width="22" height="22"/><rect x="358" y="158" width="22" height="22"/><rect x="380" y="158" width="22" height="22"/><rect x="402" y="158" width="22" height="22"/><rect x="424" y="158" width="22" height="22"/><rect x="446" y="158" width="22" height="22"/>
+<rect x="292" y="180" width="22" height="22"/><rect x="314" y="180" width="22" height="22"/><rect x="336" y="180" width="22" height="22"/><rect x="358" y="180" width="22" height="22"/><rect x="380" y="180" width="22" height="22"/><rect x="402" y="180" width="22" height="22"/><rect x="424" y="180" width="22" height="22"/><rect x="446" y="180" width="22" height="22"/>
+<rect x="292" y="202" width="22" height="22"/><rect x="314" y="202" width="22" height="22"/><rect x="336" y="202" width="22" height="22"/><rect x="358" y="202" width="22" height="22"/><rect x="380" y="202" width="22" height="22"/><rect x="402" y="202" width="22" height="22"/><rect x="424" y="202" width="22" height="22"/><rect x="446" y="202" width="22" height="22"/>
+<rect x="292" y="224" width="22" height="22"/><rect x="314" y="224" width="22" height="22"/><rect x="336" y="224" width="22" height="22"/><rect x="358" y="224" width="22" height="22"/><rect x="380" y="224" width="22" height="22"/><rect x="402" y="224" width="22" height="22"/><rect x="424" y="224" width="22" height="22"/><rect x="446" y="224" width="22" height="22"/>
+</g>
+<rect x="292" y="70" width="22" height="22" fill="#fbe3cc" stroke="#e8862a" stroke-width="1"/>
+<text x="380" y="268" font-size="12" fill="#e8862a" text-anchor="middle">有效 1/64 = 1.56%</text>
+<text x="380" y="290" font-size="11" fill="#5a6272" text-anchor="middle">通道间不耦合，仅对角有效</text>
+
+<!-- panel C -->
+<text x="632" y="52" font-size="12" fill="#1a1f2e" text-anchor="middle">③ Flash-DWC 的 Toeplitz B</text>
+<g fill="#f6f8fa" stroke="#c9d2e0" stroke-width="1">
+<rect x="544" y="70" width="22" height="22"/><rect x="566" y="70" width="22" height="22"/><rect x="588" y="70" width="22" height="22"/><rect x="610" y="70" width="22" height="22"/><rect x="632" y="70" width="22" height="22"/><rect x="654" y="70" width="22" height="22"/><rect x="676" y="70" width="22" height="22"/><rect x="698" y="70" width="22" height="22"/>
+<rect x="544" y="92" width="22" height="22"/><rect x="566" y="92" width="22" height="22"/><rect x="588" y="92" width="22" height="22"/><rect x="610" y="92" width="22" height="22"/><rect x="632" y="92" width="22" height="22"/><rect x="654" y="92" width="22" height="22"/><rect x="676" y="92" width="22" height="22"/><rect x="698" y="92" width="22" height="22"/>
+<rect x="544" y="114" width="22" height="22"/><rect x="566" y="114" width="22" height="22"/><rect x="588" y="114" width="22" height="22"/><rect x="610" y="114" width="22" height="22"/><rect x="632" y="114" width="22" height="22"/><rect x="654" y="114" width="22" height="22"/><rect x="676" y="114" width="22" height="22"/><rect x="698" y="114" width="22" height="22"/>
+<rect x="544" y="136" width="22" height="22"/><rect x="566" y="136" width="22" height="22"/><rect x="588" y="136" width="22" height="22"/><rect x="610" y="136" width="22" height="22"/><rect x="632" y="136" width="22" height="22"/><rect x="654" y="136" width="22" height="22"/><rect x="676" y="136" width="22" height="22"/><rect x="698" y="136" width="22" height="22"/>
+<rect x="544" y="158" width="22" height="22"/><rect x="566" y="158" width="22" height="22"/><rect x="588" y="158" width="22" height="22"/><rect x="610" y="158" width="22" height="22"/><rect x="632" y="158" width="22" height="22"/><rect x="654" y="158" width="22" height="22"/><rect x="676" y="158" width="22" height="22"/><rect x="698" y="158" width="22" height="22"/>
+<rect x="544" y="180" width="22" height="22"/><rect x="566" y="180" width="22" height="22"/><rect x="588" y="180" width="22" height="22"/><rect x="610" y="180" width="22" height="22"/><rect x="632" y="180" width="22" height="22"/><rect x="654" y="180" width="22" height="22"/><rect x="676" y="180" width="22" height="22"/><rect x="698" y="180" width="22" height="22"/>
+<rect x="544" y="202" width="22" height="22"/><rect x="566" y="202" width="22" height="22"/><rect x="588" y="202" width="22" height="22"/><rect x="610" y="202" width="22" height="22"/><rect x="632" y="202" width="22" height="22"/><rect x="654" y="202" width="22" height="22"/><rect x="676" y="202" width="22" height="22"/><rect x="698" y="202" width="22" height="22"/>
+<rect x="544" y="224" width="22" height="22"/><rect x="566" y="224" width="22" height="22"/><rect x="588" y="224" width="22" height="22"/><rect x="610" y="224" width="22" height="22"/><rect x="632" y="224" width="22" height="22"/><rect x="654" y="224" width="22" height="22"/><rect x="676" y="224" width="22" height="22"/><rect x="698" y="224" width="22" height="22"/>
+</g>
+<g fill="#eef3fc" stroke="#2456c4" stroke-width="1">
+<rect x="544" y="70" width="22" height="22"/>
+<rect x="544" y="92" width="22" height="22"/><rect x="566" y="92" width="22" height="22"/>
+<rect x="544" y="114" width="22" height="22"/><rect x="566" y="114" width="22" height="22"/><rect x="588" y="114" width="22" height="22"/>
+<rect x="544" y="136" width="22" height="22"/><rect x="566" y="136" width="22" height="22"/><rect x="588" y="136" width="22" height="22"/><rect x="610" y="136" width="22" height="22"/>
+<rect x="544" y="158" width="22" height="22"/><rect x="566" y="158" width="22" height="22"/><rect x="588" y="158" width="22" height="22"/><rect x="610" y="158" width="22" height="22"/><rect x="632" y="158" width="22" height="22"/>
+<rect x="544" y="180" width="22" height="22"/><rect x="566" y="180" width="22" height="22"/><rect x="588" y="180" width="22" height="22"/><rect x="610" y="180" width="22" height="22"/><rect x="632" y="180" width="22" height="22"/><rect x="654" y="180" width="22" height="22"/>
+<rect x="544" y="202" width="22" height="22"/><rect x="566" y="202" width="22" height="22"/><rect x="588" y="202" width="22" height="22"/><rect x="610" y="202" width="22" height="22"/><rect x="632" y="202" width="22" height="22"/><rect x="654" y="202" width="22" height="22"/><rect x="676" y="202" width="22" height="22"/>
+<rect x="544" y="224" width="22" height="22"/><rect x="566" y="224" width="22" height="22"/><rect x="588" y="224" width="22" height="22"/><rect x="610" y="224" width="22" height="22"/><rect x="632" y="224" width="22" height="22"/><rect x="654" y="224" width="22" height="22"/><rect x="676" y="224" width="22" height="22"/><rect x="698" y="224" width="22" height="22"/>
+</g>
+<g font-size="10" fill="#2456c4" text-anchor="middle">
+<text x="555" y="85">0</text>
+<text x="555" y="107">1</text><text x="577" y="107">0</text>
+<text x="555" y="129">2</text><text x="577" y="129">1</text><text x="599" y="129">0</text>
+<text x="555" y="151">3</text><text x="577" y="151">2</text><text x="599" y="151">1</text><text x="621" y="151">0</text>
+<text x="555" y="173">4</text><text x="577" y="173">3</text><text x="599" y="173">2</text><text x="621" y="173">1</text><text x="643" y="173">0</text>
+<text x="555" y="195">5</text><text x="577" y="195">4</text><text x="599" y="195">3</text><text x="621" y="195">2</text><text x="643" y="195">1</text><text x="665" y="195">0</text>
+<text x="555" y="217">6</text><text x="577" y="217">5</text><text x="599" y="217">4</text><text x="621" y="217">3</text><text x="643" y="217">2</text><text x="665" y="217">1</text><text x="687" y="217">0</text>
+<text x="555" y="239">7</text><text x="577" y="239">6</text><text x="599" y="239">5</text><text x="621" y="239">4</text><text x="643" y="239">3</text><text x="665" y="239">2</text><text x="687" y="239">1</text><text x="709" y="239">0</text>
+</g>
+<text x="632" y="268" font-size="12" fill="#2456c4" text-anchor="middle">有效 36/64 = 56.25%</text>
+<text x="632" y="290" font-size="11" fill="#5a6272" text-anchor="middle">N 轴装 8 个相邻输出像素</text>
+
+<text x="40" y="316" font-size="11" fill="#5a6272">纵轴 k = tap 窗口内偏移（mma 的 K 轴），横轴 n = mma 的 N 轴；③ 中格内数字 = filter tap 下标 W[k−n]。</text>
+</svg>
+</div>
+<p class="cap"><b>图 1</b>：三种映射下 B 操作数的有效密度。<b>①②是本文推导的对照基线</b>（源码里没有这两种实现，用来量化「mismatch 有多严重」）；<b>③是源码可验证的</b>：非零判据 <code>k ≥ n</code> 来自 <code>Ws</code> 的零填充（<code>FP16_dwconv3D_Gemm_mma_kernel_ruse.cuh:119-120</code>）与索引式 <code>WIdx = 7 - row + col</code>（同文件 :140），推导见 §2.3。</p>
+
+<h2 id="s2">§2 核心变换：把 filter 铺成 Toeplitz 矩阵，塞进 mma 的 N 轴</h2>
+
+<h3 id="s2-1">2.1 源码开头的三行纲领</h3>
+
+<p>整个 Tensor Core 路径的设计写在 kernel 文件的头注释里（<code>FP16_dwconv3D_Gemm_mma_kernel_ruse.cuh:6-15</code>，<code>_ex</code> 变体 :6-16 一字不差）：</p>
+
+<pre><code class="language-c">//Flash-DWC: FP16/FP32 Tensor Core
+//(1) X[N, IH, IW, IC] -&gt; X[IC,     N, IH, IW, 1]
+//(2) W[FH, FW, OC]    -&gt; W[IC, OC/IC, FH, FW, 1]
+//(3) X * W -&gt; Y[IC, N, OH, OW, OC/IC] -&gt; Y[N, OH, OW, OC]
+//[1] GN = OC
+//[2] GM = N * OH * OW
+//[3] GK = FH * FW
+//OC % 4 == 0: GN % 4 == 0
+//N  % 4 == 0: GM % 4 == 0
+//Tensor Core DWConv (FW / 9) kernels =&gt; Loop: FH * ((FW + 8) / 9)</code></pre>
+
+<p>注意 <code>GK = FH * FW</code> 而<b>不是</b> <code>micro_Gemm.cuh:8</code> 里的 <code>FH*FW*IC</code>——通道维被提到最外层当成了 batch（<code>X[IC, ...]</code> 的第 0 维、末尾那个 <code>1</code>），而 DWC 里 <code>OC/IC == 1</code>。也就是说：<b>它没有去构造一个跨通道的大 GEMM，而是承认「每个通道一个独立问题」，转去向 mma 的 M/N/K 三个轴要并行度</b>。最后一行还给出了循环次数：\(F_H\times\lceil F_W/9\rceil\)。</p>
+
+<h3 id="s2-2">2.2 一条 mma 指令算的是什么</h3>
+
+<p>以最简单的 <code>8x16</code> 变体为例（<code>FP16_dwconv3dGemm_CE_mma_kernel_64_8x16_idt</code>，:109-394）。launch 配置在 :25-29：</p>
+
+<pre><code class="language-c">#define FP16_dwconv3dGemm_CE_mma_k64_8x16_idt(stream, CLIP, X, IH, IW, W, FH, FW, Y, N, IC) \
+    FP16_dwconv3dGemm_CE_mma_kernel_64_8x16_idt&lt;FW, CLIP&gt;\
+        &lt;&lt;&lt; dim3((IW&gt;&gt;3) * ((N*IH)&gt;&gt;4), IC&gt;&gt;3&gt;&gt;3),\
+            dim3(8, 16), 0, stream &gt;&gt;&gt;\
+                (X, IH, IW, W, FH, Y, IC)</code></pre>
+
+<p>拆开看：block 是 <code>dim3(8,16)</code> = 128 线程 = <b>4 warp</b>；<code>blockIdx.y = IC&gt;&gt;6</code> → 每个 CTA 负责 <b>64 个通道</b>；<code>blockIdx.x</code> 把 <code>IW/8 × (N·IH)/16</code> 拼起来 → 每个 CTA 负责 <b>8×16 = 128 个输出像素</b>。这与 dispatch 层的注释一致（<code>FP16_dwconv3D_Gemm_mma.cuh:13</code>：<code>//======[64 (IC) * 128 (N*OH*OW)]======</code>）。</p>
+
+<p>CTA 内部的分工（:128-141）：</p>
+
+<pre><code class="language-c">const int ic0 = (by &lt;&lt; 6) + (tx &lt;&lt; 3);            // 通道：CTA 64 个，每线程 8 个
+const int j0  = (bx &lt;&lt; 7) + (ty &lt;&lt; 3);            // 像素：CTA 128 个，每线程组 8 个
+const int tidx = (ty &lt;&lt; 3) + tx;                   // 0..127
+const int lidx = tidx &amp; 31;                        // warp 内 lane
+const int row = lidx &gt;&gt; 2, col = (lidx &amp; 3) &lt;&lt; 1;  // mma fragment 的 (row, col)
+const int bidx = (tidx &gt;&gt; 5 &lt;&lt; 1), WIdx = (7 - row + col);</code></pre>
+
+<p><code>bidx = warp_id × 2</code>，累加器声明是 <code>uint32_t RC[16][4];//16 channel * 4 MMA</code>（:123）——<b>每 warp 负责 16 个通道</b>（<code>bidx</code> 与 <code>bidx+1</code> 两个 8 通道组），4 warp × 16 = 64 ✓。</p>
+
+<p>然后是本文最关键的一步。计算循环（:210-215）长这样：</p>
+
+<pre><code class="language-c">*(half8*)(HB[0]) = Ws[WIdx    ][bidx];   // filter：Toeplitz 的第 1 行
+*(half8*)(HB[1]) = Ws[WIdx + 1][bidx];   // filter：Toeplitz 的第 2 行
+*(half8*)(HA[0]) = Xs[0][row    ][col    ][bidx];   // 输入：4 个 8 通道打包
+*(half8*)(HA[1]) = Xs[0][row    ][col + 1][bidx];
+*(half8*)(HA[2]) = Xs[0][row + 8][col    ][bidx];
+*(half8*)(HA[3]) = Xs[0][row + 8][col + 1][bidx];
+#pragma unroll
+for (int j = 0; j &lt; 8; j++) {
+    *(half2*)(RB) = { HB[0][j], HB[1][j] };                     // B fragment：2 个 half
+    *(half4*)(RA) = { HA[0][j], HA[1][j], HA[2][j], HA[3][j] }; // A fragment：4 个 half
+    fp16_accu32_MMA_16_8_8_V(RC[j], RA, RB, RC[j]);             // 一条 mma = 一个通道
+}</code></pre>
+
+<p>把 <code>m16n8k8.row.col</code> 的 fragment 布局代进去（A 行主序 \(16\times8\)：线程持 <code>a0..a3</code> = <code>A[row][col]</code>, <code>A[row][col+1]</code>, <code>A[row+8][col]</code>, <code>A[row+8][col+1]</code>；B 列主序 \(8\times8\)：线程持 <code>b0,b1</code> = <code>B[col][row]</code>, <code>B[col+1][row]</code>），三个轴的语义就出来了：</p>
+
+<div class="formula">
+\[ A[m][k] \;=\; X\big[n_0(m),\; ih_0+fh,\; iw_0(m)+k,\; c\big] \qquad m\in[0,16),\ k\in[0,8) \]
+\[ B[k][n] \;=\; W_s[\,7-n+k\,] \;=\; W[k-n] \qquad n\in[0,8) \]
+\[ C[m][n] \;=\; \sum_{k} A[m][k]\,B[k][n] \;=\; \sum_{u} W[u]\cdot X[m,\,u+n] \;=\; Y\big[\text{组 }m\text{ 的第 }n\text{ 个像素},\,c\big] \]
+</div>
+
+<p>三句话总结这个映射：</p>
+<ul>
+<li><b>mma 的 N 轴（8）= 同一行内 8 个相邻输出像素</b>。这是把 GEMV 变 GEMM 的关键一步：原本空着的 N 轴被「输出像素」填满了。</li>
+<li><b>mma 的 K 轴（8）= filter tap 窗口</b>。滑动窗口的「滑」由 B 的下标差 <code>k−n</code> 自动完成——第 \(n\) 个输出像素用的正是偏移了 \(n\) 的那一段输入。</li>
+<li><b>mma 的 M 轴（16）= 16 个像素组</b>。16 组 × 8 像素 = 128，正好是 CTA 的整个像素 tile。</li>
+</ul>
+
+<p>所以<b>一条 <code>m16n8k8</code> 算完「1 个通道 × 128 个输出像素 × 8 个 tap」</b>。<code>for j = 0..7</code> 遍历一个 8 通道组，<code>bidx</code> / <code>bidx+1</code> 覆盖两个组，4 个 warp 覆盖 64 通道。</p>
+
+<div class="fig">
+<svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif">
+<defs><marker id="m2a" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#2456c4"/></marker></defs>
+<text x="40" y="30" font-size="13" fill="#1a1f2e">tile 分解：CTA 64 通道 × 128 像素 → warp 16 通道 → 1 条 mma = 1 通道 × 128 像素</text>
+
+<!-- panel A: CTA -->
+<text x="60" y="68" font-size="11" fill="#5a6272">64 通道（IC）</text>
+<rect x="60" y="80" width="240" height="40" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5" stroke-dasharray="5 3"/>
+<rect x="60" y="120" width="240" height="40" fill="#fff" stroke="#c9d2e0" stroke-width="1"/>
+<rect x="60" y="160" width="240" height="40" fill="#fff" stroke="#c9d2e0" stroke-width="1"/>
+<rect x="60" y="200" width="240" height="40" fill="#fff" stroke="#c9d2e0" stroke-width="1"/>
+<g font-size="10" fill="#1a1f2e">
+<text x="70" y="104">warp 0 · ch 0–15</text>
+<text x="70" y="144">warp 1 · ch 16–31</text>
+<text x="70" y="184">warp 2 · ch 32–47</text>
+<text x="70" y="224">warp 3 · ch 48–63</text>
+</g>
+<text x="180" y="260" font-size="11" fill="#5a6272" text-anchor="middle">128 个输出像素（N·OH·OW 的一段）</text>
+<text x="180" y="278" font-size="10" fill="#5a6272" text-anchor="middle">grid.y = IC/64</text>
+
+<!-- arrow -->
+<path d="M306,100 L432,140" stroke="#2456c4" stroke-width="1.5" fill="none" marker-end="url(#m2a)"/>
+<text x="368" y="106" font-size="10" fill="#2456c4" text-anchor="middle">取 1 个通道</text>
+
+<!-- panel B: one mma C tile -->
+<text x="440" y="86" font-size="11" fill="#5a6272">1 条 mma 的 C[16][8]</text>
+<g fill="#eef3fc" stroke="#c9d2e0" stroke-width="0.6">
+<rect x="440" y="96" width="256" height="16"/><rect x="440" y="112" width="256" height="16"/><rect x="440" y="128" width="256" height="16"/><rect x="440" y="144" width="256" height="16"/><rect x="440" y="160" width="256" height="16"/><rect x="440" y="176" width="256" height="16"/><rect x="440" y="192" width="256" height="16"/><rect x="440" y="208" width="256" height="16"/>
+</g>
+<g stroke="#2456c4" stroke-width="0.8" opacity="0.45">
+<path d="M472,96 L472,224"/><path d="M504,96 L504,224"/><path d="M536,96 L536,224"/><path d="M568,96 L568,224"/><path d="M600,96 L600,224"/><path d="M632,96 L632,224"/><path d="M664,96 L664,224"/>
+</g>
+<rect x="440" y="96" width="256" height="16" fill="none" stroke="#e8862a" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="446" y="108" font-size="9" fill="#e8862a">N 轴 = 8 个相邻输出像素</text>
+<text x="568" y="244" font-size="11" fill="#5a6272" text-anchor="middle">M 轴 → 16 个像素组 × 8 = 128 像素</text>
+<text x="568" y="262" font-size="10" fill="#5a6272" text-anchor="middle">线程持有其中 4 个 f32（RC[c][0..3]）</text>
+
+<text x="40" y="302" font-size="11" fill="#5a6272">grid = dim3((IW&gt;&gt;3) · ((N·IH)&gt;&gt;4), IC&gt;&gt;6)，block = dim3(8,16) = 128 线程 = 4 warp（8x16 变体，:25-29）。</text>
+</svg>
+</div>
+<p class="cap"><b>图 2</b>：三级 tile 分解。左：一个 CTA 覆盖 64 通道 × 128 像素，4 个 warp 各拿 16 通道（<code>bidx = warp_id×2</code>，每 warp 两个 8 通道组）。右：单个通道的一条 <code>m16n8k8</code> 输出 \(C[16][8]\)——M 轴 16 个像素组、N 轴组内 8 像素，合起来正好是 CTA 的 128 像素；每个线程拿 4 个 f32 累加器，16 通道 × 4 = <code>RC[16][4]</code> 共 64 个寄存器（:123-124）。</p>
+
+<h3 id="s2-3">2.3 56.25% 是怎么来的：Toeplitz 的下三角</h3>
+
+<p>B 操作数不是从 shared memory 里「读一块 \(8\times8\) 的 tile」，而是<b>按下标差现算</b>的。共享内存里的 filter buffer 声明与初始化是（:119-120）：</p>
+
+<pre><code class="language-c">__shared__ half8 Ws[25][9];                          //[7(zeros) + 9 + 7(zeros)]
+Ws[ty + (ty &gt; 6) * 9][tx] = half8_zero;              //zero Ws[0:6] and [16:22]</code></pre>
+
+<p>25 行里只有中间 9 行装真数据（<code>Ws[7..15]</code> = tap <code>fw = 0..8</code>），前后各 7~9 行<b>预置为全零</b>。载入发生在 :169-172 与 :187：</p>
+
+<pre><code class="language-c">const int wfw  = ty;                                  // 线程 ty 负责 tap ty
+const int woft = (fh*FW + wfw)*IC + ic0;
+uint32_t Wsoft = (uint32_t)__cvta_generic_to_shared(&amp;Ws[ty + 7][tx]);
+LWS_cp_async_cg_low (Wsoft, W + woft, 16, wfw, FW, ty);  //(wfw &lt; FW and ty &lt; 8)
+...
+LWS_cp_async_cg_high(Wsoft, W + woft, 16, wfw, FW, ty);  //(wfw &lt; FW and ty == 8)</code></pre>
+
+<p>于是 <code>Ws[r][g]</code> 的语义是「tap <code>fw = r − 7</code>、通道组 <code>g</code> 的 8 个通道」。而 mma 取 B fragment 用的下标是 <code>WIdx = 7 − row + col</code>（:140），配 <code>Ws[WIdx]</code> 与 <code>Ws[WIdx+1]</code>（:204-205），代回 <code>row = n</code>、<code>col = k</code>：</p>
+
+<div class="formula">
+\[ B[k][n] \;=\; W_s[\,7-n+k\,]\;=\;W\big[(7-n+k)-7\big]\;=\;W[k-n] \]
+</div>
+
+<p>\(W[u]\) 在 \(u<0\) 时落在 <code>Ws[0..6]</code> 的零区，所以 <b>\(B[k][n]=0 \iff k<n\)</b>：B 是一张含对角线的下三角 Toeplitz 矩阵。非零格数</p>
+
+<div class="formula">
+\[ \#\{(k,n): 0\le n\le k\le 7\} \;=\; \sum_{n=0}^{7}(8-n) \;=\; 8+7+6+5+4+3+2+1 \;=\; 36 \;\Rightarrow\; \frac{36}{64} = \mathbf{56.25\%} \]
+</div>
+
+<p>这个数可以<b>从指令数反向验证</b>，两条路必须一致。每个 warp、每个 <code>fh</code>、每个 9-tap chunk 发射的 mma 数：L 阶段 16 条（:210-228，两个 <code>for j=0..7</code>）+ H 阶段 16 条（:240-258）= <b>32 条</b>；每条 <code>m16n8k8</code> 是 \(16\times8\times8=1024\) MAC，共 32768 MAC。而这些指令完成的有用工作是 16 通道 × 128 像素 × 9 tap = 18432 MAC。</p>
+
+<div class="formula">
+\[ \frac{18432}{32768} = 0.5625 \quad\checkmark \]
+</div>
+
+<p>两条独立路径给出同一个 56.25%，说明「Toeplitz 下三角密度」就是这套映射的<b>硬天花板</b>——它不随 filter 尺寸、batch、分辨率变化，也无法通过调 tile 改善（除非改用更大的 mma 形状或跳过零区的指令，源码里没有做）。</p>
+
+<p>上面的下标推导还可以再具体一层：取一个<b>一维实例</b>，把 <code>Xs</code> / <code>Ws</code> / <code>B</code> 每个格子里放的东西全写出来，映射就不再是符号运算了。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 744" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif">
+<text x="24" y="26" font-size="13" fill="#1a1f2e">一维实例：FH=1，FW=9，IC=8，一个像素组 m（8 个输出）、一个通道 c —— 数组里到底放了什么</text>
+<text x="24" y="46" font-size="10" fill="#5a6272">stride=1，same padding → pad = FW/2 = 4；IW = 8；取 ow0 = 0，故窗口基址 tiw0 = ow0 − 4 = −4。</text>
+<text x="24" y="62" font-size="10" fill="#5a6272">half8 的 8 个通道由 for j = 0..7 逐条 mma 走完（:210-215），下面只画其中固定的一个通道 c，以及一个像素组 m。</text>
+<text x="24" y="84" font-size="12" fill="#2456c4">① 全局内存里的一行输入（含 padding）= 16 个窗口位置 k</text>
+<rect x="40" y="92" width="40" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="60" y="111" font-size="11" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="60" y="138" font-size="9" fill="#5a6272" text-anchor="middle">0</text>
+<rect x="80" y="92" width="40" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="100" y="111" font-size="11" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="100" y="138" font-size="9" fill="#5a6272" text-anchor="middle">1</text>
+<rect x="120" y="92" width="40" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="140" y="111" font-size="11" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="140" y="138" font-size="9" fill="#5a6272" text-anchor="middle">2</text>
+<rect x="160" y="92" width="40" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="180" y="111" font-size="11" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="180" y="138" font-size="9" fill="#5a6272" text-anchor="middle">3</text>
+<rect x="200" y="92" width="40" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="220" y="111" font-size="11" fill="#1a1f2e" text-anchor="middle">x0</text>
+<text x="220" y="138" font-size="9" fill="#5a6272" text-anchor="middle">4</text>
+<rect x="240" y="92" width="40" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="260" y="111" font-size="11" fill="#1a1f2e" text-anchor="middle">x1</text>
+<text x="260" y="138" font-size="9" fill="#5a6272" text-anchor="middle">5</text>
+<rect x="280" y="92" width="40" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="300" y="111" font-size="11" fill="#1a1f2e" text-anchor="middle">x2</text>
+<text x="300" y="138" font-size="9" fill="#5a6272" text-anchor="middle">6</text>
+<rect x="320" y="92" width="40" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="340" y="111" font-size="11" fill="#1a1f2e" text-anchor="middle">x3</text>
+<text x="340" y="138" font-size="9" fill="#5a6272" text-anchor="middle">7</text>
+<rect x="360" y="92" width="40" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="380" y="111" font-size="11" fill="#1a1f2e" text-anchor="middle">x4</text>
+<text x="380" y="138" font-size="9" fill="#5a6272" text-anchor="middle">8</text>
+<rect x="400" y="92" width="40" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="420" y="111" font-size="11" fill="#1a1f2e" text-anchor="middle">x5</text>
+<text x="420" y="138" font-size="9" fill="#5a6272" text-anchor="middle">9</text>
+<rect x="440" y="92" width="40" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="460" y="111" font-size="11" fill="#1a1f2e" text-anchor="middle">x6</text>
+<text x="460" y="138" font-size="9" fill="#5a6272" text-anchor="middle">10</text>
+<rect x="480" y="92" width="40" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="500" y="111" font-size="11" fill="#1a1f2e" text-anchor="middle">x7</text>
+<text x="500" y="138" font-size="9" fill="#5a6272" text-anchor="middle">11</text>
+<rect x="520" y="92" width="40" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="540" y="111" font-size="11" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="540" y="138" font-size="9" fill="#5a6272" text-anchor="middle">12</text>
+<rect x="560" y="92" width="40" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="580" y="111" font-size="11" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="580" y="138" font-size="9" fill="#5a6272" text-anchor="middle">13</text>
+<rect x="600" y="92" width="40" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="620" y="111" font-size="11" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="620" y="138" font-size="9" fill="#5a6272" text-anchor="middle">14</text>
+<rect x="640" y="92" width="40" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="660" y="111" font-size="11" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="660" y="138" font-size="9" fill="#5a6272" text-anchor="middle">15</text>
+<text x="24" y="138" font-size="9" fill="#5a6272">k</text>
+<rect x="40" y="144" width="318" height="26" fill="#eef3fc" stroke="#2456c4" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="199" y="161" font-size="10" fill="#2456c4" text-anchor="middle">cp.async → Xs[0][m][0..7][g]　L 缓冲</text>
+<rect x="362" y="144" width="318" height="26" fill="#fbe3cc" stroke="#e8862a" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="521" y="161" font-size="10" fill="#e8862a" text-anchor="middle">cp.async → Xs[1][m][0..7][g]　H 缓冲</text>
+<text x="24" y="192" font-size="12" fill="#2f9e63">② shared memory 里的 Ws[25][9]：9 行装 tap，其余常驻零</text>
+<rect x="40" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="55" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="70" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="85" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="100" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="115" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="130" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="145" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="160" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="175" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="190" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="205" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="220" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="235" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="250" y="200" width="30" height="28" fill="#d9f0e2" stroke="#2f9e63" stroke-width="0.8"/>
+<text x="265" y="218" font-size="10" fill="#2f9e63" text-anchor="middle">w0</text>
+<rect x="280" y="200" width="30" height="28" fill="#d9f0e2" stroke="#2f9e63" stroke-width="0.8"/>
+<text x="295" y="218" font-size="10" fill="#2f9e63" text-anchor="middle">w1</text>
+<rect x="310" y="200" width="30" height="28" fill="#d9f0e2" stroke="#2f9e63" stroke-width="0.8"/>
+<text x="325" y="218" font-size="10" fill="#2f9e63" text-anchor="middle">w2</text>
+<rect x="340" y="200" width="30" height="28" fill="#d9f0e2" stroke="#2f9e63" stroke-width="0.8"/>
+<text x="355" y="218" font-size="10" fill="#2f9e63" text-anchor="middle">w3</text>
+<rect x="370" y="200" width="30" height="28" fill="#d9f0e2" stroke="#2f9e63" stroke-width="0.8"/>
+<text x="385" y="218" font-size="10" fill="#2f9e63" text-anchor="middle">w4</text>
+<rect x="400" y="200" width="30" height="28" fill="#d9f0e2" stroke="#2f9e63" stroke-width="0.8"/>
+<text x="415" y="218" font-size="10" fill="#2f9e63" text-anchor="middle">w5</text>
+<rect x="430" y="200" width="30" height="28" fill="#d9f0e2" stroke="#2f9e63" stroke-width="0.8"/>
+<text x="445" y="218" font-size="10" fill="#2f9e63" text-anchor="middle">w6</text>
+<rect x="460" y="200" width="30" height="28" fill="#d9f0e2" stroke="#2f9e63" stroke-width="0.8"/>
+<text x="475" y="218" font-size="10" fill="#2f9e63" text-anchor="middle">w7</text>
+<rect x="490" y="200" width="30" height="28" fill="#d9f0e2" stroke="#2f9e63" stroke-width="0.8"/>
+<text x="505" y="218" font-size="10" fill="#2f9e63" text-anchor="middle">w8</text>
+<rect x="520" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="535" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="550" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="565" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="580" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="595" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="610" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="625" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="640" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="655" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="670" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="685" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="700" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="715" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="730" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="745" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="760" y="200" width="30" height="28" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="775" y="218" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="55" y="244" font-size="9" fill="#5a6272" text-anchor="middle">r=0</text>
+<text x="235" y="244" font-size="9" fill="#5a6272" text-anchor="middle">r=6</text>
+<text x="265" y="244" font-size="9" fill="#5a6272" text-anchor="middle">r=7</text>
+<text x="505" y="244" font-size="9" fill="#5a6272" text-anchor="middle">r=15</text>
+<text x="535" y="244" font-size="9" fill="#5a6272" text-anchor="middle">r=16</text>
+<text x="775" y="244" font-size="9" fill="#5a6272" text-anchor="middle">r=24</text>
+<text x="24" y="260" font-size="10" fill="#5a6272">Ws[r][g] = half8{ tap fw = r−7 的 8 个通道 }；Ws[0..6] 与 Ws[16..24] 在 kernel 开头就写成 half8_zero（:119-120）</text>
+<text x="24" y="284" font-size="12" fill="#2456c4">③ 两条 mma.m16n8k8 实际读到的操作数（A 竖排 = 固定 m 的 8 个 k，与 B 的行对齐；16 个像素组共用同一张 B）</text>
+<text x="40" y="304" font-size="11" fill="#2456c4">L 路　A[m][k] = Xs[0][m][k][g]　B[k][n] = Ws[7−n+k]　非零 36/64</text>
+<text x="77" y="326" font-size="9" fill="#2456c4" text-anchor="middle">A[m][k]</text>
+<text x="224" y="326" font-size="9" fill="#2456c4" text-anchor="middle">B[k][n]</text>
+<text x="56" y="353" font-size="9" fill="#5a6272" text-anchor="end">0</text>
+<rect x="62" y="334" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="77" y="353" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="104" y="334" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="119" y="353" font-size="9" fill="#1a1f2e" text-anchor="middle">w0</text>
+<rect x="134" y="334" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="149" y="353" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="164" y="334" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="179" y="353" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="194" y="334" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="209" y="353" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="224" y="334" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="239" y="353" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="254" y="334" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="269" y="353" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="284" y="334" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="299" y="353" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="314" y="334" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="329" y="353" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="56" y="383" font-size="9" fill="#5a6272" text-anchor="end">1</text>
+<rect x="62" y="364" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="77" y="383" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="104" y="364" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="119" y="383" font-size="9" fill="#1a1f2e" text-anchor="middle">w1</text>
+<rect x="134" y="364" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="149" y="383" font-size="9" fill="#1a1f2e" text-anchor="middle">w0</text>
+<rect x="164" y="364" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="179" y="383" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="194" y="364" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="209" y="383" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="224" y="364" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="239" y="383" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="254" y="364" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="269" y="383" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="284" y="364" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="299" y="383" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="314" y="364" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="329" y="383" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="56" y="413" font-size="9" fill="#5a6272" text-anchor="end">2</text>
+<rect x="62" y="394" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="77" y="413" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="104" y="394" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="119" y="413" font-size="9" fill="#1a1f2e" text-anchor="middle">w2</text>
+<rect x="134" y="394" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="149" y="413" font-size="9" fill="#1a1f2e" text-anchor="middle">w1</text>
+<rect x="164" y="394" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="179" y="413" font-size="9" fill="#1a1f2e" text-anchor="middle">w0</text>
+<rect x="194" y="394" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="209" y="413" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="224" y="394" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="239" y="413" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="254" y="394" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="269" y="413" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="284" y="394" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="299" y="413" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="314" y="394" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="329" y="413" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="56" y="443" font-size="9" fill="#5a6272" text-anchor="end">3</text>
+<rect x="62" y="424" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="77" y="443" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="104" y="424" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="119" y="443" font-size="9" fill="#1a1f2e" text-anchor="middle">w3</text>
+<rect x="134" y="424" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="149" y="443" font-size="9" fill="#1a1f2e" text-anchor="middle">w2</text>
+<rect x="164" y="424" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="179" y="443" font-size="9" fill="#1a1f2e" text-anchor="middle">w1</text>
+<rect x="194" y="424" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="209" y="443" font-size="9" fill="#1a1f2e" text-anchor="middle">w0</text>
+<rect x="224" y="424" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="239" y="443" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="254" y="424" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="269" y="443" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="284" y="424" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="299" y="443" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="314" y="424" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="329" y="443" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="56" y="473" font-size="9" fill="#5a6272" text-anchor="end">4</text>
+<rect x="62" y="454" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="77" y="473" font-size="10" fill="#1a1f2e" text-anchor="middle">x0</text>
+<rect x="104" y="454" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="119" y="473" font-size="9" fill="#1a1f2e" text-anchor="middle">w4</text>
+<rect x="134" y="454" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="149" y="473" font-size="9" fill="#1a1f2e" text-anchor="middle">w3</text>
+<rect x="164" y="454" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="179" y="473" font-size="9" fill="#1a1f2e" text-anchor="middle">w2</text>
+<rect x="194" y="454" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="209" y="473" font-size="9" fill="#1a1f2e" text-anchor="middle">w1</text>
+<rect x="224" y="454" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="239" y="473" font-size="9" fill="#1a1f2e" text-anchor="middle">w0</text>
+<rect x="254" y="454" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="269" y="473" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="284" y="454" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="299" y="473" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="314" y="454" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="329" y="473" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="56" y="503" font-size="9" fill="#5a6272" text-anchor="end">5</text>
+<rect x="62" y="484" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="77" y="503" font-size="10" fill="#1a1f2e" text-anchor="middle">x1</text>
+<rect x="104" y="484" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="119" y="503" font-size="9" fill="#1a1f2e" text-anchor="middle">w5</text>
+<rect x="134" y="484" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="149" y="503" font-size="9" fill="#1a1f2e" text-anchor="middle">w4</text>
+<rect x="164" y="484" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="179" y="503" font-size="9" fill="#1a1f2e" text-anchor="middle">w3</text>
+<rect x="194" y="484" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="209" y="503" font-size="9" fill="#1a1f2e" text-anchor="middle">w2</text>
+<rect x="224" y="484" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="239" y="503" font-size="9" fill="#1a1f2e" text-anchor="middle">w1</text>
+<rect x="254" y="484" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="269" y="503" font-size="9" fill="#1a1f2e" text-anchor="middle">w0</text>
+<rect x="284" y="484" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="299" y="503" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="314" y="484" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="329" y="503" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="56" y="533" font-size="9" fill="#5a6272" text-anchor="end">6</text>
+<rect x="62" y="514" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="77" y="533" font-size="10" fill="#1a1f2e" text-anchor="middle">x2</text>
+<rect x="104" y="514" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="119" y="533" font-size="9" fill="#1a1f2e" text-anchor="middle">w6</text>
+<rect x="134" y="514" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="149" y="533" font-size="9" fill="#1a1f2e" text-anchor="middle">w5</text>
+<rect x="164" y="514" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="179" y="533" font-size="9" fill="#1a1f2e" text-anchor="middle">w4</text>
+<rect x="194" y="514" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="209" y="533" font-size="9" fill="#1a1f2e" text-anchor="middle">w3</text>
+<rect x="224" y="514" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="239" y="533" font-size="9" fill="#1a1f2e" text-anchor="middle">w2</text>
+<rect x="254" y="514" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="269" y="533" font-size="9" fill="#1a1f2e" text-anchor="middle">w1</text>
+<rect x="284" y="514" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="299" y="533" font-size="9" fill="#1a1f2e" text-anchor="middle">w0</text>
+<rect x="314" y="514" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="329" y="533" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<text x="56" y="563" font-size="9" fill="#5a6272" text-anchor="end">7</text>
+<rect x="62" y="544" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.8"/>
+<text x="77" y="563" font-size="10" fill="#1a1f2e" text-anchor="middle">x3</text>
+<rect x="104" y="544" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="119" y="563" font-size="9" fill="#1a1f2e" text-anchor="middle">w7</text>
+<rect x="134" y="544" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="149" y="563" font-size="9" fill="#1a1f2e" text-anchor="middle">w6</text>
+<rect x="164" y="544" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="179" y="563" font-size="9" fill="#1a1f2e" text-anchor="middle">w5</text>
+<rect x="194" y="544" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="209" y="563" font-size="9" fill="#1a1f2e" text-anchor="middle">w4</text>
+<rect x="224" y="544" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="239" y="563" font-size="9" fill="#1a1f2e" text-anchor="middle">w3</text>
+<rect x="254" y="544" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="269" y="563" font-size="9" fill="#1a1f2e" text-anchor="middle">w2</text>
+<rect x="284" y="544" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="299" y="563" font-size="9" fill="#1a1f2e" text-anchor="middle">w1</text>
+<rect x="314" y="544" width="30" height="30" fill="#eef3fc" stroke="#2456c4" stroke-width="0.7" opacity="0.42"/>
+<text x="329" y="563" font-size="9" fill="#1a1f2e" text-anchor="middle">w0</text>
+<text x="119" y="590" font-size="9" fill="#5a6272" text-anchor="middle">0</text>
+<text x="149" y="590" font-size="9" fill="#5a6272" text-anchor="middle">1</text>
+<text x="179" y="590" font-size="9" fill="#5a6272" text-anchor="middle">2</text>
+<text x="209" y="590" font-size="9" fill="#5a6272" text-anchor="middle">3</text>
+<text x="239" y="590" font-size="9" fill="#5a6272" text-anchor="middle">4</text>
+<text x="269" y="590" font-size="9" fill="#5a6272" text-anchor="middle">5</text>
+<text x="299" y="590" font-size="9" fill="#5a6272" text-anchor="middle">6</text>
+<text x="329" y="590" font-size="9" fill="#5a6272" text-anchor="middle">7</text>
+<text x="224" y="610" font-size="9" fill="#5a6272" text-anchor="middle">n（组内第几个输出像素）</text>
+<text x="460" y="304" font-size="11" fill="#e8862a">H 路　A[m][k′] = Xs[1][m][k′][g]　B[k′][n] = Ws[15−n+k′]　非零 36/64</text>
+<text x="497" y="326" font-size="9" fill="#e8862a" text-anchor="middle">A[m][k]</text>
+<text x="644" y="326" font-size="9" fill="#e8862a" text-anchor="middle">B[k][n]</text>
+<text x="476" y="353" font-size="9" fill="#5a6272" text-anchor="end">0</text>
+<rect x="482" y="334" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.8"/>
+<text x="497" y="353" font-size="10" fill="#1a1f2e" text-anchor="middle">x4</text>
+<rect x="524" y="334" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="539" y="353" font-size="9" fill="#1a1f2e" text-anchor="middle">w8</text>
+<rect x="554" y="334" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="569" y="353" font-size="9" fill="#1a1f2e" text-anchor="middle">w7</text>
+<rect x="584" y="334" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="599" y="353" font-size="9" fill="#1a1f2e" text-anchor="middle">w6</text>
+<rect x="614" y="334" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="629" y="353" font-size="9" fill="#1a1f2e" text-anchor="middle">w5</text>
+<rect x="644" y="334" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="659" y="353" font-size="9" fill="#1a1f2e" text-anchor="middle">w4</text>
+<rect x="674" y="334" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="689" y="353" font-size="9" fill="#1a1f2e" text-anchor="middle">w3</text>
+<rect x="704" y="334" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="719" y="353" font-size="9" fill="#1a1f2e" text-anchor="middle">w2</text>
+<rect x="734" y="334" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="749" y="353" font-size="9" fill="#1a1f2e" text-anchor="middle">w1</text>
+<text x="476" y="383" font-size="9" fill="#5a6272" text-anchor="end">1</text>
+<rect x="482" y="364" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.8"/>
+<text x="497" y="383" font-size="10" fill="#1a1f2e" text-anchor="middle">x5</text>
+<rect x="524" y="364" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="539" y="383" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="554" y="364" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="569" y="383" font-size="9" fill="#1a1f2e" text-anchor="middle">w8</text>
+<rect x="584" y="364" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="599" y="383" font-size="9" fill="#1a1f2e" text-anchor="middle">w7</text>
+<rect x="614" y="364" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="629" y="383" font-size="9" fill="#1a1f2e" text-anchor="middle">w6</text>
+<rect x="644" y="364" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="659" y="383" font-size="9" fill="#1a1f2e" text-anchor="middle">w5</text>
+<rect x="674" y="364" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="689" y="383" font-size="9" fill="#1a1f2e" text-anchor="middle">w4</text>
+<rect x="704" y="364" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="719" y="383" font-size="9" fill="#1a1f2e" text-anchor="middle">w3</text>
+<rect x="734" y="364" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="749" y="383" font-size="9" fill="#1a1f2e" text-anchor="middle">w2</text>
+<text x="476" y="413" font-size="9" fill="#5a6272" text-anchor="end">2</text>
+<rect x="482" y="394" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.8"/>
+<text x="497" y="413" font-size="10" fill="#1a1f2e" text-anchor="middle">x6</text>
+<rect x="524" y="394" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="539" y="413" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="554" y="394" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="569" y="413" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="584" y="394" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="599" y="413" font-size="9" fill="#1a1f2e" text-anchor="middle">w8</text>
+<rect x="614" y="394" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="629" y="413" font-size="9" fill="#1a1f2e" text-anchor="middle">w7</text>
+<rect x="644" y="394" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="659" y="413" font-size="9" fill="#1a1f2e" text-anchor="middle">w6</text>
+<rect x="674" y="394" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="689" y="413" font-size="9" fill="#1a1f2e" text-anchor="middle">w5</text>
+<rect x="704" y="394" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="719" y="413" font-size="9" fill="#1a1f2e" text-anchor="middle">w4</text>
+<rect x="734" y="394" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="749" y="413" font-size="9" fill="#1a1f2e" text-anchor="middle">w3</text>
+<text x="476" y="443" font-size="9" fill="#5a6272" text-anchor="end">3</text>
+<rect x="482" y="424" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.8"/>
+<text x="497" y="443" font-size="10" fill="#1a1f2e" text-anchor="middle">x7</text>
+<rect x="524" y="424" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="539" y="443" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="554" y="424" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="569" y="443" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="584" y="424" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="599" y="443" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="614" y="424" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="629" y="443" font-size="9" fill="#1a1f2e" text-anchor="middle">w8</text>
+<rect x="644" y="424" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="659" y="443" font-size="9" fill="#1a1f2e" text-anchor="middle">w7</text>
+<rect x="674" y="424" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="689" y="443" font-size="9" fill="#1a1f2e" text-anchor="middle">w6</text>
+<rect x="704" y="424" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="719" y="443" font-size="9" fill="#1a1f2e" text-anchor="middle">w5</text>
+<rect x="734" y="424" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="749" y="443" font-size="9" fill="#1a1f2e" text-anchor="middle">w4</text>
+<text x="476" y="473" font-size="9" fill="#5a6272" text-anchor="end">4</text>
+<rect x="482" y="454" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="497" y="473" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="524" y="454" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="539" y="473" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="554" y="454" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="569" y="473" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="584" y="454" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="599" y="473" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="614" y="454" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="629" y="473" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="644" y="454" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="659" y="473" font-size="9" fill="#1a1f2e" text-anchor="middle">w8</text>
+<rect x="674" y="454" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="689" y="473" font-size="9" fill="#1a1f2e" text-anchor="middle">w7</text>
+<rect x="704" y="454" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="719" y="473" font-size="9" fill="#1a1f2e" text-anchor="middle">w6</text>
+<rect x="734" y="454" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="749" y="473" font-size="9" fill="#1a1f2e" text-anchor="middle">w5</text>
+<text x="476" y="503" font-size="9" fill="#5a6272" text-anchor="end">5</text>
+<rect x="482" y="484" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="497" y="503" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="524" y="484" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="539" y="503" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="554" y="484" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="569" y="503" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="584" y="484" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="599" y="503" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="614" y="484" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="629" y="503" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="644" y="484" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="659" y="503" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="674" y="484" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="689" y="503" font-size="9" fill="#1a1f2e" text-anchor="middle">w8</text>
+<rect x="704" y="484" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="719" y="503" font-size="9" fill="#1a1f2e" text-anchor="middle">w7</text>
+<rect x="734" y="484" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="749" y="503" font-size="9" fill="#1a1f2e" text-anchor="middle">w6</text>
+<text x="476" y="533" font-size="9" fill="#5a6272" text-anchor="end">6</text>
+<rect x="482" y="514" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="497" y="533" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="524" y="514" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="539" y="533" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="554" y="514" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="569" y="533" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="584" y="514" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="599" y="533" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="614" y="514" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="629" y="533" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="644" y="514" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="659" y="533" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="674" y="514" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="689" y="533" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="704" y="514" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="719" y="533" font-size="9" fill="#1a1f2e" text-anchor="middle">w8</text>
+<rect x="734" y="514" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="749" y="533" font-size="9" fill="#1a1f2e" text-anchor="middle">w7</text>
+<text x="476" y="563" font-size="9" fill="#5a6272" text-anchor="end">7</text>
+<rect x="482" y="544" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.8"/>
+<text x="497" y="563" font-size="10" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="524" y="544" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="539" y="563" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="554" y="544" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="569" y="563" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="584" y="544" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="599" y="563" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="614" y="544" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="629" y="563" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="644" y="544" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="659" y="563" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="674" y="544" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="689" y="563" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="704" y="544" width="30" height="30" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="0.7"/>
+<text x="719" y="563" font-size="9" fill="#b9c2d0" text-anchor="middle">0</text>
+<rect x="734" y="544" width="30" height="30" fill="#fbe3cc" stroke="#e8862a" stroke-width="0.7" opacity="0.42"/>
+<text x="749" y="563" font-size="9" fill="#1a1f2e" text-anchor="middle">w8</text>
+<text x="539" y="590" font-size="9" fill="#5a6272" text-anchor="middle">0</text>
+<text x="569" y="590" font-size="9" fill="#5a6272" text-anchor="middle">1</text>
+<text x="599" y="590" font-size="9" fill="#5a6272" text-anchor="middle">2</text>
+<text x="629" y="590" font-size="9" fill="#5a6272" text-anchor="middle">3</text>
+<text x="659" y="590" font-size="9" fill="#5a6272" text-anchor="middle">4</text>
+<text x="689" y="590" font-size="9" fill="#5a6272" text-anchor="middle">5</text>
+<text x="719" y="590" font-size="9" fill="#5a6272" text-anchor="middle">6</text>
+<text x="749" y="590" font-size="9" fill="#5a6272" text-anchor="middle">7</text>
+<text x="644" y="610" font-size="9" fill="#5a6272" text-anchor="middle">n（组内第几个输出像素）</text>
+<text x="24" y="640" font-size="12" fill="#2f9e63">④ 两路累加进同一个 C[m][n]（f32）→ 8 个输出像素</text>
+<text x="24" y="664" font-size="11" fill="#1a1f2e">n=0：C[m][0] = </text>
+<text x="123" y="664" font-size="11" fill="#2456c4">w4x0+w5x1+w6x2+w7x3</text>
+<text x="247" y="664" font-size="11" fill="#5a6272"> + </text>
+<text x="275" y="664" font-size="11" fill="#e8862a">w8x4</text>
+<text x="309" y="664" font-size="11" fill="#1a1f2e"> = Y[ow0 + 0]</text>
+<text x="411" y="664" font-size="10" fill="#2f9e63">← 蓝段来自 L 路、橙段来自 H 路，写进同一个 RC[j][0..3]（f32，:123）</text>
+<text x="24" y="686" font-size="11" fill="#1a1f2e">n=7：C[m][7] = </text>
+<text x="123" y="686" font-size="11" fill="#2456c4">w0x3</text>
+<text x="157" y="686" font-size="11" fill="#5a6272"> + </text>
+<text x="185" y="686" font-size="11" fill="#e8862a">w1x4+w2x5+w3x6+w4x7</text>
+<text x="309" y="686" font-size="11" fill="#1a1f2e"> = Y[ow0 + 7]</text>
+<text x="24" y="710" font-size="10" fill="#5a6272">分工：L 路给出 tap u = 0..7−n，H 路给出 tap u = 8−n..8 —— 合起来正好 u = 0..8，不重不漏。</text>
+<text x="24" y="728" font-size="10" fill="#5a6272">n 越大 → L 路贡献越少、H 路越多：这就是 B_L 下三角 / B_H 上三角的成因，也是 36+36 = 72 / 128 = 56.25% 的来源。</text>
+</svg>
+</div>
+<p class="cap"><b>图 3</b>：同一套映射的<b>一维实例</b>，每个数组格子里放什么都写出来了。取 <code>FH=1, FW=9, IC=8</code>、stride 1、same padding（<code>pad = FW/2 = 4</code>）、<code>IW = 8</code>，只盯一个像素组 <code>m</code>（8 个输出 <code>n=0..7</code>）和 half8 里固定的一个通道 <code>c</code>。<b>①</b> 一行输入连同两侧各 4 个 padding 零，恰好就是 16 个窗口位置 <code>X[tiw0+k]</code>（<code>tiw0 = ow0−4 = −4</code>）：前 8 列 <code>cp.async</code> 进 <code>Xs[0][m][0..7][g]</code>（L 缓冲，:174-184），后 8 列进 <code>Xs[1][m][0..7][g]</code>（H 缓冲，:189-198）——<b>padding 不需要任何分支</b>，<code>lx</code> 掩码位为 0 时 <code>cp.async</code> 的 src-size 为 0，硬件直接把目标 smem 零填充（:157-165）。<b>②</b> filter 的 9 个 tap 落在 <code>Ws[7..15][g]</code>，<code>Ws[0..6]</code> 与 <code>Ws[16..24]</code> 是 kernel 一进来就写好的常驻零（:119-120）。<b>③</b> 于是两条 mma 的操作数完全被下标决定：<code>A</code> 是那 8 个窗口值，<code>B</code> 由 <code>WIdx = 7 − row + col = 7 − n + k</code>（:140）现算——L 路读 <code>Ws[WIdx]</code> / <code>Ws[WIdx+1]</code>（:204-205）得到下三角，H 路读 <code>Ws[WIdx+8]</code> / <code>Ws[WIdx+9]</code>（:234-235）即 <code>Ws[15−n+k′]</code> 得到上三角；<b>下标一旦越出 <code>[7,15]</code> 就落进零区，所以两个三角形的空洞不需要谓词、不需要分支</b>，这也是 mma 序列能被 <code>#pragma unroll</code> 全展开的前提。<b>④</b> 两路各覆盖一段 tap：L 路给 <code>u = 0..7−n</code>、H 路给 <code>u = 8−n..8</code>，合起来恰好 <code>u = 0..8</code>，不重不漏。<code>n</code> 越大 L 出得越少、H 出得越多——这就是下三角/上三角的成因，也是 <code>36+36 = 72</code> 非零格 / <code>128 = 56.25%</code> 的来源。注意 ③ 里 <code>A</code> 画成竖排、只取固定的一个 <code>m</code>：这样 <code>A[m][k]</code> 恰好与 <code>B</code> 的第 <code>k</code> 行对齐，「同一行相乘、沿 <code>k</code> 求和」一眼可见。真实的 <code>A</code> 有 16 行（16 个像素组），<b>16 行共用同一张 <code>B</code></b>——把「每通道一次 GEMV」变成「一次 GEMM」的正是这一步。</p>
+
+<div class="infer">
+56.25% 这个数是本文从源码推导的，<b>论文正文里是否以同样的方式给出、以及是否称之为 "high-density"，无法核实</b>（PDF 未获取）。摘要只说了 "compact high-density GEMMs on Tensor Cores"。同样，图 1 的 ①② 两个对照基线是本文为了量化 mismatch 而构造的，源码里不存在这两种实现。
+</div>
+
+<h3 id="s2-4">2.4 三个空间 tile 变体：同一套映射，不同的 128 像素摆法</h3>
+
+<p>128 个输出像素可以摆成 8×16、16×8 或 32×4。选哪个由 <code>IW</code> 的整除性决定（<code>FP16_dwconv3D_Gemm_mma.cuh:118-192</code>）：</p>
+
+<pre><code class="language-c">/**/ if (!(IW &amp; 31)) { ... k64_32x4_idt(...); }   // IW % 32 == 0
+else if (!(IW &amp; 15)) { ... k64_16x8_idt(...); }   // IW % 16 == 0
+else if (IW &gt; 32) { const int R32 = IW &amp; 31; ... } // 一般情形：main + auxiliary 两个 kernel</code></pre>
+
+<p>三个变体共用同一套 Toeplitz buffer（<code>Ws[25][9]</code> 与同样的零填充语句在 :119-120 / :781-782 / :1640-1641 三处逐字重复），差别只在 X 的 shared memory 组织和把手工推导的下标映射改成对应形状：</p>
+
+<table>
+<thead><tr><th>变体</th><th>像素 tile</th><th>grid.x</th><th><code>Xs</code> 声明</th><th>像素索引 <code>j0</code></th><th>Toeplitz 下标 <code>WIdx</code></th></tr></thead>
+<tbody>
+<tr><td><code>8x16</code></td><td>8 宽 × 16 高</td><td><code>(IW&gt;&gt;3)·((N·IH)&gt;&gt;4)</code></td><td><code>half8 Xs[2][16][9][9]</code> <span class="pill">:118</span></td><td><code>(bx&lt;&lt;7)+(ty&lt;&lt;3)</code> <span class="pill">:131</span></td><td><code>7 - row + col</code> <span class="pill">:140</span></td></tr>
+<tr><td><code>16x8</code></td><td>16 宽 × 8 高</td><td><code>(IW&gt;&gt;4)·((N·IH)&gt;&gt;3)</code></td><td><code>half8 Xs[8][8][3][9]</code> <span class="pill">:780</span></td><td><code>(bx&lt;&lt;7)+((ty&gt;&gt;1)&lt;&lt;4)</code> <span class="pill">:793</span></td><td><code>7-(xrow&lt;&lt;1)-(tx&gt;&gt;2)+col</code> <span class="pill">:802</span></td></tr>
+<tr><td><code>32x4</code></td><td>32 宽 × 4 高</td><td><code>(IW&gt;&gt;5)·((N·IH)&gt;&gt;2)</code></td><td><code>half8 Xs[4][8][5][9]</code> <span class="pill">:1639</span></td><td><code>(bx&lt;&lt;7)+((ty&gt;&gt;2)&lt;&lt;5)</code> <span class="pill">:1652</span></td><td><code>7 - row + col</code> + <code>tswt</code> 轮转 <span class="pill">:1663, :994</span></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 3</b>：三个变体的 <code>Xs</code> 注释自解释得很清楚——<code>8x16</code> 是 <code>[2 buf][n: NHW/8][k: 16/2 = 8][ic: 64]</code>，<code>16x8</code> 是 <code>[n: NHW/16][k: 24/3 = 8][3 buf]</code>，<code>32x4</code> 是 <code>[n: NHW/32][k: 40/5 = 8][5 buf]</code>。即<b>tile 越宽，滚动窗口需要的 buffer 份数越多</b>（2 → 3 → 5），因为宽 tile 内相邻线程组的输入窗口错开得更多。<code>32x4</code> 还引入 <code>tswt</code>（read buf shift，:1678 注释 <code>[0, 1, 2, 3]</code>）来轮转读哪一份 buffer。</p>
+
+<p>为什么要按整除性分流？因为 <b>tile 宽度必须整除 <code>IW</code>，才能保证每行载入是一段连续、不跨行的内存</b>（§3.2）。<code>IW</code> 不整除时走 <code>_ex</code> 文件里的 <code>G</code>（general）变体，用「main kernel 处理整除部分 + auxiliary kernel 处理余数」两次 launch 拼起来（<code>FP16_dwconv3D_Gemm_mma.cuh:50-71</code>），launch 宏里 <code>MAIN_FUNC</code> / <code>PAD</code> 两个模板参数就是干这个的（<code>_ex</code> 文件 :23-32，注释写明 <code>main (true: OW divisible part) + auxiliary (false: remiander)</code>）。此外还有一个 <code>C</code>（cooperate）变体（<code>_ex</code>:757）。</p>
+
+<h2 id="s3">§3 CTA 内部的工程：访存、流水与寄存器复用</h2>
+
+<h3 id="s3-1">3.1 摘要里的 "matrix compression"：25 行 shared memory 换掉整张 im2col 矩阵</h3>
+
+<p>教科书做法是把卷积展开成 im2col：为每个输出像素复制一段输入 patch，得到一个 \(M\times K\) 的大矩阵。对 <code>8x16</code> 的 CTA tile，若真去物化「128 像素 × \(F_H F_W\) tap × 64 通道」的展开矩阵，53×53 时单是 X 侧就要 \(128\times2809\times64\times2\,\text{B}=46\,\text{MB}\)。</p>
+
+<p>Flash-DWC 一个字节都不物化。它只在 shared memory 里放两样东西（:118-119）：</p>
+
+<pre><code class="language-c">__shared__ half8 Xs[2][16][9][9];   //[2][n: NHW/8][k: 16/2 = 8][batch, ic: 64]
+__shared__ half8 Ws[25][9];         //[7(zeros) + 9 + 7(zeros)]</code></pre>
+
+<p><code>half8</code> 是 16 字节对齐的 8 个 <code>half</code>（<code>FP16_micro.cuh:15-18</code>），所以 <code>Xs</code> = 2×16×9×9×16 B ≈ <b>41 KB</b>，<code>Ws</code> = 25×9×16 B = <b>3.6 KB</b>。Toeplitz 结构完全由 <code>Ws[7-n+k]</code> 这个<b>下标表达式</b>在 mma 取 fragment 时现场合成——矩阵被「压缩」成了「9 行真数据 + 16 行零」加一条下标公式。</p>
+
+<div class="infer">
+把这套 <code>Ws</code> Toeplitz buffer 对应到摘要里的 "matrix compression" 是本文的推断（源码里没有 <code>compress</code> 字样的标识符）。摘要还并列提到 compression 与 dual-path split-GEMM、register-based input reuse 三件事，正文里它们各自的准确定义无法核实。
+</div>
+
+<h3 id="s3-2">3.2 "coalesced 128-byte memory accesses" 的确切来源</h3>
+
+<p>所有 global→shared 的搬运都走 <code>cp.async</code>，每次 <b>16 字节</b>，且指令里显式带了 <code>L2::128B</code> 提示（<code>micro_ptx.cuh:223-224</code> 与 :246-247）：</p>
+
+<pre><code class="language-c">#define cp_async_ca(dst, src, Bytes) \
+    asm volatile("cp.async.ca.shared.global.L2::128B [%0], [%1], %2;\n" ::"r"(dst), "l"(src), "n"(Bytes))
+#define cp_async_cg(dst, src, Bytes) \
+    asm volatile("cp.async.cg.shared.global.L2::128B [%0], [%1], %2;\n" ::"r"(dst), "l"(src), "n"(Bytes))</code></pre>
+
+<p>128 字节是怎么凑出来的？看 X 的载入（:174-183）：线程 <code>(tx, ty)</code> 的目标地址是 <code>&amp;Xs[0][ty][i][tx]</code>，源地址是 <code>X + X0 + fh·IW·IC + i·IC</code>。固定 <code>ty</code> 与 <code>i</code>，让 <code>tx = 0..7</code> 变化，源地址步长正好是 <code>IC</code> 个 <code>half</code> 里的连续 8 个（因为 <code>ic0 = (by&lt;&lt;6)+(tx&lt;&lt;3)</code>，:128）——<b>8 个线程 × 16 字节 = 一段连续的 128 字节</b>，一次事务搞定。这就是 channel-last 布局的直接回报：<code>[N, H, W, C]</code> 里 C 在最内层，8 个通道的 <code>half</code> 天然连续。</p>
+
+<p>越界不靠分支，靠<b>谓词化的 <code>cp.async</code></b>。每个线程先算一个 16 位的边界掩码 <code>lx</code>（:157-165），每一位对应一个 tap 位置是否落在图像内：</p>
+
+<pre><code class="language-c">uint32_t lx = (uint32_t)(tiw0) &lt; IW;  lx |= ((uint32_t)(tiw0 + 0x1) &lt; IW) &lt;&lt; 0x1;
+...                                     lx |= ((uint32_t)(tiw0 + 0xF) &lt; IW) &lt;&lt; 0xF;
+lx &amp;= -((uint32_t)(tih0 + fh) &lt; IH);              //calculate memory flags
+...
+cp_async_ca_flag(Xsofta + 144 * 1, X + xoft, 16, lx &amp; 0x02);   // 144 = 9 × 16B</code></pre>
+
+<p><code>cp_async_ca_flag</code>（<code>micro_ptx.cuh:227-232</code>）把谓词塞进 <code>cp.async</code> 的第 4 个操作数——PTX 里这一位为真时<b>跳过源读取并把目标零填充</b>，所以 padding 区域的零是「免费」产生的，既不发访存也不占带宽。filter 侧同理，<code>LWS_cp_async_cg_low/high</code>（:275-289）用 <code>setp.ge.u32 p, wfw, FW</code> 让 <code>tap ≥ FW</code> 的位置零填充，再用 <code>setp.lt/eq.u32 q, ty, 8/9</code> 限定只有 <code>ty&lt;8</code>（低 8 个 tap）或 <code>ty==8</code>（第 9 个 tap）的线程参与。</p>
+
+<h3 id="s3-3">3.3 "dual-path split-GEMM pipeline"：一条 fh 内的 L/H 双路</h3>
+
+<p>K 维（tap 窗口）被劈成<b>低 8 tap（L）与高 8 tap（H）两条路</b>，各自作为一个独立的 <code>cp.async</code> commit group 发射，然后用 <code>wait_group</code> 的计数差制造重叠（:184, :198, :201, :231）：</p>
+
+<pre><code class="language-c">/*load data from global memory: ofw = 0*/ {
+    LWS_cp_async_cg_low (Wsoft, W + woft, 16, wfw, FW, ty);   //init L-buffer (k = 0x7)
+    cp_async_ca_flag(Xsofta + 144 * 0, X + xoft, 16, lx &amp; 0x01); ...   // 8 次
+    cp_async_commit_group();                                  // ← group 1: L
+    LWS_cp_async_cg_high(Wsoft, W + woft, 16, wfw, FW, ty);   //init H-buffer (k = 0xF)
+    cp_async_ca_flag(Xsoftb + 144 * 0, X + xoft, 16, lx &amp; 0x0100); ... // 8 次
+    cp_async_commit_group();                                  // ← group 2: H
+}
+/*compute L-buffer (k = 0x7)*/ { cp_async_wait_group(1); __syncthreads(); ... 16 条 mma ... }
+/*compute H-buffer (k = 0xF)*/ { cp_async_wait_group(0); __syncthreads(); ... 16 条 mma ... }</code></pre>
+
+<p><code>wait_group(1)</code> 的语义是「最多允许 1 个 group 在飞」——即 L 已落地、<b>H 仍在传输中</b>，此时开始算 L 的 16 条 mma；等 L 算完再 <code>wait_group(0)</code> 收 H。计算 L 的整段时间都被用来掩盖 H 的访存延迟，这就是摘要说的 "hide memory latency"。</p>
+
+<div class="fig">
+<svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif">
+<defs><marker id="m4a" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5a6272"/></marker></defs>
+<text x="40" y="30" font-size="13" fill="#1a1f2e">L/H 双路 split-GEMM 流水：一条 fh 内两个 cp.async commit group 交替载入与计算</text>
+
+<text x="70" y="122" font-size="11" fill="#5a6272" text-anchor="end">载入</text>
+<text x="70" y="192" font-size="11" fill="#5a6272" text-anchor="end">计算</text>
+
+<!-- overlap highlight -->
+<rect x="200" y="92" width="110" height="122" fill="#2456c4" opacity="0.07"/>
+<rect x="440" y="92" width="110" height="122" fill="#2456c4" opacity="0.07"/>
+<text x="255" y="86" font-size="10" fill="#2456c4" text-anchor="middle">重叠区</text>
+<text x="495" y="86" font-size="10" fill="#2456c4" text-anchor="middle">重叠区</text>
+
+<!-- load lane -->
+<g font-size="10" text-anchor="middle">
+<rect x="80" y="100" width="110" height="36" fill="#eef3fc" stroke="#2456c4" stroke-width="1"/>
+<text x="135" y="122" fill="#1a1f2e">L 载入 + commit</text>
+<rect x="200" y="100" width="110" height="36" fill="#fbe3cc" stroke="#e8862a" stroke-width="1"/>
+<text x="255" y="122" fill="#1a1f2e">H 载入 + commit</text>
+<rect x="320" y="100" width="110" height="36" fill="#eef3fc" stroke="#2456c4" stroke-width="1"/>
+<text x="375" y="122" fill="#1a1f2e">L′ 载入 + commit</text>
+<rect x="440" y="100" width="110" height="36" fill="#fbe3cc" stroke="#e8862a" stroke-width="1"/>
+<text x="495" y="122" fill="#1a1f2e">H′ 载入 + commit</text>
+<rect x="560" y="100" width="110" height="36" fill="#f6f8fa" stroke="#c9d2e0" stroke-width="1"/>
+<text x="615" y="122" fill="#5a6272">下一 chunk …</text>
+</g>
+
+<!-- compute lane -->
+<g font-size="10" text-anchor="middle">
+<rect x="200" y="170" width="110" height="36" fill="#eef3fc" stroke="#2456c4" stroke-width="1"/>
+<text x="255" y="192" fill="#1a1f2e">wait(1) → 算 L</text>
+<rect x="320" y="170" width="110" height="36" fill="#fbe3cc" stroke="#e8862a" stroke-width="1"/>
+<text x="375" y="192" fill="#1a1f2e">wait(0) → 算 H</text>
+<rect x="440" y="170" width="110" height="36" fill="#eef3fc" stroke="#2456c4" stroke-width="1"/>
+<text x="495" y="192" fill="#1a1f2e">wait(1) → 算 L′</text>
+<rect x="560" y="170" width="110" height="36" fill="#fbe3cc" stroke="#e8862a" stroke-width="1"/>
+<text x="615" y="192" fill="#1a1f2e">wait(0) → 算 H′</text>
+</g>
+
+<!-- time axis -->
+<path d="M60,240 L706,240" stroke="#5a6272" stroke-width="1.2" fill="none" marker-end="url(#m4a)"/>
+<text x="666" y="258" font-size="11" fill="#5a6272" text-anchor="middle">时间</text>
+<text x="255" y="258" font-size="10" fill="#2456c4" text-anchor="middle">算 L 时 H 仍在飞</text>
+
+<text x="40" y="284" font-size="11" fill="#5a6272">每个 group 内：W 用 LWS_cp_async_cg_low/high 谓词载入（tap ≥ FW 时零填充）；</text>
+<text x="40" y="302" font-size="11" fill="#5a6272">X 用 cp_async_ca_flag 按 16 位边界掩码 lx 逐 tap 载入，每次 16 B = 8 通道 × FP16。</text>
+</svg>
+</div>
+<p class="cap"><b>图 4</b>：一个 <code>fh</code> 内的双路时序（源码 :155-259 的 stage 0；steady-state 循环 :263-358 结构相同，只是窗口滚动）。L 与 H 各是一个 <code>cp.async</code> commit group，<code>wait_group(1)</code> / <code>wait_group(0)</code> 的计数差制造出「算 L 时 H 在飞」的重叠。带撇号的 L′/H′ 表示下一个 9-tap chunk（<code>for (int ofw = 9, buf = 1; ofw &lt; FW; ofw += 9, buf ^= 1)</code>，:263）。</p>
+
+<h3 id="s3-4">3.4 "register-based input reuse"：一次 16 字节载入喂 8 条 mma</h3>
+
+<p>回到 §2.2 那段循环。<code>HA[4][8]</code> 与 <code>HB[2][8]</code> 是寄存器数组（:125），每个 <code>HA[i]</code> / <code>HB[i]</code> 装的是一个 <code>half8</code> = <b>8 个通道</b>。载入只做 6 次 shared memory 读（:204-209），随后 <code>for j = 0..7</code> 把这 6×8 = 48 个 <code>half</code> 重新切片成 8 组 mma fragment：</p>
+
+<div class="formula">
+\[ \text{smem 读次数} : \text{mma 条数} \;=\; 6 : 8 \quad\longrightarrow\quad \text{每条 mma 只需 } 0.75 \text{ 次 } 16\text{B smem 读} \]
+</div>
+
+<p>对比「每条 mma 各自去 shared memory 取自己的 fragment」，shared memory 读流量降到 \(1/8\) 量级。这也是文件后缀 <code>_ruse</code>（register use）的含义——同目录下还有一份不带 <code>_ruse</code> 的 <code>dwconv3D_Gemm_kernel.cuh</code>（CUDA-Core 路径），两者是同一 dataflow 的有/无寄存器复用版本。</p>
+
+<p>还有一层更省的：<b>整个 kernel 没有用 <code>ldmatrix</code></b>。<code>micro_ptx.cuh:19-66</code> 定义了全套 <code>ldmatrix.sync.aligned.x1/x2/x4</code>（含 <code>.trans</code>）与 <code>movmatrix</code>，但在 Tensor Core 卷积 kernel 里一次都没调用——源码中出现的 <code>//idx of ldmatrix</code>（:139）与 <code>//ldmatrix_idx</code>（:801）只是注释，说明 <code>row</code>/<code>col</code> 沿用了 ldmatrix 的线程编号习惯。</p>
+
+<div class="infer">
+为什么不用 <code>ldmatrix</code>：源码没写理由。合理的解释是 <code>ldmatrix</code> 只能把 shared memory 里一块<b>规整的</b> \(8\times8\) tile 按固定规则分发到 32 个 lane，而这里 B 操作数需要的是 <code>Ws[7-n+k]</code> 这种<b>随 lane 变化的对角偏移</b>，本质是一次 gather，<code>ldmatrix</code> 表达不了；A 操作数也要按 <code>[row][col]</code> / <code>[row+8][col+1]</code> 跳着取。手工用 <code>half8</code> 整块载入 + 寄存器切片反而更省。（推断依据：:140 的 <code>WIdx</code> 依赖 <code>row</code> 与 <code>col</code>，即依赖 lane id。）
+</div>
+
+<h3 id="s3-5">3.5 CLIP：把不可能的 filter 行整段跳过</h3>
+
+<p>当 CTA 的 128 个像素横跨图像行边界时，某些 <code>fh</code> 对整个 tile 都不可能有贡献。<code>CLIP</code> 模板参数在编译期决定要不要算这段裁剪逻辑（:144-152）：</p>
+
+<pre><code class="language-c">int fhs = 0, fhe = FH; if (CLIP) {//(OH * OW) &gt; 128, cross at most 1 (OH * OW)
+    const int ej = (bx &lt;&lt; 7), sj = ej + 120;              //ty = 0 / 15
+    const int eoh = (ej / IW) % IH, soh = (sj / IW) % IH; //最早结束行 / 最晚起始行
+    const int sih = soh - (FH &gt;&gt; 1), eih = eoh - (FH &gt;&gt; 1);
+    const bool cross_hw = (eih &gt;= sih);
+    fhs = -IF_int((sih &gt;= 0 || cross_hw), 0, sih);
+    fhe = IH - eih; fhe = IF_int((fhe &gt; FH || cross_hw), FH, fhe);
+}</code></pre>
+
+<p><code>CLIP</code> 的取值由 host 侧一句 <code>const bool CLIP = (IH * IW) &gt; 128;</code> 决定（<code>FP16_dwconv3D_Gemm_mma.cuh:24, :117</code>），注释写着 <code>//OH * OW &gt; 128</code>——只有空间尺寸大于一个 CTA tile 时才可能跨界。这是个<b>编译期分叉</b>：小 feature map 上连这段整数运算都不生成。收益是省掉 \(F_H\) 循环的部分迭代，代价是模板实例翻倍（这也是 §5.3 说的编译爆炸的来源之一）。</p>
+
+<h3 id="s3-6">3.6 epilogue：借用 Xs 做转置，不额外申请 shared memory</h3>
+
+<p>mma 的累加器分布是「每线程持有某个通道的 4 个 f32」，而输出布局要求「每线程写出某个像素的 8 个连续通道」。两者对不上，必须转置。做法是把 <code>Xs</code> 重新解释成输出 buffer（:363-364）：</p>
+
+<pre><code class="language-c">half8(*__restrict__ Ys)[9][9] = (half8(*)[9][9])(Xs);   //[128, 64]
+float(*__restrict__ FC)[4]    = (float(*)[4])(RC);
+#pragma unroll
+for (int i = 0; i &lt; 4; i++) {
+    const int roft = row + (i &gt;&gt; 1 &lt;&lt; 3), coft = col + (i &amp; 1);
+    half8 hy;
+    hy.x0 = __float2half(FC[0x0][i]); ... hy.w1 = __float2half(FC[0xF][i]);  // 16 个通道
+    Ys[roft][coft][bidx] = hy;
+}</code></pre>
+
+<p>注意这里同时完成了 <b>f32 → f16 的降精度</b>（累加始终是 f32，只在写回时转 half，:370-379），这正是 <code>Torch_Impl_fp16.cuh:144</code> 那行注释 <code>//FP16 Tensor Core: FP32 accumulation</code> 的含义，也就是摘要说的 "efficient mixed-precision acceleration"。</p>
+
+<p>转置完成后，8 次 16 字节写回（:384-393）：</p>
+
+<pre><code class="language-c">const int Y1 = Y0 + IC, Y2 = Y1 + IC, ... Y7 = Y6 + IC;
+*(half8*)(Y + Y0) = Ys[ty][0][tx];   // 8 个相邻像素，每个 8 通道 = 16 B
+...
+*(half8*)(Y + Y7) = Ys[ty][7][tx];</code></pre>
+
+<p>同样是「8 线程 × 16 B = 128 B 连续」的合并写。而 <code>Ys</code> 直接复用 <code>Xs</code> 的 41 KB——<b>转置不占用任何额外 shared memory</b>，这对 occupancy 是实打实的收益（摘要："further free on-chip resources ... improve occupancy"）。能这么干的前提是转置发生在最后一次 mma 之后，且中间有 <code>__syncthreads()</code>（:362, :382）。</p>
+
+<h2 id="s4">§4 反向传播：Tensor Core 只覆盖了 dX，dW 是另一套完全不同的工程</h2>
+
+<h3 id="s4-1">4.1 两条反向路，两个独立的库</h3>
+
+<p>「支持端到端训练」这句话在源码里是<b>两个 PyTorch 扩展</b>（<code>python/flashdwc/base.py:11-12</code>）：</p>
+
+<pre><code class="language-python">import FlashDWC       # CUDA extension for FC/BDC and filter rotation
+import FlashDWCBFC    # CUDA extension for backward-filter convolution</code></pre>
+
+<p><b>dX（backward-data，源码里叫 BDC）</b>完全借道前向。它把 filter 旋转 180° 后跑一次标准前向 DWC（<code>ops.py:379-381</code>，注释原文 <code># BDC is equivalent to a forward DWC with the filter rotated by 180°.</code>），旋转后有效 padding 也要翻（<code>ops.py:331-332</code>）：</p>
+
+<pre><code class="language-python">oph, opw = FH - 1 - ph, FW - 1 - pw;   # After rotating the filter, the effective backward-data padding changes.
+...
+if tensor_core:
+    deltaX = CUDA.fp16_DWC_T_64x128(deltaY, WT, deltaX);   # ops.py:396-397</code></pre>
+
+<p>也就是说，<b>§2 的 Toeplitz 映射、§3 的 <code>cp.async</code> 双路流水、§5 的四级分发，在反向里被原封不动复用了一次</b>——注意这里调的正是 §5.2 表 10 中那个<b>没有 <code>ph, pw</code> 参数</b>的 tensor-core 入口（<code>Torch_bind.cuh:46-52</code>），padding 靠旋转后的 filter 隐式承担。</p>
+
+<p><b>dW（backward-filter，BFC）</b>则是 <code>FlashDWCBFC_cuda/</code> 的全部内容，一套独立 kernel 家族。dW 的 filter 是<b>输出</b>而非输入，旋转偏移直接内建在索引代数里（<code>bn_act_dwconv3D_dW_GemmSK_kernel_ruse.cuh:330-340</code> 的 <code>tih0 = fh0 - oph, tiw0 = fw0 - opw</code>），所以 BFC 里<b>没有 rot180</b>——全仓库搜索确认 <code>rot180</code> 只出现在 <code>FlashDWC_cuda</code> 与 <code>ops.py:379-397</code>。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif">
+<defs><marker id="m5a" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#2456c4"/></marker></defs>
+
+<text x="30" y="30" font-size="13" fill="#1a1f2e">路径 A · dX（backward-data）：借道前向，Tensor Core 可用</text>
+
+<rect x="30" y="44" width="150" height="54" fill="#fff" stroke="#c9d2e0" stroke-width="1"/>
+<text x="105" y="67" font-size="13" fill="#1a1f2e" text-anchor="middle">deltaY</text>
+<text x="105" y="85" font-size="10.5" fill="#5a6272" text-anchor="middle">[N, OH, OW, OC]</text>
+
+<rect x="212" y="44" width="136" height="54" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+<text x="280" y="67" font-size="13" fill="#1a1f2e" text-anchor="middle">rot180(W)</text>
+<text x="280" y="85" font-size="10.5" fill="#5a6272" text-anchor="middle">滤波器翻转 180°</text>
+
+<rect x="380" y="44" width="222" height="54" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+<text x="491" y="67" font-size="13" fill="#1a1f2e" text-anchor="middle">前向 Tensor-Core kernel</text>
+<text x="491" y="85" font-size="10.5" fill="#5a6272" text-anchor="middle">fp16_DWC_T_64x128</text>
+
+<rect x="634" y="44" width="140" height="54" fill="#fff" stroke="#c9d2e0" stroke-width="1"/>
+<text x="704" y="67" font-size="13" fill="#1a1f2e" text-anchor="middle">deltaX</text>
+<text x="704" y="85" font-size="10.5" fill="#5a6272" text-anchor="middle">[N, IH, IW, IC]</text>
+
+<path d="M180,71 L212,71" stroke="#2456c4" stroke-width="1.5" fill="none" marker-end="url(#m5a)"/>
+<path d="M348,71 L380,71" stroke="#2456c4" stroke-width="1.5" fill="none" marker-end="url(#m5a)"/>
+<path d="M602,71 L634,71" stroke="#2456c4" stroke-width="1.5" fill="none" marker-end="url(#m5a)"/>
+
+<rect x="30" y="112" width="744" height="30" fill="#f4f7fd" stroke="#c9d2e0" stroke-width="1"/>
+<text x="42" y="132" font-size="12" fill="#2456c4">rot180(W) 之后，dX 就是一次标准前向 DWC → 直接复用 §2 的 mma kernel（ops.py:379-381, 396-397）</text>
+
+<text x="30" y="178" font-size="13" fill="#1a1f2e">路径 B · dW（backward-filter）：GZ 分区 + atomicAdd，纯 CUDA Core</text>
+
+<rect x="30" y="192" width="150" height="54" fill="#fff" stroke="#c9d2e0" stroke-width="1"/>
+<text x="105" y="215" font-size="13" fill="#1a1f2e" text-anchor="middle">X, deltaY</text>
+<text x="105" y="233" font-size="10.5" fill="#5a6272" text-anchor="middle">NHWC · FP16/FP32</text>
+
+<rect x="212" y="192" width="136" height="54" fill="#fff8e8" stroke="#e6c96a" stroke-width="1.5" stroke-dasharray="5 3"/>
+<text x="280" y="215" font-size="13" fill="#1a1f2e" text-anchor="middle">GZ 个分区</text>
+<text x="280" y="233" font-size="10.5" fill="#5a6272" text-anchor="middle">沿 N·OH·OW 切</text>
+
+<rect x="380" y="192" width="222" height="54" fill="#fff8e8" stroke="#e8862a" stroke-width="1.5"/>
+<text x="491" y="215" font-size="13" fill="#1a1f2e" text-anchor="middle">BFC kernel（CUDA Core）</text>
+<text x="491" y="233" font-size="10.5" fill="#5a6272" text-anchor="middle">_ruse / _mega · 无 mma</text>
+
+<rect x="634" y="192" width="140" height="54" fill="#fff" stroke="#c9d2e0" stroke-width="1"/>
+<text x="704" y="215" font-size="13" fill="#1a1f2e" text-anchor="middle">deltaW</text>
+<text x="704" y="233" font-size="10.5" fill="#5a6272" text-anchor="middle">FP32 · atomicAdd</text>
+
+<path d="M180,219 L212,219" stroke="#2456c4" stroke-width="1.5" fill="none" marker-end="url(#m5a)"/>
+<path d="M348,219 L380,219" stroke="#2456c4" stroke-width="1.5" fill="none" marker-end="url(#m5a)"/>
+<path d="M602,219 L634,219" stroke="#2456c4" stroke-width="1.5" fill="none" marker-end="url(#m5a)"/>
+
+<rect x="30" y="260" width="744" height="30" fill="#fff8e8" stroke="#e6c96a" stroke-width="1"/>
+<text x="42" y="280" font-size="12" fill="#9a7b1c">编译产物 4927 个实例，mma.sync / ldmatrix / wmma 命中 0 次（install.log）→ dW 走 CUDA Core</text>
+</svg>
+</div>
+<p class="cap"><b>图 5</b>：一次完整 DWC 反向迭代的两条路。上路（蓝）：dX 靠 <code>rot180(W)</code> 退化成一次前向，因此 <b>Tensor Core 得以进入反向</b>；注意 <code>deltaY</code> 的 shape 标注是它作为「前向输入」被喂进去时的角色。下路（黄）：dW 是独立实现的 implicit GEMM，走 split-K + atomicAdd，<b>全程不碰 mma</b>。所以「Flash-DWC 把前向和反向都搬上了 Tensor Core」是过度解读——准确说法是<b>前向 + dX 可以走 Tensor Core，dW 只能走 CUDA Core</b>。</p>
+
+<h3 id="s4-2">4.2 dW 为什么没上 Tensor Core：五条互相独立的证据</h3>
+
+<p>这是本节最重要的负面结论，证据链完全闭合：</p>
+
+<table>
+<thead><tr><th>#</th><th>证据</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>算子注册表里 BFC 只有 3 项（<code>fp32_DWBFC_32x72</code> / <code>fp16_DWBFC_64x72</code> / <code>tp16_DWBFC_64x72</code>），<b>没有任何 <code>_T_</code> 后缀的 tensor-core 版本</b>；对比前向明确有 <code>fp16_DWC_T_64x128</code>，注释写着 <code># FP16 GEMM-based Tensor-Core kernel, corresponding to Flash-DWC-T.</code></td><td><code>base.py:67, 73-82</code></td></tr>
+<tr><td>2</td><td><code>micro_ptx.cuh</code> 定义了全套 mma/ldmatrix/movmatrix 宏，<code>frame.cuh:21-23</code> 也 <code>#define CUDA_PTX 1</code> / <code>#define MMA_TF32 1</code>——但对这 10 余个宏逐个 <code>grep -rn</code> 整个 <code>FlashDWCBFC_cuda/src</code>，<b>除定义文件外调用点为 0</b>。BFC kernel 唯一用到的 PTX 是 <code>cp.async</code> 家族。</td><td><code>micro_ptx.cuh:11-141</code>；<code>frame.cuh:21-23</code></td></tr>
+<tr><td>3</td><td><code>micro_ptx_dwconv_mma.cuh</code>（dwconv 专用的 mma 封装）<b>只存在于 <code>FlashDWC_cuda/src</code></b>，BFC 目录里没有对应文件。</td><td>目录对比</td></tr>
+<tr><td>4</td><td><b>构建产物层面</b>：<code>exe/install.log</code>（作者本人 sm_86 / CUDA 11.8 构建的完整 ptxas 输出）里共 <b>4927 个 kernel 实例</b>，<code>grep -ci "mma.sync|ldmatrix|wmma" install.log</code> = <b>0</b>。</td><td><code>FlashDWCBFC_cuda/exe/install.log</code></td></tr>
+<tr><td>5</td><td>作者自己写明：<i>"The current <b>CUDA-Core</b> BFC implementation was primarily tuned and validated on recent consumer and workstation GPUs."</i></td><td><code>README.md:210</code></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 4</b>：BFC 不使用 Tensor Core 的证据。第 4 条最硬——它不依赖源码阅读，直接看编译器吐出多少个 kernel、里面有没有 mma 指令。</p>
+
+<div class="infer">
+为什么作者不上 mma？代码没写理由。一个可解释的推测：dW 的 GEMM 形状是 <code>GN=OC</code>（几百）× <code>GM=FH·FW</code>（9~2601）× <code>GK=N·OH·OW</code>（很大），其中 <b>M 维就是滤波器 tap 数，通常只有 9~49</b>，远小于 <code>m16n8k8</code> 能有效利用的规模；而前向之所以能用 mma，恰恰是因为 §2.2 把「8 个输出像素」塞进了原本空着的 N 轴——反向的 N 轴对应的是 <code>FH·FW</code> 维度，没有这种可借的相邻性。加上 implicit GEMM 每个 <code>(fh,fw)</code> 位置的取数窗口都不同，喂 <code>ldmatrix</code> 的代价可能高于收益。这是本文的推断。
+</div>
+
+<h3 id="s4-3">4.3 dW 的 GEMM 形态：三个轴全部翻转，痛点也跟着翻转</h3>
+
+<p>轴的定义在 <code>micro_common.cuh:27-29</code>，与前向（§1.3）逐字对照就能看出翻转：</p>
+
+<pre><code class="language-c">#define GET_GN(OC) (OC)                      // GN = OC
+#define GET_GM(IC, FH, FW) ((IC)*(FH)*(FW))  // GM = IC * FH * FW
+#define GET_GK(N, OH, OW) ((N)*(OH)*(OW))    // GKp = N * OHp * OWp -&gt; GK = N * OH * OW</code></pre>
+
+<table>
+<thead><tr><th></th><th>GN（batch/通道）</th><th>GM（输出行）</th><th>GK（规约维）</th><th>核心痛点</th></tr></thead>
+<tbody>
+<tr><td><b>前向 FC</b></td><td><code>OC</code></td><td><code>N·OH·OW</code></td><td><code>FH·FW</code>（9~2601，<b>很短</b>）</td><td>K 太短 + <code>GOC=1</code> → 喂不饱 mma（§1.3）</td></tr>
+<tr><td><b>反向 BFC</b></td><td><code>OC</code></td><td><code>IC·FH·FW</code>（<b>很小</b>）</td><td><code>N·OH·OW</code>（<b>很长</b>）</td><td>输出张量太小 → grid 填不满 SM</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 5</b>：前向与反向的 GEMM 形态互为转置。前向的 M 是空间（很大）、K 是 tap（很短）；反向的 M 是 tap（很小）、K 是空间（很长）。<b>同一个算子，前向和反向的瓶颈是相反的</b>——这解释了为什么两者需要两套完全不同的 kernel 策略。</p>
+
+<p>反向的数学定义可以直接从 CPU golden 读出来（<code>test_util.cuh:270-281</code>，<code>double</code> 累加）：</p>
+
+<pre><code class="language-c">for (int n = 0; n &lt; N; n++)
+for (int oh = 0; oh &lt; OH; oh++)
+for (int ow = 0; ow &lt; OW; ow++) {
+    int ih = fh - oph + oh * sh;
+    int iw = fw - opw + ow * sw;
+    if (ih &lt; 0 || iw &lt; 0 || ih &gt;= IH || iw &gt;= IW) continue;
+    float x  = get4d(     X, n, ih, iw, ic, IH, IW, IC);
+    float dy = get4d(deltaY, n, oh, ow, oc, OH, OW, OC);
+    v += x * dy;
+}</code></pre>
+
+<p>即 \(\Delta W[f_h][f_w][c] = \sum_{n,\,oh,\,ow} X[n][f_h-p_h+oh][f_w-p_w+ow][c]\cdot \Delta Y[n][oh][ow][c]\)。<code>test_util.cuh:255-261</code> 的 layout 注释把这件事说得比任何公式都直白——它列出了梯度侧的对偶视图 <code>X → [IC,1,IH,IW,N]</code>、<code>deltaY → [IC,OC/IC,OH,OW,N]</code>、<code>X*deltaY → [IC,OC/IC,FH,FW] → [FH,FW,OC]</code>，<b>这本身就是「把 dW 写成一个 GEMM」的最直接文字证据</b>。</p>
+
+<h3 id="s4-4">4.4 split-K：切的是 N×OH，合并靠裸 atomicAdd</h3>
+
+<p>既然输出只有 <code>FH·FW·IC</code> 个元素（例如 7×7×768 = 37 632 个 float），x/y 两个维度只能提供 \(\lceil FH/FC\rceil \times \lfloor FW/FD\rfloor \times (IC\!\gg\!2\!\gg\!LBX)\) 个 block，远不足以填满几十个 SM。<code>ops.py:421-424</code> 的 docstring 明说了这一点：</p>
+
+<pre><code class="language-python">"""Compute the backward-filter convolution.
+
+BFC computes the gradient of each depthwise filter by accumulating products
+between the input feature map and the output gradient. Because the output
+filter tensor is small, Flash-DWC parallelizes the long accumulation axis
+into ``GZ`` independent partitions and merges their results atomically."""</code></pre>
+
+<p>于是必须沿 <code>N×OH×OW</code> 再切一刀，用 <code>gridDim.z = GZ</code> 把并行度撑起来。launch 公式（<code>bn_act_dwconv3D_dW_GemmSK_kernel_ruse.cuh:31-38</code>）：</p>
+
+<pre><code class="language-c">&lt;&lt;&lt; dim3((((FH+FC-1)/FC) * (FW/FD)), (IC&gt;&gt;2&gt;&gt;LBX), GZ),
+    dim3(1&lt;&lt;LBX, FC), 0, stream &gt;&gt;&gt;
+// mega 变体把宽度 tile 固定成 9，用 FW_period = (FW+8)/9 让一个 kernel 覆盖所有余数：
+&lt;&lt;&lt; dim3(((FH+FC-1)/FC) * ((FW+8)/9), (IC&gt;&gt;2&gt;&gt;LBX), GZ),
+    dim3(1&lt;&lt;LBX, FC), 0, stream &gt;&gt;&gt;</code></pre>
+
+<p>三点值得停下来看：</p>
+
+<ul>
+<li><b>block 极小</b>：<code>LBX</code> 在生产路径硬编码为 3（<code>bn_act_dwconv3D_dW_GemmSK.cuh:150, 167-180</code>），<code>FC ∈ {4, 8}</code>，所以 block = <code>(8, 4)</code> 或 <code>(8, 8)</code> = <b>32 或 64 线程 = 1~2 个 warp</b>。对比前向 tensor-core 路径的 <code>dim3(8,16)</code> = 128 线程。</li>
+<li><b>smem 极小且恒定</b>：<code>install.log</code> 里 4927 个实例中 <b>4920 个的静态 smem 恰好都是 2304 字节</b>（另 7 个工具 kernel 是 0），对应 <code>__shared__ float4 Ys[2][8][(1&lt;&lt;LBX)+1]</code>（:321）= 2 buf × 8 OW × 9 × 16 B。对比前向的 <code>Xs</code> ≈ 41 KB（§3.1）——<b>差了 18 倍</b>。</li>
+<li><b>切分落在 host 侧的 <code>N×OH</code></b>（<code>bn_act_dwconv3D_dW_GemmSK.cuh:164-165</code>）：<code>const int NH_slice = (N * OH) / GZ;</code>，<code>OW</code> 不切以保证宽度方向连续访问；kernel 内用 <code>bz</code> 定位分区（:343-344）：<code>int NHs = NH_slice * bz; int NHe = IF_int((bz != (gridDim.z - 1)), (NHs + NH_slice), N*OH);</code></li>
+</ul>
+
+<p><b>合并方式：没有 workspace，没有第二个 kernel，就是裸 global atomic。</b>kernel 收尾直接打进去（:500-503）：</p>
+
+<pre><code class="language-c">if (!PAD || (fh0 &lt; FH)) {
+#pragma unroll
+    for (int i = 0; i &lt; FD; i++) atomic_add4(deltaW + W0 + IC * i, v[i]);
+}
+// atomic_add4 = 4 条标量 atomicAdd（micro_GemmSK.cuh:28-34），atomic_add8 = 8 条（:35-40）</code></pre>
+
+<p>目标张量由 <b>Python 侧预先清零</b>（<code>ops.py:522-523</code> / <code>:537-538</code>，注释 <code># Atomic accumulation requires a zero-initialized destination.</code>）。生产路径的两个 host 入口 <code>Torch_Impl_fp32.cuh</code> / <code>Torch_Impl_fp16.cuh</code> 里<b>一次 <code>cudaMalloc</code> 都没有</b>（全库只在测试脚手架 <code>test_util.cuh:54,62,70</code> 出现）。</p>
+
+<div class="infer">
+仓库里<b>确实写了</b>两阶段 reduce 方案：<code>dconv3D_dW_GemmSK_bufSum.cuh:34-72</code> 的 <code>buf_summary_kernel4</code> 做 Kahan 补偿的 <code>float4</code> 跨分区累加，FP16 版在 <code>FP16_dconv3D_dW_GemmSK_bufSum.cuh:143-149</code>，workspace 尺寸公式 <code>(GZ-1)·FH·FW·IC·4 B</code> 在 <code>test_fp32.cuh:132-136</code> 可见，reduce grid 是 <code>&lt;&lt;&lt;sizeW&gt;&gt;7, 32&gt;&gt;&gt;</code>。它们也<b>确实被编译进了 .so</b>（<code>install.log</code> 里有 <code>buf_summary_kernel4</code> 40 regs / <code>FP16_buf_summary_kernel4</code> 37 regs / <code>kernel8</code> 38 regs 各 1 个实例）。但 <code>grep -rn "buf_summary"</code> 在所有 dispatcher 里<b>调用点为 0</b>——<code>A.cu:11</code> 只 <code>#include</code>，测试里 <code>bool out_sum = false</code>（<code>test_fp32.cuh:118</code>、<code>test_fp16.cuh:134</code>）恒关。<b>所以报告里不能说 BFC 用了两阶段 reduce，实际是纯 atomic；这条路径只能标注为「代码中存在但未启用的备选方案」。</b>
+</div>
+
+<p><code>GZ</code> 由谁决定？<b>Python 侧 <code>splitK.py::decide_GZ</code>（:104-283，带 <code>@lru_cache(maxsize=256)</code>）是唯一生产决策者</b>。它的决策链条相当长，几条关键的真值：</p>
+
+<pre><code class="language-python">GZ = int((b0 + b1) / (b2 * 1.45));  # :181  初值：把 BFC 的并行度推向 FC+BDC 的 block 数
+GZ1 = GK &gt;&gt; 7;                      # :185  上限：每分区至少 128 个累加点
+if GZ &gt; GZ1: GZ = GZ1;
+
+# :235-242  FP16 累加精度守卫——反过来把 GZ 往上推，缩短每分区累加链
+if accu_size == SIZE_OF_float16:
+    if   GZ &gt;= 256: div = max(OW, 2048);
+    elif GZ &gt;= 128: div = max(OW, 1024);
+    else: div = max(OW, 512); # GZ &gt;= 64
+    GZ_a16 = GK // div;
+    if GZ &lt; GZ_a16: GZ = GZ_a16;
+    if 64 &gt; GZ &gt;= 32: GZ = 64;
+
+GZ = (GZ + 3) &gt;&gt; 2 &lt;&lt; 2;            # :257  对齐到 4 的倍数
+GZ = minimize_RK(N, OH, OW, GZ, LBK);  # :258 最小化 GK - GZ*GK_slice 余量</code></pre>
+
+<p>三条 dtype 路径传不同的 <code>(data_size, accu_size)</code>：FP32 <code>(4,4)</code>（<code>ops.py:528</code>）、True_FP16 <code>(2,2)</code>（<code>:546</code>）、FP16-FP32-accu <code>(2,4)</code>（<code>:567</code>）；<code>BX = (1&lt;&lt;LBX)*(16//data_size)</code>（<code>splitK.py:151</code>）⇒ FP32 每 block 32 通道、FP16 每 block 64 通道。C++ 侧另有三个历史启发式（<code>micro_splitK.cuh</code> 的 <code>decide_gridZ</code> V1 :64-132、<code>_v2</code> :148-242、<code>standard_decide_gridZ</code> :251-369），<b>都只被 <code>test_fp32.cuh:112</code> / <code>test_fp16.cuh:124</code> 使用，不在生产路径上</b>。<code>ops.py:45</code> 的 <code>BFC_GZ_profile = False</code> 也关掉了运行期实测（<code>profile.py:21-110</code>，候选 <code>[GZ0, GZ0//4, GZ0//2, GZ0*2, GZ0*4]</code>，100 次计时）。</p>
+
+<h3 id="s4-5">4.5 True_FP16 的真实收益是寄存器压力，不是算术吞吐</h3>
+
+<p>三条 BFC 路径的准确语义（<code>base.py:73-82</code> 的官方注释 + kernel 源码逐条核对）：</p>
+
+<table>
+<thead><tr><th>路径</th><th>算子</th><th>输入</th><th>每线程通道</th><th>累加器</th><th>分区内 FMA</th><th>最终合并</th></tr></thead>
+<tbody>
+<tr><td>FP32</td><td><code>fp32_DWBFC_32x72</code></td><td>FP32</td><td>4</td><td><code>float4 v[FD]</code></td><td><code>simdDot4</code>（标量 FP32 FMA）</td><td><code>atomic_add4</code> → FP32</td></tr>
+<tr><td>FP16</td><td><code>fp16_DWBFC_64x72</code></td><td>FP16</td><td>8</td><td><b><code>float8 v[FD]</code>（FP32）</b></td><td><code>simdDot8</code>（先 <code>half8_to_float8</code>，仍标量 FP32 FMA）</td><td><code>atomic_add8</code> → FP32</td></tr>
+<tr><td>True_FP16</td><td><code>tp16_DWBFC_64x72</code></td><td>FP16</td><td>8</td><td><b><code>half8 v[FD]</code>（FP16）</b></td><td><b><code>half_simdDot8</code> → 4 条 <code>__hfma2</code></b>（<code>FP16_micro.cuh:38-46</code>）</td><td><code>half8_to_float8</code> 后 <code>atomic_add8</code> → FP32</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 6</b>：三条 BFC 路径。注意 FP16 与 True_FP16 的<b>唯一</b>差别就是累加器类型（<code>FP16_..._kernel_ruse.cuh:91</code> <code>float8 v[FD]</code> vs <code>True_FP16_..._kernel_ruse.cuh:92</code> <code>half8 v[FD]</code>），以及分区边界处多一次升回 FP32（<code>True_FP16_...:206-212</code>）。<b>三条路径的输出张量 <code>deltaW</code> 都是 FP32</b>（<code>ops.py:483</code> 强制 <code>deltaW.dtype</code> 为 <code>float32</code>）。BN/激活仍走 FP32 再重新舍入，所以「FP16 累加」只作用于乘加链本身。</p>
+
+<p>CUDA Core 上 FP16 的 <code>__hfma2</code> 相对标量 FP32 FMA 本来就有一倍 SIMD 优势，<b>但这在 FP16-FP32-accu 路径里已经拿到了</b>（<code>simdDot8</code> 一次处理 8 通道）。True_FP16 多做的事只有一件：把累加器从 32 B 换成 16 B。收益在哪？<code>install.log</code> 给了一组可以精确配对的数据——<b>模板参数完全相同、只有累加器 dtype 不同的 144 组实例</b>：</p>
+
+<table>
+<thead><tr><th>kernel 族</th><th>配对实例数</th><th>FP16 累加（中位寄存器）</th><th>FP32 累加（中位寄存器）</th><th>削减</th></tr></thead>
+<tbody>
+<tr><td><code>kernel_8_FDxFC_ruse</code>（FD=3）</td><td>12</td><td>52–56</td><td>78–80</td><td>−30% ~ −34%</td></tr>
+<tr><td><code>kernel_8_FDxFC_ruse</code>（FD=5）</td><td>12</td><td>79–83</td><td>125–128</td><td>−35% ~ −38%</td></tr>
+<tr><td><code>kernel_8_FDxFC_ruse</code>（FD=7）</td><td>12</td><td>87–90</td><td>153–168</td><td>−41% ~ −48%</td></tr>
+<tr><td><code>kernel_8_FDxFC_ruse</code>（FD=9）</td><td>12</td><td>115–137</td><td>186–254</td><td>−37% ~ −46%</td></tr>
+<tr><td><code>mega_kernel_8_9xFC_ruse</code></td><td>96</td><td>111–142</td><td>186–241</td><td>−36% ~ −43%</td></tr>
+<tr><td><b>全部配对实例汇总</b></td><td><b>144</b></td><td><b>均值 116.3</b></td><td><b>均值 193.6</b></td><td><b>−39.9%</b></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 7</b>：从 <code>exe/install.log</code> 提取的 ptxas 寄存器统计，按「模板实参完全一致」配对（<code>True_FP16_</code> 前缀 vs <code>FP16_</code> 前缀，配对成功 144 组 / 未配对 626 组）。取这 144 组里的最坏实例对比更醒目：<b>FP16 累加 max 142 regs，FP32 累加 max 254 regs（−44.1%）</b>；两个 max 来自同一批配对实例，所以可直接相减。注意 <code>True_FP16</code> 全族（含未配对的 336 个实例）max 是 145，与表内数字口径不同。<code>复算脚本</code>见 §7.3。</p>
+
+<p>为什么寄存器就是瓶颈？因为其余资源都不是：</p>
+
+<ul>
+<li>静态 smem 恒为 2304 B（4920/4927），可忽略；</li>
+<li>block 只有 32/64 线程 = 1~2 warp；</li>
+<li><b>0 spill</b>（4927 个实例全部 <code>0 bytes spill stores, 0 bytes spill loads</code>）；</li>
+<li><b>没有任何 occupancy 调优</b>：<code>grep -rn "cudaFuncSetAttribute|__launch_bounds__|cudaOccupancy|MaxDynamicSharedMemorySize"</code> 在 <code>FlashDWCBFC_cuda/src</code> 里 <b>0 命中</b>；</li>
+<li>编译 flags 是 <code>-O3 -use_fast_math -maxrregcount=0</code>（<code>setup.py:57-64</code>），<code>-maxrregcount=0</code> = <b>不限寄存器</b>。</li>
+</ul>
+
+<p>以 64 线程/block、65536 reg/SM 估算：193.6 regs → 每 SM 约 5 个 block；116.3 regs → 约 8 个 block。<b>寄存器减半 → 驻留 block 数上升 → 用更多并发 block 掩盖 <code>cp.async</code> 延迟</b>，这比 <code>__hfma2</code> 本身的吞吐优势更值钱。</p>
+
+<p>代价也被同一个 <code>GZ</code> 参数耦合住了——FP16 累加链越长误差越大，所以必须分区足够多才能安全使用（<code>ops.py:552-558</code>）：</p>
+
+<pre><code class="language-python"># The hybrid kernel requires enough partitions to amortize its
+# merge cost. Otherwise, fall back to FP32 accumulation.
+if GZ &gt;= 64:
+    deltaW = CUDA.tp16_DWBFC_64x72(GZ, X, deltaY, deltaW, ph, pw);
+    executed = True;
+else:
+    GZ = None;   # → 落到下面的 FP16-FP32-accu 分支</code></pre>
+
+<p>而 <code>splitK.py:235-242</code>（§4.4 已引）会在 <code>accu_size == float16</code> 时<b>反向把 GZ 推大</b>。<b>精度约束和性能收益被同一个 GZ 参数绑在一起，这是 BFC 设计里最有意思的张力。</b>误差量级方面，True_FP16 kernel 内联注释的实测值是 <code>3.27e-04</code>（9×9）到 <code>2.33e-03</code>（3×3）（<code>True_FP16_..._GemmSKV2_...:296-312</code>），相对 <code>test_fp16.cuh:306</code> 的门限 <code>relative_difference ≤ 3e-2</code> 有 1~2 个数量级余量。默认 <code>ops.py:39</code> <code>default_true_fp16 = False</code>。</p>
+
+<h3 id="s4-6">4.6 「matrix compression」在反向里的对应物：从未构造矩阵</h3>
+
+<p>摘要里的 compression 在前向对应 §3.1 的 <code>Ws[25][9]</code> Toeplitz buffer。反向里<b>没有 Toeplitz 结构可压</b>（filter 是输出），对应物换成三层 implicit 手法的叠加：</p>
+
+<h4>(a) 寄存器滑窗：把 im2col 的 FD× 数据膨胀压成 1×</h4>
+
+<pre><code class="language-c">float4 x[FD]; uint32_t lx0 = 0; const int STAGE = (OW + 7) &gt;&gt; 3;   // :371
+#pragma unroll //memory flags for Init Block
+for (int i = 0; i &lt; FD; i++) lx0 |= ((uint32_t)(tiw0 + i) &lt; IW) &lt;&lt; i;  // :373
+...
+if (k &gt; 0) {
+#pragma unroll //data reuse
+    for (int i = 0; i &lt; FD - 1; i++) x[i] = x[i + 1];          // :410  寄存器移位
+    const bool lx = lh &amp;&amp; ((uint32_t)(tiw0 + (FD - 1 + ow)) &lt; IW);
+    const int xoft = Xhoft + (FD - 1 + ow)*IC;
+    x[FD - 1] = (lx ? *(float4*)(X + xoft) : F32_4_0);          // :415  每列只 1 次 global load
+}</code></pre>
+
+<p><code>FD=9</code> 时，9 个 tap 的 X 数据在 9 个连续输出列上<b>总共只从 DRAM 读 9 次而非 81 次</b>。这就是摘要里 "register-based input reuse" 在反向的实现，也是 compression 最实质的部分。<b>这一条完全成立</b>，与前向 §3.4 的手法同源（那里是 <code>Xs</code> 的一次 16 B 载入喂 8 条 mma，这里是寄存器链 <code>x[i]=x[i+1]</code>）。</p>
+
+<h4>(b) 几何零裁剪：从循环边界上直接删掉无效 MAC</h4>
+
+<p>三层，全是<b>几何</b>判据、与数值无关：宽度 padding 位掩码 <code>lx0</code>/<code>lx</code>（上面）；宽度 clip <code>owe = IW - tiw0 - FD + 1</code>（<code>_br</code> 变体 :133-134）；以及高度轴 <code>CLIP</code>——当分区不跨越整幅图时，把无效的 <code>oh</code> 前缀/后缀直接从累加区间砍掉（:345-353）：</p>
+
+<pre><code class="language-c">if (CLIP) {//NH_slice &lt; OH: cross at most 1 (OH)
+    const int soh = NHs % OH, eoh = (NHe - 1) % OH + 1;
+    const int efh = (j0 / FWD) * FC, sfh = efh + (FC - 1);
+    const int sih = soh + sfh - oph;//the latest start point
+    const int eih = eoh + efh - oph;//the earlist end point
+    const bool in_h = (sih &lt; eih);
+    NHs += IF_int((in_h &amp;&amp; sih &lt; 0), -sih, 0);
+    NHe -= IF_int((in_h &amp;&amp; eih &gt; IH), eih - IH, 0);
+}</code></pre>
+
+<p><code>IF_int(flag,a,b)</code> 是无分支选择（<code>micro_common.cuh:91</code>），避免 warp divergence。这与前向 §3.5 的 <code>CLIP</code> 是同一个思路的两种落地：前向裁的是 filter 行（<code>fh</code>），反向裁的是累加区间（<code>NHs/NHe</code>）。</p>
+
+<p><b>而且 <code>GZ</code> 选择器主动利用了这个裁剪来降 FLOPs</b>（<code>splitK.py:244-253</code>，注释原文 <code># consider zero-clip to reduce FLOPs</code>）：<code>FH &gt;= 7</code> 时按 <code>OH·OW</code> 与 <code>OH</code> 的大小把 <code>GZ</code> 往 <code>N</code> / <code>N//2</code> / <code>N//4</code> / <code>N//8</code> 推——<b>分区越多，每分区落在 padding 上的无效累加就越少</b>。这说明零裁剪是设计目标而非副产品。</p>
+
+<div class="infer">
+必须澄清一个容易写错的点：<b>这套零消除是纯几何的，不利用 ReLU 稀疏性。</b><code>FP32_function.cuh:113-117</code> 定义了 <code>fp32_func_change_zero()</code>（判断激活函数是否把 0 映射到非 0，只有 Sigmoid 返回 true），但 <code>grep</code> 显示它在整个 BFC 里<b>调用点为 0</b>。报告里不要写成「跳过零值元素」。
+</div>
+
+<h4>(c) FP16 打包：相同 smem 下通道数翻倍</h4>
+
+<p>FP32 路径每线程 4 通道（<code>float4</code>），FP16 路径每线程 8 通道（<code>half8</code>）——<b>但两者都是 16 字节</b>，所以 smem 占用完全相同（都是 <code>Ys[2][8][9]</code> = 2304 B），FP16 却拿到一倍通道吞吐。这是表 7 里 FP16 族 kernel 数量（<code>k8</code> 系列）远多于 FP32 族（<code>k4</code> 系列）的原因。</p>
+
+<h3 id="s4-7">4.7 「dual-path split-GEMM pipeline」在反向里要修正表述</h3>
+
+<p>§3.3 已经指出前向里这个短语有一个确切对应物（一条 <code>fh</code> 内的 L/H 双 <code>cp.async</code> commit group）。在反向里，代码中存在的<b>不是两条并发流水，而是多路 dispatch + mega kernel 内的 main/remainder 分流</b>：</p>
+
+<table>
+<thead><tr><th>分支维度</th><th>判据</th><th>位置</th></tr></thead>
+<tbody>
+<tr><td>高度 tile <code>FC=8</code> vs <code>FC=4</code></td><td><code>FHr8 = FH &amp; 7</code>；<code>==0</code> 或 <code>&gt;4</code> → FC=8；<code>==4</code> → FC=4(FL)；else FC=4(TR)</td><td><code>..._dW_GemmSK.cuh:375-381</code></td></tr>
+<tr><td><code>FD=9</code> mega vs <code>FD∈{3,5,7}</code> 专用</td><td><code>FW&gt;=9</code> 走 mega（用 <code>FWr = FW%9</code> 选余数模板）；<code>FW==7/5/3</code> 走专用；偶数 8/6/4 需 <code>EVEN_FILTER</code> 开关，否则 <code>return -1</code></td><td><code>:32-55</code></td></tr>
+<tr><td>FP16 专有 <code>8×8</code> vs <code>9×FC</code></td><td><code>f8x8 = (FW&gt;8) &amp;&amp; (FWr8&gt;=3) &amp;&amp; (FW&lt;45)</code></td><td><code>FP16_..._GemmSK.cuh:262</code>；<code>ops.py:564-565</code></td></tr>
+<tr><td>mega 内 main tile vs remainder tile</td><td><code>MAIN_FUNC</code> 模板 bool + <code>blockIdx.x % FW_period</code>；<code>bx_group = bx / FW_period; bx_temp = (MAIN_FUNC ? bx - bx_group : bx_group);</code></td><td><code>..._mega.cuh:86, 112-118</code></td></tr>
+<tr><td>三条 dtype 路径</td><td>fp32 / fp16(FP32 accu) / tfp16(FP16 accu + FP32 merge)</td><td><code>Torch_bind.cuh:37-41</code>；<code>ops.py:521-575</code></td></tr>
+<tr><td><code>CLIP</code> on/off</td><td><code>(NH_slice &lt; OH) || (N % GZ == 0)</code></td><td><code>..._dW_GemmSK.cuh:164-165</code></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 8</b>：BFC 的分支维度清单。准确表述应是：<b>一个 kernel 内融合 \(\lceil FW/9\rceil\) 个 FD=9 主 tile 加 1 个 <code>FW%9</code> 余数 tile</b>（mega kernel，靠 <code>blockIdx.x % FW_period</code> 选择走哪条 body，共用同一块 smem），这是<b>编译期双路 + 运行期索引分流</b>，不是两条 stream / 两个 kernel 并发。这一点与前向 §5.4 的 mega kernel 是同一套哲学。</p>
+
+<h3 id="s4-8">4.8 工程代价：4927 个 kernel 实例，以及顺手发现的 3 个真实缺陷</h3>
+
+<p><code>install.log</code> 给出了一组很适合做「代价侧写」的数字：<b>单个 <code>A.cu</code> 翻译单元编译出 4927 个 kernel 实例</b>（sm_86 / CUDA 11.8），来自 5 个维度的模板笛卡尔积——dtype×累加器（3）× tile 形状（<code>4_FDxFC</code> / <code>4_FDx8</code> / <code>9xFC</code> / <code>9x8</code> / <code>8xFC</code> / <code>8x8</code> + <code>T</code> 变体）× <code>FWr = FW%9</code> 余数（0..8）× <code>STAGE_opt</code>（0..3）× <code>PAD/CLIP</code>（2×2）× <b>IC 编译期特化 11 档</b>（<code>{64,128,192,256,384,512,768,1024,1536,2048,4096}</code>，<code>..._dW_GemmSK.cuh:127-139</code>）。前四大族就占了 3696 个：<code>mega_4_9x8T</code> 1408、<code>mega_4_9xFCT</code> 1056、<code>4_FDx8T</code> 704、<code>4_FDxFCT</code> 528。</p>
+
+<p>合起来讲了一个和「上 Tensor Core」<b>完全相反</b>的工程哲学：<b>用极小 block（1~2 warp）+ 极小 smem（2304 B）+ 编译期穷举特化 + split-K 撑并行度，把 CUDA Core 的 FMA 单元和 <code>cp.async</code> 流水打满</b>。对 DWC 反向这种「输出张量极小、规约维极大」的问题，这条路比 mma 更合身。唯一的 Ampere 特性使用是 <code>cp.async.ca.shared.global.L2::128B</code>（<code>micro_ptx.cuh:223-224</code>）+ 双缓冲 <code>buf ^= 1</code>（:496）+ <code>commit_group</code>/<code>wait_group(0)</code> 配对。</p>
+
+<p>阅读过程中发现三个真实缺陷，一并记录（都属于开源代码质量问题，不影响本文结论）：</p>
+
+<ol>
+<li><b><code>ops.py:482</code> 抛错类型不对</b>：<code>raise ValueError(f"input.dtype {X.dtype} != output_grad.dtype {Y.dtype}")</code> 里的 <code>Y</code> 在该作用域<b>未定义</b>，所以 dtype 不匹配时实际抛的是 <code>NameError</code> 而不是预期的 <code>ValueError</code>。</li>
+<li><b><code>accuracy.py:68</code> 被注释掉</b>：<code>Y1 = flashdwc.dwc2d_forward(X1, W1, padding);</code> 这行是注释状态，所以按当前 commit 运行 <code>test_FC_accuracy</code> 是拿一个未赋值的张量去和 PyTorch 比。<b>而且 <code>accuracy.py</code> 只测前向</b>——<code>grep -n "backward|BFC|deltaW" accuracy.py</code> 0 命中，即<b>开源代码里没有反向的精度回归测试</b>（只有 C++ 侧 <code>test_fp16.cuh</code> / <code>test_fp32.cuh</code> 的 golden 对比，而 <code>frame.cuh:26-28</code> 的 <code>COMPILE 1</code> + <code>PYTORCH 1</code> 意味着发布的扩展里根本不含 test 代码，要跑 golden 必须手改 <code>frame.cuh</code>）。</li>
+<li><b><code>GemmSKV2</code> 是死代码且无法编译</b>：<code>True_FP16_..._GemmSKV2_kernel_ruse_mega.cuh</code>（388 行）的 launch 宏（:21,30,41,50,75）引用了<b>未定义的 <code>N_slice</code></b>；顶层入口 <code>TFP16_bn_act_DWC3D_dW_GemmSK_CE_64_72</code>（:195-215）只路由到非 V2 kernel，<code>install.log</code> 里也确实没有任何 <code>GemmSKV2</code> 实例。V2 的想法本身不错（<code>:11</code> <code>V2: full clip along height axis: N % GZ == 0</code>——改成按 batch 维切分区，使高度裁剪量对所有 batch 相同、可预计算一次并直接缩短循环长度 <code>tOH</code>），但当前状态是坏的。</li>
+</ol>
+
+<h3 id="s4-9">4.9 精度验证口径（复核论文声明时需要知道的）</h3>
+
+<table>
+<thead><tr><th>路径</th><th>golden</th><th>度量</th><th>门限</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>BFC FP32</td><td>CPU <code>double</code> 累加</td><td><code>samePercent</code>：\(|a-b|/|a+b| &lt; 2\text{e-}3\) 的元素占比</td><td><b><code>sp ≥ 0.99</code></b>，否则 <code>exit(2)</code></td><td><code>test_fp32.cuh:264-273</code></td></tr>
+<tr><td>BFC FP16 / True_FP16</td><td>CPU <code>double</code> 累加（输入先过 <code>__float2half</code> 再回 <code>float</code>，保证 golden 看到的是 FP16 可表示值）</td><td><code>relative_difference</code>：\(\sum \big||a|-|b|\big|/|a|\,/\,\text{len}\)</td><td><b><code>dif ≤ 3e-2</code></b>，否则 <code>exit(2)</code>；<code>sp &lt; 0.99</code> 那条<b>已被作者注释掉</b></td><td><code>test_fp16.cuh:296-307</code>；<code>test_util.cuh:30-49, 197-217</code></td></tr>
+<tr><td>前向（Python）</td><td><code>torch.conv2d(groups=IC)</code></td><td>MARE = <code>mean(abs((Y1-Y2)/Y2))</code></td><td><b><code>≤ 3e-2</code></b>，否则 <code>RuntimeError</code></td><td><code>accuracy.py:71-89</code></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 9</b>：三条验证口径。FP16 路径把 <code>sp &lt; 0.99</code> 注释掉、改用平均相对误差，说明<b>逐元素通过率在 FP16 下会低于 99%</b>——这是一个诚实但容易被忽略的细节。测试 shape：BFC 用 <code>N=128, IH=IW=OH=OW=32, IC=OC=256</code>，滤波器 <b>3×3 到 51×51 的奇数</b>（<code>test_fp32.cuh:750, 795-819</code>；<code>test_fp16.cuh:725, 747-770</code>），且 FP16 测试强制 same-padding（<code>test_fp16.cuh:21</code> <code>if (ph != (FH&gt;&gt;1) || pw != (FW&gt;&gt;1)) exit(-2);</code>）。</p>
+
+<div class="infer">
+摘要里「ImageNet-1K 收敛匹配 PyTorch」这条<b>在开源代码中无法验证</b>：全仓库没有任何训练脚本、数据集加载器、模型定义或收敛曲线数据（<code>grep -rln "ImageNet|ResNet|ConvNeXt|ConvMixer"</code> 只命中 <code>python/speed.py</code>，且仅仅是 benchmark shape 的注释标签，如 <code>:398 #ConvMixer</code>、<code>:399 #ConvNeXt, HA = 7</code>）。<code>README.md</code> 的 Repository Scope 段也明确写了 "architecture-specific retuning and broader production-oriented engineering are outside the scope of the current release"。报告中应标注为<b>论文声明、无代码佐证</b>。同理，摘要的 1.03×–14.18× 加速区间也无法从仓库复现——但 §6 会用四份 benchmark 头文件做一次独立的交叉验证。
+</div>
+
+<h2 id="s5">§5 端到端：从 PyTorch 张量到 PTX 的四级分发</h2>
+
+<h3 id="s5-1">5.1 布局：channel-last 不是「优选」，是唯一入口</h3>
+
+<p><code>ops.py:164-171</code> 决定输入怎么进 kernel：</p>
+
+<pre><code class="language-python">if input.is_contiguous(memory_format=torch.contiguous_format):
+    X = input                              # 本来就是 [N, IH, IW, IC]
+elif input.is_contiguous(memory_format=torch.channels_last):
+    X = input.permute(0, 2, 3, 1)          # 只改 stride 元数据，零拷贝
+else:
+    raise ValueError(f"input is not contiguous")</code></pre>
+
+<p>两点值得注意。第一，<b>这个库不替你做布局转换</b>——NCHW-contiguous 的张量直接被拒。第二，第二条分支是<b>免费</b>的：PyTorch 的 <code>channels_last</code> 张量物理内存本来就是 NHWC，<code>permute</code> 只动元数据。所以 <code>model.to(memory_format=torch.channels_last)</code> 之后接入是零成本的，这也正是 <code>README.md:223</code> 那句 "uses a channel-last execution path where appropriate" 的实际含义——「where appropriate」= 「只接受 channel-last」。输出分配按输入的 <code>continuous</code> 标志镜像回去（<code>ops.py:186-201</code>），返回时保持调用方的 memory format。</p>
+
+<p>为什么是硬性要求而不只是偏好？§3.2 的 128 字节合并完全建立在 <code>*(half8*)(X + xoft)</code> 读的是 <b>8 个相邻通道</b>上。NHWC 里这 8 个 <code>half</code> 是连续的 16 字节；换成 NCHW，同样的表达式会读到相隔 <code>H·W</code> 的 8 个值——16 字节有效数据摊在 8 个独立的 128 字节 sector 上，带宽放大 8 倍。</p>
+
+<div class="infer">
+上一段的 8 倍放大是由寻址式（<code>xoft</code> 按 <code>IC</code> 步进，:153-163）与 NHWC/NCHW 的 stride 定义直接推出的，不是实测值，论文也没有讨论 NCHW 情形。
+</div>
+
+<p>权重布局是 <code>[FH, FW, IC]</code>，不是 PyTorch 的 <code>[IC, 1, FH, FW]</code>（<code>ops.py:53-54</code> 的 <code>weight_shape()</code>；<code>nn.DWC2d</code> 直接按这个形状建 Parameter，<code>nn.py:74-76</code>）。<code>nn.DWC2d</code> 的构造签名里<b>没有 stride / dilation / groups</b>（<code>nn.py:51-59</code>），与下一节的约束一致。</p>
+
+<h3 id="s5-2">5.2 Tensor-Core 路径的适用域最窄</h3>
+
+<p>三个前向入口的 torch 签名（<code>Torch_bind.cuh:46-52</code>）就能看出能力差异——注意最后一个<b>连 <code>ph, pw</code> 都没有</b>：</p>
+
+<pre><code class="language-c">m.def("fp32_FlashDWC_32x128(Tensor X, Tensor W, Tensor Y, int ph, int pw) -&gt; Tensor");
+m.def("fp16_FlashDWC_64x128(Tensor X, Tensor W, Tensor Y, int ph, int pw) -&gt; Tensor");
+m.def("fp16_FlashDWC_T_64x128(Tensor X, Tensor W, Tensor Y) -&gt; Tensor");   // Flash-DWC-T</code></pre>
+
+<table>
+<thead><tr><th>入口</th><th>执行单元</th><th>padding</th><th>IC 约束</th><th>FW 范围（奇数）</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td><code>fp32_FlashDWC_32x128 / 32x160</code></td><td>CUDA core（GEMV）</td><td>任意 <code>ph, pw</code></td><td><code>IC % 32 == 0</code></td><td>3 – 51</td><td><span class="pill">bn_act_dwconv3D_Gemm.cuh:119-173</span></td></tr>
+<tr><td><code>fp16_FlashDWC_64x128 / 64x160</code></td><td>CUDA core（GEMV）</td><td>任意 <code>ph, pw</code></td><td><code>IC % 64 == 0</code></td><td><b>3 – 17</b></td><td><span class="pill">FP16_bn_act_dwconv3D_Gemm.cuh:131-146</span></td></tr>
+<tr><td><code>fp16_FlashDWC_T_64x128</code></td><td><b>Tensor Core（mma）</b></td><td><b>只能 <code>FH//2, FW//2</code></b></td><td><code>IC % 64 == 0</code></td><td>3 – 51</td><td><span class="pill">FP16_dwconv3D_Gemm_mma.cuh:232-275</span></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 10</b>：三条前向路径的适用域。三者共同要求 <code>sh = sw = 1</code>（<code>bn_act_dwconv3D_Gemm_kernel_ruse.cuh:16</code>）与 <code>(N·OH) % 16 == 0</code>。Tensor-Core 路径额外要求 <code>OH = IH, OW = IW, OC = IC</code>（<code>FP16_dwconv3D_Gemm_mma.cuh:232</code>），Python 侧逐条 <code>raise</code>（<code>ops.py:245-251</code>）。<code>idt</code> 后缀就是这件事：索引宏 <code>get_n_oh_ow_idt</code> 把 <code>OH := IH</code>、<code>OW := IW</code> 写死（<code>micro_Gemm.cuh:73-76</code>），所以 grid 公式里出现的是 <code>IW</code> / <code>N·IH</code> 而不是 <code>OW</code> / <code>N·OH</code>。</p>
+
+<h4>为什么 stride 1 是这套映射的前提，而不是实现上的偷懒</h4>
+
+<p>回到 §2.3 的 B 操作数。stride 1 时输出像素 \(n\) 读输入列 \(iw_0+n\)，于是 \(B[k][n]=W[k-n]\)。stride 为 \(s\) 时输出像素 \(n\) 读的是 \(iw_0+s\cdot n\)，B 变成</p>
+
+<div class="formula">\[ B[k][n] = W[k - s\cdot n], \qquad \text{非零当且仅当 } 0 \le k - s n \le F_W-1 \]</div>
+
+<p>在 mma 的 \(8\times8\) 窗口里数非零元（取 \(F_W\ge 8\)，即窗口内不会被 filter 边界截断）：</p>
+
+<table>
+<thead><tr><th>stride \(s\)</th><th>各列非零数 \(\max(0,\,8-s n)\)</th><th>非零总数</th><th>MAC 密度</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>8+7+6+5+4+3+2+1</td><td>36</td><td><b>56.25%</b></td></tr>
+<tr><td>2</td><td>8+6+4+2+0+0+0+0</td><td>20</td><td>31.25%</td></tr>
+<tr><td>3</td><td>8+5+2+0+…</td><td>15</td><td>23.4%</td></tr>
+<tr><td>4</td><td>8+4+0+…</td><td>12</td><td>18.75%</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 11</b>：stride 对 B 操作数密度的影响（本文推导）。密度大致按 \(1/s\) 衰减——<b>stride 越大，Tensor Core 越空转</b>。</p>
+
+<div class="infer">
+表 11 是本文按 §2.3 的同一套下标代数推出来的，源码里不存在 stride &gt; 1 的 mma 变体，论文正文也取不到，无法核对作者是否这样论证。但结论方向是确定的：源码把 <code>sh = sw = 1</code> 写成硬约束（<code>bn_act_dwconv3D_Gemm_kernel_ruse.cuh:16</code>）、连 torch 签名都不留 padding 形参，不是工程省事，而是<b>密度公式本身依赖 stride 1</b>。此外 stride \(s\) 还会把 K 轴需要覆盖的范围从 \(8\) 撑到 \(8+7s\)，§2.1 注释里的分块规则 <code>Loop: FH * ((FW + 8) / 9)</code> 也要跟着改——即 stride &gt; 1 破坏的不只是密度，还有 9-tap 分块结构。
+</div>
+
+<p>same padding 的限制则来自另一处：<code>idt</code> 路径把输出尺寸等同于输入尺寸，而 <code>Xs</code> 的载入地址式（:174-183）里 <code>tih0 = oh0 - ph</code> 的 <code>ph</code> 是<b>编译期常量 <code>FH/2</code></b>——§3.5 的 <code>CLIP</code> 正是靠这个常量才能在编译期算出「哪几行 filter 一定落在图像外」。</p>
+
+<h3 id="s5-3">5.3 四级分发：Python → FW → IC → IW</h3>
+
+<p><b>L0（Python，<code>ops.py:253-273</code>）</b>：先看 dtype，再看 <code>tensor_core</code> 开关，最后看 <code>OW</code> 的整除性挑 tile 宽度。</p>
+
+<pre><code class="language-python">if data_type == torch.float32:
+    x128 = (OW % 8 == 0) and (OW % 10 != 0)
+    Y = CUDA.fp32_DWC_32x128(X, W, Y, ph, pw) if x128 else CUDA.fp32_DWC_32x160(X, W, Y, ph, pw)
+
+elif data_type == torch.float16:
+    if W.dtype != torch.float16: W = W.to(torch.float16)     # 自动降精度
+    if tensor_core:
+        Y = CUDA.fp16_DWC_T_64x128(X, W, Y)                  # ← Flash-DWC-T，默认路径
+    else:
+        x128 = ((OW % 8 == 0) and (OW % 10 != 0)) or (FW &gt; 31)
+        Y = CUDA.fp16_DWC_64x128(X, W, Y, ph, pw) if x128 else CUDA.fp16_DWC_64x160(X, W, Y, ph, pw)</code></pre>
+
+<p><code>default_tensor_core = True</code>（<code>ops.py:32-33</code>，注释写明 "True selects the GEMM-based Tensor-Core implementation, Flash-DWC-T"），所以 <b>FP16 用户默认就走 §2 那条 mma 路径</b>。FP32 没有 Tensor-Core 分支——见 §5.6。</p>
+
+<p><b>L3（C++，按 <code>FW</code>）</b>：<code>FP16_DWC3D_Gemm_CE_mma_64_128_idt</code>（<code>FP16_dwconv3D_Gemm_mma.cuh:235-276</code>）用 25 个 <code>if (FW == k)</code> 把 3–51 的奇数逐个特化，分五组由 <code>frame.cuh:30-35</code> 的宏门控，落空则 <code>return -1;//not supported</code>。把 <code>FW</code> 变成模板参数，是为了让 §2.2 那个 <code>for (ofw = 9; ofw &lt; FW; ofw += 9)</code> 的循环次数在编译期确定、从而完全展开。</p>
+
+<p><b>L2（按 <code>IC</code>）</b>：<code>temp_FP16_dwconv3dGemm_CE_mma_64_128_idt&lt;FW&gt;</code>（:203-223）把 <code>IC</code> 特化成 11 个编译期常量，命中就调 <code>elem_..._128T_idt&lt;FW, IC&gt;</code>（T = template），否则退回运行期 <code>IC</code> 版 <code>elem_..._128_idt&lt;FW&gt;</code>：</p>
+
+<pre><code class="language-c">if (IC ==   64) return elem_..._mma_64_128T_idt&lt;FW,   64&gt;(...);
+if (IC ==  128) return elem_..._mma_64_128T_idt&lt;FW,  128&gt;(...);
+...  192, 256, 384, 512, 768, 1024, 1536, 2048 ...
+if (IC == 4096) return elem_..._mma_64_128T_idt&lt;FW, 4096&gt;(...);
+return /****/ elem_..._mma_64_128_idt&lt;FW&gt;(..., IC);   // 运行期 IC 兜底</code></pre>
+
+<p><code>IC</code> 进模板的收益是 grid 公式里的 <code>IC&gt;&gt;3&gt;&gt;3</code>、地址步进里的 <code>*IC</code>、以及 §2.2 的一堆 <code>% / &gt;&gt;</code> 全部常量折叠。</p>
+
+<p><b>L1（按 <code>IW</code>）</b>：<code>elem_..._64_128T_idt&lt;FW, IC&gt;</code>（:19-101）是真正决定 tile 形状与 launch 次数的一层。完整决策表：</p>
+
+<table>
+<thead><tr><th>条件</th><th>tile</th><th>launch</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>IW % 32 == 0</code></td><td><code>32x4T</code></td><td>1</td><td>最宽 tile，行内连续 32 像素</td></tr>
+<tr><td><code>IW % 16 == 0</code></td><td><code>16x8T</code></td><td>1</td><td></td></tr>
+<tr><td><code>IW &gt; 32</code> 且 <code>R32 &gt; 23</code></td><td><code>32x4GT</code></td><td>1</td><td><code>G</code> 变体自己吃掉余数</td></tr>
+<tr><td><code>IW &gt; 32</code> 且 <code>17 &lt; R32 ≤ 23</code></td><td><code>16x8GT</code> + <code>8x16GT</code></td><td><b>2</b></td><td>main 处理 <code>IW-(IW&amp;15)</code> 列，aux 处理余数</td></tr>
+<tr><td><code>IW &gt; 32</code> 且 <code>8 &lt; R32 ≤ 17</code></td><td><code>32x4GT</code> + <code>16x8GT</code></td><td><b>2</b></td><td><code>ow_index = IW - R32</code></td></tr>
+<tr><td><code>IW &gt; 32</code> 且 <code>R32 ≤ 8</code></td><td><code>32x4GT</code> + <code>8x16GT</code></td><td><b>2</b></td><td><code>ow_index = IW - R32</code></td></tr>
+<tr><td><code>23 &lt; IW ≤ 32</code></td><td><code>32x4G</code></td><td>1</td><td></td></tr>
+<tr><td><code>15 &lt; IW ≤ 23</code></td><td><code>16x8G</code> + <code>8x16G</code></td><td><b>2</b></td><td></td></tr>
+<tr><td><code>8 &lt; IW &lt; 16</code></td><td><code>16x8G</code></td><td>1</td><td></td></tr>
+<tr><td><code>IW == 8</code></td><td><code>8x16</code></td><td>1</td><td>唯一用到 §2.2 那个基础 kernel 的分支</td></tr>
+<tr><td><code>IW &lt; 8</code></td><td><code>8x16G</code></td><td>1</td><td></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 12</b>：L1 的完整分发（<code>FP16_dwconv3D_Gemm_mma.cuh:19-101</code>，<code>R32 = IW &amp; 31</code>）。后缀含义：<code>T</code> = <code>IC</code> 进模板，<code>G</code> = general（能处理非整除宽度），<code>C</code> = cooperate（<code>_ex:39-45</code> 定义，L1 里未被调用）。三个编译期 bool 的语义写在 <code>_ex:20-22</code>：<code>MAIN_FUNC</code>（true = OW 整除部分 / false = 余数部分）、<code>CLIP</code>（高度轴 padding 裁剪，见 §3.5）、<code>PAD</code>（宽度轴补齐）。grid 一律是 <code>dim3(&lt;空间 tile 数&gt;, IC&gt;&gt;3&gt;&gt;3)</code>，block 一律是 <code>dim3(8, 16)</code> = 128 线程 = 4 warp。</p>
+
+<p>把这四级的分支数乘起来就是 <code>README.md:135</code> 那句「完整构建可能要几小时」的来源：25 个 <code>FW</code> × 11 个 <code>IC</code> × 表 12 里约 20 个不同 kernel 调用点 × <code>{CLIP, PAD}</code> 组合，量级在<b>上万个 kernel 实例</b>。</p>
+
+<p>这个量级<b>可以直接核对</b>——仓库里带着两份完整的 pip/nvcc 构建日志，<code>ptxas</code> 逐个实例打了寄存器统计：</p>
+
+<table>
+<thead><tr><th>构建日志</th><th>构建路径</th><th>distinct kernel 实例</th><th>kernel 家族数</th><th><code>-gencode</code></th></tr></thead>
+<tbody>
+<tr><td><span class="pill">FlashDWC_cuda/exe/install.log</span><br>6.2 MB · nvcc 11.8</td><td><code>/staff/gilgamesh/code/<br>Cu32_depthwise_conv3D_cu118/exe</code></td><td><b>13569</b></td><td>37</td><td>仅 <code>compute_86,sm_86</code> 一条</td></tr>
+<tr><td><span class="pill">FlashDWCBFC_cuda/exe/install.log</span><br>2.5 MB · nvcc 11.8</td><td><code>/staff/gilgamesh/code/<br>Cu32_depthwise_dconv3D_deltaW_cu118/exe</code></td><td><b>4927</b></td><td>—</td><td>仅 <code>compute_86,sm_86</code> 一条</td></tr>
+<tr><td colspan="2"><b>合计</b></td><td><b>18496</b></td><td colspan="2">两份日志都只有 <code>sm_86</code>，没有 <code>sm_80</code>／<code>sm_89</code></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 13</b>：两份构建日志的实例统计（按 <code>Compiling entry function</code> 行去重计数）。前向侧最大的三个家族是 <code>bn_act_dwconv3dGemm_mega_kernel_CE_4_AT_ruse</code>（2574）、<code>..._4_8T_ruse</code>（2002）与 <code>FP16_dwconv3dGemm_CE_mma_kernel_64_16x8GT_idt</code>（1650）；Tensor-Core 的六个 mma 家族（<code>{8x16,16x8,32x4}{T,GT}</code>）合计 <b>5500</b> 个实例。</p>
+
+<p>而且分支数的乘法<b>被逐字验证了</b>：TC 路径的 <code>FP16_dwconv3dGemm_CE_mma_kernel_64_32x4T_idt</code> 家族恰好有 <b>550</b> 个实例，去重后的模板实参正是 <code>FW ∈ {3,5,7,…,51}</code>（<b>25</b> 个奇数）× <code>IC ∈ {64,128,192,256,384,512,768,1024,1536,2048,4096}</code>（<b>11</b> 个）× <code>CLIP ∈ {0,1}</code>（<b>2</b>）= 25×11×2。对应的 <code>32x4GT_idt</code>（general，能处理非整除宽度）是 <b>1100</b> = 550×2，多出来的正是 <code>PAD</code> 这一维。</p>
+
+<div class="infer">
+两份日志都只编到 <code>sm_86</code>，而 <code>README.md:104-106</code> 的配置表要求 A100 用 <code>sm_80</code>。<code>sm_86</code> 的 SASS 无法在 <code>sm_80</code> 上加载（同 major 但 minor 更低），所以<b>这两次被记录的构建产不出 §6 里 A100 两段的任何数据</b>——那些数字来自另一次未留日志的 <code>sm_80</code> 构建。这一点本身不是问题，但它意味着：<b>仓库里可复核的构建产物只覆盖 RTX 3060 Ti / RTX 4090</b>，A100 段既没有日志也没有编译产物佐证。§6.6 会回到这件事。
+</div>
+
+<p>顺带一个<b>源码缺陷</b>：<code>ops.py:267</code> 的 <code>or (FW &gt; 31)</code> 会把 <code>FW ∈ {33,…,51}</code> 的 FP16 CUDA-Core 请求送进 <code>fp16_DWC_64x128</code>，但那个 host 函数只支持到 <code>FW ≤ 17</code>（表 10），必然 <code>return -1</code> → 抛 <code>runtime_error</code>。因为默认 <code>tensor_core=True</code>，这条路径平时踩不到。</p>
+
+<div class="infer">
+上述缺陷由两处 FW 支持范围对比推出（<code>ops.py:267</code> vs <code>FP16_bn_act_dwconv3D_Gemm.cuh:131-146</code>），未实机运行验证。
+</div>
+
+<h3 id="s5-4">5.4 mega kernel：CUDA-core 路径对同一问题的相反解法</h3>
+
+<p>CUDA-core 路径的每线程 tile 宽是 10（<code>_160</code> 家族，<code>A</code> 是罗马数字 10），同样要面对 <code>OW % 10 != 0</code>。它的答案与 Tensor-Core 的两次 launch <b>完全相反</b>：把 10 个不同尾宽的 device 函数塞进同一个 kernel，在 <b>device 端</b>用 <code>blockIdx.y</code> 选分支。</p>
+
+<pre><code class="language-c">const int OW_period = (OW + 9) / 10;
+const int OW_lane   = blockIdx.y % OW_period;
+if (OW_lane &lt; OW_period - 1) {          // 整块部分
+    DEV_bn_act_dwconv3dGemm_kernel_CE_4_A_ruse&lt;...&gt;(...);
+}
+else if (OWr == 9) { DEV_..._4_9_ruse&lt;..., false&gt;(..., OW - 9, ...); }
+...
+else if (OWr == 1) { DEV_..._4_1_ruse&lt;..., false&gt;(..., OW - 1, ...); }</code></pre>
+
+<p>配套的 launch 宏把 grid 从 floor 改成 <b>ceil</b>（<code>bn_act_dwconv3D_Gemm_kernel_ruse_mega.cuh:25</code>）：</p>
+
+<pre><code class="language-c">&lt;&lt;&lt; dim3(IC&gt;&gt;2&gt;&gt;LBX, ((OW + 9)/10) * ((N*OH)&gt;&gt;LBY)), dim3(1&lt;&lt;LBX, 1&lt;&lt;LBY), 0, stream &gt;&gt;&gt;</code></pre>
+
+<p><code>OWr</code> 本身是模板参数，所以每种尾宽都是一个编译期 specialization，运行时只多一条 <code>if</code> 链的开销。目的很明确：<b><code>OW</code> 不整除时不要发第二次 launch</b>——省掉 tail effect、省掉第二个 kernel 的低 occupancy、省掉 stream 上的串行气泡。代价是 <code>..._ruse_mega.cuh</code> 膨胀到 <b>4403 行</b>（FP16 版 <b>4938 行</b>），绝大部分是那 20 个 DEV 函数的模板展开。</p>
+
+<p>于是同一个问题有了两套解法：<b>Tensor-Core 用两次 launch 换代码简单，CUDA-core 用 4400 行模板换一次 launch</b>。</p>
+
+<div class="infer">
+为什么两条路径选了相反的策略，源码没有解释。一个自洽的读法：mma kernel 单个 CTA 已经很重（41 KB shared memory、每线程 64 个 f32 累加器），第二次 launch 的相对开销本来就小；而 GEMV kernel 轻、launch 多，tail effect 占比更显著。这属于本文的推测。
+</div>
+
+<p>另外，摘要里 "dual-path split-GEMM pipeline" 这个说法在源码里有<b>两个候选对应物</b>：§3.3 讲的 CTA 内 L/H 双路 <code>cp.async</code> 流水，和本节的 main + auxiliary 双 launch（<code>_ex:20</code> 注释确实写了 <code>main (true: OW divisible part) + auxiliary (false: remiander)</code>，且 <code>MAIN_FUNC</code> 会把 GEMM 沿 M 轴劈开，字面上更像 "split-GEMM"）。本文在 §3.3 采用了前一种读法，因为它才是每个 CTA 内都在跑的机制；后一种只在 <code>IW</code> 非整除时触发。</p>
+
+<div class="infer">
+论文正文取不到，无法确认作者指的是哪一个。两种机制在源码里都真实存在，本节把歧义显式列出而不是替作者选定。
+</div>
+
+<h3 id="s5-5">5.5 BN + 激活融合：kernel 里有，PyTorch 路径上没有</h3>
+
+<p>CUDA-core 的 <code>bn_act_*</code> 家族算的是 <code>Y = activation(batchnorm(dwconv(X)))</code>（<code>bn_act_dwconv3D_Gemm_kernel_ruse.cuh:15</code>）。BN 不是预折叠的 scale/bias，而是 kernel 内每线程算一次：</p>
+
+<pre><code class="language-c">float4 alpha, beta; if (BN) {                    //regarding eps &gt; 0
+    float4 a = *(float4*)(A + ic), var = *(float4*)(Xvar + ic);
+    alpha.x = a.x * rsqrtf(var.x + eps);  ...
+    float4 b = *(float4*)(B + ic), mean = *(float4*)(Xmean + ic);
+    beta.x  = b.x - alpha.x * mean.x;     ...
+}</code></pre>
+
+<p>因为 <code>alpha/beta</code> 只依赖 <code>ic</code>，而 <code>ic</code> 在线程内是常量（:150），整个 kernel 生命周期只算一次，摊到 40 个输出上。激活函数是编译期模板参数，支持 9 种：<code>None / Relu / LeakyRelu / Elu / Softplus / Gelu / Sigmoid / Tanh / Swish / Mish</code>（<code>FP32_function.cuh:6-16</code>）。FP16 路径的 BN 参数<b>仍是 FP32</b>，累加器是 <code>float8</code>（<code>FP16_bn_act_dwconv3D_Gemm_kernel_ruse.cuh:106-132</code>）。</p>
+
+<p>但所有对外的 torch 算子都以「无激活、无 BN」调用：</p>
+
+<pre><code class="language-c">const int code = bn_act_DWC3D_Gemm_CE_32_128&lt;-1, false&gt;(stream,
+    X_ptr, IH, IW, NULL, NULL, 0, NULL, NULL,     // Xmean, Xvar, eps, A, B 全是 NULL
+    W_ptr, FH, FW, Y_ptr, OH, OW, N, IC, ph, pw, 0, 0, 0);</code></pre>
+
+<p>（<code>Torch_Impl_fp32.cuh:61-65</code>；FP16 同形，<code>Torch_Impl_fp16.cuh:91-95, 130-134</code>。）bias 反而退回 Python 层单独做一次加法（<code>function.py:77-85</code>，还按布局分叉：<code>Y + bias</code> 或 <code>Y + bias.view(1,-1,1,1)</code>）。</p>
+
+<p>更彻底的是：<b>Tensor-Core 入口连 BN/act 的模板参数都没有</b>——它的签名就是 <code>(stream, X, IH, IW, W, FH, FW, Y, N, IC)</code>（<code>FP16_dwconv3D_Gemm_mma.cuh:235-238</code>）。也就是说，摘要里 9.01× 那条 Flash-DWC-T 路径<b>在 C++ 层面就不具备融合能力</b>，融合只存在于 CUDA-core 路径，且在那条路径上也被 torch 绑定关掉了。</p>
+
+<p>融合本来能省多少？不融合时是 <code>dwconv → 写 Y1 → 读 Y1 做 BN → 写 Y2 → 读 Y2 做 act → 写 Y3</code>，即额外 <b>2 次写 + 2 次读</b>一个 <code>N·OH·OW·IC</code> 的张量；对一个 AI 只有 \(F_HF_W/2\) 的访存受限算子来说，这是很实在的开销。</p>
+
+<div class="infer">
+「4 次额外全张量访存」由 <code>Y = activation(batchnorm(dwconv(X)))</code> 的三段式语义推出，源码没有直接给这个数字。这是本文认为<b>论文能力与开源可用面之间最大的一道裂缝</b>：pip 装完的用户拿不到摘要里那部分融合收益。
+</div>
+
+<h3 id="s5-6">5.6 源码层面的负面结论</h3>
+
+<p>以下几条是全仓库 grep 得到的<b>否定性事实</b>，写出来是为了给读者的预期划边界——它们说明哪些「看起来该有」的优化其实没有：</p>
+
+<table>
+<thead><tr><th>检查项</th><th>结果</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>tf32_MMA_16_8_8</code> / <code>_V</code></td><td>定义于 <code>micro_ptx.cuh:133-141</code>（BFC 侧同名重复），<b>0 个调用点</b></td><td><b>没有 TF32 路径</b>。FP32 前向只能走 CUDA-core GEMV（<code>torch_FP32_Flash_DWC_32x128</code> → <code>bn_act_DWC3D_Gemm_CE_32_128</code>）</td></tr>
+<tr><td><code>ldmatrix*</code> / <code>movmatrix</code></td><td>13 个宏定义于 <code>micro_ptx.cuh:11-66</code>，<b>0 个调用点</b>（源码里 61 处 <code>ldmatrix</code> 字样全是 <code>//idx of ldmatrix</code> 这类注释）</td><td>mma fragment 是<b>手工在寄存器里拼</b>的（§3.4），没有用硬件的矩阵载入指令。这在 mma kernel 里是不常见的写法</td></tr>
+<tr><td><code>__ldg</code></td><td><b>0 处命中</b></td><td>没有显式只读缓存载入。所有指针带 <code>const __restrict__</code>，nvcc <i>有资格</i>自动生成 <code>ld.global.nc</code>，但源码没有手写</td></tr>
+<tr><td><code>texture.cuh</code> / <code>tex1Dfetch</code></td><td>3 个 linear texture object 工厂（<code>floatTexture</code> 等），前向 kernel <b>一个都没用</b>；<code>tex1Dfetch</code> 只出现在一个无调用点的宏（<code>micro_Gemm.cuh:19-20</code>）和 BFC 的 dW kernel 里</td><td>frame.cuh 里 include 的 <code>cuda_texture_types.h</code> / <code>texture_fetch_functions.h</code> 对前向路径是空转</td></tr>
+<tr><td><code>NZERO_0x7[]</code> / <code>NZERO_0xF[]</code></td><td><code>micro.cuh:52, 63</code> 两张 32 项常量表，<b>无任何使用点</b></td><td>死代码。<b>没有 zero-skipping</b>：<code>fh/fw</code> 双层循环都是无条件的，不存在 <code>if (w != 0) continue</code></td></tr>
+<tr><td><code>grep -i "compress"</code> / <code>"spars"</code></td><td>全仓库 <b>0 处命中</b></td><td>摘要里的 "matrix compression" 在源码中没有同名标识符——本文 §3.1 给出的 <code>Ws[25][9]</code> Toeplitz buffer 是最贴合的对应物，但这是推断</td></tr>
+<tr><td>2:4 结构化稀疏</td><td>无相关代码</td><td>56.25% 的密度<b>没有</b>借助 Ampere 的 sparse tensor core（那要求恰好 2:4），走的是 dense mma + 零填充</td></tr>
+<tr><td><code>next_cudaStream</code></td><td><code>micro_common.cuh:102-103</code> 定义，<b>0 个调用点</b></td><td>多流并行是死代码；§5.4 的两次 launch 在同一 stream 上<b>顺序</b>下发</td></tr>
+<tr><td><code>micro_ptx_dwconv_mma.cuh</code></td><td>全文 6 行，只有一个 include guard</td><td>空壳文件</td></tr>
+<tr><td><code>tensor_remode.cuh</code></td><td>全文 9 行，只是三个 <code>*_filter_rot180.cuh</code> 的聚合 include</td><td><b>不重排激活张量</b>。所谓 "remode" 只有滤波器 180° 旋转，服务于 §4 的 backward-data</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 14</b>：负面结论汇总。另有一处仓库自身的不一致：<code>frame.cuh:26-28</code> 实际写着 <code>#define COMPILE 1</code> 与 <code>#define PYTORCH 1</code>，而 <code>README.md:119-131</code> 明确要求构建 PyTorch 扩展前这两个宏<b>都不应该被定义</b>。按 README 的指示，克隆下来直接编译会走进非预期的条件分支。</p>
+
+<h2 id="s6">§6 效果与代价：用仓库自带的 benchmark 数据独立复核</h2>
+
+<p>论文正文取不到，摘要里那三个数字（9.01× / 5.09× / 1.03×–14.18×）无法直接核对。但仓库里有一份<b>被忽略的实测数据</b>：四个 <code>performance_*.cuh</code> 头文件，函数体全空，里面只有作者跑完后粘贴回去的注释。本节把它们全部解析出来，与 cuDNN 基线逐行对齐，独立复算一遍加速比——同时也复核出一处<b>物理上不成立</b>的数据段。</p>
+
+<h3 id="s6-1">6.1 数据形态与 FLOP 口径</h3>
+
+<table>
+<thead><tr><th>文件（<code>FlashDWC_cuda/src/</code>）</th><th>测的是</th><th>段结构</th><th>解析规模</th></tr></thead>
+<tbody>
+<tr><td><code>performance_dwconv3D_FP16_Gemm_mma.cuh</code></td><td><b>Flash-DWC-T</b>（mma）</td><td><code>#ifndef</code> 分 GPU → 每 tile 变体一个函数 → 每 shape 一个 <code>{}</code> 块</td><td>30 个 (gpu, tile, shape) 组，<b>723</b> 个 filter 行</td></tr>
+<tr><td><code>performance_bn_act_dwconv3D_FP16_Gemm.cuh</code></td><td>Flash-DWC FP16（CUDA core）</td><td>同上</td><td>20 组，<b>498</b> 行</td></tr>
+<tr><td><code>performance_bn_act_dwconv3D_Gemm.cuh</code></td><td>Flash-DWC FP32（CUDA core）</td><td>同上</td><td>20 组，<b>500</b> 行 + 150 条续行</td></tr>
+<tr><td><code>cuDNN_performance_dwconv3D_FP16.cuh</code></td><td>cuDNN 基线，<b>逐算法</b></td><td>多一层「算法名」维度</td><td>18 组，<b>450</b> 行 + 1188 条续行 = <b>1638</b> 条计时</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 15</b>：GPU 段由 <code>#ifndef</code> 守卫名识别（<code>RTX3060TI</code> / <code>RTX4090</code> / <code>A100_80G(B)</code> / <code>A100_40G(B)</code>）。cuDNN 侧出现的算法名有八种：<code>IGemm</code> / <code>EGemm</code> / <code>HGemm</code> / <code>hGemm</code> / <code>CuFFT</code> / <code>tiFFT</code> / <code>Wgrad</code> / <code>WgraN</code>，共 1638 条计时行；后三种从未胜出，见 §6.2。每个 filter 的<b>首行</b>格式是 <code>//F*F: Size = ..., Time = ... msec, Performance = ... GFlop/s</code>，其后的<b>续行</b>只写 <code>//   Time = ... msec, Performance = ... GFlop/s (算法名)</code>——「续行」即指这种没有 <code>F*F</code> 与 <code>Size</code>、只有计时与算法标签的行，它们在 §6.2 里照常参与「cuDNN best」的选取，但在 §6.6 里无法被 <code>Size</code> 恒等式检验。</p>
+
+<p>四份 harness 的 FLOP 口径<b>完全一致</b>（<code>test_fp16.cuh:451,455,456</code>；<code>test_fp32.cuh:439,443,444</code>；BFC 侧 <code>test_fp16.cuh:595,599,600</code>、<code>test_fp32.cuh:547,551,552</code>）：</p>
+
+<pre><code class="language-c">float size = 2.0 * GN / 1024 * GM / 1024 * GK / 1024;
+float total = 1024 * size * 1e-9 * 1024 * 1024;      // = size * 1024^3 * 1e-9
+float performance = total / (time * 1e-3);           // 十进制 GFlop/s</code></pre>
+
+<p>约掉那两个 1024 就是 <code>performance = 2·GN·GM·GK / time</code>，即<b>有用</b> FLOP，不含 Toeplitz 的结构零。用 <code>scripts/flash_dwc_roofline.py</code> 独立算 <code>2·N·OH·OW·C·FH·FW / time</code> 去对 kernel 头注释里的 <code>Performance</code>（<code>FP16_dwconv3D_Gemm_mma_kernel_ruse.cuh:76-96</code>，shape <code>[128,64,64,256]</code>），10 行全部吻合：</p>
+
+<table>
+<thead><tr><th>F</th><th>msec</th><th>源码注释 GFlop/s</th><th>本文独立复算</th><th>偏差</th><th>\(\mathrm{AI}=F^2/2\)</th><th>density(F)</th></tr></thead>
+<tbody>
+<tr><td>5</td><td>1.663</td><td>4034.8</td><td>4035.4</td><td>0.015%</td><td>12.5</td><td>0.469</td></tr>
+<tr><td>7</td><td>2.082</td><td>6319.0</td><td>6317.6</td><td>0.022%</td><td>24.5</td><td>0.547</td></tr>
+<tr><td>9</td><td>2.586</td><td>8406.7</td><td>8408.1</td><td>0.017%</td><td>40.5</td><td>0.562</td></tr>
+<tr><td>13</td><td>5.725</td><td>7924.2</td><td>7924.1</td><td>0.001%</td><td>84.5</td><td>0.562</td></tr>
+<tr><td>17</td><td>7.486</td><td>10362.5</td><td>10363.1</td><td>0.006%</td><td>144.5</td><td>0.562</td></tr>
+<tr><td>21</td><td>12.070</td><td>9808.0</td><td>9807.8</td><td>0.002%</td><td>220.5</td><td>0.562</td></tr>
+<tr><td>27</td><td>15.640</td><td>12512.3</td><td>12512.1</td><td>0.002%</td><td>364.5</td><td>0.562</td></tr>
+<tr><td>31</td><td>22.425</td><td>11503.6</td><td>11503.5</td><td>0.001%</td><td>480.5</td><td>0.562</td></tr>
+<tr><td>45</td><td>37.459</td><td>14511.3</td><td>14511.4</td><td>0.001%</td><td>1012.5</td><td>0.562</td></tr>
+<tr><td>53</td><td>50.744</td><td>14859.6</td><td>14859.6</td><td>0.000%</td><td>1404.5</td><td>0.562</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 16</b>：FLOP 口径交叉验证。<b>这一步是后面所有百分比的地基</b>——它确认了「注释里的 GFlop/s」与「<code>2·N·OH·OW·C·FH·FW / 时间</code>」是同一个量，因此本文可以用同一个公式去推执行态吞吐。<code>density(F)</code> 的定义见表 19。<span class="pill">README.md:113</span> 声明这一组注释是早期 RTX 3060 Ti 调优留下的历史记录，<b>不是</b>论文报告的结果，所以本表只用来验证口径，不用来验证性能。</p>
+
+<h3 id="s6-2">6.2 对 cuDNN 的加速比：独立复算 vs 摘要</h3>
+
+<p>对齐规则：同一 <code>(gpu, shape, F)</code> 上，cuDNN 侧取<b>所有算法里最快的那个</b>（对 Flash-DWC 最不利的口径），Flash-DWC 侧取该 shape 下所有 tile 变体的最优。有一处需要先排除的坑：cuDNN 的 harness 除了 <code>IGemm/EGemm/HGemm/hGemm/CuFFT/tiFFT</code> 之外，还顺带记录了 <code>Wgrad</code>/<code>WgraN</code>（反向滤波器）的计时——如果这些条目曾经胜出，「cuDNN best」就会拿一个反向算法当正向基线。逐行核对全部 1638 条计时后：<b>胜出者全部落在正向 Gemm/CuFFT 集合内，<code>Wgrad</code>/<code>WgraN</code>/<code>tiFFT</code> 一次都没有赢过</b>，所以这个口径是干净的。结果是两条统计：</p>
+
+<table>
+<thead><tr><th>路径</th><th>重叠行数</th><th>min</th><th>median</th><th>mean</th><th>geomean</th><th>max</th><th>摘要口径</th></tr></thead>
+<tbody>
+<tr><td><b>Flash-DWC-T</b> / cuDNN best</td><td>216</td><td>1.58×</td><td>10.32×</td><td><b>9.84×</b></td><td>9.10×</td><td>16.42×</td><td><b>9.01× mean</b></td></tr>
+<tr><td><b>Flash-DWC</b> FP16 / cuDNN best</td><td>448</td><td>0.98×</td><td>5.08×</td><td>4.76×</td><td>4.45×</td><td>7.21×</td><td><b>5.09× mean</b></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 17</b>：独立复算的加速比分布（<code>scripts/flash_dwc_bench.py</code>）。Tensor-Core 路径的 geomean <b>9.10×</b> 对摘要的 <b>9.01×</b>，CUDA-core 路径的 median <b>5.08×</b> 对摘要的 <b>5.09×</b>。</p>
+
+<div class="infer">
+摘要没有说明平均窗口（哪些 F、哪些 shape、算术还是几何平均），正文取不到，所以<b>精确重合不该期待</b>。但两条路径分别用不同的统计量对上摘要（一条 geomean 对 mean、一条 median 对 mean），说明摘要那两个数不是从分布里挑出来的极端值——这一点比数值本身的吻合更有意义。
+</div>
+
+<p>分布的两端很能说明问题：</p>
+
+<table>
+<thead><tr><th></th><th>GPU</th><th>shape</th><th>F</th><th>Flash-DWC</th><th>cuDNN best</th><th>比值</th></tr></thead>
+<tbody>
+<tr><td rowspan="3">T 路径<br>最差</td><td>RTX 4090</td><td>[128,32,32,1024]</td><td><b>3×3</b></td><td>3488.8</td><td>2209.9</td><td>1.58×</td></tr>
+<tr><td>RTX 4090</td><td>[128,64,64,256]</td><td><b>3×3</b></td><td>3933.8</td><td>2241.7</td><td>1.75×</td></tr>
+<tr><td>RTX 4090</td><td>[128,128,128,128]</td><td><b>3×3</b></td><td>4095.9</td><td>2252.4</td><td>1.82×</td></tr>
+<tr><td rowspan="3">T 路径<br>最好</td><td>A100 40GB</td><td>[128,32,32,1024]</td><td><b>45×45</b></td><td>48160.0</td><td>2932.2</td><td>16.42×</td></tr>
+<tr><td>RTX 4090 <sup>†</sup></td><td>[128,32,32,1024]</td><td><b>45×45</b></td><td>88312.1</td><td>5391.6</td><td>16.38×</td></tr>
+<tr><td>A100 40GB</td><td>[128,32,32,1024]</td><td><b>51×51</b></td><td>47997.0</td><td>2953.7</td><td>16.25×</td></tr>
+<tr><td rowspan="3">CUDA-core<br>FP16 最差</td><td>A100 80GB</td><td>[128,80,80,256]</td><td>49×49</td><td>10207.1</td><td>10434.1</td><td><b>0.98×</b></td></tr>
+<tr><td>A100 80GB <sup>‡</sup></td><td>[128,128,128,128]</td><td>51×51</td><td>11303.4</td><td>9629.4</td><td>1.17×</td></tr>
+<tr><td>A100 80GB</td><td>[128,64,64,256]</td><td>51×51</td><td>11524.5</td><td>9680.5</td><td>1.19×</td></tr>
+<tr><td>CUDA-core<br>FP16 最好</td><td>RTX 4090</td><td>[128,40,40,1024]</td><td>37×37</td><td>37643.0</td><td>5221.5</td><td>7.21×</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 18</b>：分布两端（单位 GFlop/s）。<b>T 路径的最差行全部是 F=3，最好行全部是 F≥45 且 IC=1024</b>——与 §1.2 表 2 的临界 filter 尺寸（A100 上 \(F&gt;13.1\)）方向完全一致：小 filter 上 Tensor Core 帮不上忙，因为整个算子还在访存墙下。CUDA-core FP16 路径则相反，<b>在大 F 上被 cuDNN 反超</b>（0.98×），它的甜区是中段 F。<br><b>†</b> 这一行的分子是 §6.6 表 23 里「有用吞吐超过硬件峰值」的 4 行之一，<b>不予采信</b>；剔除后 T 路径的最好一行就是 A100 40GB 的 16.42×。<b>‡</b> 这一行取自 §6.6 表 26 那个 <code>Size</code> 阶梯只有标签一半的整块（<span class="pill">bn_act_..._FP16_Gemm.cuh:286</span>），按标签修正后应为 22606.8 GF/s、<b>2.35×</b>，即它其实<b>不是</b>第二差的行。本表按<b>记录原值</b>列出，两处偏差都在 §6.6 量化过。</p>
+
+<h3 id="s6-3">6.3 峰值效率现实检验：表 1 是上界，不是预测</h3>
+
+<p>要把「有用 GFlop/s」换成「硬件实际执行了多少 MAC」，得先修正 §2.3 那个密度。<b>36/64 只是 \(F_W\ge 8\) 的极限</b>：源码按 9-tap 分块（<code>Loop: FH * ((FW + 8) / 9)</code>，<span class="pill">FP16_dwconv3D_Gemm_mma_kernel_ruse.cuh:15</span>），一个 chunk 的 32 条 mma 是<b>固定开销</b>，不管这个 filter 实际用掉其中几个 tap。在 \(8\times8\) 的 B 窗口里，非零格是满足 \(0\le k-n\le F_W-1\) 的 \((k,n)\)：</p>
+
+<div class="formula">\[ \text{count}(F_W)=\sum_{n=0}^{7}\min(F_W,\;8-n),\qquad \text{density}(F_W)=\frac{\text{count}(F_W)}{64} \]</div>
+
+<table>
+<thead><tr><th>\(F_W\)</th><th>1</th><th>3</th><th>5</th><th>7</th><th>\(\ge 8\)</th></tr></thead>
+<tbody>
+<tr><td>窗口内非零格</td><td>8</td><td>21</td><td>30</td><td>35</td><td>36</td></tr>
+<tr><td>MAC 密度</td><td>12.5%</td><td>32.8%</td><td>46.9%</td><td>54.7%</td><td><b>56.25%</b></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 19</b>：density 随 filter 宽度的变化（本文推导，与 §2.3 同一套下标代数）。<b>3×3 DWC 只用到 32.8% 的 mma 槽位</b>——这解释了表 18 里 T 路径在 F=3 上只有 1.58×。</p>
+
+<p>于是「执行态吞吐」= 有用 GFlop/s ÷ density(F)，可以直接与 datasheet 的 FP16 Tensor Core 峰值（FP32 累加、dense）比。同时算一个「隐含 DRAM 带宽」= 有用 GFlop/s ÷ AI；这个量<b>低估</b>真实流量（没算 tile halo 的重载），所以任何超过带宽峰值的行都是致命的：</p>
+
+<table>
+<thead><tr><th>GPU</th><th>解析行数</th><th>超 TC 峰值</th><th>超 DRAM 峰值</th><th>最好一行<br>有用 GF/s</th><th>执行态<br>TF/s</th><th>%TC 峰值</th><th>最高<br>%DRAM</th></tr></thead>
+<tbody>
+<tr><td>A100 40GB<br><span class="pill">312 TF/s · 1555 GB/s</span></td><td>198</td><td>0</td><td>0</td><td>48160.0</td><td>85.6</td><td><b>27.4%</b></td><td>33.2%</td></tr>
+<tr><td>A100 80GB<br><span class="pill">312 TF/s · 2039 GB/s</span></td><td>225</td><td>0</td><td>0</td><td>49461.9</td><td>87.9</td><td><b>28.2%</b></td><td>64.1%</td></tr>
+<tr><td>RTX 3060 Ti<br><span class="pill">65.1 TF/s · 448 GB/s</span></td><td>75</td><td>0</td><td>0</td><td>17630.0</td><td>31.3</td><td>48.1%</td><td>75.5%</td></tr>
+<tr><td>RTX 4090<br><span class="pill">82.6 TF/s · 1008 GB/s</span></td><td>225</td><td><b>129</b></td><td>0</td><td>90282.3</td><td>160.5</td><td><b>194.3%</b></td><td>91.1%</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 20</b>：峰值效率现实检验（<code>flash_dwc_bench.py</code> 末段）。前三块 GPU 的数据<b>没有任何一行越过物理上限</b>；RTX 4090 段有 129/225 行越界，见 §6.6。</p>
+
+<p>先看可信的三块。<b>A100 上最好的一行也只跑到 datasheet 峰值的 27.4% / 28.2%</b>。回到 §1.2 表 1 那个「可达有效算力 122.8 TF/s」（= 312 × 0.70 × 0.5625）：实测最好的<b>有用</b>吞吐是 49.5 TF/s，即<b>只达到那个上界的 40%</b>。</p>
+
+<div class="infer">
+所以表 1 的正确读法是<b>上界与分区判据</b>，不是吞吐预测：它能告诉你某个 F 落在访存区还是计算区（这一点表 18 的分布证实了），但不能告诉你 GFlop/s 会是多少。0.70 的 Tensor-Core 效率折扣对这类算子偏乐观——mma 只占 kernel 时间的一部分，其余被 <code>cp.async</code> 等待、smem  banking、以及每个 <code>fh</code> 的 prologue 吃掉。这个 40% 是从 benchmark 数据反推的经验值，论文没有给对应的分解。
+</div>
+
+<div class="fig">
+<svg viewBox="0 0 880 440" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif">
+<text x="40" y="28" font-size="13" fill="#1a1f2e">执行态 mma 吞吐占各自 datasheet 峰值的百分比（shape [128,32,32,1024]，tile 32x4）</text>
+<text x="40" y="48" font-size="11" fill="#5a6272">纵轴 = 有用 GFlop/s ÷ density(F) ÷ FP16-TC-FP32acc 峰值；横轴 = filter 宽度 F（奇数）</text>
+
+<rect x="70" y="70" width="780" height="140" fill="#fbe3cc" opacity="0.45"/>
+
+<g stroke="#c9d2e0" stroke-width="1">
+<line x1="70" y1="280" x2="850" y2="280"/>
+<line x1="70" y1="140" x2="850" y2="140"/>
+<line x1="70" y1="70" x2="850" y2="70"/>
+<line x1="70" y1="70" x2="70" y2="350"/>
+</g>
+<line x1="70" y1="210" x2="850" y2="210" stroke="#e8862a" stroke-width="1.5" stroke-dasharray="6 4"/>
+<line x1="70" y1="350" x2="850" y2="350" stroke="#5a6272" stroke-width="1"/>
+
+<g stroke="#5a6272" stroke-width="1">
+<line x1="200" y1="350" x2="200" y2="357"/>
+<line x1="330" y1="350" x2="330" y2="357"/>
+<line x1="492.5" y1="350" x2="492.5" y2="357"/>
+<line x1="622.5" y1="350" x2="622.5" y2="357"/>
+<line x1="785" y1="350" x2="785" y2="357"/>
+</g>
+
+<text x="62" y="354" font-size="10" fill="#5a6272" text-anchor="end">0%</text>
+<text x="62" y="284" font-size="10" fill="#5a6272" text-anchor="end">50%</text>
+<text x="62" y="214" font-size="10" fill="#5a6272" text-anchor="end">100%</text>
+<text x="62" y="144" font-size="10" fill="#5a6272" text-anchor="end">150%</text>
+<text x="62" y="74" font-size="10" fill="#5a6272" text-anchor="end">200%</text>
+
+<polyline fill="none" stroke="#2456c4" stroke-width="2" points="70.0,342.6 102.5,338.7 135.0,334.9 167.5,329.6 200.0,334.3 232.5,331.0 265.0,327.9 297.5,324.1 330.0,330.1 362.5,325.8 395.0,323.0 427.5,320.2 460.0,317.1 492.5,322.7 525.0,320.3 557.5,317.7 590.0,315.1 622.5,320.0 655.0,317.8 687.5,315.3 720.0,312.9 752.5,310.5 785.0,315.4 817.5,313.0 850.0,310.8"/>
+<polyline fill="none" stroke="#163a86" stroke-width="2" points="167.5,333.9 200.0,336.1 232.5,332.9 265.0,330.3 297.5,326.2 330.0,331.1 362.5,327.0 395.0,324.5 427.5,321.7 460.0,319.1 492.5,323.5 525.0,321.4 557.5,318.8 590.0,316.3 622.5,320.9 655.0,318.6 687.5,316.5 720.0,314.0 752.5,311.6 785.0,316.4 817.5,313.7 850.0,311.8"/>
+<polyline fill="none" stroke="#e8862a" stroke-width="2" points="70.0,331.9 102.5,314.7 135.0,290.5 167.5,255.8 200.0,251.7 232.5,231.6 265.0,211.4 297.5,188.4 330.0,214.3 362.5,195.9 395.0,177.9 427.5,161.0 460.0,141.7 492.5,171.1 525.0,156.0 557.5,138.2 590.0,119.7 622.5,149.0 655.0,134.3 687.5,117.2 720.0,101.5 752.5,83.9 785.0,112.0 817.5,95.2 850.0,78.0"/>
+
+<text x="70" y="366" font-size="10" fill="#5a6272" text-anchor="middle">3</text>
+<text x="102.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">5</text>
+<text x="135" y="366" font-size="10" fill="#5a6272" text-anchor="middle">7</text>
+<text x="167.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">9</text>
+<text x="200" y="366" font-size="10" fill="#5a6272" text-anchor="middle">11</text>
+<text x="232.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">13</text>
+<text x="265" y="366" font-size="10" fill="#5a6272" text-anchor="middle">15</text>
+<text x="297.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">17</text>
+<text x="330" y="366" font-size="10" fill="#5a6272" text-anchor="middle">19</text>
+<text x="362.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">21</text>
+<text x="395" y="366" font-size="10" fill="#5a6272" text-anchor="middle">23</text>
+<text x="427.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">25</text>
+<text x="460" y="366" font-size="10" fill="#5a6272" text-anchor="middle">27</text>
+<text x="492.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">29</text>
+<text x="525" y="366" font-size="10" fill="#5a6272" text-anchor="middle">31</text>
+<text x="557.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">33</text>
+<text x="590" y="366" font-size="10" fill="#5a6272" text-anchor="middle">35</text>
+<text x="622.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">37</text>
+<text x="655" y="366" font-size="10" fill="#5a6272" text-anchor="middle">39</text>
+<text x="687.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">41</text>
+<text x="720" y="366" font-size="10" fill="#5a6272" text-anchor="middle">43</text>
+<text x="752.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">45</text>
+<text x="785" y="366" font-size="10" fill="#5a6272" text-anchor="middle">47</text>
+<text x="817.5" y="366" font-size="10" fill="#5a6272" text-anchor="middle">49</text>
+<text x="850" y="366" font-size="10" fill="#5a6272" text-anchor="middle">51</text>
+
+<text x="460" y="386" font-size="11" fill="#5a6272" text-anchor="middle">filter 宽度 F（奇数）</text>
+
+<rect x="70" y="398" width="14" height="10" fill="#2456c4"/>
+<text x="90" y="407" font-size="11" fill="#1a1f2e">A100 80GB · 峰值 312 TF/s</text>
+<rect x="270" y="398" width="14" height="10" fill="#163a86"/>
+<text x="290" y="407" font-size="11" fill="#1a1f2e">A100 40GB · 峰值 312 TF/s</text>
+<rect x="470" y="398" width="14" height="10" fill="#e8862a"/>
+<text x="490" y="407" font-size="11" fill="#1a1f2e">RTX 4090 · 峰值 82.6 TF/s</text>
+
+<text x="70" y="428" font-size="10" fill="#5a6272">轴下方 5 根短竖线标出 ceil(F/9) 递增的位置（F = 11 / 19 / 29 / 37 / 47），即 §6.4 的锯齿下降点。</text>
+</svg>
+</div>
+<p class="cap"><b>图 6</b>：同一 shape 下三块 GPU 的执行态峰值利用率。<b>橙色阴影带（100% 以上）是物理上不可达的区域</b>——RTX 4090 段自 F=17 起进入该区域并在 F=51 达到 194.3%，详见 §6.6，本报告不采信这一段的绝对数字。两条 A100 曲线几乎重合（同一颗芯片、只是显存容量不同），最高 28.2%；曲线呈明显锯齿，下降点与 <code>ceil(F/9)</code> 的递增位置<b>逐个对齐</b>。A100 40GB 段缺 F=3/5/7 三行（源文件里这三行只有 <code>//3 * 3:</code> 标签、没有 Time/Performance 字段）。</p>
+
+<h3 id="s6-4">6.4 9-tap 分块锯齿：F=9 时整个 kernel 就是 prologue</h3>
+
+<p>把图 6 的 A100 80GB 曲线摊成表：</p>
+
+<table>
+<thead><tr><th>F</th><th>chunks/fh<br><code>(F+8)/9</code></th><th>steady-state<br>迭代次数</th><th>有用 GFlop/s</th><th>执行态 TF/s</th><th>%峰值</th></tr></thead>
+<tbody>
+<tr><td>3</td><td>1</td><td><b>0</b></td><td>5455.0</td><td>16.6</td><td>5.3%</td></tr>
+<tr><td>5</td><td>1</td><td><b>0</b></td><td>11862.9</td><td>25.3</td><td>8.1%</td></tr>
+<tr><td>7</td><td>1</td><td><b>0</b></td><td>18423.4</td><td>33.7</td><td>10.8%</td></tr>
+<tr><td>9</td><td>1</td><td><b>0</b></td><td>25694.4</td><td>45.7</td><td><b>14.6%</b></td></tr>
+<tr><td><b>11</b></td><td>2</td><td>1</td><td>19604.4 ↓</td><td>34.9</td><td>11.2%</td></tr>
+<tr><td>13</td><td>2</td><td>1</td><td>23878.0</td><td>42.4</td><td>13.6%</td></tr>
+<tr><td>15</td><td>2</td><td>1</td><td>27740.8</td><td>49.3</td><td>15.8%</td></tr>
+<tr><td>17</td><td>2</td><td>1</td><td>32466.7</td><td>57.7</td><td><b>18.5%</b></td></tr>
+<tr><td><b>19</b></td><td>3</td><td>2</td><td>24869.8 ↓</td><td>44.2</td><td>14.2%</td></tr>
+<tr><td>21</td><td>3</td><td>2</td><td>30295.1</td><td>53.9</td><td>17.3%</td></tr>
+<tr><td>23</td><td>3</td><td>2</td><td>33784.7</td><td>60.1</td><td>19.3%</td></tr>
+<tr><td>25</td><td>3</td><td>2</td><td>37326.5</td><td>66.4</td><td>21.3%</td></tr>
+<tr><td>27</td><td>3</td><td>2</td><td>41224.3</td><td>73.3</td><td><b>23.5%</b></td></tr>
+<tr><td><b>29</b></td><td>4</td><td>3</td><td>34306.5 ↓</td><td>61.0</td><td>19.5%</td></tr>
+<tr><td>31</td><td>4</td><td>3</td><td>37273.7</td><td>66.3</td><td>21.2%</td></tr>
+<tr><td>33</td><td>4</td><td>3</td><td>40452.8</td><td>71.9</td><td>23.1%</td></tr>
+<tr><td>35</td><td>4</td><td>3</td><td>43746.5</td><td>77.8</td><td><b>24.9%</b></td></tr>
+<tr><td><b>37</b></td><td>5</td><td>4</td><td>37619.4 ↓</td><td>66.9</td><td>21.4%</td></tr>
+<tr><td>39</td><td>5</td><td>4</td><td>40285.3</td><td>71.6</td><td>23.0%</td></tr>
+<tr><td>41</td><td>5</td><td>4</td><td>43473.0</td><td>77.3</td><td>24.8%</td></tr>
+<tr><td>43</td><td>5</td><td>4</td><td>46473.6</td><td>82.6</td><td>26.5%</td></tr>
+<tr><td>45</td><td>5</td><td>4</td><td>49461.9</td><td>87.9</td><td><b>28.2%</b></td></tr>
+<tr><td><b>47</b></td><td>6</td><td>5</td><td>43310.8 ↓</td><td>77.0</td><td>24.7%</td></tr>
+<tr><td>49</td><td>6</td><td>5</td><td>46325.0</td><td>82.4</td><td>26.4%</td></tr>
+<tr><td>51</td><td>6</td><td>5</td><td>49153.7</td><td>87.4</td><td>28.0%</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 21</b>：A100 80GB，<code>[N,H,W,C] = [128,32,32,1024]</code>，tile <code>32x4</code>。加粗 F 是 <code>ceil(F/9)</code> 递增的位置，↓ 是相对上一行的下降。<b>全部 5 个下降点都落在分块边界上，无一例外</b>；每个分块组内部则单调上升。粗体百分比是各组的组末峰值：14.6% → 18.5% → 23.5% → 24.9% → 28.2% → 28.0%。</p>
+
+<p>锯齿的成因在 §3.3 已经埋好了。stage 0（<code>:155-259</code>）是<b>没有重叠</b>的 prologue：先 <code>cp.async</code> 载入第一个 9-tap chunk，<code>wait_group(0)</code> 硬等，再算。真正双缓冲重叠的稳态循环是</p>
+
+<pre><code class="language-c">for (int ofw = 9, buf = 1; ofw &lt; FW; ofw += 9, buf ^= 1) {   //:263</code></pre>
+
+<p>它执行 <code>ceil(FW/9) − 1</code> 次。<b>F=9 时这个循环体一次都不执行</b>——整个 kernel 就是 prologue 加 epilogue，<code>cp.async</code> 的异步性完全没被用上，所以只有 14.6% 的峰值利用率。F=11 多了一个 chunk，计算量涨 22%，但稳态迭代只有 1 次，重叠收益还不够摊掉多出来的 prologue，于是<b>绝对吞吐反而掉了 24%</b>（25694 → 19604 GFlop/s）。要到 F=17（同属 2-chunk 组）才爬回来并超过 F=9。</p>
+
+<div class="infer">
+「F=9 时稳态循环 0 次」是把 <code>ofw = 9; ofw &lt; FW</code> 代入 <code>FW=9</code> 直接得到的，源码没有注释说明这一点；「prologue 无重叠」由 stage 0 里的 <code>wait_group(0)</code>（§3.3 已引）推出。各组组末峰值随 chunk 数单调上升（14.6→18.5→23.5→24.9→28.2）与这个解释一致，但仓库里没有 profiling 数据可以进一步拆分 prologue / 稳态 / epilogue 的占比。
+</div>
+
+<p><b>实践含义</b>：如果 filter 尺寸可选，<code>F ∈ {9, 17, 27, 35, 45}</code>（各分块组的末尾）是性价比最高的点；<code>F ∈ {11, 19, 29, 37, 47}</code> 是最差的点——多付一个 chunk 的全部代价，却只多用到其中 2 个 tap。</p>
+
+<h3 id="s6-5">6.5 cuDNN 在大 filter 上换成 FFT，加速比反而收窄</h3>
+
+<p>比值不只是 Flash-DWC 的函数，分母也在变。统计 cuDNN 侧「五种算法里谁最快」在 18 个 (gpu, shape) 组合上的分布：</p>
+
+<table>
+<thead><tr><th>F</th><th>3</th><th>5</th><th>7</th><th>9</th><th>11</th><th>13</th><th>17</th><th>21</th><th>25</th><th>27</th><th>31</th><th>35</th><th>37</th><th>41</th><th>43</th><th>47</th><th>51</th></tr></thead>
+<tbody>
+<tr><td>Gemm 家族胜出</td><td>18</td><td>18</td><td>18</td><td>18</td><td>18</td><td>18</td><td>18</td><td>18</td><td>18</td><td>15</td><td>12</td><td>13</td><td>10</td><td>10</td><td>9</td><td>7</td><td>6</td></tr>
+<tr><td><b>CuFFT 胜出</b></td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>3</td><td>6</td><td>5</td><td>8</td><td>8</td><td>9</td><td>11</td><td>12</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 22</b>：cuDNN 逐 F 的最优算法统计（18 个 (gpu, shape) 组合）。Gemm 家族含 <code>IGemm</code>/<code>EGemm</code>/<code>HGemm</code>/<code>hGemm</code>。<b>F ≤ 25 时 CuFFT 从未胜出</b>，F=27 起开始出现，F ≥ 43 起占多数。</p>
+
+<p>FFT 卷积的代价随 F 增长远慢于直接卷积。在 A100 80GB <code>[128,32,32,1024]</code> 上，F=43…51 全是 CuFFT，它的<b>时间几乎不变</b>：157.977 / 158.463 / 159.500 / 159.451 / 158.628 ms——F 涨 19%，时间涨 0.4%。而 harness 用 <code>2·GN·GM·GK / time</code> 计分，时间不变就意味着 cuDNN 的<b>报告 GFlop/s 按 F² 增长</b>（3141.8 → 4401.5，+40%）。同期 Flash-DWC-T 只从 46473.6 涨到 49153.7（+5.8%，因为它的工作量按 <code>ceil(F/9)</code> 阶梯增长）。比值于是从 <b>14.79× 掉到 11.17×</b>。</p>
+
+<div class="infer">
+这条对论文的选题有一点反讽意味：摘要开篇的动机是「Recent models increasingly employ large-filter DWC」，但恰恰在<b>大 filter 上 cuDNN 有一条完全不同的路（FFT）</b>，使得加速比在中段 F（27–45）达到峰值后回落。表 17 的 9.01× 落在哪个 F 区间因此很关键，而正文取不到，无法确认。本节只陈述从数据可直接算出的部分。
+</div>
+
+<h3 id="s6-6">6.6 数据完整性审计：RTX 4090 段物理不成立，另有 86 行标注自相矛盾</h3>
+
+<p>这一节做一件<b>完全不依赖论文</b>的事：把仓库三份 Flash-DWC benchmark 头文件里的 <b>1721 行</b>可审计注释全部按 §6.1 的口径重算一遍（<code>Size</code> 用 shape 标签反推、<code>Performance</code> 用 <code>Size</code> 与 <code>Time</code> 反推），看哪些行自相矛盾。结果分两部分：<b>RTX 4090 段整体不可采信</b>，以及<b>三个整块的 shape 标签与 Size 字段对不上</b>。本节全部数字由 <code>scripts/flash_dwc_audit.py</code> 产生，见 §7.4。</p>
+
+<h4>A. RTX 4090 段：四条独立证据</h4>
+
+<p><b>① 最硬的一条不需要任何模型假设。</b>表 20 的「%TC 峰值」是<b>执行态</b>口径（有用 GF/s ÷ density），要先接受 §6.3 的密度模型。但 RTX 4090 段里有 <b>4 行连密度修正都不需要就已经越界</b>——它们报告的<b>有用</b>吞吐直接超过了 AD102 的 datasheet 峰值 82.6 TF/s：</p>
+
+<table>
+<thead><tr><th>tile</th><th>shape</th><th>F</th><th>Time</th><th>有用 GF/s</th><th>占 82.6 TF/s<br>原始峰值</th></tr></thead>
+<tbody>
+<tr><td>32x4</td><td>[128,32,32,1024]</td><td>51</td><td>7.734 ms</td><td>90282.3</td><td><b>109.3%</b></td></tr>
+<tr><td>32x4</td><td>[128,32,32,1024]</td><td>45</td><td>6.155 ms</td><td>88312.1</td><td><b>106.9%</b></td></tr>
+<tr><td>16x8</td><td>[128,32,32,1024]</td><td>51</td><td>8.178 ms</td><td>85378.8</td><td><b>103.4%</b></td></tr>
+<tr><td>32x4</td><td>[128,32,32,1024]</td><td>49</td><td>7.622 ms</td><td>84559.0</td><td><b>102.4%</b></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 23</b>：RTX 4090 段中「有用吞吐 &gt; 硬件原始峰值」的 4 行（<span class="pill">performance_dwconv3D_FP16_Gemm_mma.cuh</span>）。<b>有用 FLOP ≤ 执行 FLOP 恒成立</b>，所以这 4 行的不可能性与 Toeplitz 密度的估计无关，不需要表 19 的任何假设。紧随其后的一行是同 shape 同 tile 的 F=43，82448.3 GF/s = <b>99.8%</b>——一个访存与流水都受限的 kernel 不可能贴着满峰值跑，所以真正越界的远不止 4 行，只是这 4 行越过了 100% 这条最保守的线。把密度模型加回去（\(F\ge 8\) 时 56.25%），越界行数就从 4 涨到表 20 的 <b>129/225</b>。</p>
+
+<p><b>② 与 A100 直接对比能看出交叉点。</b>同一个 shape、同一个 tile：</p>
+
+<table>
+<thead><tr><th>F</th><th>RTX 4090<br>有用 GF/s</th><th>A100 80GB<br>有用 GF/s</th><th>4090 / A100</th><th>4090<br>%TC 峰值</th><th>判读</th></tr></thead>
+<tbody>
+<tr><td>3</td><td>3488.8</td><td>5455.0</td><td>0.64</td><td>12.9%</td><td><b>合理</b>：此点访存受限，0.64 与带宽比 1008/2039 = 0.49 同量级</td></tr>
+<tr><td>9</td><td>31274.2</td><td>25694.4</td><td>1.22</td><td>67.3%</td><td>可疑：TC 峰值只有 A100 的 26%，却快 22%</td></tr>
+<tr><td>17</td><td>53619.4</td><td>32466.7</td><td>1.65</td><td><b>115.4%</b></td><td><b>不可能</b></td></tr>
+<tr><td>51</td><td>90282.3</td><td>49153.7</td><td>1.84</td><td><b>194.3%</b></td><td><b>不可能</b></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 24</b>：RTX 4090 与 A100 80GB 在 <code>[128,32,32,1024]</code> / <code>32x4</code> 上的交叉诊断（%TC 峰值为执行态口径，见表 20）。<b>小 F（访存受限）的行是合理的，大 F（Tensor-Core 受限）的行不可能</b>——这个交叉点说明问题出在计算侧的计时或标注，而不是整段数据凭空捏造。</p>
+
+<p><b>③ 峰值口径没有解释空间：kernel 只做 FP32 累加。</b>一个可能的辩护是「GeForce 卡的 FP16 峰值该按 FP16-累加口径算，即 165.2 TF/s，那 194.3% 就变成 97.2% 了」。这条退路被源码堵死：<code>micro_ptx.cuh</code> 里 FP16-累加的四个宏（<code>fp16_MMA_16_8_8</code> / <code>_V</code> / <code>fp16_MMA_16_8_16</code> / <code>_V</code>，<span class="pill">micro_ptx.cuh:78,83,88,93</span>）在全仓库 <b>0 个调用点</b>，只有定义；而 FP32-累加的 <code>fp16_accu32_MMA_16_8_8_V</code>（<span class="pill">micro_ptx.cuh:113-116</span>）有 <b>168 个调用点</b>，且是 TC 路径唯一用到的 mma 宏。发射的指令就是 <code>mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32</code>，天花板就是 82.6 TF/s。</p>
+
+<p>即便如此，退一步按 165.2 TF/s 算也救不回来：最好一行是 <b>97.2%</b>，而同 shape 的 A100 只有 28%（表 20）。一个访存与流水都受限的 kernel 不可能在一张卡上跑到满峰值、同时在峰值高 3.8 倍的卡上只跑到 28%。</p>
+
+<p><b>④ 注释字段有可验证的复制粘贴错误。</b><code>:192</code>（函数 <code>FP16_dwconv3dGemm_CE_mma_kernel_64_8x16T_idt_RTX4090()</code>，shape 标签 <code>[128,32,32,1024]</code>）：</p>
+
+<pre><code class="language-c">//47*47: Size = 552.25, Time = 8.359 msec, Performance = 70938.4 GFlop/s
+//49*49: Size = 552.25, Time = 8.544 msec, Performance = 75430.4 GFlop/s   // ← Size 应为 600.25</code></pre>
+
+<p>用 <code>performance = size × 1024³ × 1e-9 / (time × 1e-3)</code> 反推：<code>552.25</code> 给 69402 GFlop/s（不符），<code>600.25</code> 给 75435 GFlop/s（符合，误差 0.006%）。所以 <b>Performance 字段是用正确的 size 算的，注释里的 Size 是上一行抄漏改的</b>。这不是一处孤例——全仓库 <code>49*49</code> 行的 Size 取值分布是 <code>600.25</code> ×39、<code>937.89</code> ×26、<code>1200.5</code> ×20、<code>468.95</code> ×11，以及 <b><code>552.25</code> ×9</b>；这 9 处横跨三份头文件、四块 GPU 段（<code>mma.cuh:192,276,360</code> RTX 4090 与 <code>:710,794,878</code> A100 40GB；<code>bn_act_..._FP16_Gemm.cuh:162</code> RTX 4090 与 <code>:515</code> A100 40GB；<code>bn_act_..._Gemm.cuh:166</code> RTX 4090）。同一个数字抄错九次，说明这些注释<b>不是</b>机器生成的，可靠性需要打折。</p>
+
+<div class="infer">
+需要主动排除一个<b>看起来可疑但其实无关</b>的点：<code>performance_dwconv3D_FP16_Gemm_mma.cuh:7-10</code> 的配置注释写着 <code>RTX4090: sm_86, which similar to sm_89</code>，而 RTX 4090 是 Ada = <code>sm_89</code>。这<b>不是</b>数据造假的证据：(a) <code>README.md:105,109</code> 明确把「Ada 卡用 <code>sm_86</code> 编」写成有意的发布默认配置，并声明实测 <code>sm_89</code> 与 <code>sm_86</code> 性能接近；(b) <code>sm_86</code> 的 SASS 在 <code>sm_89</code> 上可以直接加载（同 major、minor 更高），所以这段数据确实是在 4090 上跑出来的；(c) 更根本的是，<b>编译目标不可能抬高硬件峰值</b>，所以它无论如何也解释不了 109.3%。两份构建日志（<code>FlashDWC_cuda/exe/install.log</code>、<code>FlashDWCBFC_cuda/exe/install.log</code>）确实都只有 <code>-gencode arch=compute_86,code=sm_86</code> 一条——这只能说明<b>日志里的这两次构建产不出 A100 段的数据</b>（<code>sm_86</code> 的 SASS 不能在 <code>sm_80</code> 上加载），A100 段来自另一次未记录日志的 <code>sm_80</code> 构建，与 <code>README.md:104-106</code> 的分卡配置表一致。
+</div>
+
+<h4>B. 全仓库 Size / Performance 自检：86 行对不上</h4>
+
+<p>把三份头文件的 1721 行全部重算，<b>86 行的 <code>Size</code> 与它自己的 shape 标签不符</b>，<b>11 行的 <code>Performance</code> 与它自己的 <code>Size</code>/<code>Time</code> 不符</b>（两者有重叠）：</p>
+
+<table>
+<thead><tr><th>文件（对应表 17 的哪一路）</th><th>解析行数</th><th>Size 不符</th><th>Perf 不符</th><th>性质</th></tr></thead>
+<tbody>
+<tr><td><code>performance_dwconv3D_FP16_Gemm_mma.cuh</code><br><b>TC 路（表 17 的分子）</b></td><td>723</td><td><b>6</b></td><td>6</td><td>全部是 ④ 那个 <code>49*49</code> 抄漏改；<b>Performance 用的是正确 size</b>，所以 6 行的「Perf 不符」是 Size 字段错、不是吞吐错</td></tr>
+<tr><td><code>performance_bn_act_dwconv3D_FP16_Gemm.cuh</code><br><b>CUDA-Core FP16 路（表 17 的 n=448）</b></td><td>498</td><td><b>29</b></td><td>5</td><td>25 行整块标签错 + 2 行 <code>49*49</code> + 2 行整块标签错（RTX 4090）+ 1 行 Performance 抄上一行</td></tr>
+<tr><td><code>performance_bn_act_dwconv3D_Gemm.cuh</code><br>FP32 路（<b>表 17 未使用</b>）</td><td>500</td><td><b>51</b></td><td>0</td><td>两个 25 行整块标签错 + 1 行 <code>49*49</code>（这一处 Performance 是用<b>错的</b> size 算的，被低估 8%）</td></tr>
+<tr><td><b>合计</b></td><td><b>1721</b></td><td><b>86</b>（5.0%）</td><td><b>11</b>（0.6%）</td><td>—</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 25</b>：Size / Performance 自检汇总（<code>scripts/flash_dwc_audit.py</code>）。判据是 §6.1 的两条恒等式：<code>Size = 2·(C/1024)·(N·OH·OW/1024)·(F_H·F_W/1024)</code>（same padding + stride 1 ⇒ <code>OH=H, OW=W</code>）与 <code>Performance = Size×1024³×1e-9/(Time×1e-3)</code>，容差分别 0.02 与 1%。「解析行数」只计<b>自带 <code>Size</code> 字段的行</b>：FP32 头文件另有 150 条续行（只有 <code>Time</code> / <code>Performance</code> / tile 标签，没有 <code>Size</code>），无从用第一条恒等式检验，故不计入；cuDNN 头文件同理有 1188 条续行（每个算法一条），见表 15。</p>
+
+<p>86 行里有 <b>77 行集中在三个整块</b>——它们的 shape 标签与整个 Size 阶梯成固定倍数关系，说明标签写错了（或 Size 阶梯是从别的块粘来的）：</p>
+
+<table>
+<thead><tr><th>位置</th><th>GPU 段 / 函数</th><th>标签 shape</th><th>行数</th><th>记录/标签</th><th>Size 阶梯实际对应的 shape</th></tr></thead>
+<tbody>
+<tr><td><span class="pill">bn_act_..._FP16_Gemm.cuh:261-287</span></td><td>A100 80GB<br><code>..._CE_8_8T_ruse_A100_80G</code></td><td>[128,128,128,128]</td><td><b>25</b></td><td><b>×0.500</b></td><td>与紧邻的 <code>:288</code> 块 <b>[128,64,64,256]</b> 完全同阶梯（F=3 都是 2.25），但 Time / Performance 各不相同 ⇒ 是两次真实测量，标签或 Size 基准串了</td></tr>
+<tr><td><span class="pill">bn_act_..._Gemm.cuh:50-76</span></td><td>RTX 3060 Ti<br><code>..._CE_4_AT_ruse_idt_PERFORMANCE</code></td><td>[128,64,64,256]</td><td><b>25</b></td><td><b>×1.560</b></td><td><b>[128,80,80,256]</b>（25/16 = (80/64)²）。这个 shape 在仓库里真实存在，出现 7 次</td></tr>
+<tr><td><span class="pill">bn_act_..._Gemm.cuh:451-478</span></td><td>A100 80GB<br><code>..._CE_4_AT_ruse_idt_A100_80G</code></td><td>[128,40,40,512]</td><td><b>25</b></td><td><b>×2.002</b></td><td><b>[128,40,40,1024]</b>。这个 shape 也真实存在，出现 6 次</td></tr>
+<tr><td><span class="pill">bn_act_..._FP16_Gemm.cuh:197-198</span></td><td>RTX 4090<br><code>..._CE_8_AT_ruse_RTX4090</code></td><td>[128,40,40,512]</td><td><b>2</b></td><td><b>×2.002</b></td><td>只有 F=3、F=5 两行是 <b>[128,40,40,1024]</b> 的阶梯，F=7 起又回到标签本身 ⇒ 局部粘贴</td></tr>
+<tr><td><span class="pill">bn_act_..._FP16_Gemm.cuh:144</span></td><td>RTX 4090<br><code>..._CE_8_8T_ruse_RTX4090</code></td><td>[128,32,32,1024]</td><td><b>1</b></td><td>Size 正确</td><td>F=13 行的 <code>Time = 1.244</code> / <code>Performance = 26117.4</code> 与上一行 F=11 的 <code>1.243</code> / <code>26117.4</code> 几乎逐字相同；按 Size 42.25 反推应为 <b>36467</b> ⇒ Performance 是抄上一行的</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 26</b>：整块级标注错误。<code>[128,80,80,256]</code> 与 <code>[128,40,40,1024]</code> 在 <code>cuDNN_performance_dwconv3D.cuh:20</code> 里被写成同一组注释 <code>[128, 80, 80, 256] or [128, 40, 40, 1024]</code>——两者元素数相同（都是 1,638,400），是仓库有意配对的两个等工作量 shape。所以推断出的这两个 shape <b>不是本文虚构的</b>，而是同一份代码里就在用的标签。</p>
+
+<p><b>对结论的影响（blast radius）</b>：把每一行统计实际取用的是哪一行源码追出来——</p>
+
+<ul>
+<li><b>TC 路（表 17 的 n=216、表 20、表 21、表 22、图 6）完全不受影响。</b>比值只用 <code>Performance</code> 字段，而 6 处 <code>49*49</code> 笔误行的 <code>Performance</code> 都是用正确的 600.25 算的（表 23 的 4 行里就有一行是 <code>:360</code>，其 84559.0 与 600.25/7.622 吻合到 0.001%）。错的只是打印出来的 <code>Size</code> 字符串。</li>
+<li><b>CUDA-Core FP16 路（表 17 的 n=448）有 30 行取到了有缺陷的行</b>：25 行来自 A100 80GB 那个 ×0.5 的整块，2 行来自 RTX 4090 的 ×2 局部粘贴，2 行是无害的 <code>49*49</code> 笔误，1 行是 <code>:144</code> 的 Performance 抄袭。<b>方向不一致</b>（25 行被低估约 2×，2 行被高估约 2×，1 行被低估 39%），所以必须重算而不是简单剔除。</li>
+<li>FP32 路的 51 行缺陷<b>与本报告的结论无关</b>——表 17 只统计 TC 路与 CUDA-Core FP16 路。</li>
+</ul>
+
+<table>
+<thead><tr><th>CUDA-Core FP16 路（Flash-DWC / cuDNN best）</th><th>n</th><th>median</th><th>mean</th><th>geomean</th><th>max</th></tr></thead>
+<tbody>
+<tr><td>照抄记录值（= 表 17）</td><td>448</td><td>5.08×</td><td>4.76×</td><td>4.45×</td><td>7.21×</td></tr>
+<tr><td><b>把表 26 的缺陷行按标签就地修正</b></td><td>448</td><td>5.10×</td><td><b>4.97×</b></td><td><b>4.63×</b></td><td>11.28×</td></tr>
+<tr><td>改为直接丢弃这 30 行</td><td>418</td><td>5.10×</td><td>4.84×</td><td>4.55×</td><td>7.21×</td></tr>
+<tr><td>只剔除 RTX 4090（A 部分），不修缺陷</td><td>299</td><td>4.57×</td><td>4.34×</td><td>4.06×</td><td>6.52×</td></tr>
+<tr><td>再叠加就地修正</td><td>299</td><td>4.67×</td><td>4.64×</td><td>4.30×</td><td>11.28×</td></tr>
+<tr><td colspan="6"><b>摘要口径：5.09× mean</b></td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 27</b>：修正缺陷行后重算 CUDA-Core FP16 路的加速比。五种口径都由 <code>scripts/flash_dwc_audit.py</code> 的第 6 段一次跑出（剔除 RTX 4090 的分支同时固化在 <code>flash_dwc_bench.py</code> 里）。「就地修正」= 对每一个胜者行，用<b>标签 shape</b> 推出的 <code>Size</code> 与该行<b>自己记录的 <code>Time</code></b> 重算 <code>Performance</code>，因此 ×0.5 整块的 25 行、×2 局部粘贴的 2 行、<code>:144</code> 那行抄来的 Performance、以及 9 处 <code>49*49</code> 笔误都被同一套公式覆盖，没有逐块手工特例。<b>TC 路不在此表内</b>：它的 6 处缺陷全是打印出来的 <code>Size</code> 字符串错、<code>Performance</code> 用的是正确值，而比值只取 <code>Performance</code>，所以修正标注对 9.10× / 9.84× 一个数字都不动（脚本末段单独复算过，仍是 n=216、geomean 9.10×）。</p>
+
+<p><b>本报告的处理</b>：所有基于绝对吞吐的结论（表 20 的峰值效率、表 21 的锯齿、图 6 的曲线）只锚定 A100 两段（<b>423 行，0 行越过执行态 TC 峰值，0 行越过 DRAM 峰值</b>）与 RTX 3060 Ti 段（<b>75 行，同样干净</b>）。RTX 4090 段的绝对数字<b>不予采信</b>。</p>
+
+<div class="infer">
+两处需要如实交代。<b>其一，我在写这一版之前对「剔除 4090 会怎样」的预判是错的。</b>原先的推理是「4090 段的分子被抬高，而 cuDNN 侧的 4090 数字看起来正常，所以 4090 会抬高整体比值，9.10× 偏乐观」。真跑一遍（<code>flash_dwc_bench.py</code> 已把这个分支固化进去）结果是<b>反的</b>：TC 路剔除 4090 后 n=141、geomean 从 9.10× <b>升到 9.60×</b>、mean 从 9.84× 升到 10.29×。原因是 cuDNN 在 4090 上<b>同样</b>快，比值并没有被单边抬高；而 4090 恰恰贡献了整个集合里<b>最低</b>的三个比值——最小的 1.58× 是 4090 的 F=3 行，1.75× 与 1.82× 也都是。剔除低值当然抬高均值。<b>其二，两条统计量对 4090 的反应方向相反</b>（TC 路升、CUDA-Core 路从 4.45× 降到 4.06×），所以「剔除 4090」并不能让任何一侧对上摘要。<br><br>
+真正能对上摘要的是<b>修缺陷</b>而不是<b>剔 4090</b>：CUDA-Core FP16 路就地修正后 mean = <b>4.97×</b>，与摘要的 <b>5.09×</b> 只差 2.4%（照抄记录值是 4.76×，差 6.5%）。而 TC 路无论怎么处理都<b>高于</b>摘要的 9.01×（记录值 9.84×、修正后仍 9.84×、剔除 4090 后 10.29×）。这两点合起来提示摘要的两个均值很可能来自<b>修正过标注的数据</b>与<b>某个更窄的筛选窗口</b>（例如只取论文正文表格里的 shape/filter 组合），但窗口具体是什么，没有正文无法确认——见表 29。
+</div>
+
+<h3 id="s6-7">6.7 benchmark 覆盖了 torch 入口够不到的 FW</h3>
+
+<p>CUDA-core FP16 的 benchmark 函数名指向 <b>kernel 级模板</b>（如 <code>FP16_bn_act_dwconv3dGemm_kernel_CE_8_AT_ruse_A100_80G</code>，<span class="pill">performance_bn_act_dwconv3D_FP16_Gemm.cuh:344</span>），记录的 FW 覆盖 3–51。但 torch 能到达的 host dispatcher 只特化到 <b>FW = 17</b>：<code>_8_8</code> 家族（<code>FP16_bn_act_dwconv3D_Gemm.cuh:131-146</code>）与 <code>_8_A</code> 家族（<code>:277-291</code>）都只有 <code>TEMPLATE_A</code>（3–11）加 <code>TEMPLATE_B</code> 的 13/15/17，之后直接 <code>return -1;//not supported</code>。<code>frame.cuh:32-35</code> 把 TEMPLATE_B…E 标注为 13–21 / 23–31 / 33–41 / 43–51，<b>FP16 CUDA-core 侧一个都没实现</b>。</p>
+
+<p>kernel 本体对 FW 没有上限（<code>FP16_bn_act_dwconv3D_Gemm_kernel_ruse.cuh:1349-1353</code> 的 <code>if (FW &gt; k)</code> 守卫是通用写法），所以 benchmark 是直接实例化 kernel 模板跑出来的，绕过了 host 分发。</p>
+
+<p><b>影响</b>：表 17 里 n=448 的 CUDA-core 统计包含大量 <code>tensor_core=False</code> 时<b>根本调不到</b>的配置（FW ≥ 19）。这也和 §5.3 末尾那个缺陷呼应：<code>ops.py:267</code> 的 <code>or (FW &gt; 31)</code> 会把请求送进一个必然 <code>return -1</code> 的入口。</p>
+
+<h3 id="s6-8">6.8 代价小结</h3>
+
+<table>
+<thead><tr><th>维度</th><th>代价</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>构建规模</td><td>前向一次构建 <b>13569 个 kernel 实例</b>（37 个家族），BFC <b>4927 个</b>，合计 <b>18496</b>；README 说完整构建「可能要几小时」</td><td>表 13 <span class="pill">README.md:135</span></td></tr>
+<tr><td>寄存器</td><td>前向 13569 个实例：min 14 / median <b>153</b> / max <b>255</b>，其中 <b>55 个撞到 255 的硬上限</b>、680 个 ≥250；BFC 4927 个：min 14 / median 128 / max 254。<b>两份日志都是 0 处 spill</b>。静态 smem 最大到 <b>45072 B/block</b>（1800 个实例），BFC 侧 4920 个实例各占 2304 B</td><td><span class="pill">install.log</span> ×2</td></tr>
+<tr><td>适用域</td><td>Tensor-Core 路径要求 stride 1 + same padding + channel-last + <code>IC%64==0</code> + <code>(N·OH)%16==0</code> + FP16</td><td>表 10</td></tr>
+<tr><td>算子融合</td><td>Tensor-Core 入口<b>连 BN/激活的模板参数都没有</b>；CUDA-core 入口有但被 torch 绑定关成 <code>NULL</code></td><td>§5.5</td></tr>
+<tr><td>数值口径</td><td>FP16 路径放弃了 <code>sp &lt; 0.99</code> 的逐元素通过率，改用平均相对误差 ≤ 3e-2</td><td>表 9</td></tr>
+<tr><td>反向覆盖</td><td>dW 完全没上 Tensor Core，是另一套纯 CUDA-core 库</td><td>§4.2</td></tr>
+<tr><td>大 filter 竞争</td><td>F ≥ 43 时 cuDNN 多半会选 CuFFT，比值从峰值回落</td><td>§6.5</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 28</b>：把散在前面各节的代价集中起来。<b>这份开源实现的「工程税」主要不在运行时，而在构建时和适用域上</b>——上万级的模板实例化换来的是一组很窄的编译期特化。</p>
+
+<h2 id="s7">§7 复算脚本</h2>
+
+<p>本文所有可计算的数字都由 <code>scripts/</code> 下四个纯 stdlib 脚本产生，不需要 GPU、不需要装 Flash-DWC，只需要仓库源码。默认路径指向 <code>/tmp/flashdwc</code>，克隆到别处时用参数覆盖。</p>
+
+<h3 id="s7-1">7.1 <code>flash_dwc_roofline.py</code>：AI 闭式、roofline 与临界 F</h3>
+
+<pre><code class="language-bash">python3 scripts/flash_dwc_roofline.py --gpu a100-sxm
+python3 scripts/flash_dwc_roofline.py --gpu rtx4090 --filters 3,9,17,35,51</code></pre>
+
+<p>产出：<b>表 1</b>（A100 roofline，含「可达有效算力」与 <code>mma/warp/fh</code>）、<b>表 2</b>（四块 GPU 的 ridge 与临界 F）、<b>表 19</b> 的 density 推导常数、以及 <b>表 16</b> 的口径交叉验证。<code>--gpu</code> 可选 <code>a100-sxm / h100-sxm / rtx4090 / rtx3060ti / a100-fp32 / 4090-fp32</code>。</p>
+
+<p>脚本里的关键常数都带 <code>path:line</code> 注释，例如 <code>MMA_CHUNKS_PER_9TAPS = 32</code>、<code>TAPS_PER_CHUNK = 9</code>（<code>:59-60</code>）。交叉验证段会把执行态 TFLOPS 同时对三块候选 GPU 报百分比，因为<b>那组 kernel 注释从没说自己是哪块卡跑的</b>——只有 ≤100% 的那一列在物理上成立。</p>
+
+<h3 id="s7-2">7.2 <code>flash_dwc_bench.py</code>：解析四份 benchmark 头并对齐 cuDNN</h3>
+
+<pre><code class="language-bash">python3 scripts/flash_dwc_bench.py --src /path/to/Flash-DWC/FlashDWC_cuda/src
+python3 scripts/flash_dwc_bench.py --src ... --gpu "A100 80GB" --min-filter 9
+python3 scripts/flash_dwc_bench.py --src ... --all-tiles   # 不按 dispatcher 选 tile</code></pre>
+
+<p>四段输出：</p>
+
+<ol>
+<li><b>逐 shape 对照表</b>——每个 <code>(gpu, shape)</code> 一张，列出 F、AI、cuDNN 最优（含算法名与时间）、Flash-DWC-T、Flash-DWC FP16，以及两个比值。cuDNN 的多个 tile 变体段会被折叠（它的 harness 不按 tile 分）。</li>
+<li><b>表 17</b> 的分布统计（min / median / mean / geomean / max）。</li>
+<li><b>表 20</b> 的峰值效率现实检验，含「超 TC 峰值」「超 DRAM 峰值」两列越界计数。</li>
+<li><b>表 21 / 图 6</b> 的逐 F 扫描（每块 GPU 取它自己最好的那个 shape）。</li>
+</ol>
+
+<p><code>--min-filter</code> 用来复现「只看大 filter」的子集；<code>--all-tiles</code> 会忽略 <code>dispatched_tile()</code>（按 <code>IW</code> 整除性推断表 12 的选择）而取所有 tile 变体的最优，用来判断分发是否选错。</p>
+
+<h3 id="s7-3">7.3 <code>flash_dwc_regs.py</code>：表 7 的配对寄存器分析</h3>
+
+<pre><code class="language-bash">python3 scripts/flash_dwc_regs.py --log /path/to/FlashDWCBFC_cuda/exe/install.log
+python3 scripts/flash_dwc_regs.py --by FD          # 按 tile 宽度 FD / FWr 细分</code></pre>
+
+<p>解析 ptxas 的四行一组输出（<code>Compiling entry function</code> → <code>Function properties</code> → <code>spill</code> → <code>Used N registers, M bytes smem</code>），然后做<b>配对</b>：把 mangled 名的 <code>_Z&lt;len&gt;</code> 前缀剥掉（<code>True_FP16_</code> 与 <code>FP16_</code> 的长度不同，不剥会一个都配不上），再把 <code>True_FP16_</code> 归一化成 <code>FP16_</code>，剩下的模板实参串完全相同才算一对。结果：</p>
+
+<pre><code>paired keys: 144   unpaired: 626
+group                        n  FP16acc mean   range  FP32acc mean   range  saving
+FD=3                        12          53.7   52-56          79.3   78-80   32.4%
+FD=5                        12          80.3   79-83         126.7  125-128   36.6%
+FD=7                        12          89.2   87-90         157.2  153-168   43.3%
+FD=9                        12         129.7  115-137        221.0  186-254   41.3%
+mega FWr=1..7               84         130.2  111-142        217.4  186-241   40.1%
+mega FWr=8                  12         131.7  111-142        217.6  186-241   39.5%
+TOTAL                      144         116.3  52-142         193.6  78-254   39.9%</code></pre>
+
+<p>两点补充。<b>mega 族的寄存器数几乎与 <code>FWr</code> 无关</b>（FWr=1…7 全是 130.2 / 217.4）——§5.4 那 9 个 device 端分支并没有各自吃一份寄存器，因为一个 block 只会走其中一条，ptxas 分配的是各分支的<b>最大值</b>，而这些分支的结构几乎一样。同一个脚本指向前向日志（<code>--log FlashDWC_cuda/exe/install.log</code>）也能跑，得到 <code>n=13569 · median 153 · max 255 · spill 0</code>，但<b>配不上任何一对</b>——前向侧不存在 <code>True_FP16_</code>／<code>FP16_</code> 这种「同一模板体、只差累加精度」的双份实现，所以表 7 的配对分析只在 BFC 侧成立。<br><br>两份日志的 18496 个实例<b>全部只编到 <code>sm_86</code></b>（各只有一条 <code>-gencode arch=compute_86,code=sm_86</code>）。这一点在 §6.6 里被<b>明确排除</b>为数据可信性的线索：<code>sm_86</code> 的 SASS 能在 <code>sm_89</code> 上正常加载，而且编译目标本来也不可能抬高硬件峰值。它唯一能推出的是——<b>被记录的这两次构建产不出 A100 段的数据</b>。</p>
+
+<h3 id="s7-4">7.4 <code>flash_dwc_audit.py</code>：§6.6 的数据完整性审计</h3>
+
+<pre><code class="language-bash">python3 scripts/flash_dwc_audit.py --src /path/to/Flash-DWC/FlashDWC_cuda/src
+python3 scripts/flash_dwc_audit.py --src ... --list-defects   # 逐行列出 86+11 处缺陷</code></pre>
+
+<p>它复用 <code>flash_dwc_bench.py</code> 的正则与 GPU 标签，但额外记录<b>行号</b>，然后把 §6.1 的两条恒等式反过来当判据用：<code>Size</code> 应当等于 shape 标签推出的值，<code>Performance</code> 应当等于该行自己的 <code>Size</code>/<code>Time</code> 推出的值。六段输出依次对应 §6.6 的表 25（逐文件不符行数）、表 26（定比整块）、表 23（有用吞吐越过原始峰值的 4 行）、blast radius 清单、以及表 27 的五种重算口径。<b>它与 <code>flash_dwc_bench.py</code> 的加速比统计逐位相同</b>（TC 路 n=216 / geomean 9.10×、CUDA-core 路 n=448 / geomean 4.45×），这一点是必要的：两个脚本的胜者选取规则必须一致，否则「哪些缺陷行真的被用到」就无从判断。<br><br>两处容易踩的坑，脚本里都做了处理。<b>其一</b>，只有自带 <code>Size</code> 的行可审计——FP32 头文件另有 150 条续行、cuDNN 头文件另有 1188 条续行（每个算法一条），它们没有 <code>Size</code> 字段，所以被计入分母之外；三份 Flash-DWC 头文件的可审计行是 723 + 498 + 500 = <b>1721</b>。<b>其二</b>，续行虽然不能被审计，却<b>必须</b>参与 cuDNN 基线的胜者选取，否则「cuDNN best」会退化成只比较每个 filter 的第一条算法，比值会整体偏高（漏掉续行时 CUDA-core 路的 min 会从 0.98× 变成 2.61×）。</p>
+
+<h3 id="s7-5">7.5 无法复算的部分</h3>
+
+<table>
+<thead><tr><th>论文声明</th><th>状态</th><th>原因</th></tr></thead>
+<tbody>
+<tr><td>ImageNet-1K 上收敛匹配 PyTorch</td><td><b>无法验证</b></td><td>仓库内 0 个训练脚本 / 数据集加载器 / 模型定义（<code>grep -rln "ImageNet|ResNet|ConvNeXt|ConvMixer"</code> 只命中 <code>python/speed.py</code> 的 shape 注释）</td></tr>
+<tr><td>1.03× – 14.18× 加速区间</td><td><b>无法复现</b></td><td>表 17 的复算区间是 1.58×–16.42×（T 路径）与 0.98×–7.21×（CUDA-core FP16）；按 §6.6 修正标注缺陷后，CUDA-core 路的上界升到 <b>11.28×</b>，仍够不到 14.18×。论文用的是哪条路径、哪个基线、哪个子集，正文取不到</td></tr>
+<tr><td>9.01× / 5.09× 的平均窗口</td><td><b>只能近似</b></td><td>见 §6.2 与 §6.6：本文用「所有重叠行、不加权」得到 T 路 9.10× geomean / 9.84× mean、CUDA-core 路 4.45× geomean / 4.76× mean。修正标注缺陷后 CUDA-core 路的 mean 升到 <b>4.97×</b>，与摘要 5.09× 只差 2.4%；但 T 路在任何处理下都<b>高于</b>摘要的 9.01×，所以摘要用的筛选窗口仍无法确定</td></tr>
+<tr><td>论文的所有图、消融、评测方法学</td><td><b>未获取</b></td><td>ACM 页面有 Cloudflare 拦截，脚本 403；本报告全部技术细节来自摘要 + 官方源码</td></tr>
+<tr><td><code>dual-path split-GEMM</code> / <code>matrix compression</code> 的确切所指</td><td><b>只能给出候选</b></td><td>§5.4 与 §5.6：两个术语在源码里都没有同名标识符，本文列出最贴合的对应物并标注为推断</td></tr>
+</tbody>
+</table>
+<p class="cap"><b>表 29</b>：本报告的取证边界。凡是这里列出的条目，正文中都以 <span class="pill">论文声明、无代码佐证</span> 或 <code>.infer</code> 块的形式标注过。</p>
+
+<h2 id="s8">参考</h2>
+
+<ul>
+<li><b>论文</b>：Zhiyi Zhang, Yang Zhao, Jingwei Sun, Liang Qiao, Junshi Chen, Jun Shi, Hong An（中国科学技术大学 / 崂山实验室），<i>Flash-DWC: Making Depthwise Convolution Compute-Efficient on GPUs</i>，ACM Transactions on Architecture and Code Optimization (TACO)，2026，23(4)，pp. 1–25，DOI <code>10.1145/3837088</code>（CC-BY 4.0）。本报告仅取得 Crossref 上的完整摘要，<b>正文未获取</b>。</li>
+<li><b>官方源码</b>：<a href="https://github.com/GilgameshXYZ123/Flash-DWC"><code>github.com/GilgameshXYZ123/Flash-DWC</code></a>（main 分支，2026-10-26 抓取；仓库内文件时间戳为 2026-08-14）。顶层只有三个目录：<code>FlashDWC_cuda</code>（前向 FC + 反向数据 BDC + <b>cuDNN 基线</b>，cuDNN 基线是 <code>src/cuDNN_performance_dwconv3D_FP16.cuh</code> 与 <code>src/cuDNN_performance_dwconv3D.cuh</code> 两个文件，不是独立子库）、<code>FlashDWCBFC_cuda</code>（反向滤波器 BFC）、<code>python/flashdwc</code>（PyTorch 封装）。本报告引用的行号全部来自这份快照。</li>
+<li><b>硬件口径</b>：NVIDIA A100 / H100 datasheet 与 Ada 架构白皮书的 FP16 Tensor Core（FP32 累加、dense）峰值与显存带宽；GeForce 卡的 FP16-累加口径是 FP32-累加的 2 倍，本文一律采用后者（因为 <code>micro_ptx.cuh:113-116</code> 发射的是 <code>...f32.f16.f16.f32</code>）。</li>
+<li><b>本文推导</b>（非论文原文，均在 <code>.infer</code> 块或图注中标明）：AI 闭式 \(\mathrm{AI}=F_HF_W/2\)、Toeplitz B 操作数的密度通式 \(\text{count}(F_W)/64\)、stride &gt; 1 的密度衰减（表 11）、§6.4 的 prologue / 稳态占比解释、§6.6 的数据可信性判据。</li>
+<li><b>复算脚本</b>：<code>scripts/flash_dwc_roofline.py</code>、<code>scripts/flash_dwc_bench.py</code>、<code>scripts/flash_dwc_regs.py</code>、<code>scripts/flash_dwc_audit.py</code>（用法见 §7）。</li>
+</ul>
+
+<footer>生成于 2026-10-26 · paper-research 工作流 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 事实性内容以论文与官方源码为准，推断处已逐条标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
