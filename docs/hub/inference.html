@@ -79,12 +79,19 @@
   <div class="step">
     <span class="no">4</span>
     <div>
+      <h3><a href="../misc/collective-communication.html">集合通信零基础指南</a> → <a href="../misc/multi-gpu-attention-moe.html">多卡部署 Attention 与 MoE</a> <span class="tag">（多卡两篇）</span></h3>
+      <p>先把 all-reduce / all-gather 等八个原语的通信量算清楚（α-β 模型、Ring/Tree、busBw 校正因子），再看 TP / SP / ZeRO / EP / CP 具体怎么切、每层传多少字节。两篇都带可调计算器，是 vLLM 第 5 讲的理论底座。</p>
+    </div>
+  </div>
+  <div class="step">
+    <span class="no">5</span>
+    <div>
       <h3><a href="../deepseek-v4/v4pro-ridge-point.html">DeepSeek-V4-Pro 算术强度账本</a> <span class="tag">（实战算账）</span></h3>
       <p>用生产 config 逐算子算 prefill 与 decode 的 roofline，把第 1 步的账本方法落到真实模型上。</p>
     </div>
   </div>
   <div class="step">
-    <span class="no">5</span>
+    <span class="no">6</span>
     <div>
       <h3><a href="../deepseek-v4/dspark-speculative-decoding.html">DSpark 投机解码</a> <span class="tag">（单点深读）</span></h3>
       <p>DeepSeek 生产级置信度调度投机解码，与 vLLM 第 6 讲的 draft-verify 框架互为印证。</p>

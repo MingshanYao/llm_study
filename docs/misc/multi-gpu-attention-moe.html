@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<!-- 零基础教学报告：多卡部署 Attention 与 MoE（并行模式 / 显存账本 / 通信量）。
+     head 的内联 CSS 与钉死版本 + SRI 的 CDN 引用与 docs/_template.html 保持一致，不得更换 CDN 或去掉 integrity。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多卡部署 Attention 与 MoE 零基础指南：五种并行模式、显存账本与通信量</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; overflow-x: auto; }
+  .fig svg { max-width: 100%; height: auto; display: block; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .toc {
+    background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 20px; margin: 16px 0; font-size: 0.93em;
+  }
+  .toc ol { margin: 6px 0 2px; padding-left: 22px; }
+  .toc li { margin: 3px 0; }
+  .recipe {
+    background: #fff; border: 1px solid var(--line); border-left: 4px solid #2f9e63;
+    border-radius: 0 10px 10px 0; padding: 12px 18px; margin: 16px 0;
+  }
+  .recipe h4 { margin: 0 0 6px; color: #1f7a49; }
+  .recipe p { margin: 4px 0; font-size: 0.95em; }
+  .keypoint {
+    background: #d9f0e2; border-radius: 8px; padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .keypoint b { color: #1f7a49; }
+  /* 计算器 */
+  .calc { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 16px 0; }
+  .calc-row { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 8px 0; }
+  .calc fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px 10px; margin: 10px 0; flex: 1 1 260px; }
+  .calc legend { font-size: 0.86em; color: var(--muted); padding: 0 6px; }
+  .calc label { font-size: 0.82em; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+  .calc input, .calc select {
+    font-size: 0.88em; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px;
+    width: 84px; background: #fff; color: var(--ink); font-family: inherit;
+  }
+  .calc select { width: auto; }
+  .calc .field { display: inline-flex; flex-direction: column; gap: 2px; }
+  .out-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-top: 12px; }
+  .out-card { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+  .out-card .k { font-size: 0.78em; color: var(--muted); }
+  .out-card .v { font-size: 1.02em; font-weight: 600; }
+  .out-card .s { font-size: 0.76em; color: var(--muted); }
+  .warnv { color: #b3261e; }
+  .okv { color: #1f7a49; }
+  /* 显存条形图 */
+  .bar-wrap { margin: 12px 0; }
+  .bar-line { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 0.82em; }
+  .bar-line .bl { width: 190px; color: var(--muted); flex: none; }
+  .bar-track { flex: 1; background: #f1f4f9; border-radius: 4px; height: 18px; position: relative; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px 0 0 4px; background: linear-gradient(90deg, #2456c4, #4a7de0); }
+  .bar-fill.g { background: linear-gradient(90deg, #2f9e63, #58c08a); }
+  .bar-fill.o { background: linear-gradient(90deg, #e8862a, #f0a95e); }
+  .bar-val { width: 92px; text-align: right; flex: none; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>多卡部署 Attention 与 MoE 零基础指南</h1>
+<p style="color:#5a6272;margin:0 0 4px;font-size:1.02em">五种并行模式怎么切、切完每卡吃多少显存、每层要传多少字节</p>
+<div class="meta">
+  <b>零基础教学报告</b> · 生成于 2026-10-27 ·
+  事实来源：<a href="https://arxiv.org/abs/2412.19437">DeepSeek-V3 论文 §3 Infrastructures</a>（本地 <code>paper/deepseek_v3.pdf</code>）、Megatron-LM / ZeRO / Ring Attention / DeepSpeed-Ulysses 论文、vLLM 官方文档与博客 ·
+  相关阅读：<a href="collective-communication.html">集合通信零基础指南</a>（all-reduce / all-gather 的通信量怎么算） · <a href="../vllm/vllm-t5-distributed.html">vLLM 分布式并行（源码级）</a> · <a href="../moe/moe-t1-basics.html">MoE 零基础第 1 讲</a> · <a href="mha-prefill-decode.html">MHA prefill/decode 成本账本</a> · <a href="mla-training-inference.html">MLA 训练与推理</a>
+</div>
+
+<div class="toc">
+  <b>本篇导航</b>
+  <ol>
+    <li><a href="#why">为什么非要多卡：三笔账与四类显存</a></li>
+    <li><a href="#dims">五个可以切的维度（全景图 + 术语表）</a></li>
+    <li><a href="#attn">Attention 的多卡部署：TP / SP / CP / KV 分片</a></li>
+    <li><a href="#moe">MoE 的多卡部署：EP / ETP / DP-attention</a></li>
+    <li><a href="#rest">补齐另外两维：PP 与 DP/ZeRO</a></li>
+    <li><a href="#ledger">总账表：每种并行的显存与通信</a></li>
+    <li><a href="#recipes">六个场景配方</a></li>
+    <li><a href="#pitfalls">常见误区与自检清单</a></li>
+    <li><a href="#calc">动手算：并行配置计算器</a></li>
+  </ol>
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：多卡部署 = 挑一个维度把张量切开（batch / 层 / 矩阵内部 / 序列 / 专家），再用一个通信原语把切开后的结果拼回来。<b>切开省显存，拼回来花带宽</b>——所有并行策略的差别，只是「切哪里」和「拼的代价多大、多久拼一次」。</p>
+  <p><b>五个维度一句话记住</b>：<span class="pill">DP</span>切 batch，各卡模型全复制，吞吐 ×n；<span class="pill">PP</span>切层，只在 stage 边界传激活，通信最省但有气泡；<span class="pill">TP</span>切矩阵内部（attention 按 head 切），每层 2 次 all-reduce，必须待在机内 NVLink；<span class="pill">CP/SP</span>切序列，长上下文专用，KV cache 也 ÷n；<span class="pill">EP</span>切专家，每层 2 次 all-to-all，MoE 的默认选择。</p>
+  <p><b>通信量速记</b>（每层、每卡、前向一次）：TP all-reduce ≈ \(2\cdot\frac{n-1}{n}\cdot B S H\cdot b\)，约 <b>百 MiB 量级</b>；EP all-to-all ≈ \(2\cdot T\cdot k\cdot H\cdot b\)，prefill 时可到 <b>~900 MiB</b>（比专家计算还慢）；Ring-CP 传 KV ≈ \(4 S d_{kv}\cdot b\)，<b>与卡数无关</b>、可被计算掩盖；PP 只传 \(BSH\cdot b\)，<b>最省</b>。</p>
+  <p><b>显存速记</b>：推理每卡 ≈ 权重字节/切片数 + KV cache/切片数 + 激活与框架开销；训练每个参数要 16 字节（bf16 权重 2 + bf16 梯度 2 + fp32 主权重与 Adam 动量 12），ZeRO-1 把后 12 字节摊到 DP 组上。</p>
+</div>
+
+<h2 id="why">1. 为什么非要多卡：三笔账与四类显存</h2>
+
+<p>先把「为什么要多卡」拆成三个互相独立的动机——它们对应完全不同的并行手段，混在一起想就会晕。</p>
+
+<table>
+<tr><th>动机</th><th>典型症状</th><th>该用的手段</th><th>不该用的手段</th></tr>
+<tr><td><b>装不下</b>（显存墙）</td><td>70B bf16 权重 131.5 GiB &gt; 单卡 80 GB，直接 OOM</td><td>TP / PP / EP 切权重；ZeRO-3 切参数与优化器状态</td><td>DP（DP 是整份复制，只会更放不下）</td></tr>
+<tr><td><b>算不完</b>（延迟墙）</td><td>128K 上下文的 attention 是 \(O(S^2)\)，单卡一次 prefill 要几十秒</td><td>CP（序列维切分）、TP（把矩阵乘拆开并行）</td><td>PP（PP 降不了单条请求的延迟，反而加气泡）</td></tr>
+<tr><td><b>不够多</b>（吞吐墙）</td><td>单卡能跑，但 QPS 上不去，成本高</td><td>DP（复制模型、分摊请求）、EP（专家分卡，n 卡吞吐 ≈ n×）</td><td>单纯加大 TP（TP 不提升吞吐，见 §3.2）</td></tr>
+</table>
+
+<h3>1.1 一个参数值多少字节</h3>
+<p>所有显存账的起点。记住这张表，后面全部是乘除：</p>
+<table>
+<tr><th>场景</th><th>每参数字节</th><th>7B 模型</th><th>70B 模型</th><th>671B MoE（V3）</th></tr>
+<tr><td>推理 bf16 / fp16</td><td>2</td><td>13.1 GiB</td><td>131.5 GiB</td><td>1249.8 GiB</td></tr>
+<tr><td>推理 fp8 / int8</td><td>1</td><td>6.5 GiB</td><td>65.8 GiB</td><td>624.9 GiB</td></tr>
+<tr><td>推理 int4（W4A16）</td><td>0.5</td><td>3.3 GiB</td><td>32.9 GiB</td><td>312.4 GiB</td></tr>
+<tr><td>训练 混合精度<b>合计</b></td><td>16</td><td>104 GiB</td><td>1043 GiB</td><td>—</td></tr>
+<tr><td>├ bf16 权重 + bf16 梯度</td><td>2 + 2</td><td colspan="3">每卡都要一份（TP/PP/EP 可切）</td></tr>
+<tr><td>└ fp32 主权重 + Adam m + Adam v</td><td>4 + 4 + 4</td><td colspan="3">这 12 字节可被 ZeRO-1 摊到 DP 组：<code>12/DP</code></td></tr>
+<tr><td>训练 ZeRO-1（DP=8）每参数</td><td>4 + 12/8 = 5.5</td><td>36 GiB</td><td>359 GiB</td><td>—</td></tr>
+</table>
+<p class="cap">按 1 GiB = 2<sup>30</sup> B 计。<b>训练还要额外加激活</b>（下一节），激活在长序列下常常比权重更大。</p>
+
+<h3>1.2 推理时显存被谁吃掉</h3>
+<p>四类占用，量级完全不同，优化手段也完全不同：</p>
+<table>
+<tr><th>类别</th><th>公式 / 量级</th><th>随什么增长</th><th>怎么压</th></tr>
+<tr><td><b>① 权重</b></td><td>\(\Psi \times b\)，70B bf16 = 131.5 GiB</td><td>模型大小（固定）</td><td>量化、TP/PP/EP 切分</td></tr>
+<tr><td><b>② KV cache</b></td><td>\(2 L n_{kv} d_h \times b\) 每 token，见 §3.5 表</td><td>并发数 × 上下文长度（<b>线性爆炸</b>）</td><td>GQA/MLA、KV 量化、CP/DCP 切分、PagedAttention、prefix 复用、offload</td></tr>
+<tr><td><b>③ 激活 / 中间 buffer</b></td><td>推理只有当前 step 的一层，\(O(T \cdot H)\)；MoE 的 permute buffer 是 \(T\cdot k\cdot H\)（4096 token、k=8、H=7168 → 470 MiB）</td><td>batch × chunk 长度</td><td>减小 chunk、分块计算、CUDA graph</td></tr>
+<tr><td><b>④ 框架固定开销</b></td><td>CUDA context ~0.5–1 GiB + NCCL 通信 buffer（每个通信组几十 MiB～数百 MiB）+ 显存碎片</td><td>并行度越高、通信组越多，越大</td><td>实践上给 ①②③ 之外<b>预留 10–20%</b></td></tr>
+</table>
+
+<div class="keypoint">
+  <b>最容易忽略的一条</b>：MoE 模型的「激活参数 37B」只决定<b>算力</b>和<b>带宽</b>，不决定<b>显存</b>。671B 的专家权重必须<b>全部驻留</b>（除非做专家 offload），否则路由到没在显存里的专家就得等 PCIe/NVMe 搬运。这就是 MoE 部署的核心矛盾：<i>算得像 37B，存得像 671B</i>。
+</div>
+
+<h3>1.3 训练时激活有多大</h3>
+<p>训练要多存反向传播用的中间结果。以 Transformer 一层为例（\(s\)=序列长、\(b\)=batch、\(h\)=hidden、\(a\)=head 数、字节数按 bf16=2）：</p>
+<div class="formula">
+\[
+\text{每层激活} \approx sbh\left(34 + 5\frac{as}{h}\right)\ \text{字节}
+\]
+</div>
+<p>前一项是各种线性层的输入输出（34·sbh），后一项是 attention 里那个 \(s\times s\) 的分数矩阵（5·as²b）。<b>第二项随序列长平方增长</b>——这正是 FlashAttention（把 \(s^2\) 矩阵不落显存）和 CP（把 \(s\) 切开）存在的理由。</p>
+<p>举个数：\(s=4096,\ b=1,\ h=8192,\ a=64\)，每层激活 ≈ \(4096\times8192\times(34 + 5\times64\times4096/8192)\) ≈ 33.6M × 50 ≈ 1.6 GiB，80 层就是 130 GiB——比 70B 的权重还大。所以长上下文训练里，<b>激活才是显存的第一杀手</b>，而切激活的手段正是 SP（÷n）、CP（÷n）、重计算（V3 论文里明确重算所有 RMSNorm 与 MLA up-projection）。</p>
+
+<h2 id="dims">2. 五个可以切的维度</h2>
+
+<p>一个 Transformer 前向过程里，能切的维度就五个。任何框架的并行配置（Megatron 的 <code>--tensor-model-parallel-size</code>、vLLM 的 <code>--tensor-parallel-size</code> / <code>--enable-expert-parallel</code>、SGLang 的 <code>--enable-dp-attention</code>）本质上都是在这五个维度上填数字。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 344" role="img" aria-label="五个可切维度全景：DP、PP、TP、CP、EP 各自切什么、用什么通信原语">
+  <defs>
+    <marker id="m1arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <style>text { font-family: 'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',system-ui,sans-serif; }</style>
+
+  <text x="24" y="30" font-size="14" font-weight="bold" fill="#1a1f2e">五种并行 = 五个维度各切一刀 + 一个通信原语把结果拼回来（下图都按 4 卡画）</text>
+  <text x="24" y="54" font-size="11" fill="#5a6272">切什么</text>
+  <text x="150" y="54" font-size="11" fill="#5a6272">切开的样子</text>
+  <text x="320" y="54" font-size="11" fill="#5a6272">每卡得到什么 / 省什么</text>
+  <text x="580" y="54" font-size="11" fill="#5a6272">拼回来的通信原语与代价</text>
+  <line x1="24" y1="62" x2="856" y2="62" stroke="#e3e7ee" stroke-width="1"/>
+
+  <!-- row 1: DP -->
+  <rect x="24" y="70" width="832" height="46" fill="#f8fafc" rx="6"/>
+  <text x="34" y="90" font-size="13" font-weight="bold" fill="#163a86">batch 维 · DP</text>
+  <text x="34" y="106" font-size="10" fill="#5a6272">谁在算</text>
+  <rect x="150" y="76" width="140" height="7" fill="#2456c4" rx="2"/>
+  <rect x="150" y="86" width="140" height="7" fill="#e8862a" rx="2"/>
+  <rect x="150" y="96" width="140" height="7" fill="#2f9e63" rx="2"/>
+  <rect x="150" y="106" width="140" height="7" fill="#163a86" rx="2"/>
+  <text x="320" y="90" font-size="12" fill="#2a3040">完整模型复制 4 份，各跑不同请求；</text>
+  <text x="320" y="106" font-size="12" fill="#2a3040">权重显存不省，吞吐 ×4</text>
+  <text x="580" y="90" font-size="12" fill="#2a3040">训练：每步一次梯度 all-reduce（2Ψ）</text>
+  <text x="580" y="106" font-size="12" fill="#2a3040">推理：层内零通信，最省带宽</text>
+
+  <!-- row 2: PP -->
+  <rect x="24" y="124" width="832" height="46" fill="#ffffff" rx="6"/>
+  <text x="34" y="144" font-size="13" font-weight="bold" fill="#163a86">layer 维 · PP</text>
+  <text x="34" y="160" font-size="10" fill="#5a6272">按层分段</text>
+  <rect x="150" y="130" width="140" height="7" fill="#2456c4" rx="2"/>
+  <rect x="150" y="139" width="140" height="7" fill="#2456c4" rx="2"/>
+  <rect x="150" y="148" width="140" height="7" fill="#e8862a" rx="2"/>
+  <rect x="150" y="157" width="140" height="7" fill="#e8862a" rx="2"/>
+  <text x="320" y="144" font-size="12" fill="#2a3040">前 40 层在卡 0/1、后 40 层在卡 2/3；</text>
+  <text x="320" y="160" font-size="12" fill="#2a3040">权重与激活都 ÷PP</text>
+  <text x="580" y="144" font-size="12" fill="#2a3040">只在 stage 边界 P2P 传激活（B·S·H·b）</text>
+  <text x="580" y="160" font-size="12" fill="#2a3040">通信最省，代价是流水线气泡</text>
+
+  <!-- row 3: TP -->
+  <rect x="24" y="178" width="832" height="46" fill="#f8fafc" rx="6"/>
+  <text x="34" y="198" font-size="13" font-weight="bold" fill="#163a86">矩阵内部 · TP</text>
+  <text x="34" y="214" font-size="10" fill="#5a6272">按 head / 列</text>
+  <rect x="150" y="184" width="140" height="34" fill="#eef3fc" stroke="#2456c4" rx="3"/>
+  <line x1="185" y1="184" x2="185" y2="218" stroke="#2456c4" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="220" y1="184" x2="220" y2="218" stroke="#2456c4" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="255" y1="184" x2="255" y2="218" stroke="#2456c4" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="320" y="198" font-size="12" fill="#2a3040">同一批 token，每卡算 1/4 的 head</text>
+  <text x="320" y="214" font-size="12" fill="#2a3040">（或 1/4 的 FFN 列）；权重与 KV ÷TP</text>
+  <text x="580" y="198" font-size="12" fill="#2a3040">每层 2 次 all-reduce（attn + MLP 各一次）</text>
+  <text x="580" y="214" font-size="12" fill="#2a3040">每次 2(n−1)/n·B·S·H·b，百 MiB 量级</text>
+
+  <!-- row 4: CP -->
+  <rect x="24" y="232" width="832" height="46" fill="#ffffff" rx="6"/>
+  <text x="34" y="252" font-size="13" font-weight="bold" fill="#163a86">序列维 · CP/SP</text>
+  <text x="34" y="268" font-size="10" fill="#5a6272">长上下文</text>
+  <g>
+    <rect x="150" y="246" width="33" height="12" fill="#2456c4" rx="2"/>
+    <rect x="186" y="246" width="33" height="12" fill="#e8862a" rx="2"/>
+    <rect x="222" y="246" width="33" height="12" fill="#2f9e63" rx="2"/>
+    <rect x="258" y="246" width="32" height="12" fill="#163a86" rx="2"/>
+    <text x="150" y="272" font-size="10" fill="#5a6272">同一条序列切 4 段</text>
+  </g>
+  <text x="320" y="252" font-size="12" fill="#2a3040">每卡持 1/4 的 Q 与 1/4 的 KV；</text>
+  <text x="320" y="268" font-size="12" fill="#2a3040">KV cache 与激活 ÷CP，长上下文关键</text>
+  <text x="580" y="252" font-size="12" fill="#2a3040">Ring：环形传 KV，每层 4·S·d_kv·b</text>
+  <text x="580" y="268" font-size="12" fill="#2a3040">Ulysses：2 次 all-to-all 换轴 seq→head</text>
+
+  <!-- row 5: EP -->
+  <rect x="24" y="286" width="832" height="46" fill="#f8fafc" rx="6"/>
+  <text x="34" y="306" font-size="13" font-weight="bold" fill="#163a86">专家维 · EP</text>
+  <text x="34" y="322" font-size="10" fill="#5a6272">MoE 专属</text>
+  <g>
+    <rect x="150" y="292" width="15" height="15" fill="#2456c4" rx="2"/>
+    <rect x="168" y="292" width="15" height="15" fill="#2456c4" rx="2"/>
+    <rect x="186" y="292" width="15" height="15" fill="#e8862a" rx="2"/>
+    <rect x="204" y="292" width="15" height="15" fill="#e8862a" rx="2"/>
+    <rect x="150" y="310" width="15" height="15" fill="#2f9e63" rx="2"/>
+    <rect x="168" y="310" width="15" height="15" fill="#2f9e63" rx="2"/>
+    <rect x="186" y="310" width="15" height="15" fill="#163a86" rx="2"/>
+    <rect x="204" y="310" width="15" height="15" fill="#163a86" rx="2"/>
+    <text x="228" y="316" font-size="10" fill="#5a6272">8 专家 / 4 卡</text>
+  </g>
+  <text x="320" y="306" font-size="12" fill="#2a3040">256 只专家分到 n 卡，每卡 256/n 只；</text>
+  <text x="320" y="322" font-size="12" fill="#2a3040">专家权重 ÷EP，吞吐随卡数近线性</text>
+  <text x="580" y="306" font-size="12" fill="#2a3040">每层 2 次 all-to-all（dispatch + combine）</text>
+  <text x="580" y="322" font-size="12" fill="#2a3040">2·T·k·H·b，prefill 时可到 ~900 MiB/层</text>
+</svg>
+</div>
+<p class="cap"><b>图 2-1</b>｜五个维度互不冲突，可以叠起来用（这就是「3D / 4D 并行」）：world_size = DP × PP × CP × TP，EP 则是在 MoE 层上对这批卡的<b>另一种分组方式</b>，不额外增加卡数。注意最后两列的数字都是「每层、每卡、前向一次」的量，反向传播再翻倍。</p>
+
+<h3>2.1 术语对照表（英文缩写 → 人话）</h3>
+<table>
+<tr><th>缩写</th><th>全称</th><th>人话</th><th>切谁</th></tr>
+<tr><td>DP</td><td>Data Parallelism</td><td>数据并行：模型复制，数据分开</td><td>batch</td></tr>
+<tr><td>TP</td><td>Tensor Parallelism</td><td>张量并行：一个大矩阵乘法拆成 n 份</td><td>权重矩阵的列/行</td></tr>
+<tr><td>SP</td><td>Sequence Parallelism（Megatron 口径）</td><td>TP 的补丁：把 LayerNorm/Dropout 那段的激活也按序列切开</td><td>激活的序列维（<b>不切权重</b>）</td></tr>
+<tr><td>CP</td><td>Context Parallelism</td><td>上下文并行：整条序列切开，attention 用环形传 KV 拼回来</td><td>激活 + KV cache 的序列维</td></tr>
+<tr><td>PP</td><td>Pipeline Parallelism</td><td>流水线并行：按层分段接力</td><td>层</td></tr>
+<tr><td>EP</td><td>Expert Parallelism</td><td>专家并行：一只专家整只放在一张卡上</td><td>专家集合</td></tr>
+<tr><td>ETP</td><td>Expert Tensor Parallelism</td><td>把单只专家再切开（MoE 层的 TP）</td><td>专家权重矩阵</td></tr>
+<tr><td>DCP / PCP</td><td>Decode / Prefill Context Parallelism</td><td>vLLM 口径：decode 阶段与 prefill 阶段分别设的 CP 度数</td><td>KV cache 的序列维</td></tr>
+<tr><td>ZeRO 1/2/3</td><td>Zero Redundancy Optimizer</td><td>把 DP 里冗余的优化器状态 / 梯度 / 参数逐层切开</td><td>训练态显存</td></tr>
+</table>
+
+<div class="infer">SP 这个词在业界有两种用法：Megatron 的 SP（只切 LN/Dropout 激活，配合 TP 用）和有些框架里指「序列维并行 = CP」。读文档时先看它有没有和 TP 绑在一起，绑在一起基本就是 Megatron 口径。DeepSeek-V3 论文里的 "TP4 with SP" 就是 Megatron 口径。</div>
+
+<h2 id="attn">3. Attention 的多卡部署</h2>
+
+<h3>3.1 先看一层 attention 里到底有什么</h3>
+<p>以 Llama-3-70B 的一层为例（\(H=8192\)，\(n_q=64\) 个 Q head，\(n_{kv}=8\) 个 KV head，\(d_h=128\)，GQA）：</p>
+<table>
+<tr><th>张量</th><th>形状</th><th>参数量</th><th>bf16 大小</th><th>说明</th></tr>
+<tr><td>\(W_q\)</td><td>\([H,\ n_q d_h]=[8192,8192]\)</td><td>67.1 M</td><td>128 MiB</td><td>把 hidden 投成 64 个 Q head</td></tr>
+<tr><td>\(W_k, W_v\)</td><td>\([8192,\ 8\times128=1024]\) 各一个</td><td>8.4 M ×2</td><td>16 MiB ×2</td><td>GQA：KV head 只有 8 个，比 Q 小 8 倍</td></tr>
+<tr><td>\(W_o\)</td><td>\([8192,8192]\)</td><td>67.1 M</td><td>128 MiB</td><td>把 head 拼回来的输出投影</td></tr>
+<tr><td><b>attention 每层合计</b></td><td>—</td><td>151 M</td><td><b>288 MiB</b></td><td>×80 层 = 22.5 GiB</td></tr>
+<tr><td>MLP（SwiGLU, \(d_{ff}=28672\)）</td><td>\(3\times[8192,28672]\)</td><td>704 M</td><td><b>1.31 GiB</b></td><td>×80 层 = 105 GiB</td></tr>
+</table>
+
+<div class="keypoint">
+  <b>第一个反直觉</b>：稠密模型里 attention 的<b>权重只占约 18%</b>，MLP 占 78%。所以「切 attention」的真正目的不是省权重，而是<b>省 KV cache 和摊薄 \(O(S^2)\) 的计算</b>；省权重大头靠切 MLP（同一套 TP 机制顺手就做了）。MoE 模型则相反——权重的大头全在专家里，于是有了第 4 章。
+</div>
+
+<p>一层 attention 的显存分三块，多卡策略对它们的影响完全不同，<b>看任何方案时都要分别问这三块</b>：</p>
+<table>
+<tr><th>块</th><th>大小</th><th>TP 能切吗</th><th>CP/DCP 能切吗</th><th>DP 能切吗</th></tr>
+<tr><td>权重 \(W_q,W_k,W_v,W_o\)</td><td>固定</td><td>✅ ÷TP</td><td>❌</td><td>❌（DP 是复制）</td></tr>
+<tr><td>KV cache</td><td>\(\propto\) 并发 × 上下文</td><td>✅ ÷TP（<b>有前提</b>，见 3.2）</td><td>✅ ÷CP</td><td>✅ 天然分（各卡自己的请求）</td></tr>
+<tr><td>激活（Q/K/V/O、LN 输出）</td><td>\(\propto T\cdot H\)</td><td>✅ 配 SP 才彻底</td><td>✅ ÷CP</td><td>❌</td></tr>
+</table>
+
+<h3>3.2 TP：按 head 切（Megatron 风格，最常用）</h3>
+<p>核心技巧只有一句：<b>\(W_q,W_k,W_v\) 按输出列切（列并行），\(W_o\) 按输入行切（行并行）</b>。这样每卡拿到若干完整的 head，从投影到 attention 到输出投影<b>全程不需要通信</b>——因为每个 head 的 \(\mathrm{softmax}(Q_iK_i^\top)V_i\) 本来就只依赖自己；只在最后 \(W_o\) 出来时，每卡手里是一个「部分和」，需要一次 all-reduce 相加。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 318" role="img" aria-label="TP=4 切 attention 的数据流：QKV 列并行、各卡独立算 head、O 行并行、最后一次 all-reduce">
+  <defs>
+    <marker id="m31arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <style>text { font-family: 'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',system-ui,sans-serif; }</style>
+
+  <text x="24" y="28" font-size="14" font-weight="bold" fill="#1a1f2e">TP=4 切 attention：列并行 → 各卡算自己的 head → 行并行 → 一次 all-reduce</text>
+
+  <rect x="270" y="44" width="340" height="30" rx="6" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="440" y="64" font-size="12" text-anchor="middle" fill="#1a1f2e">输入 X [T×H]：TP 组内每卡都有完整一份</text>
+  <line x1="440" y1="74" x2="157" y2="90" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+  <line x1="440" y1="74" x2="347" y2="90" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+  <line x1="440" y1="74" x2="537" y2="90" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+  <line x1="440" y1="74" x2="727" y2="90" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+
+  <!-- lane 0 -->
+  <rect x="70" y="92" width="170" height="54" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="155" y="110" font-size="12" font-weight="bold" text-anchor="middle" fill="#163a86">① QKV 列并行</text>
+  <text x="155" y="126" font-size="10" text-anchor="middle" fill="#2a3040">本卡 64/4 = 16 个 Q head</text>
+  <text x="155" y="140" font-size="10" text-anchor="middle" fill="#2a3040">8/4 = 2 个 KV head</text>
+  <rect x="70" y="158" width="170" height="40" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="155" y="176" font-size="12" text-anchor="middle" fill="#1a1f2e">② 本卡算自己的 head</text>
+  <text x="155" y="190" font-size="10" text-anchor="middle" fill="#5a6272">softmax(QKᵀ)V 零通信</text>
+  <rect x="70" y="210" width="170" height="40" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="155" y="228" font-size="12" text-anchor="middle" fill="#1a1f2e">③ O 投影行并行</text>
+  <text x="155" y="242" font-size="10" text-anchor="middle" fill="#5a6272">输出是部分和 [T×H]</text>
+  <line x1="155" y1="146" x2="155" y2="156" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+  <line x1="155" y1="198" x2="155" y2="208" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+  <line x1="155" y1="250" x2="155" y2="264" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+
+  <!-- lane 1 -->
+  <rect x="260" y="92" width="170" height="54" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="345" y="110" font-size="12" font-weight="bold" text-anchor="middle" fill="#163a86">① QKV 列并行</text>
+  <text x="345" y="126" font-size="10" text-anchor="middle" fill="#2a3040">16 个 Q head · 2 个 KV</text>
+  <text x="345" y="140" font-size="10" text-anchor="middle" fill="#2a3040">权重与 KV cache 都 ÷4</text>
+  <rect x="260" y="158" width="170" height="40" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="345" y="176" font-size="12" text-anchor="middle" fill="#1a1f2e">② 本卡算自己的 head</text>
+  <text x="345" y="190" font-size="10" text-anchor="middle" fill="#5a6272">只读自己的 KV 分片</text>
+  <rect x="260" y="210" width="170" height="40" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="345" y="228" font-size="12" text-anchor="middle" fill="#1a1f2e">③ O 投影行并行</text>
+  <text x="345" y="242" font-size="10" text-anchor="middle" fill="#5a6272">输出是部分和 [T×H]</text>
+  <line x1="345" y1="146" x2="345" y2="156" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+  <line x1="345" y1="198" x2="345" y2="208" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+  <line x1="345" y1="250" x2="345" y2="264" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+
+  <!-- lane 2 -->
+  <rect x="450" y="92" width="170" height="54" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="535" y="110" font-size="12" font-weight="bold" text-anchor="middle" fill="#a35c11">① QKV 列并行</text>
+  <text x="535" y="126" font-size="10" text-anchor="middle" fill="#2a3040">16 个 Q head · 2 个 KV</text>
+  <text x="535" y="140" font-size="10" text-anchor="middle" fill="#2a3040">head 数不够就没法切</text>
+  <rect x="450" y="158" width="170" height="40" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="535" y="176" font-size="12" text-anchor="middle" fill="#1a1f2e">② 本卡算自己的 head</text>
+  <text x="535" y="190" font-size="10" text-anchor="middle" fill="#5a6272">只读自己的 KV 分片</text>
+  <rect x="450" y="210" width="170" height="40" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="535" y="228" font-size="12" text-anchor="middle" fill="#1a1f2e">③ O 投影行并行</text>
+  <text x="535" y="242" font-size="10" text-anchor="middle" fill="#5a6272">输出是部分和 [T×H]</text>
+  <line x1="535" y1="146" x2="535" y2="156" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+  <line x1="535" y1="198" x2="535" y2="208" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+  <line x1="535" y1="250" x2="535" y2="264" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+
+  <!-- lane 3 -->
+  <rect x="640" y="92" width="170" height="54" rx="6" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="725" y="110" font-size="12" font-weight="bold" text-anchor="middle" fill="#a35c11">① QKV 列并行</text>
+  <text x="725" y="126" font-size="10" text-anchor="middle" fill="#2a3040">16 个 Q head · 2 个 KV</text>
+  <text x="725" y="140" font-size="10" text-anchor="middle" fill="#2a3040">rank 0/1 是 NVLink 邻居</text>
+  <rect x="640" y="158" width="170" height="40" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="725" y="176" font-size="12" text-anchor="middle" fill="#1a1f2e">② 本卡算自己的 head</text>
+  <text x="725" y="190" font-size="10" text-anchor="middle" fill="#5a6272">只读自己的 KV 分片</text>
+  <rect x="640" y="210" width="170" height="40" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="725" y="228" font-size="12" text-anchor="middle" fill="#1a1f2e">③ O 投影行并行</text>
+  <text x="725" y="242" font-size="10" text-anchor="middle" fill="#5a6272">输出是部分和 [T×H]</text>
+  <line x1="725" y1="146" x2="725" y2="156" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+  <line x1="725" y1="198" x2="725" y2="208" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+  <line x1="725" y1="250" x2="725" y2="264" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m31arr)"/>
+
+  <rect x="70" y="266" width="740" height="38" rx="6" fill="#eef3fc" stroke="#2456c4" stroke-dasharray="4 3"/>
+  <text x="440" y="284" font-size="12" font-weight="bold" text-anchor="middle" fill="#163a86">④ all-reduce：4 份部分和相加 → 每卡重新拿到完整输出 [T×H]</text>
+  <text x="440" y="299" font-size="10" text-anchor="middle" fill="#5a6272">每卡收发 2(n−1)/n × T·H·b 字节（TP=4 → 1.5×，TP=8 → 1.75×），每层 attention + MLP 各一次</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-1</b>｜TP 的精妙之处：<b>列并行 + 行并行成对出现</b>，中间那一大段（含 \(S^2\) 的 attention 计算）完全本地化，一层只付一次 all-reduce。同样的模式复制到 MLP（gate/up 列并行 + down 行并行），所以「每层 2 次 all-reduce」。</p>
+
+<h4>通信量算一遍（Llama-3-70B，prefill 一个 4096-token 的 chunk，bf16）</h4>
+<p>每次 all-reduce 的消息体 \(M = T\times H\times b = 4096\times8192\times2 = 64\) MiB。ring all-reduce 下每卡实际收发 \(2\frac{n-1}{n}M\)：</p>
+<table>
+<tr><th>TP</th><th>每次 all-reduce 每卡收发</th><th>一次前向（80 层 × 2 次）合计</th><th>@NVLink 450 GB/s</th><th>@H800 NVLink ~200 GB/s</th><th>@IB 50 GB/s</th></tr>
+<tr><td>4</td><td>96 MiB</td><td>15.0 GiB</td><td>36 ms</td><td>81 ms</td><td>322 ms</td></tr>
+<tr><td>8</td><td>112 MiB</td><td>17.5 GiB</td><td>42 ms</td><td>94 ms</td><td>376 ms</td></tr>
+</table>
+<p class="cap">对比一下计算量：70B 模型处理 4096 token 的一次前向约 \(2\times70\text{B}\times4096 = 573\) TFLOP，摊到 8 卡、按每卡 400 TFLOPS 有效算力算约 180 ms。也就是说<b>机内 TP=8 的通信约占 20–30%</b>（可与计算部分重叠），<b>跨机 TP 的通信比计算还慢一倍</b>——这就是「TP 不出机」这条铁律的由来。</p>
+
+<h4>decode 阶段：通信量变小，但延迟变重要</h4>
+<p>decode 时每步只有「batch 里每条请求 1 个 token」，\(T\) = 并发数。batch=32 时 \(M = 32\times8192\times2 = 512\) KiB，带宽上完全不值一提；但 <b>all-reduce 的次数没变</b>（80 层 × 2 = 160 次），每次都有 kernel 启动 + 同步的固定开销（几 µs 到几十 µs）。160 次 × 30 µs ≈ 5 ms，而 decode 一个 token 本身可能只要 15 ms——<b>TP 在 decode 阶段的成本主要是「次数 × 延迟」，不是字节数</b>。这也是小模型、小 batch 的 decode 不建议开大 TP 的原因。</p>
+
+<h4>TP 的三个前提条件（不满足就会退化）</h4>
+<table>
+<tr><th>前提</th><th>不满足时会怎样</th><th>实例</th></tr>
+<tr><td>\(n_q \bmod \mathrm{TP} = 0\)</td><td>框架直接报错或自动降 TP</td><td>40 个 head 的模型开 TP=8 → 不行</td></tr>
+<tr><td>\(n_{kv} \ge \mathrm{TP}\)（GQA）</td><td>KV head 不够分 → <b>复制 KV head</b>，KV cache 不再随 TP 线性下降，还多算冗余 attention</td><td>Llama-3-70B \(n_{kv}=8\)：TP=8 刚好，TP=16 时每份 KV 被复制 2 次</td></tr>
+<tr><td>TP 组在机内（NVLink）</td><td>all-reduce 走 IB，通信时间超过计算时间</td><td>见上表最后一列：376 ms vs 计算 ~180 ms</td></tr>
+</table>
+
+<div class="keypoint">
+  <b>第二个反直觉</b>：TP 不提升吞吐。TP=8 的 8 张卡合起来处理的是<b>同一批 token</b>，全局吞吐 ≈ 单卡（减去通信损耗），只是单步延迟降了、单卡显存降了。要提吞吐必须在外面再套一层 DP（或 MoE 的 EP，它天然带吞吐扩展，见 §4.2）。
+</div>
+
+<h3>3.3 SP：Megatron 序列并行，TP 的免费补丁</h3>
+<p>纯 TP 有个浪费：在 TP 区域<b>之外</b>（LayerNorm、Dropout、残差），每卡都持有完整的 \([T,H]\) 激活，4 卡就是 4 份重复。SP 的做法是把这些区域的激活<b>沿序列维切开</b>，每卡只存 \(T/n\)；进 TP 区前用 <b>all-gather</b> 拼回完整序列，出 TP 区后用 <b>reduce-scatter</b> 直接散开。</p>
+<ul>
+  <li><b>通信量不变</b>：all-gather \((n{-}1)/n\cdot M\) + reduce-scatter \((n{-}1)/n\cdot M\) = all-reduce \(2(n{-}1)/n\cdot M\)，只是把一个原语换成两个；</li>
+  <li><b>激活 ÷n</b>：训练时按 §1.3 的公式，34·sbh 那一项直接省 n 倍，长序列训练里这是几十 GiB 的差别；</li>
+  <li><b>推理时收益很小</b>：推理只存当前 step 的激活，本来就不大。所以你会看到 DeepSeek-V3 的部署写「TP4 with SP」——训练/长 prefill 场景才需要它。</li>
+</ul>
+
+<h3>3.4 CP：切序列的两大流派（长上下文的正解）</h3>
+<p>当上下文到了 128K、1M，问题变成：单卡放不下这条序列的 KV，也算不完 \(S^2\) 的 attention。CP（context parallelism）把序列本身切开，有两种主流实现：</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 416" role="img" aria-label="三种序列维并行方案对比：Megatron-SP、Ring Attention、DeepSpeed-Ulysses">
+  <defs>
+    <marker id="m32arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <style>text { font-family: 'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',system-ui,sans-serif; }</style>
+
+  <text x="24" y="28" font-size="14" font-weight="bold" fill="#1a1f2e">序列维的三种切法：SP 只切激活，Ring 与 Ulysses 连 KV 一起切</text>
+
+  <!-- panel 1: Megatron-SP -->
+  <rect x="24" y="44" width="832" height="112" rx="8" fill="#f8fafc" stroke="#e3e7ee"/>
+  <text x="40" y="70" font-size="13" font-weight="bold" fill="#163a86">Megatron-SP</text>
+  <text x="40" y="88" font-size="10" fill="#5a6272">TP 的补丁，不切权重</text>
+  <text x="40" y="104" font-size="10" fill="#5a6272">也不切 KV cache</text>
+  <rect x="190" y="66" width="96" height="48" rx="4" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="195" y="72" width="86" height="8" fill="#2456c4" rx="2"/>
+  <rect x="195" y="83" width="86" height="8" fill="#e8862a" rx="2"/>
+  <rect x="195" y="94" width="86" height="8" fill="#2f9e63" rx="2"/>
+  <rect x="195" y="105" width="86" height="8" fill="#163a86" rx="2"/>
+  <text x="190" y="132" font-size="10" fill="#5a6272">LN/Dropout 区：切 4 段</text>
+  <line x1="288" y1="90" x2="346" y2="90" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m32arr)"/>
+  <text x="317" y="80" font-size="9" text-anchor="middle" fill="#5a6272">all-gather</text>
+  <rect x="350" y="66" width="160" height="48" rx="4" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="430" y="88" font-size="11" text-anchor="middle" fill="#163a86">attention / MLP 区</text>
+  <text x="430" y="104" font-size="10" text-anchor="middle" fill="#2a3040">每卡都算完整序列</text>
+  <text x="190" y="148" font-size="10" fill="#5a6272">出口用 reduce-scatter 散回 4 段</text>
+  <text x="540" y="70" font-size="12" font-weight="bold" fill="#1a1f2e">通信量 = 与原 all-reduce 相同</text>
+  <text x="540" y="90" font-size="11" fill="#2a3040">AG + RS 各 (n−1)/n·T·H·b，每层 2 组</text>
+  <text x="540" y="110" font-size="11" fill="#2a3040">省：LN/Dropout 激活 ÷n（训练时几十 GiB）</text>
+  <text x="540" y="130" font-size="11" fill="#2a3040">不省：权重、KV cache、attention 计算</text>
+  <text x="540" y="150" font-size="11" fill="#2f9e63">适合：TP 训练/长 prefill 的默认搭配</text>
+
+  <!-- panel 2: Ring -->
+  <rect x="24" y="164" width="832" height="112" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="40" y="190" font-size="13" font-weight="bold" fill="#163a86">Ring Attention / CP</text>
+  <text x="40" y="208" font-size="10" fill="#5a6272">切序列，环形传 KV</text>
+  <text x="40" y="224" font-size="10" fill="#5a6272">可与计算重叠</text>
+  <rect x="190" y="186" width="74" height="34" rx="4" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="227" y="200" font-size="10" font-weight="bold" text-anchor="middle" fill="#163a86">rank 0</text>
+  <text x="227" y="214" font-size="9" text-anchor="middle" fill="#2a3040">Q₀ · KV₀</text>
+  <rect x="272" y="186" width="74" height="34" rx="4" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="309" y="200" font-size="10" font-weight="bold" text-anchor="middle" fill="#a35c11">rank 1</text>
+  <text x="309" y="214" font-size="9" text-anchor="middle" fill="#2a3040">Q₁ · KV₁</text>
+  <rect x="354" y="186" width="74" height="34" rx="4" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="391" y="200" font-size="10" font-weight="bold" text-anchor="middle" fill="#1f7a49">rank 2</text>
+  <text x="391" y="214" font-size="9" text-anchor="middle" fill="#2a3040">Q₂ · KV₂</text>
+  <rect x="436" y="186" width="74" height="34" rx="4" fill="#e6ebf5" stroke="#163a86"/>
+  <text x="473" y="200" font-size="10" font-weight="bold" text-anchor="middle" fill="#163a86">rank 3</text>
+  <text x="473" y="214" font-size="9" text-anchor="middle" fill="#2a3040">Q₃ · KV₃</text>
+  <line x1="264" y1="203" x2="270" y2="203" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m32arr)"/>
+  <line x1="346" y1="203" x2="352" y2="203" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m32arr)"/>
+  <line x1="428" y1="203" x2="434" y2="203" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m32arr)"/>
+  <polyline points="473,220 473,244 227,244 227,222" fill="none" stroke="#5a6272" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#m32arr)"/>
+  <text x="190" y="262" font-size="10" fill="#5a6272">每步：算一块 block-attention，同时把 KV 块传给右邻居（共 n−1 步）</text>
+  <text x="540" y="190" font-size="12" font-weight="bold" fill="#1a1f2e">每卡每层通信 ≈ 4·S·d_kv·b，与 n 无关</text>
+  <text x="540" y="210" font-size="11" fill="#2a3040">掩盖条件：每块长度 c ≥ 算力 ÷ 带宽</text>
+  <text x="540" y="230" font-size="11" fill="#2a3040">机内 NVLink c ≳ 2.2K token，跨机 IB c ≳ 20K</text>
+  <text x="540" y="250" font-size="11" fill="#2a3040">省：KV ÷n、激活 ÷n；因果掩码要 zigzag 配平</text>
+  <text x="540" y="270" font-size="11" fill="#2f9e63">适合：≥64K 超长上下文的训练与 prefill</text>
+
+  <!-- panel 3: Ulysses -->
+  <rect x="24" y="284" width="832" height="112" rx="8" fill="#f8fafc" stroke="#e3e7ee"/>
+  <text x="40" y="310" font-size="13" font-weight="bold" fill="#163a86">DeepSpeed-Ulysses</text>
+  <text x="40" y="328" font-size="10" fill="#5a6272">all-to-all 换轴</text>
+  <text x="40" y="344" font-size="10" fill="#5a6272">seq ↔ head</text>
+  <rect x="190" y="306" width="96" height="48" rx="4" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="195" y="312" width="86" height="8" fill="#2456c4" rx="2"/>
+  <rect x="195" y="323" width="86" height="8" fill="#e8862a" rx="2"/>
+  <rect x="195" y="334" width="86" height="8" fill="#2f9e63" rx="2"/>
+  <rect x="195" y="345" width="86" height="8" fill="#163a86" rx="2"/>
+  <text x="190" y="372" font-size="10" fill="#5a6272">换轴前：S/4 × 全部 head</text>
+  <line x1="288" y1="330" x2="346" y2="330" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m32arr)"/>
+  <text x="317" y="320" font-size="9" text-anchor="middle" fill="#5a6272">all-to-all</text>
+  <rect x="350" y="306" width="130" height="48" rx="4" fill="#eef3fc" stroke="#2456c4"/>
+  <line x1="382" y1="306" x2="382" y2="354" stroke="#2456c4" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="415" y1="306" x2="415" y2="354" stroke="#2456c4" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="447" y1="306" x2="447" y2="354" stroke="#2456c4" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="350" y="372" font-size="10" fill="#5a6272">换轴后：全部 S × head/4</text>
+  <text x="190" y="388" font-size="10" fill="#5a6272">算完 attention 再 all-to-all 换回序列切分</text>
+  <text x="540" y="310" font-size="12" font-weight="bold" fill="#1a1f2e">每卡每层通信 ≈ 4·B·S·H·b ÷ n</text>
+  <text x="540" y="330" font-size="11" fill="#2a3040">随卡数摊薄（论文口径：比 SP 省 n 倍）</text>
+  <text x="540" y="350" font-size="11" fill="#2a3040">硬限制：n ≤ head 数，GQA 下受 n_kv 限制</text>
+  <text x="540" y="370" font-size="11" fill="#2a3040">省：激活 ÷n；换轴后每卡要持有完整序列的 KV</text>
+  <text x="540" y="390" font-size="11" fill="#2f9e63">适合：head 多的模型、机内长序列、实现最简单</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-2</b>｜三者不是竞争关系：SP 常与 TP 绑在一起用，Ring 与 Ulysses 是 CP 的两种实现（Megatron-Core 用 Ring 系，DeepSpeed 用 Ulysses，也有 hybrid 方案把两者叠起来）。右侧「掩盖条件」的推导见下面。</p>
+
+<h4>Ring 的通信为什么能被计算掩盖（一行推导）</h4>
+<p>设每张卡拿到 \(c = S/n\) 个 token 的 Q 和 KV，hidden 维 \(d\)。环上每步：<b>计算</b>两个 \(c\times d\) 与 \(d\times c\) 的矩阵乘 ≈ \(4c^2d\) FLOPs，<b>通信</b>把一块 KV 发给邻居 ≈ \(4cd\) 字节（K 和 V 各 \(c\cdot d\) 个数、bf16 各 2 字节）。要让通信藏进计算里：</p>
+<div class="formula">
+\[
+\frac{4cd}{\text{带宽}} \le \frac{4c^2 d}{\text{算力}}
+\quad\Longrightarrow\quad
+\boxed{c \ge \frac{\text{算力}}{\text{带宽}}}
+\]
+</div>
+<p>结论很干净：<b>掩盖通信只要求每块的 token 数超过「算力/带宽」这个比值，与卡数无关</b>。代入数字（bf16 稠密峰值按 500 TFLOPS，实测有效算力打 5 折）：</p>
+<table>
+<tr><th>链路</th><th>单向带宽</th><th>峰值算力下要求 c ≥</th><th>50% MFU 下要求 c ≥</th><th>现实含义</th></tr>
+<tr><td>H100/H200 NVLink</td><td>~450 GB/s</td><td>1.1 K token</td><td>2.2 K token</td><td>机内 8 卡切 128K → 每块 16K，绰绰有余</td></tr>
+<tr><td>H800 NVLink（限速版）</td><td>~200 GB/s</td><td>2.5 K</td><td>5 K</td><td>机内切 32K → 每块 4K，刚好够</td></tr>
+<tr><td>InfiniBand NDR</td><td>50 GB/s</td><td>10 K</td><td>20 K</td><td>跨机 CP 只对 ≥256K 的序列划算</td></tr>
+<tr><td>PCIe 4.0 ×16（4090 无 NVLink）</td><td>32 GB/s</td><td>15.6 K</td><td>31 K</td><td>消费级卡基本别想跨卡切序列</td></tr>
+</table>
+<div class="infer">带宽与算力取的是公开标称值（H100 SXM NVLink 900 GB/s 双向 → 单向约 450 GB/s；H800 NVLink 被限到约 400 GB/s 双向；bf16 稠密峰值约 500 TFLOPS）。实际可用带宽通常是标称的 60–80%，所以阈值应再放宽 1.3–1.7 倍。这张表用于建立量级直觉，不要当调度依据。</div>
+
+<h4>四种「切序列/切 head」方案横向对比</h4>
+<table>
+<tr><th>方案</th><th>切什么</th><th>KV cache</th><th>每层每卡通信</th><th>并行度上限</th><th>典型用途</th></tr>
+<tr><td>TP（切 head）</td><td>权重列/行 + head</td><td>÷TP（\(n_{kv}\ge\)TP 时）</td><td>\(2\cdot\frac{n-1}{n}THb\) ×2 次</td><td>\(n_q\)，且必须机内</td><td>稠密模型推理/训练的默认</td></tr>
+<tr><td>Megatron-SP</td><td>LN/Dropout 激活</td><td>不变</td><td>与 TP 合计不变（AG+RS）</td><td>跟 TP 一样</td><td>TP 的默认补丁</td></tr>
+<tr><td>Ring-CP</td><td>序列（Q 与 KV 都切）</td><td>÷CP</td><td>\(\approx 4Sd_{kv}b\)，可掩盖</td><td>受 \(c\ge\) 算力/带宽 约束</td><td>超长上下文训练、prefill</td></tr>
+<tr><td>Ulysses</td><td>序列 ↔ head 换轴</td><td>换轴期间每卡持全量</td><td>\(\approx 4BSHb/n\)</td><td>\(\le n_{heads}\)</td><td>head 多的模型、机内长序列</td></tr>
+<tr><td>DCP（vLLM）</td><td>decode 阶段的 KV 按序列切</td><td>÷DCP</td><td>AllGather Q + ReduceScatter 输出/LSE</td><td>要求 <code>tp % dcp == 0</code></td><td>长上下文 decode，尤其 MLA</td></tr>
+</table>
+
+<h3>3.5 KV cache：推理显存的真主角</h3>
+<p>公式先写清楚（MHA/GQA/MQA 通用）：</p>
+<div class="formula">
+\[
+\text{每 token 每层} = \underbrace{2}_{K,V}\times n_{kv}\times d_h\times b
+\qquad\Longrightarrow\qquad
+\text{KV 总量} = 2\,L\,n_{kv}\,d_h\,b \times S \times B_{\text{并发}}
+\]
+</div>
+<p><b>MLA 是例外</b>：它不分别存 K 和 V，而是存一个所有 head 共享的压缩潜向量 \(c_{KV}\)（512 维）加一段 rope 用的 \(k^R\)（64 维），所以那个「×2」没有了：</p>
+<div class="formula">
+\[
+\text{MLA 每 token 每层} = (d_{c} + d_{R})\times b = (512+64)\times 2 = 1152\ \text{字节}
+\]
+</div>
+
+<table>
+<tr><th>模型</th><th>层数</th><th>\(n_{kv}\)</th><th>\(d_h\)</th><th>KV / token</th><th>@4K</th><th>@32K</th><th>@128K</th></tr>
+<tr><td>Llama-3-8B（GQA-8）</td><td>32</td><td>8</td><td>128</td><td>128 KiB</td><td>0.50 GiB</td><td>4.0 GiB</td><td>16.0 GiB</td></tr>
+<tr><td>Mixtral-8×7B（GQA-8）</td><td>32</td><td>8</td><td>128</td><td>128 KiB</td><td>0.50 GiB</td><td>4.0 GiB</td><td>16.0 GiB</td></tr>
+<tr><td>Llama-3-70B / Qwen2.5-72B（GQA-8）</td><td>80</td><td>8</td><td>128</td><td>320 KiB</td><td>1.25 GiB</td><td>10.0 GiB</td><td>40.0 GiB</td></tr>
+<tr><td>Llama-3.1-405B（GQA-8）</td><td>126</td><td>8</td><td>128</td><td>504 KiB</td><td>1.97 GiB</td><td>15.8 GiB</td><td>63.0 GiB</td></tr>
+<tr><td><b>DeepSeek-V3 / R1（MLA）</b></td><td>61</td><td>共享 576 维</td><td>—</td><td><b>68.6 KiB</b></td><td>0.26 GiB</td><td>2.1 GiB</td><td>8.4 GiB</td></tr>
+<tr><td>假想：70B 用 MHA（\(n_{kv}=64\)）</td><td>80</td><td>64</td><td>128</td><td>2560 KiB</td><td>10 GiB</td><td>80 GiB</td><td>320 GiB</td></tr>
+</table>
+<p class="cap">单条请求的 KV，未做量化（bf16/fp16）。看最后一行：<b>GQA 相对 MHA 省 8 倍，MLA 相对 GQA 再省 4.7 倍</b>——这就是为什么长上下文模型的架构演进主线是 MHA → GQA → MLA（详见 <a href="mla-training-inference.html">MLA 训练与推理深读</a>）。</p>
+
+<h4>MLA 的并行陷阱：KV 切不动</h4>
+<p>TP 能切 KV，靠的是「KV head 数 ≥ TP」——每卡分几个 head 的 KV。但 MLA 的 KV 是<b>所有 128 个 head 共享的一份潜向量</b>，没有 head 维可切。结果是：</p>
+<ul>
+  <li><b>纯 TP 下，每张卡都要存整份 MLA KV cache</b>（vLLM 官方明确说明：没有 DCP 时 MLA 的 KV 在每个 TP rank 上是完整复制的）——KV 完全不省，TP 越大浪费越多；</li>
+  <li>出路一：<b>DP-attention</b>。每张卡跑自己的请求，KV 天然分开、零复制。DeepSeek-V3 官方部署正是这个思路（attention 侧 DP8/DP80）；</li>
+  <li>出路二：<b>DCP</b>（decode context parallel）。把 KV 按序列切到 DCP 组，代价是每层要 AllGather Q、ReduceScatter 输出与 LSE。vLLM 报告在长上下文 decode 上吞吐约 <b>3×</b>；</li>
+  <li>顺带的好处：MLA 的 attention 权重很小（V3 是每层 187 M 参数、61 层共 11.4 B → bf16 仅 21 GiB），<b>小到可以每卡整份复制</b>，于是 DP-attention 变得完全可行。这是 MLA 与 MoE 的一个隐藏协同。</li>
+</ul>
+
+<h4>把显存预算摊开看：8×H100 80GB 跑 Llama-3-70B（bf16, TP=8）</h4>
+<div class="bar-wrap">
+  <div class="bar-line"><span class="bl">权重 131.5 GiB ÷ 8</span><span class="bar-track"><span class="bar-fill" style="width:20.5%"></span></span><span class="bar-val">16.4 GiB</span></div>
+  <div class="bar-line"><span class="bl">框架/CUDA/NCCL 预留</span><span class="bar-track"><span class="bar-fill o" style="width:3.8%"></span></span><span class="bar-val">3 GiB</span></div>
+  <div class="bar-line"><span class="bl">可用于 KV cache</span><span class="bar-track"><span class="bar-fill g" style="width:75.7%"></span></span><span class="bar-val">60.6 GiB</span></div>
+</div>
+<p>每卡 60.6 GiB 能装多少 KV？TP=8 时每卡只存 \(320/8 = 40\) KiB/token，于是 \(60.6\,\text{GiB} / 40\,\text{KiB} \approx\) <b>159 万 token</b>（全系统容量，因为 8 卡合起来存同一批序列）——相当于 <b>12 条 128K 请求</b>，或 <b>388 条 4K 请求</b>。这就是 vLLM 启动日志里 <code>GPU KV cache size: xxx tokens</code> 的来历，也是「并发上不去」时第一个该看的数字。</p>
+<div class="keypoint">
+  <b>换算口诀</b>：<code>可容纳 token 总数 = (卡数 × 单卡显存 − 权重 − 预留) ÷ 每 token KV</code>。想提并发只有四条路：加卡、量化权重（把预算让给 KV）、量化 KV、换更省 KV 的架构（GQA/MLA）。
+</div>
+
+<h3>3.6 prefill 与 decode 要用不同的并行配置</h3>
+<p>同一个模型，两个阶段的瓶颈完全不同，所以<b>成熟部署都是两套配置</b>（甚至两组机器，即 PD 分离）：</p>
+<table>
+<tr><th></th><th>prefill（读入 prompt）</th><th>decode（逐 token 生成）</th></tr>
+<tr><td>瓶颈</td><td>算力（大 GEMM，\(O(S^2)\) attention）</td><td>访存（每 token 要读一遍全部权重 + 全部 KV）</td></tr>
+<tr><td>每步 token 数 \(T\)</td><td>数百～数千</td><td>= 并发请求数（每请求 1 个）</td></tr>
+<tr><td>通信特点</td><td>字节数大，但计算更大 → <b>可重叠掩盖</b></td><td>字节数小，但次数不变 → <b>延迟占比高</b></td></tr>
+<tr><td>推荐配置</td><td>TP 大一点、EP 大一点、可用 CP 切长 prompt</td><td>TP 保守（4）、靠 DP/DCP 扩吞吐，MoE 用低延迟 all-to-all</td></tr>
+<tr><td>V3 官方实例</td><td>4 节点 32 卡：attention TP4+SP、DP8；MoE EP32；两 micro-batch 互相掩盖</td><td>40 节点 320 卡：attention TP4+SP、DP80；MoE EP320；dispatch/combine 走 IB 点对点 + IBGDA 降延迟</td></tr>
+</table>
+<p class="cap">数据来源：DeepSeek-V3 论文 §3.4.1 / §3.4.2。注意 decode 阶段「每专家 batch 通常 ≤256 token，瓶颈是访存而非算力」，所以官方只给 dispatch+MoE+combine 分配<b>少量 SM</b>，把算力留给 attention。</p>
+
+<h2 id="moe">4. MoE 的多卡部署</h2>
+
+<h3>4.1 一层 MoE 里有什么：显存与算力的严重错配</h3>
+<p>一层 MoE = 一个很小的 <b>router</b>（\(H\times N\) 的打分矩阵）+ <b>N 只专家</b>（每只是 gate/up/down 三个矩阵，共 \(3Hd_{ff}\) 参数）+ 可选的<b>共享专家</b>。每个 token 只走 top-\(k\) 只专家，于是出现 MoE 的核心错配：</p>
+<div class="keypoint">
+  <b>算得像小模型，存得像大模型。</b>以 DeepSeek-V3 为例：每只专家 \(3\times7168\times2048 = 44.0\) M 参数（bf16 = 84 MiB），256 只 = 11.27 B/层，58 个 MoE 层共 <b>654 B</b>——占 671 B 总参数的 <b>97%</b>；而 attention 全部 61 层只有 11.4 B。每 token 只激活 8 只（+1 只共享）→ 计算量相当于 37 B 模型，但<b>显存必须装下全部 671 B</b>。
+</div>
+<table>
+<tr><th>V3 的组成部分</th><th>参数量</th><th>bf16 显存</th><th>占比</th><th>每 token 是否都要读</th></tr>
+<tr><td>58 层 × 256 只路由专家</td><td>654 B</td><td>1218 GiB</td><td>97.4%</td><td>❌ 只读被路由到的 8 只</td></tr>
+<tr><td>61 层 attention（MLA）</td><td>11.4 B</td><td>21.3 GiB</td><td>1.7%</td><td>✅ 全读</td></tr>
+<tr><td>共享专家 + 稠密层 + embedding + router</td><td>~5.6 B</td><td>~10.5 GiB</td><td>0.9%</td><td>✅ 全读</td></tr>
+</table>
+<p class="cap">这张表决定了 MoE 部署的一切：<b>显存优化目标是那 97%（专家权重），通信优化目标是把 token 送到专家身边</b>。而 attention 因为只有 21 GiB，小到可以整份复制——这就是 DeepSeek 敢用「attention 走 DP」的原因。</p>
+
+<h3>4.2 四种放法：EP 与 ETP 的取舍</h3>
+<p>设专家总权重为 \(E\)，专家并行度 \(\mathrm{EP}\)，专家内张量并行度 \(\mathrm{ETP}\)，则<b>每卡专家权重 \(= E/(\mathrm{EP}\times\mathrm{ETP})\)</b>。显存账很简单，难的是这两种切法的<b>通信与吞吐完全不同</b>：</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 336" role="img" aria-label="ETP 与 EP 两种专家放置方式的对比图">
+  <style>text { font-family: 'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',system-ui,sans-serif; }</style>
+
+  <text x="24" y="28" font-size="14" font-weight="bold" fill="#1a1f2e">同样 4 卡、8 只专家、同样显存（E/4）：切法不同，通信与吞吐完全不同</text>
+
+  <!-- panel A: ETP -->
+  <rect x="24" y="44" width="404" height="200" rx="8" fill="#f8fafc" stroke="#e3e7ee"/>
+  <text x="40" y="68" font-size="13" font-weight="bold" fill="#163a86">① ETP=4：每卡持有 8 只专家各 1/4</text>
+  <text x="50" y="96" font-size="10" font-weight="bold" text-anchor="middle" fill="#5a6272">rank 0</text>
+  <text x="146" y="96" font-size="10" font-weight="bold" text-anchor="middle" fill="#5a6272">rank 1</text>
+  <text x="242" y="96" font-size="10" font-weight="bold" text-anchor="middle" fill="#5a6272">rank 2</text>
+  <text x="338" y="96" font-size="10" font-weight="bold" text-anchor="middle" fill="#5a6272">rank 3</text>
+  <rect x="12" y="104" width="76" height="96" rx="3" fill="#eef0f4"/>
+  <rect x="108" y="104" width="76" height="96" rx="3" fill="#eef0f4"/>
+  <rect x="204" y="104" width="76" height="96" rx="3" fill="#eef0f4"/>
+  <rect x="300" y="104" width="76" height="96" rx="3" fill="#eef0f4"/>
+  <rect x="12" y="106" width="19" height="9" fill="#2456c4" rx="1"/>
+  <rect x="12" y="118" width="19" height="9" fill="#e8862a" rx="1"/>
+  <rect x="12" y="130" width="19" height="9" fill="#2f9e63" rx="1"/>
+  <rect x="12" y="142" width="19" height="9" fill="#163a86" rx="1"/>
+  <rect x="12" y="154" width="19" height="9" fill="#2456c4" rx="1"/>
+  <rect x="12" y="166" width="19" height="9" fill="#e8862a" rx="1"/>
+  <rect x="12" y="178" width="19" height="9" fill="#2f9e63" rx="1"/>
+  <rect x="12" y="190" width="19" height="9" fill="#163a86" rx="1"/>
+  <rect x="108" y="106" width="19" height="9" fill="#2456c4" rx="1"/>
+  <rect x="108" y="118" width="19" height="9" fill="#e8862a" rx="1"/>
+  <rect x="108" y="130" width="19" height="9" fill="#2f9e63" rx="1"/>
+  <rect x="108" y="142" width="19" height="9" fill="#163a86" rx="1"/>
+  <rect x="108" y="154" width="19" height="9" fill="#2456c4" rx="1"/>
+  <rect x="108" y="166" width="19" height="9" fill="#e8862a" rx="1"/>
+  <rect x="108" y="178" width="19" height="9" fill="#2f9e63" rx="1"/>
+  <rect x="108" y="190" width="19" height="9" fill="#163a86" rx="1"/>
+  <rect x="204" y="106" width="19" height="9" fill="#2456c4" rx="1"/>
+  <rect x="204" y="118" width="19" height="9" fill="#e8862a" rx="1"/>
+  <rect x="204" y="130" width="19" height="9" fill="#2f9e63" rx="1"/>
+  <rect x="204" y="142" width="19" height="9" fill="#163a86" rx="1"/>
+  <rect x="204" y="154" width="19" height="9" fill="#2456c4" rx="1"/>
+  <rect x="204" y="166" width="19" height="9" fill="#e8862a" rx="1"/>
+  <rect x="204" y="178" width="19" height="9" fill="#2f9e63" rx="1"/>
+  <rect x="204" y="190" width="19" height="9" fill="#163a86" rx="1"/>
+  <rect x="300" y="106" width="19" height="9" fill="#2456c4" rx="1"/>
+  <rect x="300" y="118" width="19" height="9" fill="#e8862a" rx="1"/>
+  <rect x="300" y="130" width="19" height="9" fill="#2f9e63" rx="1"/>
+  <rect x="300" y="142" width="19" height="9" fill="#163a86" rx="1"/>
+  <rect x="300" y="154" width="19" height="9" fill="#2456c4" rx="1"/>
+  <rect x="300" y="166" width="19" height="9" fill="#e8862a" rx="1"/>
+  <rect x="300" y="178" width="19" height="9" fill="#2f9e63" rx="1"/>
+  <rect x="300" y="190" width="19" height="9" fill="#163a86" rx="1"/>
+  <text x="98" y="150" font-size="10" fill="#5a6272">…</text>
+  <text x="40" y="222" font-size="10" fill="#5a6272">灰底 = 一只完整专家，实色 = 本卡存的 1/4</text>
+  <text x="40" y="238" font-size="10" fill="#2456c4">通信：每层 2 次 all-reduce；4 卡合算同一批 token</text>
+
+  <!-- panel B: EP -->
+  <rect x="452" y="44" width="404" height="200" rx="8" fill="#fff" stroke="#e3e7ee"/>
+  <text x="468" y="68" font-size="13" font-weight="bold" fill="#a35c11">② EP=4：每卡持有 2 只完整专家</text>
+  <text x="516" y="96" font-size="10" font-weight="bold" text-anchor="middle" fill="#5a6272">rank 0</text>
+  <text x="612" y="96" font-size="10" font-weight="bold" text-anchor="middle" fill="#5a6272">rank 1</text>
+  <text x="708" y="96" font-size="10" font-weight="bold" text-anchor="middle" fill="#5a6272">rank 2</text>
+  <text x="804" y="96" font-size="10" font-weight="bold" text-anchor="middle" fill="#5a6272">rank 3</text>
+  <rect x="478" y="104" width="76" height="44" rx="3" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="516" y="130" font-size="10" text-anchor="middle" fill="#163a86">E1 完整</text>
+  <rect x="478" y="156" width="76" height="44" rx="3" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="516" y="182" font-size="10" text-anchor="middle" fill="#163a86">E2 完整</text>
+  <rect x="574" y="104" width="76" height="44" rx="3" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="612" y="130" font-size="10" text-anchor="middle" fill="#a35c11">E3 完整</text>
+  <rect x="574" y="156" width="76" height="44" rx="3" fill="#fbe3cc" stroke="#e8862a"/>
+  <text x="612" y="182" font-size="10" text-anchor="middle" fill="#a35c11">E4 完整</text>
+  <rect x="670" y="104" width="76" height="44" rx="3" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="708" y="130" font-size="10" text-anchor="middle" fill="#1f7a49">E5 完整</text>
+  <rect x="670" y="156" width="76" height="44" rx="3" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="708" y="182" font-size="10" text-anchor="middle" fill="#1f7a49">E6 完整</text>
+  <rect x="766" y="104" width="76" height="44" rx="3" fill="#e6ebf5" stroke="#163a86"/>
+  <text x="804" y="130" font-size="10" text-anchor="middle" fill="#163a86">E7 完整</text>
+  <rect x="766" y="156" width="76" height="44" rx="3" fill="#e6ebf5" stroke="#163a86"/>
+  <text x="804" y="182" font-size="10" text-anchor="middle" fill="#163a86">E8 完整</text>
+  <text x="468" y="222" font-size="10" fill="#5a6272">每卡显存 = E/4（与 ① 完全相同）</text>
+  <text x="468" y="238" font-size="10" fill="#e8862a">通信：每层 2 次 all-to-all；4 卡各算各的 token</text>
+
+  <!-- bottom summary -->
+  <rect x="24" y="256" width="832" height="68" rx="8" fill="#f4f7fd" stroke="#2456c4" stroke-dasharray="4 3"/>
+  <text x="40" y="276" font-size="12" font-weight="bold" fill="#163a86">差别不在显存，而在通信与吞吐：</text>
+  <text x="40" y="296" font-size="11" fill="#2a3040">① ETP：无 all-to-all，但 n 卡合算同一批 token → 吞吐不涨；且 d_ff=2048 被切成 512 列，GEMM 太瘦、算力利用率低</text>
+  <text x="40" y="314" font-size="11" fill="#2a3040">② EP：吞吐随卡数近线性（每卡处理自己的 token），代价是每层两次 all-to-all——跨机时它就是主瓶颈</text>
+</svg>
+</div>
+<p class="cap"><b>图 4-1</b>｜记住这张图的核心：<b>EP 天然带吞吐扩展，ETP 不带</b>。因为 EP 场景下每张卡处理的是<b>不同的 token</b>（等价于 MoE 层的 DP），而 ETP 场景下所有卡处理<b>同一批 token</b>（等价于稠密模型的 TP）。所以 MoE 的默认答案是 EP，ETP 只在「EP 分完还是放不下单只专家」时才用。</p>
+
+<table>
+<tr><th>方案</th><th>每卡专家权重</th><th>每层通信</th><th>吞吐扩展</th><th>什么时候用</th><th>主要坑</th></tr>
+<tr><td><b>① 纯 ETP</b><br>（专家内部切）</td><td>\(E/\mathrm{ETP}\)</td><td>2 次 all-reduce</td><td>❌ 不扩展</td><td>专家很大（\(d_{ff}\) 上万）、卡数少、框架还不支持 all-to-all</td><td>\(d_{ff}\) 切碎后 GEMM 太瘦；每卡仍要过全部 token 的 top-k</td></tr>
+<tr><td><b>② 纯 EP</b><br>（整只专家分开）</td><td>\(E/\mathrm{EP}\)</td><td>2 次 all-to-all</td><td>✅ 近线性</td><td><b>MoE 默认</b>；细粒度专家（V3 的 256 只）天生适合</td><td>跨机 all-to-all 贵；负载不均会让整层等最慢的卡</td></tr>
+<tr><td><b>③ EP × ETP</b><br>混合</td><td>\(E/(\mathrm{EP}\cdot\mathrm{ETP})\)</td><td>all-to-all + all-reduce</td><td>部分扩展</td><td>EP 分完单只专家仍放不下（超大专家），或想在机内用 ETP、跨机用 EP</td><td>两种通信叠加，配置空间大、调参难</td></tr>
+<tr><td><b>④ attention-DP + MoE-EP</b><br>（DeepSeek 配方）</td><td>\(E/\mathrm{EP}\)；attention <b>整份复制</b></td><td><b>只有 all-to-all</b>，全模型无 all-reduce</td><td>✅ 近线性</td><td>MLA 类模型（attention 权重小到能复制，V3 只有 21 GiB）</td><td>每卡要放一份完整 attention 权重 + 自己的 KV</td></tr>
+</table>
+
+<h4>框架里怎么填这些数字</h4>
+<ul>
+  <li><b>vLLM</b>：<code>--enable-expert-parallel</code> 打开后 <b>EP_SIZE = TP_SIZE × DP_SIZE</b>（官方文档明确）；all-to-all 后端可选 <code>deepep_high_throughput</code>、<code>deepep_low_latency</code>、<code>flashinfer_nvlink_one_sided</code> 等；</li>
+  <li><b>SGLang</b>：<code>--enable-dp-attention --dp-size N --ep-size N</code>，走的就是方案 ④；</li>
+  <li><b>Megatron-LM</b>（训练）：<code>--expert-model-parallel-size</code>（EP）与 <code>--expert-tensor-parallel-size</code>（ETP）分开给，可以与稠密部分的 TP 不同；</li>
+  <li>每卡专家数 \(= N_{\text{experts}}/\mathrm{EP}\)。V3 的 256 只：EP32 → 每卡 8 只（prefill 再各加 1 只冗余专家）；EP320 → 每卡 1 只（其中 64 卡专门放冗余专家和共享专家）。</li>
+</ul>
+<div class="infer">上述 flag 名与「EP = TP × DP」的口径来自 vLLM 当前文档，各版本改动较频繁，落地前请以所用版本的 <code>--help</code> 与文档为准。</div>
+
+<h3>4.3 all-to-all 的通信量：MoE 部署的头号成本</h3>
+<p>EP 的每一层要做两次全员交换：<b>dispatch</b>（把每个 token 复制 \(k\) 份，发往对应专家所在的卡）和 <b>combine</b>（把 \(k\) 份结果发回原卡，按 router 权重加权求和）。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 302" role="img" aria-label="EP 一层的 dispatch 与 combine all-to-all 数据流">
+  <defs>
+    <marker id="m42g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+    <marker id="m42o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#e8862a"/>
+    </marker>
+  </defs>
+  <style>text { font-family: 'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',system-ui,sans-serif; }</style>
+
+  <text x="24" y="28" font-size="14" font-weight="bold" fill="#1a1f2e">EP 的一层：dispatch 把 token 送到专家身边，combine 把结果送回来</text>
+  <text x="280" y="48" font-size="10" text-anchor="middle" fill="#5a6272">dispatch all-to-all</text>
+  <text x="600" y="48" font-size="10" text-anchor="middle" fill="#5a6272">combine all-to-all</text>
+
+  <rect x="40" y="58" width="170" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="125" y="76" font-size="11" font-weight="bold" text-anchor="middle" fill="#163a86">rank 0：T 个 token</text>
+  <text x="125" y="92" font-size="10" text-anchor="middle" fill="#2a3040">router 各选 k=8 只专家</text>
+  <rect x="40" y="116" width="170" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="125" y="134" font-size="11" font-weight="bold" text-anchor="middle" fill="#163a86">rank 1：T 个 token</text>
+  <text x="125" y="150" font-size="10" text-anchor="middle" fill="#2a3040">router 各选 k=8 只专家</text>
+  <rect x="40" y="174" width="170" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="125" y="192" font-size="11" font-weight="bold" text-anchor="middle" fill="#163a86">rank 2：T 个 token</text>
+  <text x="125" y="208" font-size="10" text-anchor="middle" fill="#2a3040">router 各选 k=8 只专家</text>
+  <rect x="40" y="232" width="170" height="44" rx="6" fill="#eef3fc" stroke="#2456c4"/>
+  <text x="125" y="250" font-size="11" font-weight="bold" text-anchor="middle" fill="#163a86">rank 3：T 个 token</text>
+  <text x="125" y="266" font-size="10" text-anchor="middle" fill="#2a3040">router 各选 k=8 只专家</text>
+
+  <rect x="350" y="58" width="180" height="44" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="440" y="76" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">rank 0 的 64 只专家</text>
+  <text x="440" y="92" font-size="10" text-anchor="middle" fill="#2a3040">收到约 4T·8/4 个 token</text>
+  <rect x="350" y="116" width="180" height="44" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="440" y="134" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">rank 1 的 64 只专家</text>
+  <text x="440" y="150" font-size="10" text-anchor="middle" fill="#2a3040">收到约 4T·8/4 个 token</text>
+  <rect x="350" y="174" width="180" height="44" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="440" y="192" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">rank 2 的 64 只专家</text>
+  <text x="440" y="208" font-size="10" text-anchor="middle" fill="#2a3040">收到约 4T·8/4 个 token</text>
+  <rect x="350" y="232" width="180" height="44" rx="6" fill="#fff" stroke="#c9d2e0"/>
+  <text x="440" y="250" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">rank 3 的 64 只专家</text>
+  <text x="440" y="266" font-size="10" text-anchor="middle" fill="#2a3040">收到约 4T·8/4 个 token</text>
+
+  <rect x="670" y="58" width="170" height="44" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="755" y="76" font-size="11" font-weight="bold" text-anchor="middle" fill="#1f7a49">rank 0：收回 8 份结果</text>
+  <text x="755" y="92" font-size="10" text-anchor="middle" fill="#2a3040">按 router 权重加权求和</text>
+  <rect x="670" y="116" width="170" height="44" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="755" y="134" font-size="11" font-weight="bold" text-anchor="middle" fill="#1f7a49">rank 1：收回 8 份结果</text>
+  <text x="755" y="150" font-size="10" text-anchor="middle" fill="#2a3040">按 router 权重加权求和</text>
+  <rect x="670" y="174" width="170" height="44" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="755" y="192" font-size="11" font-weight="bold" text-anchor="middle" fill="#1f7a49">rank 2：收回 8 份结果</text>
+  <text x="755" y="208" font-size="10" text-anchor="middle" fill="#2a3040">按 router 权重加权求和</text>
+  <rect x="670" y="232" width="170" height="44" rx="6" fill="#d9f0e2" stroke="#2f9e63"/>
+  <text x="755" y="250" font-size="11" font-weight="bold" text-anchor="middle" fill="#1f7a49">rank 3：收回 8 份结果</text>
+  <text x="755" y="266" font-size="10" text-anchor="middle" fill="#2a3040">按 router 权重加权求和</text>
+
+  <line x1="210" y1="80" x2="348" y2="80" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m42g)"/>
+  <line x1="210" y1="138" x2="348" y2="138" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m42g)"/>
+  <line x1="210" y1="196" x2="348" y2="196" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m42g)"/>
+  <line x1="210" y1="254" x2="348" y2="254" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m42g)"/>
+  <line x1="210" y1="90" x2="348" y2="186" stroke="#e8862a" stroke-width="1.1" stroke-dasharray="4 3" opacity="0.75" marker-end="url(#m42o)"/>
+  <line x1="210" y1="244" x2="348" y2="148" stroke="#e8862a" stroke-width="1.1" stroke-dasharray="4 3" opacity="0.75" marker-end="url(#m42o)"/>
+
+  <line x1="530" y1="80" x2="668" y2="80" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m42g)"/>
+  <line x1="530" y1="138" x2="668" y2="138" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m42g)"/>
+  <line x1="530" y1="196" x2="668" y2="196" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m42g)"/>
+  <line x1="530" y1="254" x2="668" y2="254" stroke="#5a6272" stroke-width="1.2" marker-end="url(#m42g)"/>
+  <line x1="530" y1="90" x2="668" y2="186" stroke="#e8862a" stroke-width="1.1" stroke-dasharray="4 3" opacity="0.75" marker-end="url(#m42o)"/>
+  <line x1="530" y1="244" x2="668" y2="148" stroke="#e8862a" stroke-width="1.1" stroke-dasharray="4 3" opacity="0.75" marker-end="url(#m42o)"/>
+
+  <text x="440" y="294" font-size="11" text-anchor="middle" fill="#1a1f2e">每层每卡通信 ≈ 2 · T · k · H · b · (1 − 1/EP)　（dispatch 与 combine 各一份，橙色虚线是发往别的卡的部分）</text>
+</svg>
+</div>
+<p class="cap"><b>图 4-2</b>｜图中画的是 EP=4、256 只专家（每卡 64 只）的情形。注意 dispatch 是<b>复制式</b>的：一个 token 要发 \(k\) 份出去，所以 all-to-all 的字节数是 \(T\cdot k\cdot H\)，比 attention 的 all-reduce（\(T\cdot H\)）大了 \(k\) 倍——这就是 MoE 通信贵的根本原因。</p>
+
+<h4>代入 DeepSeek-V3 算一遍（\(H=7168\)，58 个 MoE 层）</h4>
+<p>每层每卡：\(\text{bytes} = 2\cdot T\cdot k\cdot H\cdot b\)（dispatch + combine，忽略留在本卡的 \(1/\mathrm{EP}\) 部分）。</p>
+<table>
+<tr><th>阶段</th><th>\(T\)/卡</th><th>\(k\)</th><th>精度</th><th>每层每卡</th><th>58 层合计</th><th>@NVLink 450 GB/s</th><th>@IB 50 GB/s</th></tr>
+<tr><td>prefill 大 chunk</td><td>4096</td><td>8</td><td>bf16</td><td><b>896 MiB</b></td><td>50.8 GiB</td><td>121 ms</td><td><b>1090 ms</b></td></tr>
+<tr><td>prefill + FP8 dispatch</td><td>4096</td><td>8</td><td>fp8</td><td>448 MiB</td><td>25.4 GiB</td><td>61 ms</td><td>545 ms</td></tr>
+<tr><td>prefill 小 chunk</td><td>1024</td><td>8</td><td>bf16</td><td>224 MiB</td><td>12.7 GiB</td><td>30 ms</td><td>272 ms</td></tr>
+<tr><td>decode 大 batch</td><td>128</td><td>9（含共享专家）</td><td>bf16</td><td>31.5 MiB</td><td>1.8 GiB</td><td>4.3 ms</td><td>38 ms</td></tr>
+<tr><td>decode 小 batch</td><td>32</td><td>9</td><td>bf16</td><td>7.9 MiB</td><td>0.45 GiB</td><td>1.1 ms</td><td>10 ms</td></tr>
+<tr><td>decode 单请求</td><td>1</td><td>9</td><td>bf16</td><td>0.25 MiB</td><td>15 MiB</td><td>—</td><td><b>纯延迟问题</b></td></tr>
+</table>
+
+<div class="keypoint">
+  <b>三个结论，直接决定部署方案</b>：
+  <br>① <b>prefill 的 all-to-all 是「带宽问题」</b>：896 MiB/层 与专家计算（\(4096\times8\times6\times7168\times2048 \approx 2.89\) TFLOP ≈ 5.8 ms @500 TFLOPS，机内通信约 2.1 ms）同量级 → 机内可掩盖，<b>跨机（18.8 ms/层）就盖不住了</b>。DeepSeek-V3 论文实测跨机 EP 的「计算:通信 ≈ 1:1」，靠 DualPipe 让前向与反向互相掩盖、并用两个 micro-batch 交错才把这 1:1 藏掉。
+  <br>② <b>decode 的 all-to-all 是「延迟问题」</b>：字节数很小，但每层两次全员同步的固定延迟会直接叠到 token 间隔上 → 要用低延迟 kernel（V3 decode 走 IB 点对点 + <b>IBGDA</b>，DeepEP 的 low-latency 模式）。
+  <br>③ <b>降精度是最便宜的一刀</b>：V3 训练时把 dispatch 的激活量化成 FP8、combine 保留 BF16（论文 §3.3.3），通信量直接减半，且与 FP8 的 up-projection GEMM 天然兼容。
+</div>
+
+<h4>跨机 all-to-all 的工程做法（V3 论文的实现细节）</h4>
+<ul>
+  <li><b>分层转发</b>：先跨节点用 IB 把 token 发到目标节点的一张卡，再由这张卡在节点内用 NVLink 转发给同节点的其它卡——避免每张卡都单独占一条 IB 连接；</li>
+  <li><b>专用 SM + warp specialization</b>：划出 20 个 SM（H800 共 132 个）分成 10 个通信通道，dispatch 阶段三类 warp 分别负责「IB 发送」「IB→NVLink 转发」「NVLink 接收」，按实际负载动态调整 warp 数；</li>
+  <li><b>combine 侧顺手做规约</b>：NVLink→IB 转发时就地累加，减少回程字节；</li>
+  <li><b>少占 L2</b>：用定制 PTX 指令 + 自动调优的 chunk size，降低对计算 kernel 的干扰。</li>
+</ul>
+<p>这些优化后来被抽成开源库 <a href="https://github.com/deepseek-ai/DeepEP">DeepEP</a>，提供两类 kernel：高吞吐（NVLink 机内 + IB 跨机，用于 prefill/训练）与低延迟（纯 IBGDA RDMA，用于 decode），dispatch 支持 BF16 与 FP8。vLLM / SGLang 都已把它作为可选后端。</p>
+
+<h3>4.4 负载不均：同时吃你的算力和显存</h3>
+<p>理想情况下每只专家收到 \(T_{\text{global}}\cdot k/N\) 个 token；现实中热点专家可能收到几倍。EP 下这是<b>硬伤</b>，因为一层结束时所有卡要同步：</p>
+<table>
+<tr><th>后果</th><th>机制</th><th>缓解手段</th></tr>
+<tr><td><b>尾延迟</b></td><td>整层等最慢的那张卡（拿到最多 token 的卡）</td><td>训练侧 aux-loss-free 均衡（V3 的 bias 门控）、序列级均衡保险丝</td></tr>
+<tr><td><b>显存按最坏情况留</b></td><td>capacity factor \(C\)：缓冲区要按「最热专家」的尺寸开；dropless 实现（vLLM/SGLang）虽然不丢 token，但 permute buffer 仍需 \(T\cdot k\cdot H\cdot b\) 量级</td><td>grouped GEMM 变长分组、分块 dispatch、把 chunk 调小</td></tr>
+<tr><td><b>吞吐被拖低</b></td><td>均衡越差，EP 的线性扩展越打折</td><td>部署侧<b>冗余专家</b>、EPLB 周期重排、动态冗余</td></tr>
+</table>
+<p>DeepSeek-V3 的官方做法值得抄：<b>prefill 阶段设 32 只冗余专家</b>（每卡在原有 8 只之外再托管 1 只高负载专家的副本），并按线上统计<b>每约 10 分钟</b>重新确定冗余集合、在<b>节点内</b>重排专家位置（刻意不增加跨机 all-to-all）；<b>decode 阶段设 64 只冗余专家</b>，因为每卡只托管 1 只专家，反而不需要重排。他们还在探索「每卡放 16 只、每步只激活 9 只，在 all-to-all 之前实时算全局最优路由」的动态冗余方案。</p>
+<div class="infer">上面提到的 permute buffer 尺寸是按「\(T\cdot k\cdot H\cdot b\)」推的量级（4096 token、k=8、H=7168、bf16 → 470 MiB），不同框架的实现（是否复用、是否分块、是否用 FP8 中转）差别较大，请以实际 profile 为准。</div>
+
+<h3>4.5 MoE 还有哪些省显存的招</h3>
+<table>
+<tr><th>手段</th><th>省多少</th><th>代价</th><th>适合</th></tr>
+<tr><td>专家权重量化到 FP8</td><td>\(E\) 减半（V3：1218 → 609 GiB）</td><td>需要 scale 管理，精度损失通常很小（官方就发布了 FP8 权重）</td><td>几乎所有 MoE 部署的默认</td></tr>
+<tr><td>专家权重量化到 INT4</td><td>\(E\) 变 1/4</td><td>精度风险明显上升，需 GPTQ/AWQ 类校准</td><td>卡少、显存极紧</td></tr>
+<tr><td>专家 offload 到 CPU/NVMe</td><td>GPU 上只留热点专家</td><td>路由到冷专家要等 PCIe（~32 GB/s）搬运，尾延迟灾难</td><td>离线批处理、demo、极低并发</td></tr>
+<tr><td>共享专家留在本地</td><td>省掉每 token 一次的 all-to-all 份额</td><td>每卡多存 1 只专家（V3 是 84 MiB）</td><td>默认就该这么做</td></tr>
+<tr><td>EP 只在机内 + 跨机用 PP/DP</td><td>把最贵的 all-to-all 关进 NVLink</td><td>EP 上限 = 8，专家数多时每卡专家数上升</td><td>跨机带宽弱的集群</td></tr>
+</table>
+
+<h2 id="rest">5. 补齐另外两维：PP 与 DP / ZeRO</h2>
+
+<p>Attention 用 TP/CP、MoE 用 EP，这两维已经覆盖"层内"的全部故事。但一台真机还要回答两个问题：<b>模型太长一张卡（一组卡）放不下怎么办</b>（PP），以及<b>怎么把吞吐扩到几百上千卡</b>（DP）。</p>
+
+<h3>5.1 PP：通信最省的切法，代价是气泡</h3>
+<p>PP（pipeline parallel，流水线并行）按<b>层</b>切：把 \(L\) 层分成 \(p\) 段（stage），第 \(i\) 段放在第 \(i\) 组卡上，只有段与段的边界需要传数据。</p>
+<div class="formula">
+\[
+\text{一次边界传输} = B\cdot S\cdot H\cdot b \ \text{字节（单向）}
+\qquad\qquad
+\text{气泡率} = \frac{p-1}{m+p-1}
+\]
+</div>
+<p>\(m\) = micro-batch 数（把一个大 batch 拆成 \(m\) 份依次灌进流水线）。拿 Llama-3-70B、\(S=4096\)、bf16 代入：一次边界传输 = \(4096\times8192\times2 = \) <b>64 MiB</b>。对比 TP=8 时<b>每层</b>就要 all-reduce 两次共 224 MiB、80 层合计 <b>17.5 GiB</b>——这就是"PP 通信最省"的量化含义，差了<b>两个数量级</b>，也是为什么 PP 是唯一可以放心跨机的"模型内"切分。</p>
+
+<table>
+<tr><th>stage 数 \(p\)</th><th>\(m=4\)</th><th>\(m=8\)</th><th>\(m=16\)</th><th>\(m=32\)</th><th>\(m=64\)</th><th>\(m=128\)</th></tr>
+<tr><td>2</td><td>20.0%</td><td>11.1%</td><td>5.9%</td><td>3.0%</td><td>1.5%</td><td>0.8%</td></tr>
+<tr><td>4</td><td>42.9%</td><td>27.3%</td><td>15.8%</td><td>8.6%</td><td>4.5%</td><td>2.3%</td></tr>
+<tr><td>8</td><td>63.6%</td><td>46.7%</td><td>30.4%</td><td>17.9%</td><td>9.9%</td><td>5.2%</td></tr>
+<tr><td>16（V3 训练用）</td><td>78.9%</td><td>65.2%</td><td>48.4%</td><td>31.9%</td><td>19.0%</td><td>10.5%</td></tr>
+</table>
+<p class="cap">气泡 = 第一个 micro-batch 还没流到最后一个 stage 时，那些 stage 在干等。规律很好记：<b>想让气泡 &lt;10%，\(m\) 至少要 \(p\) 的 5–10 倍</b>。\(p=16\) 想压到 10% 以内就要 \(m\approx 150\)，所以 V3 除了加大 \(m\) 还上了 DualPipe（让不同 stage 的前向和反向在两条链路上互相填空，把气泡再压一半以上）。</p>
+
+<table>
+<tr><th>调度方式</th><th>怎么做</th><th>气泡</th><th>激活峰值</th><th>用在哪</th></tr>
+<tr><td>GPipe</td><td>全部前向 → 全部反向</td><td>\((p-1)/(m+p-1)\)</td><td>\(m\) 份（最高）</td><td>早期实现，现少用</td></tr>
+<tr><td>1F1B</td><td>交替一进一出</td><td>同上</td><td>\(p\) 份</td><td>Megatron-LM 默认</td></tr>
+<tr><td>Interleaved 1F1B</td><td>每卡持有多个不连续的层块</td><td>÷ 层块数</td><td>\(p\) 份 + 更多通信</td><td>大 \(p\) 训练</td></tr>
+<tr><td>DualPipe（V3）</td><td>两个方向同时灌流水线，双向链路都跑满</td><td>显著更低</td><td>较高</td><td>跨机 EP 计算:通信≈1:1 的场景</td></tr>
+</table>
+
+<div class="keypoint">
+  <b>推理里的 PP 和训练里不是一回事。</b>训练有 \(m\) 个 micro-batch 可以灌满流水线；推理的 decode 每步只有一个很小的 batch，\(m\) 常常等于 1 → 气泡率 \((p-1)/p\)，也就是 \(p=4\) 时<b>每卡有 75% 的时间在闲着</b>。所以推理用 PP 的唯一正当理由是"权重装不下"，而不是"想更快"。想靠 PP 降单条请求的延迟是行不通的——层是串行依赖的，PP 只会增加同步开销。
+</div>
+
+<h3>5.2 DP 与 ZeRO：唯一的"横向扩展"维度</h3>
+<p>DP（data parallel）复制整份模型、切 batch。它<b>不省任何显存</b>，但它是唯一能把吞吐线性扩到几百上千卡的维度——所以它在推理和训练里的含义完全不同：</p>
+<table>
+<tr><th></th><th>推理里的 DP</th><th>训练里的 DP</th></tr>
+<tr><td>副本间通信</td><td><b>零</b>（各引擎独立调度器 + 独立 KV cache，只在前端做请求路由）</td><td>每步一次梯度 all-reduce，\(2\Psi\) 字节/卡</td></tr>
+<tr><td>扩到多大</td><td>几百个副本都行（V3 decode 是 DP80）</td><td>受通信与 batch 大小限制</td></tr>
+<tr><td>注意</td><td>负载不均要靠路由策略（最短队列 / 按 KV 占用）</td><td>梯度通信可与反向计算重叠，通常不是瓶颈</td></tr>
+</table>
+<p>70B bf16 训练一次梯度同步 = \(2\times131.5 = 263\) GiB（ring 实际 \(\approx 2\frac{n-1}{n}\) → 230 GiB）；671B 则是 2.2–2.5 <b>TiB</b>。听起来吓人，但它是<b>每步一次</b>且能与反向重叠，而 TP 是<b>每层两次</b>——频率差了两个数量级，所以 DP 可以跨机、TP 不行。</p>
+
+<h4>ZeRO / FSDP：把 DP 的复制浪费切掉</h4>
+<p>朴素 DP 每张卡都存着完整的优化器状态（12 字节/参数），这是最大的浪费。ZeRO 分三级把它切开：</p>
+<table>
+<tr><th>方案</th><th>切什么</th><th>每参数字节（每卡）</th><th>70B 每卡</th><th>每步通信</th><th>什么时候用</th></tr>
+<tr><td>朴素 DP</td><td>什么都不切</td><td>16</td><td>1043 GiB</td><td>\(2\Psi\)</td><td>小模型</td></tr>
+<tr><td>ZeRO-1</td><td>优化器状态</td><td>\(4 + 12/\text{DP}\)</td><td>359 GiB（DP=8）<br>274 GiB（DP=64）</td><td>\(2\Psi\)</td><td><b>V3 训练用的就是这个</b>；几乎无损，默认首选</td></tr>
+<tr><td>ZeRO-2</td><td>+ 梯度</td><td>\(2 + 14/\text{DP}\)</td><td>245 GiB（DP=8）</td><td>\(2\Psi\)</td><td>显存更紧，收益有限</td></tr>
+<tr><td>ZeRO-3 / FSDP</td><td>+ 参数本身</td><td>\(16/\text{DP}\)</td><td>130 GiB（DP=8）<br>16 GiB（DP=64）</td><td>\(3\Psi\)</td><td>大模型 + 不想用 TP/PP 时；多出的 \(\Psi\) 是前向要 all-gather 参数</td></tr>
+</table>
+<p class="cap">ZeRO 只作用于<b>训练</b>（推理没有优化器状态和梯度，ZeRO 无从下手）。它和 TP/PP/EP 是<b>正交</b>的：V3 的训练配置就是 <code>PP16 × EP64 × ZeRO-1(DP2)</code>，完全没用 TP。</p>
+
+<h4>DP-attention：MLA + MoE 时代的"新 DP"</h4>
+<p>§3.5 提过的一个关键组合，值得单独强调：MLA 的 KV cache 无法按 head 切分，TP 只会让每卡都存一份完整的 KV。而 MLA 的 attention 权重又特别小（V3 是 21 GiB bf16，除以 TP=4 只剩 5.3 GiB）。于是最优解变成：<b>attention 侧走 DP</b>（每卡处理自己那批请求，KV 天然分开、零复制、零通信），<b>MoE 侧走大 EP</b>（专家摊到几百张卡上）。</p>
+<div class="formula">
+\[
+\text{V3 decode：}320\ \text{卡} = \underbrace{\text{DP}80 \times \text{TP}4}_{\text{attention}} \quad+\quad \underbrace{\text{EP}320}_{\text{MoE}}
+\]
+</div>
+<p>这也解释了一个看起来矛盾的现象：<b>同一批卡在不同层里扮演不同角色</b>。attention 层里，4 张卡是一个 TP 组、共同处理同一批 token；到了 MoE 层，这 4 张卡变成 EP 组里的 4 个独立节点、各自把 token 发给别的卡上的专家。框架里这体现为"通信组的重新划分"（详见 <a href="../vllm/vllm-t5-distributed.html">vLLM 分布式第 5 讲</a>里 <code>initialize_model_parallel</code> 那张 rank 网格）。</p>
+
+<h3>5.3 把五个维度放回真实的机架上</h3>
+
+<div class="fig">
+<svg viewBox="0 0 880 246" role="img" aria-label="两节点十六卡的并行维度放置：DP 在最外层，PP 跨节点，TP 与 EP 在节点内">
+  <defs>
+    <marker id="m5p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+  <style>text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }</style>
+
+  <rect x="12" y="12" width="856" height="222" rx="12" fill="none" stroke="#c9d2e0" stroke-width="1.2" stroke-dasharray="6 4"/>
+  <text x="24" y="32" font-size="10.5" fill="#5a6272">DP 维度：把下面这整套（16 卡）复制 N 份，副本之间前向不通信，只在训练时同步梯度</text>
+
+  <rect x="30" y="48" width="350" height="170" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="205" y="68" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">节点 0 · 8×GPU · 机内 NVLink 450 GB/s</text>
+  <g fill="#eef3fc" stroke="#2456c4" stroke-width="1">
+    <rect x="40" y="84" width="36" height="38" rx="5"/>
+    <rect x="82" y="84" width="36" height="38" rx="5"/>
+    <rect x="124" y="84" width="36" height="38" rx="5"/>
+    <rect x="166" y="84" width="36" height="38" rx="5"/>
+    <rect x="208" y="84" width="36" height="38" rx="5"/>
+    <rect x="250" y="84" width="36" height="38" rx="5"/>
+    <rect x="292" y="84" width="36" height="38" rx="5"/>
+    <rect x="334" y="84" width="36" height="38" rx="5"/>
+  </g>
+  <g font-size="10" text-anchor="middle" fill="#163a86">
+    <text x="58" y="107">G0</text><text x="100" y="107">G1</text><text x="142" y="107">G2</text><text x="184" y="107">G3</text>
+    <text x="226" y="107">G4</text><text x="268" y="107">G5</text><text x="310" y="107">G6</text><text x="352" y="107">G7</text>
+  </g>
+  <text x="205" y="140" font-size="10.5" font-weight="bold" text-anchor="middle" fill="#2456c4">同样这 8 张卡，两种切法</text>
+  <text x="205" y="160" font-size="10.5" text-anchor="middle" fill="#1a1f2e">① attention / 稠密层 → TP=8，每层 2 次 all-reduce</text>
+  <text x="205" y="180" font-size="10.5" text-anchor="middle" fill="#1a1f2e">② MoE 层 → EP=8，每层 2 次 all-to-all</text>
+  <text x="205" y="200" font-size="10" text-anchor="middle" fill="#5a6272">PP stage 0 · 层 0–39 · 每卡权重 = 全量 ÷ 8</text>
+
+  <rect x="500" y="48" width="350" height="170" rx="10" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="675" y="68" font-size="11" font-weight="bold" text-anchor="middle" fill="#1a1f2e">节点 1 · 8×GPU · 机内 NVLink 450 GB/s</text>
+  <g fill="#fbe3cc" stroke="#e8862a" stroke-width="1">
+    <rect x="510" y="84" width="36" height="38" rx="5"/>
+    <rect x="552" y="84" width="36" height="38" rx="5"/>
+    <rect x="594" y="84" width="36" height="38" rx="5"/>
+    <rect x="636" y="84" width="36" height="38" rx="5"/>
+    <rect x="678" y="84" width="36" height="38" rx="5"/>
+    <rect x="720" y="84" width="36" height="38" rx="5"/>
+    <rect x="762" y="84" width="36" height="38" rx="5"/>
+    <rect x="804" y="84" width="36" height="38" rx="5"/>
+  </g>
+  <g font-size="10" text-anchor="middle" fill="#1a1f2e">
+    <text x="528" y="107">G8</text><text x="570" y="107">G9</text><text x="612" y="107">G10</text><text x="654" y="107">G11</text>
+    <text x="696" y="107">G12</text><text x="738" y="107">G13</text><text x="780" y="107">G14</text><text x="822" y="107">G15</text>
+  </g>
+  <text x="675" y="140" font-size="10.5" font-weight="bold" text-anchor="middle" fill="#e8862a">同样这 8 张卡，两种切法</text>
+  <text x="675" y="160" font-size="10.5" text-anchor="middle" fill="#1a1f2e">① attention / 稠密层 → TP=8，每层 2 次 all-reduce</text>
+  <text x="675" y="180" font-size="10.5" text-anchor="middle" fill="#1a1f2e">② MoE 层 → EP=8，每层 2 次 all-to-all</text>
+  <text x="675" y="200" font-size="10" text-anchor="middle" fill="#5a6272">PP stage 1 · 层 40–79 · 每卡权重 = 全量 ÷ 8</text>
+
+  <line x1="382" y1="110" x2="498" y2="110" stroke="#2456c4" stroke-width="1.6" marker-end="url(#m5p)"/>
+  <text x="440" y="92" font-size="10.5" font-weight="bold" text-anchor="middle" fill="#2456c4">PP：只传激活</text>
+  <text x="440" y="132" font-size="10" text-anchor="middle" fill="#1a1f2e">B·S·H·b 一次</text>
+  <text x="440" y="154" font-size="9.5" text-anchor="middle" fill="#5a6272">跨机 IB ≈ 50 GB/s</text>
+</svg>
+</div>
+<p class="cap"><b>图 5-1</b>｜2 节点 16 卡的典型配置：<code>TP=8（机内） × PP=2（跨机） × DP=N（最外层）</code>。三个要点：① <b>TP 永远关在机内</b>——它每层通信两次，跨机 IB 撑不住；② <b>PP 放跨机</b>——每个 micro-batch 只传一次 64 MiB；③ <b>同一批 8 张卡在 attention 层是 TP 组、在 MoE 层是 EP 组</b>，物理卡不变，只是通信组和权重切法变了（图中第 ② 行只对 MoE 模型成立，Llama-3-70B 这类稠密模型只有第 ① 行）。</p>
+
+<h4>放置原则：看"频率 × 字节"，不看单一指标</h4>
+<table>
+<tr><th>维度</th><th>通信频率</th><th>每次字节</th><th>放机内？</th><th>放跨机？</th><th>原因</th></tr>
+<tr><td>TP</td><td>每层 2 次</td><td>百 MiB</td><td>✅ 必须</td><td>❌ 禁止</td><td>频率最高、且在关键路径上，无法掩盖</td></tr>
+<tr><td>EP</td><td>每 MoE 层 2 次</td><td>数百 MiB</td><td>✅ 最好</td><td>⚠️ 可以但很贵</td><td>V3 实测跨机计算:通信≈1:1，需 DualPipe + DeepEP 才能藏住</td></tr>
+<tr><td>CP（Ring）</td><td>每层 \(n-1\) 步</td><td>数 MiB</td><td>✅</td><td>✅ 可以</td><td>点对点、可与 attention 计算逐步重叠</td></tr>
+<tr><td>PP</td><td>每 stage 边界 1 次</td><td>数十 MiB</td><td>✅</td><td>✅ 首选</td><td>频率最低、字节最少</td></tr>
+<tr><td>DP</td><td>训练每步 1 次<br>推理 0 次</td><td>\(2\Psi\)（很大）</td><td>✅</td><td>✅ 首选</td><td>可与反向计算完全重叠；推理干脆不通信</td></tr>
+</table>
+<div class="keypoint">
+  <b>一句口诀</b>：<i>频率高的往机内塞，字节大的往机外放</i>。TP 是"频率高"的极端（每层两次同步），DP 是"字节大但频率低"的极端（每步一次、可与计算重叠）。EP 两头都占，所以它是所有维度里最难调的一个——这也是 DeepSeek 为它单独写了一个通信库（DeepEP）的原因。
+</div>
+
+<h2 id="ledger">6. 总账表：显存与通信一页看完</h2>
+
+<h4>表 6-1 显存账（每张卡）</h4>
+<table>
+<tr><th>并行</th><th>权重</th><th>KV cache</th><th>训练优化器状态</th><th>一句话</th></tr>
+<tr><td>DP</td><td>÷1（全复制）</td><td>÷1（各存自己的请求）</td><td>÷1（ZeRO 前）</td><td>不省显存，只提吞吐</td></tr>
+<tr><td>TP</td><td>÷TP</td><td>÷min(TP, \(n_{kv}\))；<b>MLA 不切</b></td><td>÷TP</td><td>机内首选，兼顾降延迟</td></tr>
+<tr><td>PP</td><td>÷PP</td><td>÷PP（每卡层数少了）</td><td>÷PP</td><td>切权重最干净，代价是气泡</td></tr>
+<tr><td>CP / DCP</td><td>不变</td><td><b>÷CP</b></td><td>÷CP（激活）</td><td>长上下文的唯一解</td></tr>
+<tr><td>EP</td><td>专家 ÷EP，非专家不变</td><td>不变</td><td>专家 ÷EP</td><td>MoE 唯一能线性扩吞吐的维度</td></tr>
+<tr><td>ETP</td><td>专家 ÷ETP</td><td>不变</td><td>专家 ÷ETP</td><td>只在"专家本身装不下"时用</td></tr>
+<tr><td>ZeRO-1/2/3</td><td>÷1 / ÷1 / ÷DP</td><td>—</td><td>÷DP / ÷DP / ÷DP</td><td>训练专用，推理无意义</td></tr>
+</table>
+
+<h4>表 6-2 通信账（每层、每卡、前向一次）</h4>
+<table>
+<tr><th>并行</th><th>原语</th><th>公式</th><th>代入实数</th><th>能否跨机</th></tr>
+<tr><td>TP</td><td>all-reduce ×2</td><td>\(2\times 2\frac{n-1}{n}THb\)</td><td>224 MiB（70B，\(T{=}4096\)，\(n{=}8\)）</td><td>❌</td></tr>
+<tr><td>Megatron-SP</td><td>all-gather + reduce-scatter ×2</td><td>与 TP 完全相同</td><td>224 MiB（同上，但省激活）</td><td>❌</td></tr>
+<tr><td>CP（Ring）</td><td>P2P send/recv</td><td>\(4Sd_{kv}b\cdot\frac{n-1}{n}\)</td><td>28 MiB（70B，\(S{=}4096\)，CP=8）</td><td>✅ 可掩盖</td></tr>
+<tr><td>CP（Ulysses）</td><td>all-to-all ×2</td><td>\(4THb/n\)</td><td>32 MiB（同上）</td><td>⚠️ 机内为佳</td></tr>
+<tr><td><b>EP</b></td><td><b>all-to-all ×2</b></td><td>\(2TkHb(1-\frac{1}{\mathrm{EP}})\)</td><td><b>784 MiB</b>（V3，EP=8）/ 868 MiB（EP=32）</td><td>⚠️ 最贵</td></tr>
+<tr><td>PP</td><td>P2P send</td><td>\(T_{mb}Hb\)</td><td>64 MiB（70B，\(S{=}4096\)）</td><td>✅ 最适合</td></tr>
+<tr><td>DP（训练）</td><td>all-reduce 梯度</td><td>\(2\Psi\)</td><td>230 GiB（70B bf16）——<b>但每步只一次</b></td><td>✅</td></tr>
+<tr><td>DP（推理）</td><td>—</td><td>0</td><td>0</td><td>✅</td></tr>
+</table>
+
+<h4>表 6-3 同样的字节数，在不同链路上花多久</h4>
+<table>
+<tr><th>链路</th><th>单向带宽</th><th>112 MiB<br>（TP 一次 all-reduce）</th><th>896 MiB<br>（EP 一层 all-to-all）</th><th>64 MiB<br>（PP 一次边界）</th></tr>
+<tr><td>NVLink 4/5（机内）</td><td>450 GB/s</td><td>0.26 ms</td><td>2.09 ms</td><td>0.15 ms</td></tr>
+<tr><td>PCIe 5.0 ×16</td><td>64 GB/s</td><td>1.83 ms</td><td>14.7 ms</td><td>1.05 ms</td></tr>
+<tr><td>InfiniBand NDR 400Gb/s</td><td>50 GB/s</td><td>2.35 ms</td><td><b>18.8 ms</b></td><td>1.34 ms</td></tr>
+<tr><td>InfiniBand HDR 200Gb/s</td><td>25 GB/s</td><td>4.70 ms</td><td>37.6 ms</td><td>2.68 ms</td></tr>
+</table>
+<p class="cap">按理论峰值算，实际可用带宽通常是标称的 60–80%（拥塞、协议开销、SM 参与转发）。把这张表和 §3.2 的"一次 all-reduce ≈ 一个 attention kernel 的耗时"对照着看，就能理解为什么 TP 出不了机内。</p>
+
+<h2 id="recipes">7. 六个场景配方</h2>
+<p>下面每个配方都给出<b>具体数字</b>，可以直接照着算自己的场景。所有显存按"单卡 80 GiB、预留 3 GiB 给 CUDA/NCCL/碎片"计。</p>
+
+<div class="recipe">
+  <h4>配方 1｜单机 8×H100/H800（80 GiB），Llama-3-70B bf16，在线服务</h4>
+  <p><b>基线方案 TP=8</b>：权重 131.5 ÷ 8 = <b>16.4 GiB</b>/卡 → 剩 60.6 GiB 给 KV → 每卡存 \(320/8 = 40\) KiB/token → 全系统 <b>159 万 token</b> ≈ 12 条 128K 或 388 条 4K 请求。</p>
+  <p><b>替代方案 TP=4 × DP=2</b>：权重 32.9 GiB/卡 → 每副本剩 44.1 GiB → 每副本 58 万 token、两副本合计 <b>116 万 token</b>（比 TP=8 <b>少 27%</b>，因为权重被复制了两份）。</p>
+  <p><b>怎么选</b>：长上下文或高并发（&gt;200 路）→ TP=8（KV 池更大）；短请求高 QPS、追求低首 token 延迟 → TP=4×DP=2（每层通信减半、两条独立队列互不阻塞）。<b>不要</b>用 PP：80 层切两段会让 decode 阶段每卡闲一半时间。</p>
+</div>
+
+<div class="recipe">
+  <h4>配方 2｜单机 8 卡，DeepSeek-V3 / R1（671B MoE）</h4>
+  <p><b>bf16 不可能</b>：1249.8 GiB ÷ 8 = 156 GiB/卡 &gt; 80 GiB。</p>
+  <p><b>FP8 也放不下</b>：624.9 ÷ 8 = <b>78.1 GiB</b>/卡，80 GiB 的卡只剩 1.9 GiB（连 CUDA context 都不够）→ OOM。</p>
+  <p><b>可行解</b>：① 换 <b>8×H200（141 GiB）</b>：78.1 GiB 权重 + 剩 62.9 GiB 给 KV；② 换 <b>W4A16</b>：312.4 ÷ 8 = 39 GiB/卡，80 GiB 卡可行，但要接受量化精度损失；③ 上 2 节点（见配方 3）。</p>
+  <p><b>并行</b>：<code>EP=8</code>（256 只专家 → 每卡 32 只）+ attention 侧 <code>TP=8</code> 或 <code>DP=8</code>（MLA 的话强烈建议 DP，否则 KV 复制 8 份）。</p>
+</div>
+
+<div class="recipe">
+  <h4>配方 3｜2 节点 16 卡，671B FP8，中等并发在线服务</h4>
+  <p><b>显存</b>：624.9 ÷ 16 = <b>39.1 GiB</b>/卡 → 剩 37.9 GiB。attention 走 DP=16、KV 不复制 → 每卡 37.9 GiB ÷ 68.6 KiB = <b>58 万 token</b>，全系统 <b>928 万 token</b>。</p>
+  <p><b>通信是唯一的问题</b>：EP=16 跨机 all-to-all = 896 MiB/层 @ IB 50 GB/s = <b>18.8 ms/层</b>，58 个 MoE 层 = 1.09 s/step（完全不掩盖的话）。必须上：FP8 dispatch（减半到 9.4 ms）+ DeepEP 高吞吐 kernel + 与专家 GEMM 重叠。</p>
+  <p><b>更稳的替代</b>：<code>PP=2 × EP=8</code>——把 all-to-all 全部关进机内 NVLink（2.09 ms/层），跨机只传 64 MiB 激活。代价是 PP 气泡和"两套专家分布"的运维复杂度。跨机带宽弱（HDR 200Gb/s 或纯以太网）时，<b>这是唯一靠谱的选择</b>。</p>
+</div>
+
+<div class="recipe">
+  <h4>配方 4｜128K 长上下文的单请求 prefill（RAG / 长文档总结）</h4>
+  <p><b>瓶颈不是显存而是 \(O(S^2)\) 算力</b>：128K 的 attention 是 4K 的 \(32^2 = 1024\) 倍计算量。单卡几十秒起步。</p>
+  <p><b>方案</b>：<code>CP=8</code>（每卡只处理 16K 的 Q）+ <code>TP=4</code>。机内优先 Ulysses（70B 有 64 个 Q head，够切 8 份）；跨机只能 Ring（Ulysses 的 all-to-all 跨机太贵）。</p>
+  <p><b>能不能掩盖？</b>用 §3.4 的判据 \(c \ge \frac{\text{算力}}{\text{带宽}}\)：H100 是 500 TFLOPS ÷ 450 GB/s ≈ 1100 token；这里每卡 chunk \(c = 131072/8 = 16384\) token，<b>超阈值 15 倍</b> → Ring 通信完全被计算掩盖，跨机（阈值 ~10000）也刚好够。</p>
+  <p><b>KV 显存</b>：70B @128K = 40 GiB，CP=8 → 每卡 5 GiB，很轻松。MLA 模型（V3）@128K 只要 8.6 GiB，但<b>记得它不随 TP 切分</b>，要用 DCP 或 DP-attention。</p>
+</div>
+
+<div class="recipe">
+  <h4>配方 5｜高并发 decode（V3 官方生产配置，40 节点 320 卡）</h4>
+  <p><b>配置</b>：attention <code>TP=4 + SP，DP=80</code>；MoE <code>EP=320</code>（每卡只托管 <b>1 只</b>专家，另用 64 卡放冗余专家和共享专家）；dispatch/combine 走 IB 点对点 + <b>IBGDA</b>。</p>
+  <p><b>每卡显存</b>：attention 权重 11.4 B bf16 ÷ 4 = <b>5.3 GiB</b> + 1 只专家 FP8 ≈ 42 MiB → 约 5.4 GiB，扣掉 3 GiB 预留后剩 ~71 GiB 全给 KV → 每卡约 <b>108 万 token</b>（\(71\,\text{GiB} / 68.6\,\text{KiB}\)）。</p>
+  <p><b>瓶颈是延迟不是带宽</b>：每层 all-to-all 只有 31.5 MiB（batch=128、k=9），但 58 层 × 2 次全员同步的<b>固定延迟</b>会直接叠进 token 间隔。所以官方只给通信分配少量 SM，并用低延迟 kernel 绕开 CPU 代理。</p>
+  <p><b>注意</b>：每专家 batch 通常 ≤256 token → 专家 GEMM 是<b>访存受限</b>的，加大 EP 反而提高了每卡的利用率（权重更少、KV 更多）。</p>
+</div>
+
+<div class="recipe">
+  <h4>配方 6｜训练（V3 官方：2048 卡）</h4>
+  <p><b>配置</b>：<code>PP=16</code> + <code>EP=64（8 节点）</code> + <code>ZeRO-1（DP=2）</code>，<b>完全没有 TP</b>。</p>
+  <p><b>为什么不用 TP</b>：TP 每层两次 all-reduce 无法跨机，而 2048 卡必须跨机；H800 的 NVLink 还被限到 ~400 GB/s 双向。官方选择"把跨机通信全部交给 PP（低频）和 EP（可用 DualPipe 掩盖）"。</p>
+  <p><b>每卡显存</b>：671 B × \((4 + 12/2) = 10\) 字节/参数 = 6249 GiB，÷ (16×64=1024 路切分) = <b>6.1 GiB</b>/卡，剩下的全给激活。</p>
+  <p><b>省激活的两招</b>：① 重计算所有 RMSNorm 和 MLA 的 up-projection（这俩便宜但占内存）；② DualPipe + 两个 micro-batch 交错，把跨机 EP 那 1:1 的计算/通信比藏掉。</p>
+</div>
+
+<h2 id="pitfalls">8. 常见误区与自检清单</h2>
+
+<table>
+<tr><th>误区</th><th>事实</th><th>出处</th></tr>
+<tr><td>"TP 开大一点吞吐更高"</td><td>TP 是把<b>同一批 token</b> 拆给多卡算，吞吐上限仍受单份 batch 限制；它降延迟、不降单请求成本。提吞吐要靠 DP/EP</td><td>§3.2</td></tr>
+<tr><td>"MoE 激活 37B，所以显存只要 37B"</td><td>激活参数决定<b>算力和带宽</b>，显存要装<b>全部 671B</b> 专家权重。算得像 37B，存得像 671B</td><td>§4.1</td></tr>
+<tr><td>"PP 能降单请求延迟"</td><td>层是串行依赖的，PP 只增加同步点。推理 decode 时 \(m=1\)，气泡率 \((p-1)/p\)</td><td>§5.1</td></tr>
+<tr><td>"EP 越大越好，最好等于专家数"</td><td>EP 越大，all-to-all 越可能跨机；每卡专家越少，专家 GEMM 的 batch 越小、越访存受限。V3 decode 才用到 EP=320，prefill 只用 EP=32</td><td>§4.3</td></tr>
+<tr><td>"DP 能解决装不下"</td><td>DP 是整份复制，只会更放不下。装不下要用 TP/PP/EP/ZeRO/量化</td><td>§1</td></tr>
+<tr><td>"all-reduce 通信量随卡数线性增长"</td><td>ring all-reduce 每卡是 \(2\frac{n-1}{n}M \approx 2M\)，<b>与卡数几乎无关</b>。变的是延迟项（\(2(n-1)\) 次同步）</td><td>§3.2</td></tr>
+<tr><td>"MLA 的 KV cache 会自动随 TP 切分"</td><td>MLA 的 KV 是所有 head 共享的一份潜向量，<b>没有 head 维可切</b>；纯 TP 下每卡存整份。要用 DCP 或 DP-attention</td><td>§3.5</td></tr>
+<tr><td>"带宽够就没问题了"</td><td>decode 阶段字节数很小，瓶颈是<b>每次集合通信的固定延迟 × 层数 × 2</b>。这时候要换低延迟 kernel（IBGDA），加带宽没用</td><td>§4.3</td></tr>
+<tr><td>"量化 KV 和量化权重是一回事"</td><td>权重量化省的是<b>固定</b>开销，KV 量化省的是<b>随并发线性增长</b>的部分。高并发长上下文场景，KV 量化的收益远大于权重量化</td><td>§3.5</td></tr>
+<tr><td>"专家负载均衡是训练的事，部署不用管"</td><td>部署侧的不均衡直接变成尾延迟和"按最坏情况开缓冲区"的显存浪费。V3 线上跑 32（prefill）/64（decode）只<b>冗余专家</b>，每 10 分钟重排一次</td><td>§4.4</td></tr>
+</table>
+
+<h4>上线前的十条自检</h4>
+<ol>
+  <li>权重字节数 ÷ 切分因子 + KV + 3 GiB 预留 ≤ 单卡显存？（<b>先算这个，别的都是空谈</b>）</li>
+  <li>KV cache 用的是哪个公式？GQA 是 \(2Ln_{kv}d_h b\)，MLA 是 \(L(d_c+d_R)b\)（没有那个 2）。</li>
+  <li>如果是 MLA + TP，我确认过 KV 是复制的还是切分的吗？（vLLM 需要显式开 DCP 或用 DP-attention）</li>
+  <li>TP 组是否完整落在同一台机器内？<code>nvidia-smi topo -m</code> 看过 NVLink 连接了吗？</li>
+  <li>\(n_{kv} \ge\) TP 吗？不满足的话 KV head 会被复制，KV 省不下来。</li>
+  <li>MoE 用的是 EP 还是 ETP？EP 才能线性扩吞吐；ETP 只在单只专家装不下时才需要。</li>
+  <li>跨机的 all-to-all 每层多少毫秒？和专家 GEMM 的时间比是多少？超过 1:1 就要考虑 PP 替代或 DeepEP。</li>
+  <li>prefill 和 decode 用的是同一套并行配置吗？成熟部署应该是两套（甚至 PD 分离）。</li>
+  <li>训练的话：micro-batch 数 \(m\) 够不够把 PP 气泡压到 10% 以下（\(m \ge 5\text{–}10p\)）？</li>
+  <li>专家负载统计接上了吗？冗余专家 / EPLB 有没有开？</li>
+</ol>
+
+<h2 id="calc">9. 动手算：并行配置计算器</h2>
+<p>把前面所有公式串起来。<b>选一个模型预设，改并行度，实时看每卡显存和每层通信量</b>——数字与本文各表用的是同一套公式。</p>
+
+<div class="calc">
+  <div class="calc-row">
+    <div class="field"><label for="c-preset">模型预设</label>
+      <select id="c-preset">
+        <option value="llama8">Llama-3-8B（稠密 GQA）</option>
+        <option value="llama70" selected>Llama-3-70B（稠密 GQA）</option>
+        <option value="qwen235">Qwen3-235B-A22B（MoE GQA）</option>
+        <option value="v3">DeepSeek-V3 671B（MoE + MLA）</option>
+      </select>
+    </div>
+    <div class="field"><label for="c-phase">阶段</label>
+      <select id="c-phase">
+        <option value="prefill" selected>prefill（大 chunk）</option>
+        <option value="decode">decode（每请求 1 token）</option>
+      </select>
+    </div>
+  </div>
+
+  <fieldset><legend>模型结构</legend>
+    <div class="calc-row">
+      <span class="field"><label for="c-psi">总参数量 (B)</label><input id="c-psi" type="number" step="0.1" value="70"></span>
+      <span class="field"><label for="c-L">层数 L</label><input id="c-L" type="number" value="80"></span>
+      <span class="field"><label for="c-H">hidden H</label><input id="c-H" type="number" value="8192"></span>
+      <span class="field"><label for="c-nkv">KV head 数</label><input id="c-nkv" type="number" value="8"></span>
+      <span class="field"><label for="c-dh">head dim</label><input id="c-dh" type="number" value="128"></span>
+    </div>
+    <div class="calc-row">
+      <span class="field"><label for="c-mla">MLA（KV 共享潜向量）</label><input id="c-mla" type="checkbox"></span>
+      <span class="field"><label for="c-dc">MLA d_c</label><input id="c-dc" type="number" value="512"></span>
+      <span class="field"><label for="c-dr">MLA d_rope</label><input id="c-dr" type="number" value="64"></span>
+      <span class="field"><label for="c-exp">专家参数占比 (%)</label><input id="c-exp" type="number" step="0.1" value="0"></span>
+      <span class="field"><label for="c-moeL">MoE 层数</label><input id="c-moeL" type="number" value="0"></span>
+      <span class="field"><label for="c-topk">top-k</label><input id="c-topk" type="number" value="8"></span>
+    </div>
+  </fieldset>
+
+  <fieldset><legend>负载与精度</legend>
+    <div class="calc-row">
+      <span class="field"><label for="c-S">上下文长度 S</label><input id="c-S" type="number" value="4096"></span>
+      <span class="field"><label for="c-B">并发请求数</label><input id="c-B" type="number" value="32"></span>
+      <span class="field"><label for="c-T">每步 token 数 T</label><input id="c-T" type="number" value="4096"></span>
+      <span class="field"><label for="c-bw">权重精度</label>
+        <select id="c-bw"><option value="2" selected>bf16 / fp16 (2B)</option><option value="1">fp8 / int8 (1B)</option><option value="0.5">int4 (0.5B)</option></select>
+      </span>
+      <span class="field"><label for="c-bwexp">专家权重精度</label>
+        <select id="c-bwexp"><option value="2" selected>bf16 (2B)</option><option value="1">fp8 (1B)</option><option value="0.5">int4 (0.5B)</option></select>
+      </span>
+      <span class="field"><label for="c-bkv">KV 精度</label>
+        <select id="c-bkv"><option value="2" selected>bf16 (2B)</option><option value="1">fp8 (1B)</option></select>
+      </span>
+    </div>
+  </fieldset>
+
+  <fieldset><legend>集群与并行度</legend>
+    <div class="calc-row">
+      <span class="field"><label for="c-mem">单卡显存 (GiB)</label><input id="c-mem" type="number" value="80"></span>
+      <span class="field"><label for="c-rsv">框架预留 (GiB)</label><input id="c-rsv" type="number" value="3"></span>
+      <span class="field"><label for="c-tp">TP</label><input id="c-tp" type="number" value="8"></span>
+      <span class="field"><label for="c-pp">PP</label><input id="c-pp" type="number" value="1"></span>
+      <span class="field"><label for="c-cp">CP</label><input id="c-cp" type="number" value="1"></span>
+      <span class="field"><label for="c-ep">EP</label><input id="c-ep" type="number" value="1"></span>
+      <span class="field"><label for="c-dp">DP</label><input id="c-dp" type="number" value="1"></span>
+    </div>
+    <div class="calc-row">
+      <span class="field"><label for="c-nvl">机内单向带宽 (GB/s)</label><input id="c-nvl" type="number" value="450"></span>
+      <span class="field"><label for="c-ib">跨机单向带宽 (GB/s)</label><input id="c-ib" type="number" value="50"></span>
+      <span class="field"><label for="c-mb">micro-batch 数 m</label><input id="c-mb" type="number" value="8"></span>
+      <span class="field"><label for="c-flops">单卡 bf16 算力 (TFLOPS)</label><input id="c-flops" type="number" value="500"></span>
+    </div>
+  </fieldset>
+
+  <div class="out-grid" id="c-out"></div>
+  <p class="cap" id="c-note"></p>
+</div>
+
+<h3>参考资料</h3>
+<ol class="refs">
+  <li><a href="https://arxiv.org/abs/2412.19437">DeepSeek-V3 Technical Report</a>，§3 Infrastructures（跨机 EP 的 SM 分配、冗余专家、DualPipe、FP8 dispatch）与 §3.4（prefill/decode 两套部署配置）。本地副本：<code>paper/deepseek_v3.pdf</code>。</li>
+  <li><a href="https://arxiv.org/abs/1909.08053">Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism</a>——TP 的列并行/行并行切法与每层两次 all-reduce。</li>
+  <li><a href="https://arxiv.org/abs/2205.05198">Reducing Activation Recomputation in Large Transformer Models</a>——Megatron-SP 与激活公式 \(sbh(34 + 5as/h)\)。</li>
+  <li><a href="https://arxiv.org/abs/1910.02054">ZeRO: Memory Optimizations Toward Training Trillion Parameter Models</a>——三级切分与 \(2\Psi / 3\Psi\) 通信量。</li>
+  <li><a href="https://arxiv.org/abs/2309.14509">Ring Attention with Blockwise Transformers for Near-Infinite Context</a>——环形传 KV 与计算/通信重叠条件。</li>
+  <li><a href="https://arxiv.org/abs/2310.01889">DeepSpeed-Ulysses</a>——序列↔head 换轴的两次 all-to-all，通信量随并行度下降。</li>
+  <li><a href="https://arxiv.org/abs/2211.05953">Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM</a>——3D 并行的放置原则与气泡分析。</li>
+  <li><a href="https://github.com/deepseek-ai/DeepEP">DeepEP</a>——DeepSeek 开源的高吞吐 / 低延迟 all-to-all kernel（NVLink + IB + IBGDA，支持 FP8 dispatch）。</li>
+  <li>vLLM 官方文档：<a href="https://docs.vllm.ai/en/latest/serving/distributed_serving.html">Distributed Serving</a>、<a href="https://docs.vllm.ai/en/latest/models/parallelism.html">Parallelism</a>（TP/PP/EP/DP/DCP 的参数与组合规则）、<a href="https://blog.vllm.ai/2025/01/27/v1-alpha-release.html">vLLM V1</a>（KV cache 容量与调度器日志）。</li>
+  <li>本仓库相关报告：<a href="../vllm/vllm-t5-distributed.html">vLLM 分布式与并行（源码级）</a> · <a href="../moe/moe-t1-basics.html">MoE 零基础第 1 讲</a> · <a href="mha-prefill-decode.html">MHA prefill/decode 成本账本</a> · <a href="mla-training-inference.html">MLA 训练与推理深读</a>。</li>
+</ol>
+
+<script>
+(function () {
+  var GiB = Math.pow(2, 30), MiB = Math.pow(2, 20);
+  var PRESETS = {
+    llama8:  { psi: 8.03,  L: 32, H: 4096, nkv: 8, dh: 128, mla: false, exp: 0,    moeL: 0,  topk: 8, bw: 2,   bwexp: 2, tp: 4, pp: 1, ep: 1 },
+    llama70: { psi: 70.55, L: 80, H: 8192, nkv: 8, dh: 128, mla: false, exp: 0,    moeL: 0,  topk: 8, bw: 2,   bwexp: 2, tp: 8, pp: 1, ep: 1 },
+    qwen235: { psi: 235,   L: 94, H: 4096, nkv: 4, dh: 128, mla: false, exp: 96.6, moeL: 94, topk: 8, bw: 2,   bwexp: 1, tp: 4, pp: 1, ep: 8 },
+    v3:      { psi: 671,   L: 61, H: 7168, nkv: 1, dh: 128, mla: true,  exp: 97.4, moeL: 58, topk: 8, bw: 2,   bwexp: 1, tp: 4, pp: 1, ep: 32 }
+  };
+  var IDS = ['psi','L','H','nkv','dh','dc','dr','exp','moeL','topk','S','B','T','mem','rsv','tp','pp','cp','ep','dp','nvl','ib','mb','flops'];
+  function g(id) { return document.getElementById('c-' + id); }
+  function num(id, dflt) {
+    var e = g(id); if (!e) return dflt;
+    var v = parseFloat(e.value); return isFinite(v) && v > 0 ? v : dflt;
+  }
+  function fmtBytes(x) {
+    if (!isFinite(x) || x <= 0) return '0';
+    if (x >= GiB) return (x / GiB).toFixed(x / GiB >= 100 ? 0 : 1) + ' GiB';
+    if (x >= MiB) return (x / MiB).toFixed(0) + ' MiB';
+    return (x / 1024).toFixed(0) + ' KiB';
+  }
+  function fmtTok(x) {
+    if (!isFinite(x) || x <= 0) return '0';
+    if (x >= 1e6) return (x / 1e6).toFixed(2) + ' M';
+    if (x >= 1e3) return (x / 1e3).toFixed(0) + ' K';
+    return x.toFixed(0);
+  }
+  function card(k, v, s, cls) {
+    return '<div class="out-card"><div class="k">' + k + '</div><div class="v' +
+      (cls ? ' ' + cls : '') + '">' + v + '</div><div class="s">' + (s || '') + '</div></div>';
+  }
+
+  function compute() {
+    var psi = num('psi', 70), L = num('L', 80), H = num('H', 8192);
+    var nkv = num('nkv', 8), dh = num('dh', 128);
+    var mla = g('mla').checked;
+    var dc = num('dc', 512), dr = num('dr', 64);
+    var expRatio = Math.min(0.999, num('exp', 0) / 100), moeL = num('moeL', 0), topk = num('topk', 8);
+    var S = num('S', 4096), B = num('B', 32);
+    var phase = g('phase').value;
+    var T = phase === 'decode' ? B : num('T', 4096);
+    var bw = num('bw', 2), bwexp = num('bwexp', 2), bkv = num('bkv', 2);
+    var mem = num('mem', 80), rsv = num('rsv', 3);
+    var TP = num('tp', 8), PP = num('pp', 1), CP = num('cp', 1), EP = num('ep', 1), DP = num('dp', 1);
+    var nvl = num('nvl', 450), ib = num('ib', 50), m = num('mb', 8), flops = num('flops', 500);
+
+    var P = psi * 1e9;
+    // --- 权重（非专家部分按 TP×PP 切，专家部分按 EP×PP 切）---
+    var wAttn = P * (1 - expRatio) * bw / (TP * PP);
+    var wExp  = P * expRatio * bwexp / (Math.max(1, EP) * PP);
+    var wPer = wAttn + wExp;
+
+    // --- KV cache ---
+    var kvTokLayer = mla ? (dc + dr) * bkv : 2 * nkv * dh * bkv;
+    var kvTotal = kvTokLayer * L * S * B;
+    var kvTpSplit = mla ? 1 : Math.max(1, Math.min(TP, nkv));
+    var kvSplit = PP * CP * kvTpSplit;
+    var kvPer = kvTotal / kvSplit;
+
+    // --- 激活（粗估：几个 T×H 的中间张量）---
+    var actPer = 4 * T * H * 2;
+
+    var used = wPer + kvPer + actPer + rsv * GiB;
+    var left = mem * GiB - used;
+    var kvBudget = Math.max(0, mem * GiB - wPer - actPer - rsv * GiB);
+    var tokSys = kvBudget * kvSplit / (kvTokLayer * L);   // 全系统能装多少 token
+    var reqs = tokSys / S;
+
+    // --- 通信 ---
+    var tpCall = 2 * (TP - 1) / TP * T * H * 2;   // 一次 all-reduce
+    var tpLayer = 2 * tpCall;                      // 每层两次
+    var tpAll = tpLayer * L / PP;                  // 本卡持有的那些层
+    var epLayer = EP > 1 ? 2 * T * topk * H * 2 * (1 - 1 / EP) : 0;
+    var epAll = epLayer * moeL / PP;
+    var dkv = mla ? (dc + dr) : nkv * dh;
+    var cpLayer = CP > 1 ? 4 * S * dkv * bkv * (CP - 1) / CP : 0;
+    var cpAll = cpLayer * L / PP;
+    var ppMsg = S * H * 2;
+    var bubble = PP > 1 ? (PP - 1) / (m + PP - 1) : 0;
+
+    function ms(bytes, gbs) { return bytes / (gbs * 1e9) * 1000; }
+    var epLocal = EP <= 8, tpLocal = TP <= 8;
+
+    var out = '';
+    out += card('每卡权重', fmtBytes(wPer),
+      '非专家 ' + fmtBytes(wAttn) + ' + 专家 ' + fmtBytes(wExp));
+    out += card('每卡 KV cache', fmtBytes(kvPer),
+      '全系统 ' + fmtBytes(kvTotal) + ' ÷ 切分 ' + kvSplit +
+      (mla && TP > 1 && CP === 1 ? '（MLA 不随 TP 切！）' : ''));
+    out += card('可容纳 token（系统）', fmtTok(tokSys),
+      '≈ ' + reqs.toFixed(reqs < 10 ? 1 : 0) + ' 条 ' + (S >= 1024 ? (S / 1024) + 'K' : S) + ' 请求');
+    out += card('每卡显存合计', fmtBytes(used),
+      (left >= 0 ? '余量 ' + fmtBytes(left) : '<b>超出 ' + fmtBytes(-left) + ' → OOM</b>'),
+      left >= 0 ? 'okv' : 'warnv');
+
+    out += card('TP 通信（每层 2 次）', fmtBytes(tpLayer),
+      '本卡各层合计 ' + fmtBytes(tpAll) + ' · ' + ms(tpLayer, nvl).toFixed(2) + ' ms @机内' +
+      (tpLocal ? '' : ' · <b>跨机 ' + ms(tpLayer, ib).toFixed(1) + ' ms ✗</b>'));
+    out += card('EP all-to-all（每层）', EP > 1 ? fmtBytes(epLayer) : '未启用',
+      EP > 1 ? ('本卡 ' + Math.round(moeL / PP) + ' 个 MoE 层合计 ' + fmtBytes(epAll) + ' · ' +
+        ms(epLayer, nvl).toFixed(2) + ' ms 机内 / ' + ms(epLayer, ib).toFixed(1) + ' ms 跨机') : 'EP=1，专家全复制');
+    out += card('CP 传 KV（每层）', CP > 1 ? fmtBytes(cpLayer) : '未启用',
+      CP > 1 ? ('本卡各层合计 ' + fmtBytes(cpAll) + ' · 每卡 chunk ' + Math.round(S / CP) + ' token，掩盖阈值 ' +
+        Math.round(flops * 1e12 / (nvl * 1e9)) + ' token') : 'CP=1');
+    out += card('PP 边界 + 气泡', PP > 1 ? fmtBytes(ppMsg) : '未启用',
+      PP > 1 ? ('气泡率 ' + (bubble * 100).toFixed(1) + '%（m=' + m + '）· 边界耗时 ' +
+        ms(ppMsg, ib).toFixed(2) + ' ms @跨机') : 'PP=1');
+    out += card('训练每卡（ZeRO-1）', fmtBytes((wAttn / bw + wExp / bwexp) * (4 + 12 / DP)),
+      '按 4+12/DP 字节/参数，DP=' + DP + '；不含激活');
+    document.getElementById('c-out').innerHTML = out;
+
+    var notes = [];
+    if (!tpLocal) notes.push('<b class="warnv">TP=' + TP + ' 超出单机 8 卡</b>：每层两次 all-reduce 走跨机链路，实测会把吞吐打掉一半以上，改用 PP 或 DP。');
+    if (EP > 1 && !epLocal) notes.push('EP=' + EP + ' 跨机：all-to-all ' + ms(epLayer, ib).toFixed(1) + ' ms/层，需要 DeepEP + FP8 dispatch，或用 PP 把 EP 关进机内。');
+    if (CP > 1 && S / CP < flops * 1e12 / (nvl * 1e9)) notes.push('<b class="warnv">CP 的 chunk（' + Math.round(S / CP) + ' token）小于掩盖阈值</b>，Ring 通信盖不住，考虑减小 CP 或换 Ulysses。');
+    if (PP > 1 && bubble > 0.1) notes.push('PP 气泡 ' + (bubble * 100).toFixed(0) + '% 偏高：把 micro-batch 数 m 提到 ' + Math.ceil((PP - 1) / 0.1 - PP + 1) + ' 以上。');
+    if (mla && TP > 1 && CP === 1 && DP === 1) notes.push('<b class="warnv">MLA + 纯 TP</b>：KV cache 在每个 TP rank 上是完整复制的。开 DP-attention 或 DCP 才能真正切分 KV。');
+    if (nkv < TP && !mla) notes.push('KV head 数（' + nkv + '）< TP（' + TP + '）：KV head 会被复制，KV 显存省不下来。');
+    if (phase === 'decode' && EP > 1) notes.push('decode 阶段 all-to-all 字节小但延迟占主导：优先低延迟 kernel（IBGDA / DeepEP low-latency）。');
+    if (left < 0) notes.push('<b class="warnv">显存不够</b>：可降权重量化等级、加 PP/EP、减小并发或上下文长度。');
+    if (!notes.length) notes.push('配置合理。以上按理论峰值带宽与 1 GiB=2³⁰B 计算，实测带宽通常只有标称的 60–80%，请预留余量。');
+    document.getElementById('c-note').innerHTML = notes.join('<br>');
+  }
+
+  function applyPreset(name) {
+    var p = PRESETS[name]; if (!p) return;
+    ['psi','L','H','nkv','dh','exp','moeL','topk','tp','pp','ep'].forEach(function (k) {
+      var e = g(k); if (e && p[k] !== undefined) e.value = p[k];
+    });
+    g('mla').checked = !!p.mla;
+    g('bw').value = String(p.bw); g('bwexp').value = String(p.bwexp);
+    if (p.mla) { g('nkv').value = 1; }
+    compute();
+  }
+
+  IDS.concat(['bw','bwexp','bkv','phase','preset']).forEach(function (id) {
+    var e = g(id); if (!e) return;
+    e.addEventListener('input', function () { if (id === 'preset') applyPreset(e.value); else compute(); });
+    e.addEventListener('change', function () { if (id === 'preset') applyPreset(e.value); else compute(); });
+  });
+  applyPreset('llama70');
+})();
+</script>
+
+
+<footer>生成于 2026-10-27 · 零基础教学报告 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 数字均按 1 GiB = 2<sup>30</sup> B、bf16 = 2 字节计算，带宽取理论峰值（实测通常为 60–80%）· 事实性内容以 DeepSeek-V3 论文 §3、vLLM 官方文档与各并行方法原始论文为准，推断处已用「推断」块标注</footer>
+
+</main>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

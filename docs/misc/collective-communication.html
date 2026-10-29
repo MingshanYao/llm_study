@@ -1,0 +1,2115 @@
+<!DOCTYPE html>
+<!-- 零基础教学报告：集合通信（collective communication）原语、Ring/Tree 算法与通信量计算。
+     head 的内联 CSS 与钉死版本 + SRI 的 CDN 引用与 docs/_template.html 保持一致，不得更换 CDN 或去掉 integrity。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>集合通信零基础指南：All-Reduce / All-Gather / Reduce-Scatter / All-to-All 与通信量计算</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp" crossorigin="anonymous"></script>
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+  options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" integrity="sha384-Wuix6BuhrWbjDBs24bXrjf4ZQ5aFeFWBuKkFekO2t8xFU0iNaLQfp2K6/1Nxveei" crossorigin="anonymous" async></script>
+<style>
+  :root {
+    --ink: #1a1f2e; --muted: #5a6272; --line: #e3e7ee;
+    --accent: #2456c4; --accent-soft: #eef3fc; --code-bg: #f6f8fa;
+    --quote-bg: #f4f7fd; --warn-bg: #fff8e8; --warn-line: #e6c96a;
+    --c0: #2456c4; --c1: #e8862a; --c2: #2f9e63; --c3: #163a86;
+    --c0s: #eef3fc; --c1s: #fbe3cc; --c2s: #d9f0e2; --c3s: #dfe6f6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fbfbfd;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.9em; line-height: 1.35; margin: 0 0 6px; }
+  h2 { font-size: 1.4em; margin: 2.2em 0 0.7em; padding-bottom: 6px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.12em; margin: 1.6em 0 0.5em; color: var(--accent); }
+  h4 { font-size: 1.02em; margin: 1.3em 0 0.4em; }
+  p, li { color: #2a3040; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .meta {
+    color: var(--muted); font-size: 0.9em; background: var(--accent-soft);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; margin: 18px 0 8px;
+  }
+  .meta b { color: var(--ink); }
+  .tldr {
+    background: var(--quote-bg); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 14px 20px; margin: 26px 0;
+  }
+  .tldr p { margin: 6px 0; }
+  .infer {
+    background: var(--warn-bg); border: 1px dashed var(--warn-line); border-radius: 8px;
+    padding: 10px 16px; margin: 14px 0; font-size: 0.95em;
+  }
+  .infer::before { content: "推断"; font-weight: 700; color: #9a7b1c; margin-right: 8px; }
+  .trap { border-color: #b3261e; background: #fff2f0; }
+  .trap::before { content: "口径陷阱"; color: #b3261e; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 0.93em; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); }
+  tr:nth-child(even) td { background: #fafbfd; }
+  table code, li code, p code, .opcard code {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  pre { margin: 14px 0; padding: 0; }
+  pre code {
+    display: block; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55;
+    font-size: 0.86em; font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  .cap { color: var(--muted); font-size: 0.85em; margin: -6px 0 18px; }
+  .cap b { color: var(--ink); }
+  .fig { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; overflow-x: auto; }
+  .fig svg { max-width: 100%; height: auto; display: block; }
+  .formula { overflow-x: auto; }
+  footer { color: var(--muted); font-size: 0.85em; border-top: 1px solid var(--line); margin-top: 48px; padding-top: 14px; }
+  ol.refs li, ul.refs li { margin: 6px 0; }
+  .pill {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; padding: 1px 10px; font-size: 0.82em; margin-right: 6px;
+  }
+  .toc { background: var(--quote-bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 20px; margin: 16px 0; font-size: 0.93em; }
+  .toc ol { margin: 6px 0 2px; padding-left: 22px; }
+  .toc li { margin: 3px 0; }
+  .keypoint { background: #d9f0e2; border-radius: 8px; padding: 10px 16px; margin: 14px 0; font-size: 0.95em; }
+  .keypoint b { color: #1f7a49; }
+  /* 原语全景：色块矩阵 */
+  .opgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 12px; margin: 14px 0; }
+  .opcard { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .opcard h4 { margin: 0; font-size: 0.97em; color: var(--accent); }
+  .opcard .sub { color: var(--muted); font-size: 0.76em; margin: 0 0 8px; line-height: 1.5; }
+  .opbody { display: flex; align-items: center; gap: 8px; }
+  .opside { flex: 1 1 0; min-width: 0; }
+  .opside .hd { font-size: 0.72em; color: var(--muted); margin-bottom: 3px; }
+  .opmid { color: var(--muted); font-size: 1.1em; flex: none; }
+  .oprow { display: flex; align-items: center; gap: 4px; margin: 2px 0; }
+  .oprow .rl { width: 22px; font-size: 0.68em; color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+  .chips { display: flex; gap: 2px; }
+  .chip { width: 19px; height: 13px; border-radius: 2px; flex: none; }
+  .k0 { background: var(--c0s); border: 1px solid var(--c0); }
+  .k1 { background: var(--c1s); border: 1px solid var(--c1); }
+  .k2 { background: var(--c2s); border: 1px solid var(--c2); }
+  .k3 { background: var(--c3s); border: 1px solid var(--c3); }
+  .ksum { background: repeating-linear-gradient(90deg, var(--c0s) 0 5px, var(--c1s) 5px 10px, var(--c2s) 10px 14px, var(--c3s) 14px 19px); border: 1px solid #1a1f2e; }
+  .knone { background: #fff; border: 1px dashed #c9d2e0; }
+  .oplegend { font-size: 0.8em; color: var(--muted); margin: 6px 0 0; }
+  .oplegend .chip { display: inline-block; vertical-align: -2px; margin: 0 4px 0 10px; }
+  /* 步进模拟器控件 */
+  .simctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 4px; }
+  .simctl button {
+    font-family: inherit; font-size: 0.86em; padding: 4px 14px; border-radius: 6px;
+    border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer;
+  }
+  .simctl button:hover { border-color: var(--accent); color: var(--accent); }
+  .simctl button.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .simctl button.pri:hover { color: #fff; opacity: 0.9; }
+  .simctl .hint { font-size: 0.8em; color: var(--muted); }
+  /* 计算器 */
+  .calc { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 16px 0; }
+  .calc-row { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 8px 0; }
+  .calc fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px 10px; margin: 10px 0; }
+  .calc legend { font-size: 0.86em; color: var(--muted); padding: 0 6px; }
+  .calc label { font-size: 0.82em; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+  .calc input, .calc select {
+    font-size: 0.88em; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px;
+    width: 88px; background: #fff; color: var(--ink); font-family: inherit;
+  }
+  .calc select { width: auto; }
+  .calc .field { display: inline-flex; flex-direction: column; gap: 2px; }
+  .out-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-top: 12px; }
+  .out-card { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+  .out-card .k { font-size: 0.78em; color: var(--muted); }
+  .out-card .v { font-size: 1.02em; font-weight: 600; }
+  .out-card .s { font-size: 0.76em; color: var(--muted); }
+  .warnv { color: #b3261e; }
+  .okv { color: #1f7a49; }
+  .presetbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+  .presetbar button {
+    font-family: inherit; font-size: 0.78em; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent); cursor: pointer;
+  }
+  .presetbar button:hover { border-color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>集合通信零基础指南</h1>
+<p style="color:#5a6272;margin:0 0 4px;font-size:1.02em">八个原语怎么工作、Ring/Tree 怎么走、通信量到底怎么算（附分步模拟器与计算器）</p>
+<div class="meta">
+  <b>零基础教学报告</b> · 生成于 2026-10-29 ·
+  事实来源：<a href="https://github.com/NVIDIA/nccl-tests/blob/master/doc/PERFORMANCE.md">nccl-tests PERFORMANCE.md</a>（algbw / busBw 的定义与下界推导）、<a href="https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html">NCCL User Guide</a>（算法与协议清单）、MPI 集合通信语义、Megatron-LM / ZeRO / DeepSpeed-Ulysses / Ring Attention / DeepEP 论文 ·
+  相关阅读：<a href="multi-gpu-attention-moe.html">多卡部署 Attention 与 MoE</a>（并行模式怎么切）· <a href="../vllm/vllm-t5-distributed.html">vLLM 分布式与并行（源码级）</a> · <a href="mha-prefill-decode.html">MHA prefill/decode 成本账本</a>
+</div>
+
+<div class="toc">
+  <b>本篇导航</b>
+  <ol>
+    <li><a href="#why">先把「通信量」说清楚：三个口径与记号约定</a></li>
+    <li><a href="#ops">八个原语：一张图看懂输入 → 输出</a></li>
+    <li><a href="#volume">通信量怎么算：α-β 模型、八个原语的推导与速查表</a></li>
+    <li><a href="#ring">Ring 算法逐步走（可交互模拟器）</a></li>
+    <li><a href="#algo">Ring 不是万灵药：Tree、双二叉树、多维环、NVLS、one-shot</a></li>
+    <li><a href="#hier">分层通信：机内 NVLink + 机间 IB 的流量账</a></li>
+    <li><a href="#llm">LLM 里谁在调什么原语（含真实算例）</a></li>
+    <li><a href="#measure">实测与调优：nccl-tests 怎么读、八个坑</a></li>
+    <li><a href="#calc">动手算：集合通信计算器</a></li>
+    <li><a href="#check">自检清单与参考资料</a></li>
+  </ol>
+</div>
+
+<div class="tldr">
+  <p><b>一句话</b>：集合通信 = 一组进程（rank）按<b>约定好的语义</b>交换数据。所有原语都是三件事的组合——<b>搬数据</b>（gather / scatter / all-to-all）、<b>做归约</b>（reduce）、<b>发副本</b>（broadcast）。</p>
+  <p><b>八个原语一句话记住</b>：<span class="pill">Broadcast</span>一份发给所有人；<span class="pill">Scatter</span>一份切开分给所有人；<span class="pill">Gather</span>每人交一片汇总到一人；<span class="pill">All-Gather</span>每人交一片、人人都拿到全套；<span class="pill">Reduce</span>所有人的数据求和给一人；<span class="pill">All-Reduce</span>求和后人人都有；<span class="pill">Reduce-Scatter</span>求和后每人只拿自己那一片；<span class="pill">All-to-All</span>每人给每人发不同的一块（分布式转置）。</p>
+  <p><b>最重要的一条恒等式</b>：<code>All-Reduce = Reduce-Scatter + All-Gather</code>。Ring All-Reduce 就是这么实现的；Megatron 序列并行、ZeRO、FSDP 都是把这条恒等式反过来用。</p>
+  <p><b>通信量速记</b>（\(N\) 卡、每卡消息 \(S\) 字节）：All-Reduce 每卡线上量 \(W=2\frac{N-1}{N}S\)（<b>与卡数几乎无关</b>，渐近 \(2S\)）；All-Gather / Reduce-Scatter / All-to-All 各 \(W=\frac{N-1}{N}S\)；Broadcast / Reduce 受 root 出口限制，\(W=S\) 且无法用满所有链路。</p>
+  <p><b>时间公式</b>：\(T = \text{步数}\times\alpha + W\times\beta\)。<b>小消息看 \(\alpha\)（步数越少越好 → Tree）；大消息看 \(\beta\)（每卡线上量越小越好 → Ring 最优）</b>。机内 8 卡的分界点约在 5 MiB。</p>
+</div>
+
+<h2 id="why">1. 先把「通信量」说清楚：三个口径与记号约定</h2>
+
+<h3>1.1 点对点 vs 集合</h3>
+<p>最原始的通信只有两个动作：<code>send(dst, buf)</code> 和 <code>recv(src, buf)</code>——点对点（P2P）。流水线并行（PP）用的就是它：第 40 层的激活从 GPU 1 发给 GPU 2，一次一条消息。</p>
+<p>但一旦是「\(N\) 张卡都要参与同一件事」——比如把 8 张卡上的梯度加起来——用 P2P 手写就会变成 \(O(N^2)\) 条消息和一堆死锁风险。<b>集合通信（collective communication）就是把这类「全员参与、语义固定」的模式封装成一个调用</b>，由库（NCCL / MPI / Gloo / RCCL）负责选拓扑、排调度、做流水线。你只说「all-reduce 这个张量」，库来决定谁在第几步发给谁。</p>
+<table>
+<tr><th></th><th>点对点（send / recv）</th><th>集合通信（collective）</th></tr>
+<tr><td>参与者</td><td>2 个 rank</td><td>通信组（communicator）内<b>全部</b> rank，缺一个就挂死</td></tr>
+<tr><td>语义</td><td>只搬数据</td><td>搬数据 + 可选归约（sum / max / prod…）</td></tr>
+<tr><td>典型用途</td><td>PP 传激活、Ring Attention 传 KV</td><td>TP 的 all-reduce、DP 的梯度归约、EP 的 all-to-all</td></tr>
+<tr><td>性能由谁决定</td><td>单条链路带宽</td><td><b>算法</b>（ring / tree / …）+ 拓扑 + 消息大小</td></tr>
+</table>
+<div class="keypoint">
+  <b>「集合」指的是参与者的集合，不是数据结构。</b>一个 communicator 就是一份 rank 名单（外加它们协商好的连接）。同一次调用必须由名单里<b>所有</b> rank 以<b>相同顺序</b>发起，否则先到的会一直等——这是分布式训练「卡住不动」最常见的原因。
+</div>
+
+<h3>1.2 记号约定（全文统一）</h3>
+<table>
+<tr><th>记号</th><th>含义</th><th>典型取值</th></tr>
+<tr><td>\(N\)</td><td>通信组内的 rank（GPU）数</td><td>机内 8；集群 64 ～ 数千</td></tr>
+<tr><td>\(S\)</td><td><b>每卡</b>参与本次调用的缓冲区字节数（PyTorch 里就是 <code>tensor.numel() × dtype_size</code>）</td><td>512 KiB ～ 数 GiB</td></tr>
+<tr><td>\(s = S/N\)</td><td>一个 chunk（ring 算法把 \(S\) 切成 \(N\) 份）</td><td>—</td></tr>
+<tr><td>\(W\)</td><td><b>每卡实际发到线上的字节数</b>（wire volume）。本篇说「通信量」默认指它</td><td>见 §3.3 速查表</td></tr>
+<tr><td>\(\alpha\)</td><td>一次消息的固定开销（启动 kernel + 同步 + 建链），与大小无关</td><td>机内 NVLink ≈ 1～3 µs；跨机 IB ≈ 5～20 µs</td></tr>
+<tr><td>\(\beta = 1/B\)</td><td>每字节的传输时间，\(B\) 是<b>单向</b>链路带宽</td><td>NVLink4 = 450 GB/s；IB NDR = 50 GB/s</td></tr>
+<tr><td>\(b\)</td><td>数据类型字节数</td><td>bf16 = 2；fp8 = 1</td></tr>
+</table>
+<div class="infer">
+  \(\alpha\) 的取值依赖 NCCL 版本、协议（LL / LL128 / Simple）、是否用 CUDA graph、以及 rank 数。上面给的是量级而非精确值；用 §9 的计算器时，建议按自己机器上 nccl-tests 的小消息地板反推 \(\alpha\)。
+</div>
+
+<h3>1.3 「通信量」有三个口径，混用就会算错</h3>
+<p>这是本篇最想先钉死的一件事。同一句「all-reduce 的通信量是多少」，可能指三件完全不同的东西：</p>
+<table>
+<tr><th>口径</th><th>说的是什么</th><th>All-Reduce 的值</th><th>谁在用</th></tr>
+<tr><td><b>① 语义量</b> \(S\)</td><td>应用层看到的张量有多大</td><td>\(S\)</td><td>写模型的人：「我这层要 all-reduce 一个 64 MiB 的激活」</td></tr>
+<tr><td><b>② 线上量</b> \(W\)</td><td>每卡 NVLink / 网卡端口实际吐出多少字节</td><td>\(2\frac{N-1}{N}S \approx 2S\)</td><td>算带宽占用、算耗时、算成本的人</td></tr>
+<tr><td><b>③ 时间</b> \(T\)</td><td>这次调用花多久</td><td>\(2(N-1)\alpha + W\beta\)</td><td>判断能不能被计算掩盖、要不要换算法的人</td></tr>
+</table>
+<p>三者关系：<b>① 决定 ②（差一个算法系数），② 和步数决定 ③（差一个带宽和延迟）</b>。很多「我算出来通信量对不上」的困惑，都是因为一方说的是 ① 而另一方说的是 ②，或者把 algbw（用 ① 算）当成了 busBw（用 ② 算）——§3.4 专门讲这件事。</p>
+
+<h2 id="ops">2. 八个原语：一张图看懂输入 → 输出</h2>
+
+<p>下面八张卡片是<b>本篇的核心图</b>。约定：<b>每个色块 = 一个大小为 \(S/N\) 的槽位</b>，所以「色块数量 = 缓冲区大小」；<b>颜色 = 这块数据来自哪个 rank</b>（唯一例外是 scatter 的输入侧：root 那四块的颜色表示它将去往哪个 rank）；<b>四色条纹 = 已被归约（求和）的数据</b>；<b>虚线框 = 该 rank 此处没有数据</b>。全部按 \(N=4\) 画。</p>
+
+<div class="oplegend">
+  图例：<span class="chip k0"></span>来自 r0 <span class="chip k1"></span>来自 r1 <span class="chip k2"></span>来自 r2 <span class="chip k3"></span>来自 r3 <span class="chip ksum"></span>已归约（Σ 全部 4 个 rank）<span class="chip knone"></span>空
+</div>
+
+<div class="opgrid">
+
+  <div class="opcard">
+    <h4>① Broadcast 广播</h4>
+    <p class="sub">root 的一份数据复制给所有人。<code>dist.broadcast(t, src=0)</code></p>
+    <div class="opbody">
+      <div class="opside"><div class="hd">输入</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip knone"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip knone"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip knone"></i></span></div>
+      </div>
+      <div class="opmid">→</div>
+      <div class="opside"><div class="hd">输出</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opcard">
+    <h4>② Scatter 分发</h4>
+    <p class="sub">root 的一份数据切成 N 片，第 i 片给 r<sub>i</sub>。<code>dist.scatter(out, in_list, src=0)</code></p>
+    <div class="opbody">
+      <div class="opside"><div class="hd">输入</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i><i class="chip k1"></i><i class="chip k2"></i><i class="chip k3"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip knone"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip knone"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip knone"></i></span></div>
+      </div>
+      <div class="opmid">→</div>
+      <div class="opside"><div class="hd">输出</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip k1"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip k2"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip k3"></i></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opcard">
+    <h4>③ Gather 收集</h4>
+    <p class="sub">Scatter 的逆：每人交一片，全汇总到 root。<code>dist.gather(t, gather_list, dst=0)</code></p>
+    <div class="opbody">
+      <div class="opside"><div class="hd">输入</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip k1"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip k2"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip k3"></i></span></div>
+      </div>
+      <div class="opmid">→</div>
+      <div class="opside"><div class="hd">输出</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i><i class="chip k1"></i><i class="chip k2"></i><i class="chip k3"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip knone"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip knone"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip knone"></i></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opcard">
+    <h4>④ All-Gather 全收集</h4>
+    <p class="sub">每人交一片，<b>人人</b>都拿到全套。<code>dist.all_gather_into_tensor(out, in)</code></p>
+    <div class="opbody">
+      <div class="opside"><div class="hd">输入</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip k1"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip k2"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip k3"></i></span></div>
+      </div>
+      <div class="opmid">→</div>
+      <div class="opside"><div class="hd">输出</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i><i class="chip k1"></i><i class="chip k2"></i><i class="chip k3"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip k0"></i><i class="chip k1"></i><i class="chip k2"></i><i class="chip k3"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip k0"></i><i class="chip k1"></i><i class="chip k2"></i><i class="chip k3"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip k0"></i><i class="chip k1"></i><i class="chip k2"></i><i class="chip k3"></i></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opcard">
+    <h4>⑤ Reduce 归约</h4>
+    <p class="sub">所有人的数据逐元素求和，结果只给 root。<code>dist.reduce(t, dst=0)</code></p>
+    <div class="opbody">
+      <div class="opside"><div class="hd">输入</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip k1"></i><i class="chip k1"></i><i class="chip k1"></i><i class="chip k1"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip k2"></i><i class="chip k2"></i><i class="chip k2"></i><i class="chip k2"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip k3"></i><i class="chip k3"></i><i class="chip k3"></i><i class="chip k3"></i></span></div>
+      </div>
+      <div class="opmid">→</div>
+      <div class="opside"><div class="hd">输出</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip ksum"></i><i class="chip ksum"></i><i class="chip ksum"></i><i class="chip ksum"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip knone"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip knone"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip knone"></i></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opcard">
+    <h4>⑥ All-Reduce 全归约 ★</h4>
+    <p class="sub">求和后<b>人人</b>都有一份。训练里出现频率最高的原语。<code>dist.all_reduce(t)</code></p>
+    <div class="opbody">
+      <div class="opside"><div class="hd">输入</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip k1"></i><i class="chip k1"></i><i class="chip k1"></i><i class="chip k1"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip k2"></i><i class="chip k2"></i><i class="chip k2"></i><i class="chip k2"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip k3"></i><i class="chip k3"></i><i class="chip k3"></i><i class="chip k3"></i></span></div>
+      </div>
+      <div class="opmid">→</div>
+      <div class="opside"><div class="hd">输出</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip ksum"></i><i class="chip ksum"></i><i class="chip ksum"></i><i class="chip ksum"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip ksum"></i><i class="chip ksum"></i><i class="chip ksum"></i><i class="chip ksum"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip ksum"></i><i class="chip ksum"></i><i class="chip ksum"></i><i class="chip ksum"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip ksum"></i><i class="chip ksum"></i><i class="chip ksum"></i><i class="chip ksum"></i></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opcard">
+    <h4>⑦ Reduce-Scatter 归约分发 ★</h4>
+    <p class="sub">求和后<b>切片分发</b>：r<sub>i</sub> 只拿第 i 片的和。<code>dist.reduce_scatter_tensor(out, in)</code></p>
+    <div class="opbody">
+      <div class="opside"><div class="hd">输入</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip k1"></i><i class="chip k1"></i><i class="chip k1"></i><i class="chip k1"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip k2"></i><i class="chip k2"></i><i class="chip k2"></i><i class="chip k2"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip k3"></i><i class="chip k3"></i><i class="chip k3"></i><i class="chip k3"></i></span></div>
+      </div>
+      <div class="opmid">→</div>
+      <div class="opside"><div class="hd">输出</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip ksum"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip ksum"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip ksum"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip ksum"></i></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opcard">
+    <h4>⑧ All-to-All 全交换 ★</h4>
+    <p class="sub">每人给每人发<b>不同</b>的一块（分布式转置）。MoE 的命脉。<code>dist.all_to_all_single(out, in)</code></p>
+    <div class="opbody">
+      <div class="opside"><div class="hd">输入（每行四块都是自己的）</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i><i class="chip k0"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip k1"></i><i class="chip k1"></i><i class="chip k1"></i><i class="chip k1"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip k2"></i><i class="chip k2"></i><i class="chip k2"></i><i class="chip k2"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip k3"></i><i class="chip k3"></i><i class="chip k3"></i><i class="chip k3"></i></span></div>
+      </div>
+      <div class="opmid">→</div>
+      <div class="opside"><div class="hd">输出（第 j 块来自 r<sub>j</sub>）</div>
+        <div class="oprow"><span class="rl">r0</span><span class="chips"><i class="chip k0"></i><i class="chip k1"></i><i class="chip k2"></i><i class="chip k3"></i></span></div>
+        <div class="oprow"><span class="rl">r1</span><span class="chips"><i class="chip k0"></i><i class="chip k1"></i><i class="chip k2"></i><i class="chip k3"></i></span></div>
+        <div class="oprow"><span class="rl">r2</span><span class="chips"><i class="chip k0"></i><i class="chip k1"></i><i class="chip k2"></i><i class="chip k3"></i></span></div>
+        <div class="oprow"><span class="rl">r3</span><span class="chips"><i class="chip k0"></i><i class="chip k1"></i><i class="chip k2"></i><i class="chip k3"></i></span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<p class="cap"><b>看图的两个要点</b>：① 比较「输入侧色块总数」和「输出侧色块总数」——All-Gather 让每卡缓冲区从 \(S/N\) 涨到 \(S\)，Reduce-Scatter 让它从 \(S\) 缩到 \(S/N\)，这两个正好互逆；② All-to-All 是八张卡里唯一「<b>单色行变四色行</b>」的原语：输入侧每行四块同色（都是自己的），输出侧每行集齐四色各一块。把输入第 \(s\) 行和输出第 \(s\) <b>列</b>对着看：颜色 \(k_s\) 从横着的一行变成竖着的一列——这就是一次矩阵转置。它与 All-Gather 的输出完全相同，差别只在输入四块是否互不相同（§2.1）。</p>
+
+<h3>2.1 原语之间的等价关系（记这几条就够了）</h3>
+<div class="formula">
+\[
+\underbrace{\text{All-Reduce}}_{\text{人人有和}} \;=\; \underbrace{\text{Reduce-Scatter}}_{\text{各拿一片的和}} \;+\; \underbrace{\text{All-Gather}}_{\text{把片段拼给所有人}}
+\]
+\[
+\text{All-Gather} = \text{All-to-All 的特例（每行都发同一块）},\qquad
+\text{Broadcast} = \text{All-Gather 的特例（只有 root 有数据）}
+\]
+\[
+\text{Reduce} = \text{Reduce-Scatter} + \text{Gather},\qquad
+\text{All-Reduce} = \text{Reduce} + \text{Broadcast}\ (\text{但 root 是瓶颈，没人这么实现})
+\]
+</div>
+<p>第一条恒等式是全部现代分布式训练的地基：</p>
+<ul>
+<li><b>Megatron 序列并行（SP）</b>：把 TP 里的 all-reduce 拆成 reduce-scatter + all-gather，<b>总线上量一模一样</b>（\(2\frac{N-1}{N}S\)），但中间的 LayerNorm / Dropout 激活可以只存 \(1/N\)，白省显存。</li>
+<li><b>ZeRO-1/2、FSDP</b>：梯度不再 all-reduce，而是 reduce-scatter（每卡只留自己那 \(1/N\) 的梯度去更新优化器状态），更新完再 all-gather 参数。通信量与普通 DP 相同。</li>
+<li><b>Ring All-Reduce</b>：本身就是按这条恒等式实现的两阶段算法（§4）。</li>
+</ul>
+
+<h3>2.2 用 PyTorch 写出来：shape 是唯一容易错的地方</h3>
+<p>把上面八张卡片翻译成代码。<b>注意每个 API 里的张量是「每卡的」还是「总量的」</b>——这是最容易写错、也最容易导致通信量算错的地方：</p>
+<pre><code class="language-python">import torch, torch.distributed as dist
+
+N = dist.get_world_size()          # rank 数
+r = dist.get_rank()                # 我是谁
+
+# ① broadcast：所有 rank 都要传同一个 tensor，root 的值覆盖其他人
+t = torch.full((1024,), float(r), device="cuda")   # 每卡 shape [1024]
+dist.broadcast(t, src=0)                           # 之后所有卡的 t 都等于 r0 的值
+
+# ② / ③ scatter / gather：list 版本只在 root 上需要
+in_list = [torch.full((256,), float(i), device="cuda") for i in range(N)] if r == 0 else None
+out     = torch.empty(256, device="cuda")
+dist.scatter(out, in_list, src=0)                  # root 的 N×256 -> 每卡 256
+g_list  = [torch.empty(256, device="cuda") for _ in range(N)] if r == 0 else None
+dist.gather(out, g_list, dst=0)
+
+# ④ all-gather：**输出是输入的 N 倍**
+local = torch.randn(256, device="cuda")            # 每卡 [256]
+full  = torch.empty(N * 256, device="cuda")        # 每卡 [N*256]  <- 别写成 256
+dist.all_gather_into_tensor(full, local)
+
+# ⑤ / ⑥ reduce / all-reduce：shape 完全不变，只有值变了
+g = torch.randn(4096, device="cuda")
+dist.all_reduce(g, op=dist.ReduceOp.SUM)           # 每卡 [4096] -> [4096]
+g /= N                                             # 求平均要自己除
+
+# ⑦ reduce-scatter：**输入是输出的 N 倍**（与 all-gather 相反）
+src = torch.randn(N * 256, device="cuda")          # 每卡 [N*256]
+dst = torch.empty(256, device="cuda")              # 每卡 [256]
+dist.reduce_scatter_tensor(dst, src, op=dist.ReduceOp.SUM)
+
+# ⑧ all-to-all：输入输出同 shape，但按 rank 维重新分配
+send = torch.randn(N, 256, device="cuda")          # send[j] 是要发给 rank j 的
+recv = torch.empty(N, 256, device="cuda")          # recv[i] 是 rank i 发来的
+dist.all_to_all_single(recv, send)
+
+# 异步 + 与计算重叠：几乎所有真实性能优化都靠这两个参数
+work = dist.all_reduce(g, async_op=True)           # 立刻返回句柄
+do_something_else()                                # 计算与通信重叠
+work.wait()                                        # 需要结果时才阻塞
+</code></pre>
+<p class="cap"><code>all_gather_into_tensor</code> / <code>reduce_scatter_tensor</code> / <code>all_to_all_single</code> 是「单张量」版本，比 list 版本少一次显存拷贝，实际框架里用的都是它们，底层直接对应 NCCL 的 <code>ncclAllGather</code> / <code>ncclReduceScatter</code> / <code>ncclSend+Recv</code>。</p>
+
+<div class="infer">
+  PyTorch 的 <code>all_gather(tensor_list, tensor)</code>（list 版本）在 NCCL 后端上是用 \(N\) 组 send/recv 模拟的，比 <code>all_gather_into_tensor</code> 慢；后者才走真正的 <code>ncclAllGather</code>。写性能敏感代码时一律用单张量版本。
+</div>
+<h2 id="volume">3. 通信量怎么算：α-β 模型、八个原语的推导与速查表</h2>
+
+<h3>3.1 α-β 模型：一次集合通信花多久</h3>
+<p>业界通用的成本模型只有两项。设一次调用被拆成 \(k\) 步点对点传输、每卡累计发出 \(W\) 字节：</p>
+<div class="formula">
+\[
+T \;=\; \underbrace{k\cdot\alpha}_{\text{延迟项：与消息大小无关}} \;+\; \underbrace{W\cdot\beta}_{\text{带宽项}=\,W/B}
+\]
+</div>
+<p>模型假设链路全双工（收发同时）、每卡各有一条带宽 \(B\) 的链路、且所有链路同速。它不精确，但足够回答两类问题：</p>
+<ul>
+<li><b>\(W \ll \alpha B\)（小消息）</b>：\(T \approx k\alpha\)，<b>只看步数</b>。这正是 decode 阶段 TP all-reduce 的处境——512 KiB 的消息，时间全花在 14 次传输的启动与同步上。</li>
+<li><b>\(W \gg \alpha B\)（大消息）</b>：\(T \approx W/B\)，<b>只看每卡线上量</b>。这正是 prefill 激活和梯度 all-reduce 的处境。</li>
+</ul>
+
+<p>两段的分界点 \(S^\ast\) 满足「延迟项 = 带宽项」。以机内 8 卡、\(\alpha=1.5\,\mu s\)、\(B=450\) GB/s 代入 All-Reduce（\(k=2(N-1)\)、\(W=2\frac{N-1}{N}S\)）：</p>
+<div class="formula">
+\[
+2(N-1)\alpha = 2\tfrac{N-1}{N}S^\ast\beta
+\;\Longrightarrow\;
+S^\ast = N\alpha B = 8 \times 1.5\,\mu s \times 450\,\text{GB/s} \approx \mathbf{5.2\ MiB}
+\]
+</div>
+<div class="keypoint">
+  <b>\(S^\ast\approx 5\) MiB 是个很有用的经验值</b>：机内 all-reduce 的消息<b>小于 5 MiB 就属于延迟主导</b>——此时加带宽毫无帮助，该做的是<b>减少调用次数（融合）、减少步数（换 Tree / one-shot）</b>；大于 5 MiB 才轮到「压线上量」出场。注意 \(S^\ast\) 与 \(N\) 成正比、与 \(\alpha B\) 成正比：跨机（\(\alpha\) 大 10 倍、\(B\) 小 9 倍）时 \(S^\ast\) 会涨到几百 MiB，也就是<b>跨机场景下几乎所有 LLM 通信都是延迟主导的</b>。
+</div>
+
+<h4>3.1.1 \(k\)（步数）到底是什么：串行的时间深度</h4>
+
+<p>\(k\) 不是「一共发生了多少次 send」，而是<b>无法并行掉的那部分时间深度</b>。把它想成接力赛：<b>同时进行的传递算一棒，必须等上一棒跑完才能开始的传递算下一棒</b>。</p>
+
+<p>用 Ring Reduce-Scatter（§4 详解）看这条界线在哪：</p>
+<ul>
+<li>第 1 步里，\(N\) 张卡<b>同时</b>各发一个 \(S/N\) 的块给下游。这是 \(N\) 次 send，但只算 <b>1 步</b>——因为它们互不依赖，占的是同一段时间。</li>
+<li>第 2 步必须等第 1 步的接收方把数据加完才能发，所以它是<b>新的一棒</b>，要多付一个 \(\alpha\)。</li>
+<li>一个块要集齐 \(N\) 份数据，必须依次经过 \(N-1\) 张卡 → <b>\(N-1\) 步</b>。加上 All-Gather 那 \(N-1\) 步，All-Reduce 共 \(k=2(N-1)\)。</li>
+</ul>
+
+<p>\(W\) 则是<b>同一张卡在整个过程中累计发出的字节</b>，与并行无关：Ring Reduce-Scatter 里每卡每步发 \(S/N\)、发 \(N-1\) 步，所以 \(W=(N-1)\cdot\frac{S}{N}=\frac{N-1}{N}S\)。</p>
+
+<div class="keypoint">
+<b>\(\alpha\) 项数的是「串行深度」，\(\beta\) 项数的是「单卡累计字节」——两者的口径根本不同，这是最容易搞混的地方。</b>
+所以「星型 all-reduce」的 \(k\) 只有 2（收一轮、发一轮，看起来步数极少），但根节点的 \(W=2(N-1)S\) 是别人的 \(N\) 倍，时间照样被它拖死。反过来 Ring 的 \(k=2(N-1)\) 很大，但每卡 \(W\) 与 \(N\) 无关。<b>判断一个算法好不好，必须两项一起看，而且 \(W\) 要看最忙那张卡：</b>
+\[ T \;=\; k\cdot\alpha \;+\; \max_r W(r)\cdot\beta \qquad(\text{用 } \max_r W(r)\text{，不是平均值 }\overline{W}) \]
+</div>
+
+<p>两类算法因此各占一头：<b>树 / 递归折半</b>把 \(k\) 压到 \(O(\log N)\) 而 \(W\) 一分不变（小消息赢）；<b>环</b>把 \(W\) 压到下界而 \(k\) 是 \(O(N)\)（大消息赢）。§3.2 逐个原语把这两笔账算出来，§5.2 给出选型表。</p>
+
+<h3>3.2 通信量推导：All-Reduce 下界与八个原语的 \(W\)</h3>
+<h4>3.2.1 先证 All-Reduce 的下界</h4>
+<p>这不是 ring 算法的特性，而是<b>任何用 send/recv 实现的 all-reduce 的共同下界</b>。nccl-tests 官方文档给的论证非常干净：</p>
+<ol>
+<li>对每一个元素，最终要得到 \(o_0 = o_1 = \cdots = o_{N-1} = i_0 + i_1 + \cdots + i_{N-1}\)。</li>
+<li>这需要 <b>\(N-1\) 次加法</b>（把 \(N\) 个输入合成一个）和 <b>\(N\) 次赋值</b>（把结果放到 \(N\) 个 rank 上）。</li>
+<li>除了「最后一个输入恰好与第一个输出在同一个 rank」这一处能省掉，其余每次加法 / 赋值都发生在<b>不同的 rank</b> 上，必须靠一次跨 rank 传输完成 → 每个元素至少 <b>\(2(N-1)\) 次传输</b>。</li>
+<li>\(N\) 个 rank 各有一条带宽 \(B\) 的对外链路，\(S\) 个元素 × \(2(N-1)\) 次传输分摊到 \(N\) 条链路上：</li>
+</ol>
+<div class="formula">
+\[
+t \;\ge\; \frac{S\cdot 2(N-1)}{N\cdot B}
+\;=\; \frac{S}{B}\cdot 2\frac{N-1}{N}
+\qquad\Longrightarrow\qquad
+W_{\min} = 2\frac{N-1}{N}S
+\]
+</div>
+<p>Ring All-Reduce <b>正好达到这个下界</b>（§4 逐步验证），所以被称为「带宽最优」。下面把同样的算法套到其余七个原语上，逐个把 \(W\) 算出来。</p>
+<div class="keypoint">
+  <b>\(2\frac{N-1}{N}\) 随 \(N\) 的变化：\(N=2\) → 1.0，\(N=4\) → 1.5，\(N=8\) → 1.75，\(N=64\) → 1.97，\(N\to\infty\) → 2。</b>
+  即 <b>All-Reduce 的每卡线上量与卡数几乎无关</b>——这正是数据并行能扩到上千卡的原因：卡越多，每卡要传的字节数<b>不变</b>（永远约等于 2× 梯度大小）。但<b>延迟项 \(2(N-1)\alpha\) 是随 \(N\) 线性增长的</b>，所以小消息场景下卡数依然会要命（见 §3.5 图与 §5）。
+</div>
+
+<h4>3.2.2 推导前先分清三个量</h4>
+
+<p>「通信量」这个词在资料里至少有三种口径，混用会得出完全相反的结论。本节统一记号：</p>
+
+<table>
+<thead><tr><th>记号</th><th>含义</th><th>用在哪</th></tr></thead>
+<tbody>
+<tr><td>\(W(r)\)</td><td>rank \(r\) 全程<b>累计发出</b>的字节数</td><td>逐卡算账；接收量在全双工下与之对称，不额外花时间</td></tr>
+<tr><td>\(W_{\max}=\max_r W(r)\)</td><td><b>最忙那张卡</b>的量</td><td>决定时间：\(T = k\alpha + W_{\max}\beta\)（§3.1.1）</td></tr>
+<tr><td>\(\sum_r W(r)\)</td><td>全网所有链路上的总字节</td><td>判断链路有没有被吃满；除以 \(N\) 得平均值 \(\overline{W}\)</td></tr>
+</tbody>
+</table>
+
+<p><b>Ring、递归折半、双二叉树的 \(W(r)\) 对所有 \(r\) 都相同</b>，所以 \(W_{\max}=\overline{W}\)，账很好算。<b>星型和朴素二项树不是</b>——它们的 \(W_{\max}\) 可以是 \(\overline{W}\) 的好几倍，这正是它们输掉的原因。§3.3 表里的 \(W\) 一律指 \(W_{\max}\)。</p>
+
+<h4>3.2.3 Broadcast 与 Reduce：一对镜像</h4>
+
+<p><b>Broadcast</b>：root 有 \(S\)，其余为 0；结束时人人有 \(S\)。</p>
+
+<ol>
+<li><b>下界</b>：\(N-1\) 个节点各要收到 \(S\)，所以 \(\sum_r W(r) \ge (N-1)S\)。摊到 \(N\) 条链路上，每卡的理想值是 \(\frac{N-1}{N}S \approx S\)。</li>
+<li><b>线性 / 星型</b>：root 依次发给 \(N-1\) 个节点 → \(W(\text{root})=(N-1)S\)、其余为 0。<b>\(W_{\max}\) 是理想值的 \(N\) 倍</b>，\(k=N-1\)。（若交换机允许 root 同时发 \(N-1\) 份，\(k\) 可以记 1，但 root 的 NIC 仍要吐 \((N-1)S\) 字节，\(\beta\) 项一分没省。）</li>
+<li><b>二项树（倍增树）</b>：第 \(i\) 步由所有已拿到数据的 \(2^i\) 个节点同时转发给 \(r+2^i\)，故 \(k=\log_2 N\)。但每卡的发送次数<b>极不均匀</b>——\(N=8\) 时逐卡发送份数是 <code>[3,2,1,1,0,0,0,0]</code>（单位 \(S\)），root 发 \(\log_2 N\cdot S = 3S\)，而 \(\sum_r W(r)=7S=(N-1)S\)，<b>与线性实现完全相同</b>。</li>
+<li><b>分块流水线</b>：把 \(S\) 切成 \(P\) 块，收到一块就立刻转发。\(k=\log_2 N + P\)，而每卡累计转发量降到 \(\approx\frac{N-1}{N}S\)。这才是 §3.3 表里 Broadcast 记 \(W=S\) 的由来，也是 NCCL 双二叉树 + 分块的实际形态。</li>
+</ol>
+
+<div class="infer trap">
+<b>「树状广播的通信量是 \(\log_2 N\cdot S\)」——这个流传很广的说法是错的，或至少严重误导。</b>
+\(\log_2 N\) 是<b>步数</b>（\(\alpha\) 项），不是通信量的改善。朴素二项树里 \(\log_2 N\cdot S\) 只是 <b>root 一张卡</b>的发送量，全网总量仍是 \((N-1)S\)，和线性实现一模一样；而且 \(\log_2 N\cdot S > S\)，比起流水线的 \(\approx S\) 反而<b>更差</b>。
+树买到的是「\(N-1\) 步 → \(\log_2 N\) 步」，即延迟项缩小 \(\frac{N-1}{\log_2 N}\) 倍（\(N=8\) 时 2.3×，\(N=1024\) 时 102×）。<b>小消息用树是因为步数，不是因为字节变少了。</b>
+</div>
+
+<div class="fig">
+<svg viewBox="0 0 880 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="N=8 二项树广播的时间展开图：三步覆盖八卡，逐卡发送份数 3,2,1,1,0,0,0,0，总量仍为 (N-1)S">
+  <defs>
+    <marker id="bcastarrb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+    <marker id="bcastarrg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    </marker>
+    <marker id="bcastarro" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#e8862a"/>
+    </marker>
+  </defs>
+  <text x="440" y="24" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1f2e">N = 8 二项树（倍增树）广播：3 步覆盖 8 卡，但发送次数极不均匀</text>
+  <text x="150" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#5a6272">初始</text>
+  <text x="340" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#2456c4">步 1：r→r+1</text>
+  <text x="530" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#2f9e63">步 2：r→r+2</text>
+  <text x="720" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#e8862a">步 3：r→r+4</text>
+  <line x1="159" y1="66" x2="331" y2="66" stroke="#c9d2e0" stroke-width="1.3"/>
+  <line x1="156" y1="70" x2="334" y2="92" stroke="#2456c4" stroke-width="1.8" marker-end="url(#bcastarrb)"/>
+  <line x1="349" y1="66" x2="521" y2="66" stroke="#c9d2e0" stroke-width="1.3"/>
+  <line x1="346" y1="70" x2="524" y2="122" stroke="#2f9e63" stroke-width="1.8" marker-end="url(#bcastarrg)"/>
+  <line x1="349" y1="96" x2="521" y2="96" stroke="#c9d2e0" stroke-width="1.3"/>
+  <line x1="346" y1="100" x2="524" y2="152" stroke="#2f9e63" stroke-width="1.8" marker-end="url(#bcastarrg)"/>
+  <line x1="539" y1="66" x2="711" y2="66" stroke="#c9d2e0" stroke-width="1.3"/>
+  <line x1="536" y1="70" x2="714" y2="182" stroke="#e8862a" stroke-width="1.8" marker-end="url(#bcastarro)"/>
+  <line x1="539" y1="96" x2="711" y2="96" stroke="#c9d2e0" stroke-width="1.3"/>
+  <line x1="536" y1="100" x2="714" y2="212" stroke="#e8862a" stroke-width="1.8" marker-end="url(#bcastarro)"/>
+  <line x1="539" y1="126" x2="711" y2="126" stroke="#c9d2e0" stroke-width="1.3"/>
+  <line x1="536" y1="130" x2="714" y2="242" stroke="#e8862a" stroke-width="1.8" marker-end="url(#bcastarro)"/>
+  <line x1="539" y1="156" x2="711" y2="156" stroke="#c9d2e0" stroke-width="1.3"/>
+  <line x1="536" y1="160" x2="714" y2="272" stroke="#e8862a" stroke-width="1.8" marker-end="url(#bcastarro)"/>
+  <circle cx="150" cy="66" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="150" cy="96" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="150" cy="126" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="150" cy="156" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="150" cy="186" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="150" cy="216" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="150" cy="246" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="150" cy="276" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="340" cy="66" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="340" cy="96" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="340" cy="126" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="340" cy="156" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="340" cy="186" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="340" cy="216" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="340" cy="246" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="340" cy="276" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="530" cy="66" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="530" cy="96" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="530" cy="126" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="530" cy="156" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="530" cy="186" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="530" cy="216" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="530" cy="246" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="530" cy="276" r="9" fill="#f7f8fa" stroke="#c9d2e0" stroke-width="1.2"/>
+  <circle cx="720" cy="66" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="720" cy="96" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="720" cy="126" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="720" cy="156" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="720" cy="186" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="720" cy="216" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="720" cy="246" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <circle cx="720" cy="276" r="9" fill="#eef3fc" stroke="#2456c4" stroke-width="1.5"/>
+  <text x="118" y="69.5" text-anchor="end" font-size="10.5" fill="#5a6272">r0</text>
+  <text x="118" y="99.5" text-anchor="end" font-size="10.5" fill="#5a6272">r1</text>
+  <text x="118" y="129.5" text-anchor="end" font-size="10.5" fill="#5a6272">r2</text>
+  <text x="118" y="159.5" text-anchor="end" font-size="10.5" fill="#5a6272">r3</text>
+  <text x="118" y="189.5" text-anchor="end" font-size="10.5" fill="#5a6272">r4</text>
+  <text x="118" y="219.5" text-anchor="end" font-size="10.5" fill="#5a6272">r5</text>
+  <text x="118" y="249.5" text-anchor="end" font-size="10.5" fill="#5a6272">r6</text>
+  <text x="118" y="279.5" text-anchor="end" font-size="10.5" fill="#5a6272">r7</text>
+  <text x="776" y="69.5" font-size="10.5" font-weight="700" fill="#b4232a">发 3 份</text>
+  <text x="776" y="99.5" font-size="10.5" font-weight="700" fill="#c2701c">发 2 份</text>
+  <text x="776" y="129.5" font-size="10.5" fill="#2456c4">发 1 份</text>
+  <text x="776" y="159.5" font-size="10.5" fill="#2456c4">发 1 份</text>
+  <text x="776" y="189.5" font-size="10.5" fill="#8b93a5">发 0 份</text>
+  <text x="776" y="219.5" font-size="10.5" fill="#8b93a5">发 0 份</text>
+  <text x="776" y="249.5" font-size="10.5" fill="#8b93a5">发 0 份</text>
+  <text x="776" y="279.5" font-size="10.5" fill="#8b93a5">发 0 份</text>
+  <text x="800" y="46" text-anchor="middle" font-size="10.5" fill="#5a6272">逐卡发出量</text>
+  <text x="440" y="308" text-anchor="middle" font-size="11.5" fill="#b4232a">root 一张卡发 log₂N·S = 3S ← 「树状广播通信量 = log₂N·S」的说法只说到这一张卡</text>
+  <text x="440" y="330" text-anchor="middle" font-size="11.5" fill="#1a1f2e">全网 Σ W(r) = 3+2+1+1 = 7 份 = (N−1)S，与线性实现完全相同 —— 树买到的是步数 7→3，不是字节</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-1</b>：二项树（倍增树）广播，\(N=8\)。第 \(i\) 步由所有已拿到数据的 \(2^i\) 个节点<b>同时</b>转发给 \(r+2^i\)，所以 3 步就覆盖 8 卡（\(k=\log_2 N\)）——图上四列就是四个时刻，时间从左往右流。但看右列「发几份」：r0 发了 3 次、r1 两次、r2/r3 各一次、r4–r7 一次都没发。\(W_{\max}=3S=\log_2 N\cdot S\)，而 \(\sum_r W(r)=7S=(N-1)S\) —— <b>总字节和线性实现一模一样</b>，只是压在了左边几张卡上。这就是 §3.2.2 里「朴素二项树的 \(W_{\max}\) 是 \(\overline W\) 的好几倍」的图像版。</p>
+
+<p><b>Reduce</b> 是 Broadcast 的镜像（人人有 \(S\)，结束时只有 root 有归约结果）：</p>
+
+<ol>
+<li><b>星型</b>：每个非根发 \(S\) → 发送侧很均匀（\(W_{\max}=S\)），但 root 要<b>收</b> \((N-1)S\)，接收侧成了瓶颈，且 \(k=N-1\)。</li>
+<li><b>二项树</b>：\(k=\log_2 N\)。每个非根只向父节点发 <b>1 份</b>已归约的 \(S\)（子树的数据在上行途中就被合并了），所以 \(W_{\max}=S\)；root 从 \(\log_2 N\) 个孩子各收 \(S\)，收 \(\log_2 N\cdot S\)。</li>
+<li>结论：Reduce 的发送侧本来就近乎最优，树改善的是<b>步数</b>和 <b>root 的接收侧</b>。§3.3 表里记 \(W=S\)。</li>
+</ol>
+
+<p><b>Scatter / Gather</b> 是上面两者的「切块版」：root 的 \(S\) 切成 \(N\) 份，第 \(i\) 份归 rank \(i\)。</p>
+<ul>
+<li><b>Scatter</b>：root 发 \(\frac{N-1}{N}S\)（自己那份不用发），其余为 0 → \(W_{\max}=\frac{N-1}{N}S\)；每个非根收 \(S/N\)。\(k=N-1\)（线性）或 \(\log_2 N\)（树）。</li>
+<li><b>Gather</b>：每个非根发 \(S/N\) → \(W_{\max}=S/N\)；root 收 \(\frac{N-1}{N}S\)。与 Scatter 镜像。</li>
+</ul>
+
+<h4>3.2.4 Reduce-Scatter：两种算法，同一个 \(W\)</h4>
+
+<p><b>定义</b>：每卡输入 \(S\)；结束后 rank \(r\) 只持有「第 \(r\) 块的总和」，大小 \(S/N\)。</p>
+
+<div class="formula">
+\[
+W \;\ge\; (N-1)\cdot\frac{S}{N} \;=\; \frac{N-1}{N}S
+\qquad\text{（每卡必须把自己那份数据中属于其余 } N-1 \text{ 块的部分送出去）}
+\]
+</div>
+
+<table>
+<thead><tr><th>算法</th><th>步数 \(k\)</th><th>每卡线上量 \(W\)</th><th>推导</th></tr></thead>
+<tbody>
+<tr><td><b>Ring</b></td><td>\(N-1\)</td><td>\(\frac{N-1}{N}S\) ✓达到下界</td><td>每步发一块 \(S/N\)，共 \(N-1\) 步 → \((N-1)\cdot\frac{S}{N}\)</td></tr>
+<tr><td><b>递归折半</b><br>recursive halving</td><td>\(\log_2 N\)</td><td>\(\frac{N-1}{N}S\) ✓达到下界</td><td>第 \(j\) 步与 rank \(r\oplus 2^{d-j}\) 交换当前数据的一半并累加（\(d=\log_2 N\)）：<br>\(\displaystyle W=\sum_{j=1}^{d}\frac{S}{2^{j}} = S\Big(1-\frac{1}{2^{d}}\Big)=\Big(1-\frac{1}{N}\Big)S=\frac{N-1}{N}S\)</td></tr>
+</tbody>
+</table>
+
+<div class="keypoint">
+<b>这是全篇最重要的一条推导：步数从 \(N-1\) 降到 \(\log_2 N\)，\(W\) 一个字节都没多。</b>
+递归折半每步交换的量<b>指数衰减</b>（\(S/2, S/4, S/8,\dots\)），几何级数求和刚好收敛到 \((1-\frac1N)S\)；而 Ring 每步交换的量<b>恒定</b>（\(S/N\)），要 \(N-1\) 步才凑齐同一个总数。<b>「树/递归类算法必然多花流量」是错觉</b>——它们只是把同样的字节压缩进了更少的轮次。这就是 NCCL 在小消息上切到 <code>Tree</code> / <code>PAT</code> 而不损失带宽的数学基础。
+</div>
+
+<h4>3.2.5 All-Gather：镜像的递归加倍</h4>
+
+<p><b>定义</b>：每卡输入 \(S/N\)；结束后人人持有拼接好的 \(S\)。</p>
+
+<div class="infer trap">
+<b>\(S\) 的口径在这里会翻 \(N\) 倍，是最常见的算错点。</b>本节和 §3.3 表一律取 <b>\(S=\) 输出总长</b>（即拼接后的完整张量）。若你习惯用「本地分片 \(s\)」，则 \(W=(N-1)s=\frac{N-1}{N}S\)，看着像差 \(N\) 倍其实是同一个数。<b>nccl-tests 的 <code>size</code> 列、<code>all_gather_into_tensor</code> 的输出张量都按输出总长算</b>；而 PyTorch 的 <code>all_gather(list, tensor)</code> 里你传进去的 <code>tensor</code> 是分片。对不上时先查口径。
+</div>
+
+<table>
+<thead><tr><th>算法</th><th>步数 \(k\)</th><th>每卡线上量 \(W\)</th><th>推导</th></tr></thead>
+<tbody>
+<tr><td><b>Ring</b></td><td>\(N-1\)</td><td>\(\frac{N-1}{N}S\) ✓</td><td>每步转发一块 \(S/N\)，共 \(N-1\) 步（发给自己的那块不上网）</td></tr>
+<tr><td><b>递归加倍</b><br>recursive doubling</td><td>\(\log_2 N\)</td><td>\(\frac{N-1}{N}S\) ✓</td><td>第 \(i\) 步与 rank \(r\oplus 2^{i}\) 互换全部已有数据，持有量每步翻倍：<br>\(\displaystyle W=\frac{S}{N}\big(1+2+4+\cdots+2^{d-1}\big)=\frac{S}{N}(N-1)=\frac{N-1}{N}S\)</td></tr>
+</tbody>
+</table>
+
+<p>下界同理由「每卡必须收到其余 \(N-1\) 块」给出，也是 \(\frac{N-1}{N}S\)；两种算法都达到。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="递归折半与递归加倍各三步完成 8 卡的 reduce-scatter 与 all-gather，每卡线上量同为 (N-1)/N·S">
+  <defs>
+    <marker id="recarrb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+    <marker id="recarrg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f9e63"/>
+    </marker>
+    <marker id="recarro" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#e8862a"/>
+    </marker>
+  </defs>
+  <line x1="440" y1="18" x2="440" y2="308" stroke="#e3e7ef" stroke-width="1.4"/>
+  <text x="225" y="26" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1a1f2e">A. 递归折半 → Reduce-Scatter</text>
+  <text x="225" y="46" text-anchor="middle" font-size="10.5" fill="#5a6272">每步交换一半并就地累加 → 3 步后每卡只剩 1 块完整和</text>
+  <path d="M53.4,182.9 Q145.0,-22.9 236.6,182.9" fill="none" stroke="#2456c4" stroke-width="1.7" marker-start="url(#recarrb)" marker-end="url(#recarrb)"/>
+  <path d="M103.4,182.9 Q195.0,-22.9 286.6,182.9" fill="none" stroke="#2456c4" stroke-width="1.7" marker-start="url(#recarrb)" marker-end="url(#recarrb)"/>
+  <path d="M153.4,182.9 Q245.0,-22.9 336.6,182.9" fill="none" stroke="#2456c4" stroke-width="1.7" marker-start="url(#recarrb)" marker-end="url(#recarrb)"/>
+  <path d="M203.4,182.9 Q295.0,-22.9 386.6,182.9" fill="none" stroke="#2456c4" stroke-width="1.7" marker-start="url(#recarrb)" marker-end="url(#recarrb)"/>
+  <path d="M53.4,182.9 Q95.0,57.1 136.6,182.9" fill="none" stroke="#2f9e63" stroke-width="1.7" marker-start="url(#recarrg)" marker-end="url(#recarrg)"/>
+  <path d="M103.4,182.9 Q145.0,57.1 186.6,182.9" fill="none" stroke="#2f9e63" stroke-width="1.7" marker-start="url(#recarrg)" marker-end="url(#recarrg)"/>
+  <path d="M253.4,182.9 Q295.0,57.1 336.6,182.9" fill="none" stroke="#2f9e63" stroke-width="1.7" marker-start="url(#recarrg)" marker-end="url(#recarrg)"/>
+  <path d="M303.4,182.9 Q345.0,57.1 386.6,182.9" fill="none" stroke="#2f9e63" stroke-width="1.7" marker-start="url(#recarrg)" marker-end="url(#recarrg)"/>
+  <path d="M53.4,182.9 Q70.0,117.1 86.6,182.9" fill="none" stroke="#e8862a" stroke-width="1.7" marker-start="url(#recarro)" marker-end="url(#recarro)"/>
+  <path d="M153.4,182.9 Q170.0,117.1 186.6,182.9" fill="none" stroke="#e8862a" stroke-width="1.7" marker-start="url(#recarro)" marker-end="url(#recarro)"/>
+  <path d="M253.4,182.9 Q270.0,117.1 286.6,182.9" fill="none" stroke="#e8862a" stroke-width="1.7" marker-start="url(#recarro)" marker-end="url(#recarro)"/>
+  <path d="M353.4,182.9 Q370.0,117.1 386.6,182.9" fill="none" stroke="#e8862a" stroke-width="1.7" marker-start="url(#recarro)" marker-end="url(#recarro)"/>
+  <circle cx="45" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="45" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">0</text>
+  <circle cx="95" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="95" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">1</text>
+  <circle cx="145" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="145" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">2</text>
+  <circle cx="195" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="195" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">3</text>
+  <circle cx="245" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="245" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">4</text>
+  <circle cx="295" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="295" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">5</text>
+  <circle cx="345" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="345" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">6</text>
+  <circle cx="395" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="395" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">7</text>
+  <text x="225" y="222" text-anchor="middle" font-size="10.5" fill="#1a1f2e">结束：每卡只留 1 块完整和（S/N）</text>
+  <text x="225" y="244" text-anchor="middle" font-size="10.5" fill="#2456c4">第 1 步：与 r⊕4 互换，每卡发 S/2 = 0.500S</text>
+  <text x="225" y="262" text-anchor="middle" font-size="10.5" fill="#2f9e63">第 2 步：与 r⊕2 互换，每卡发 S/4 = 0.250S</text>
+  <text x="225" y="280" text-anchor="middle" font-size="10.5" fill="#e8862a">第 3 步：与 r⊕1 互换，每卡发 S/8 = 0.125S</text>
+  <text x="225" y="304" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1f2e">合计 W = S(1/2+1/4+1/8) = 7S/8 = (N−1)S/N</text>
+  <text x="655" y="26" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1a1f2e">B. 递归加倍 → All-Gather</text>
+  <text x="655" y="46" text-anchor="middle" font-size="10.5" fill="#5a6272">每步把已有数据全部互换 → 3 步后每卡集齐 8 块</text>
+  <path d="M483.4,182.9 Q500.0,117.1 516.6,182.9" fill="none" stroke="#2456c4" stroke-width="1.7" marker-start="url(#recarrb)" marker-end="url(#recarrb)"/>
+  <path d="M583.4,182.9 Q600.0,117.1 616.6,182.9" fill="none" stroke="#2456c4" stroke-width="1.7" marker-start="url(#recarrb)" marker-end="url(#recarrb)"/>
+  <path d="M683.4,182.9 Q700.0,117.1 716.6,182.9" fill="none" stroke="#2456c4" stroke-width="1.7" marker-start="url(#recarrb)" marker-end="url(#recarrb)"/>
+  <path d="M783.4,182.9 Q800.0,117.1 816.6,182.9" fill="none" stroke="#2456c4" stroke-width="1.7" marker-start="url(#recarrb)" marker-end="url(#recarrb)"/>
+  <path d="M483.4,182.9 Q525.0,57.1 566.6,182.9" fill="none" stroke="#2f9e63" stroke-width="1.7" marker-start="url(#recarrg)" marker-end="url(#recarrg)"/>
+  <path d="M533.4,182.9 Q575.0,57.1 616.6,182.9" fill="none" stroke="#2f9e63" stroke-width="1.7" marker-start="url(#recarrg)" marker-end="url(#recarrg)"/>
+  <path d="M683.4,182.9 Q725.0,57.1 766.6,182.9" fill="none" stroke="#2f9e63" stroke-width="1.7" marker-start="url(#recarrg)" marker-end="url(#recarrg)"/>
+  <path d="M733.4,182.9 Q775.0,57.1 816.6,182.9" fill="none" stroke="#2f9e63" stroke-width="1.7" marker-start="url(#recarrg)" marker-end="url(#recarrg)"/>
+  <path d="M483.4,182.9 Q575.0,-22.9 666.6,182.9" fill="none" stroke="#e8862a" stroke-width="1.7" marker-start="url(#recarro)" marker-end="url(#recarro)"/>
+  <path d="M533.4,182.9 Q625.0,-22.9 716.6,182.9" fill="none" stroke="#e8862a" stroke-width="1.7" marker-start="url(#recarro)" marker-end="url(#recarro)"/>
+  <path d="M583.4,182.9 Q675.0,-22.9 766.6,182.9" fill="none" stroke="#e8862a" stroke-width="1.7" marker-start="url(#recarro)" marker-end="url(#recarro)"/>
+  <path d="M633.4,182.9 Q725.0,-22.9 816.6,182.9" fill="none" stroke="#e8862a" stroke-width="1.7" marker-start="url(#recarro)" marker-end="url(#recarro)"/>
+  <circle cx="475" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="475" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">0</text>
+  <circle cx="525" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="525" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">1</text>
+  <circle cx="575" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="575" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">2</text>
+  <circle cx="625" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="625" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">3</text>
+  <circle cx="675" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="675" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">4</text>
+  <circle cx="725" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="725" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">5</text>
+  <circle cx="775" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="775" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">6</text>
+  <circle cx="825" cy="190" r="11" fill="#f2f5fa" stroke="#8b93a5" stroke-width="1.5"/>
+  <text x="825" y="193.5" text-anchor="middle" font-size="10" fill="#1a1f2e">7</text>
+  <text x="655" y="222" text-anchor="middle" font-size="10.5" fill="#1a1f2e">结束：每卡持有全部 8 块（S）</text>
+  <text x="655" y="244" text-anchor="middle" font-size="10.5" fill="#2456c4">第 1 步：与 r⊕1 互换，每卡发 S/8 = 0.125S</text>
+  <text x="655" y="262" text-anchor="middle" font-size="10.5" fill="#2f9e63">第 2 步：与 r⊕2 互换，每卡发 S/4 = 0.250S</text>
+  <text x="655" y="280" text-anchor="middle" font-size="10.5" fill="#e8862a">第 3 步：与 r⊕4 互换，每卡发 S/2 = 0.500S</text>
+  <text x="655" y="304" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1f2e">合计 W = (S/N)(1+2+4) = 7S/8 = (N−1)S/N</text>
+</svg>
+</div>
+<p class="cap"><b>图 3-2</b>：同样 8 张卡、同样 3 步，A（递归折半，§3.2.4）做 Reduce-Scatter、B（递归加倍，§3.2.5）做 All-Gather，两者是镜像：A 的交换量按 \(S/2, S/4, S/8\) <b>指数衰减</b>，B 的持有量按 \(S/8, S/4, S/2\) <b>指数增长</b>，几何级数求和都收敛到 \(\frac{N-1}{N}S=\frac78 S\)。配对规则是 <b>rank \(r\) 与 \(r\oplus 2^{i}\) 互换</b>（\(\oplus\) 是异或），所以每步的连线都是完美配对、所有链路同时满载 —— 这是它能在 \(\log_2 N\) 步内跑满带宽的原因，也是 Ring 做不到的。</p>
+
+<h4>3.2.6 All-Reduce = Reduce-Scatter + All-Gather</h4>
+
+<div class="formula">
+\[
+W = \underbrace{\tfrac{N-1}{N}S}_{\text{RS}} + \underbrace{\tfrac{N-1}{N}S}_{\text{AG}} = 2\tfrac{N-1}{N}S,
+\qquad
+k = \underbrace{(N-1)}_{\text{RS}} + \underbrace{(N-1)}_{\text{AG}} = 2(N-1)\ \text{（Ring）}\ \text{或}\ 2\log_2 N\ \text{（递归）}
+\]
+</div>
+
+<p>与 §3.2.1 的下界证明完全吻合。对照星型（参数服务器）：root 收 \((N-1)S\) 再发 \((N-1)S\) → \(W_{\max}=2(N-1)S\)，是 Ring 的 <b>\(N\) 倍</b>。\(N=8\) 时同一份梯度，星型要 14× 的时间——这就是「参数服务器撑不过 8 卡」的算术原因，也是 Horovod 当年换成 ring 的全部理由。</p>
+
+<h4>3.2.7 All-to-All：唯一无法优化的原语</h4>
+
+<p><b>定义</b>：每卡输入 \(S\)，切成 \(N\) 块，第 \(j\) 块发给 rank \(j\)（纯置换，无归约、无复制）。</p>
+
+<div class="formula">
+\[
+W = S - \underbrace{\frac{S}{N}}_{\text{发给自己的那块不上网}} = \frac{N-1}{N}S
+\qquad(\text{既是下界，也是实际值})
+\]
+</div>
+
+<ul>
+<li>没有可聚合的结构 → <b>树、环、递归都帮不上忙</b>，\(W\) 无从再降。\(k=N-1\)（逐对串行）或 \(1\)（全连接直发，NVSwitch / 单跳 IB 内可行）。</li>
+<li>所以 MoE 专家并行（§7.4）和 DeepSpeed-Ulysses 式的上下文并行（§7.1 表的 CP 行）的通信优化只能从另外两个方向下手：<b>少发</b>（FP8 dispatch、top-\(k\) 截断、token 丢弃）和<b>藏起来</b>（DeepEP 用 IBGDA 让 all-to-all 与专家计算重叠）。</li>
+</ul>
+
+<h4>3.2.8 八个原语的推导汇总</h4>
+
+<table>
+<thead><tr><th>原语</th><th>\(W\) 下界的来源</th><th>\(W\)</th><th>Ring \(k\)</th><th>对数级 \(k\)</th><th>朴素实现的 \(W_{\max}\)</th></tr></thead>
+<tbody>
+<tr><td><b>Broadcast</b></td><td>\(N-1\) 个节点各收 \(S\)，摊到 \(N\) 条链路</td><td>\(\approx S\)</td><td>\(N-1\)</td><td>\(\log_2 N\)</td><td>星型 \((N-1)S\)；朴素树 \(\log_2 N\cdot S\)</td></tr>
+<tr><td><b>Reduce</b></td><td>上行途中已归约，每非根只发 1 份</td><td>\(\approx S\)</td><td>\(N-1\)</td><td>\(\log_2 N\)</td><td>星型 root 收 \((N-1)S\)</td></tr>
+<tr><td><b>Scatter</b></td><td>root 的 \(S\) 有 \(1/N\) 留给自己</td><td>\(\frac{N-1}{N}S\)（root）</td><td>\(N-1\)</td><td>\(\log_2 N\)</td><td>同左（root 天然是瓶颈）</td></tr>
+<tr><td><b>Gather</b></td><td>每非根只有 \(S/N\) 要发</td><td>\(S/N\)</td><td>\(N-1\)</td><td>\(\log_2 N\)</td><td>root 收 \(\frac{N-1}{N}S\)</td></tr>
+<tr><td><b>Reduce-Scatter</b></td><td>每卡送出属于其余 \(N-1\) 块的部分</td><td>\(\frac{N-1}{N}S\)</td><td>\(N-1\)</td><td>\(\log_2 N\)（递归折半）</td><td>—（各卡均匀）</td></tr>
+<tr><td><b>All-Gather</b></td><td>每卡收下其余 \(N-1\) 块</td><td>\(\frac{N-1}{N}S\)</td><td>\(N-1\)</td><td>\(\log_2 N\)（递归加倍）</td><td>—（各卡均匀）</td></tr>
+<tr><td><b>All-Reduce</b></td><td>\(N-1\) 次加法 + \(N\) 次赋值（§3.2.1）</td><td>\(2\frac{N-1}{N}S\)</td><td>\(2(N-1)\)</td><td>\(2\log_2 N\)</td><td>星型 \(2(N-1)S\)（\(N\) 倍）</td></tr>
+<tr><td><b>All-to-All</b></td><td>纯置换，仅 \(1/N\) 留本地</td><td>\(\frac{N-1}{N}S\)</td><td>\(N-1\)</td><td>—（无树算法）</td><td>—（各卡均匀）</td></tr>
+</tbody>
+</table>
+
+<div class="keypoint">
+<b>从八条推导里能提炼出三条规律，记住它们就不用背表了：</b>
+<ol>
+<li><b>\(W\) 的下界几乎总是 \(\frac{N-1}{N}S\) 的整数倍。</b>因为「每卡至少要把自己那份送给其余 \(N-1\) 卡」是所有原语共同的约束；需要归约再分发的（All-Reduce）就乘 2。</li>
+<li><b>换算法改的是 \(k\)，不是 \(W\)。</b>Ring / 递归折半 / 双二叉树的 \(W\) 完全相同，差别全在 \(N-1\) 步 vs \(\log_2 N\) 步。所以「\(S \gg S^\ast\) 时换算法没用、\(S \ll S^\ast\) 时换算法有奇效」——这条选型规则（§5.1）就是规律 2 的直接推论。</li>
+<li><b>朴素实现输在 \(W_{\max}\)，不是输在总量。</b>星型和朴素二项树的全网总字节与优化算法相同甚至更少，但负载压在一两个节点上，\(T=k\alpha+W_{\max}\beta\) 里的 \(W_{\max}\) 被放大 \(N\) 倍或 \(\log_2 N\) 倍。<b>分布式通信优化的本质是负载均衡</b>，这一点在 §6 的分层网络里会以「8 张 NIC vs 1 张 NIC」的形式再次出现。</li>
+</ol>
+</div>
+
+<h3>3.3 速查表：每个原语的通信量、步数与 busBw 系数</h3>
+<p>\(S\) = <b>「完整数组」的字节数</b>——也就是 nccl-tests 的 <code>size</code> 列口径。对多数原语它等于每卡输入缓冲区（All-Reduce / Reduce-Scatter / All-to-All / Broadcast / Reduce），但对 <b>All-Gather 与 Gather 它是输出总长</b>，此时每卡输入只有 \(S/N\)（详见 §3.2.5 的口径警告）。「每卡线上量 \(W\)」= 该卡实际发送的字节总数（接收量对称，全双工下不额外花时间），且取的是<b>最忙那张卡</b>的 \(W_{\max}\)（§3.2.2）。</p>
+<table>
+<tr>
+  <th>原语</th><th>每卡输入</th><th>每卡输出</th><th>每卡线上量 \(W\)</th>
+  <th>Ring 步数</th><th>Tree / 递归 步数</th><th>busBw 系数</th>
+</tr>
+<tr><td><b>All-Reduce</b></td><td>\(S\)</td><td>\(S\)</td><td>\(2\frac{N-1}{N}S\)</td><td>\(2(N-1)\)</td><td>\(2\log_2 N\)</td><td>\(2\frac{N-1}{N}\)</td></tr>
+<tr><td><b>Reduce-Scatter</b></td><td>\(S\)</td><td>\(S/N\)</td><td>\(\frac{N-1}{N}S\)</td><td>\(N-1\)</td><td>\(\log_2 N\)</td><td>\(\frac{N-1}{N}\)</td></tr>
+<tr><td><b>All-Gather</b></td><td>\(S/N\)</td><td>\(S\)</td><td>\(\frac{N-1}{N}S\)</td><td>\(N-1\)</td><td>\(\log_2 N\)</td><td>\(\frac{N-1}{N}\)</td></tr>
+<tr><td><b>All-to-All</b></td><td>\(S\)</td><td>\(S\)</td><td>\(\frac{N-1}{N}S\)</td><td>\(N-1\)</td><td>—（无通用树算法）</td><td>\(\frac{N-1}{N}\)</td></tr>
+<tr><td><b>Broadcast</b></td><td>\(S\)（root）/ 0</td><td>\(S\)</td><td>\(S\)</td><td>\(N-1\)</td><td>\(\log_2 N\)</td><td>1</td></tr>
+<tr><td><b>Reduce</b></td><td>\(S\)</td><td>\(S\)（root）</td><td>\(S\)</td><td>\(N-1\)</td><td>\(\log_2 N\)</td><td>1</td></tr>
+<tr><td><b>Scatter</b></td><td>\(S\)（root）/ 0</td><td>\(S/N\)</td><td>\(\frac{N-1}{N}S\)（root）</td><td>\(N-1\)</td><td>\(\log_2 N\)</td><td>≈1<sup>†</sup></td></tr>
+<tr><td><b>Gather</b></td><td>\(S/N\)</td><td>\(S\)（root）</td><td>\(S/N\)</td><td>\(N-1\)</td><td>\(\log_2 N\)</td><td>≈1<sup>†</sup></td></tr>
+</table>
+<p class="cap"><b>†</b> nccl-tests 官方只为 AllReduce / ReduceScatter / AllGather / Broadcast / Reduce / AlltoAll 定义了 busBw 系数；Scatter 与 Gather 和 Broadcast / Reduce 同属「root 出入口是瓶颈」，按同样论证系数取 1（此处为推断）。<b>Ring 步数</b>指流水线步数，每步搬 \(S/N\)；<b>Tree / 递归 步数</b>指二叉树或递归折半/加倍的高度。<b>两者第 4 列的 \(W\) 完全相同</b>——递归类算法单步搬得更多（首步 \(S/2\)），但步数按 \(\log_2 N\) 收敛，几何级数求和仍是 \(\frac{N-1}{N}S\)，推导见 §3.2.4。所以「换算法」改的是 \(\alpha\) 项而不是 \(\beta\) 项（§5.1）。</p>
+
+<div class="infer">
+  Broadcast 的 \(W=S\) 看着比 All-Gather 的 \(\frac{N-1}{N}S\) 还大，但它承载的<b>信息量</b>少得多（root 只有 \(S\) 的原始数据，不像 all-gather 有 \(N\) 份互不相同的数据）。区别在于：<b>root 的出口链路无法被分摊</b>——所有数据都得从它那儿出去，任一时刻只有 1 条链路在忙、其余 \(N-1\) 条闲置，所以 busBw 系数是 1 而不是 \(\frac{N-1}{N}\)。这也是「能用 all-gather 就别用 broadcast」的量化理由（NCCL 内部实现 broadcast 时用的是 ring，能把所有链路用上，但 root 仍是数据源头，总出口量固定为 \(S\)）。
+</div>
+
+<h3>3.4 algbw 与 busBw：读懂 benchmark 的钥匙</h3>
+<p>nccl-tests 对每次调用报两个带宽：</p>
+<div class="formula">
+\[
+\text{algbw} = \frac{S}{t}\qquad\qquad
+\text{busBw} = \text{algbw} \times \text{系数（见 §3.3 表）}
+\]
+</div>
+<ul>
+<li><b>algbw（algorithm bandwidth）</b>：最朴素的「数据量 ÷ 时间」。用途是<b>估算</b>——知道 algbw，就能用 \(t = S/\text{algbw}\) 预测任意大小调用的耗时。缺点是它随 \(N\) 变化（\(N\) 越大越小），不能直接和硬件峰值比。</li>
+<li><b>busBw（bus bandwidth）</b>：乘上系数，把「算法必然产生的额外倍数」除掉，得到<b>硬件链路的实际利用率</b>。它与 \(N\) 基本无关，可以直接与 NVLink / IB 的标称带宽对比——<b>这才是判断「我的集群网络正常吗」的指标</b>。</li>
+</ul>
+<p>举例：机内 8 卡 all-reduce，\(S=64\) MiB，实测 \(t=282\,\mu s\)。algbw \(=64\text{ MiB}/282\,\mu s=238\) GB/s——看着只有 NVLink4（450 GB/s）的一半，容易误判成有问题；busBw \(=238\times2\times\frac{7}{8}=416\) GB/s，已达单向峰值的 <b>93%</b>，完全正常。</p>
+<div class="infer trap">
+  nccl-tests 输出的 <code>size</code> 列，对 <b>all-gather 是「输出总数组大小」= 每卡输入 × N</b>，对 <b>reduce-scatter 是「输入总数组大小」= 每卡输出 × N</b>，而对 all-reduce 就是每卡张量大小。官方文档明确写了这两处的 S 指 total array（<code>sendcount*sizeof*n</code> / <code>recvcount*sizeof*n</code>）。若拿 all-gather 的 <code>size</code> 当成「每卡输入」去套公式，结果会差整整 \(N\) 倍。<b>本篇所有公式里的 \(S\) 统一是「每卡输入缓冲区大小」</b>，代 nccl-tests 数字前请先换算。
+</div>
+
+<h3>3.5 从公式到曲线：延迟主导区与带宽主导区</h3>
+<div class="fig">
+<svg viewBox="0 0 880 330" role="img" aria-label="α-β 模型下 all-reduce 耗时随消息大小变化的双对数曲线，对比机内 8 卡与跨机 64 卡的 ring 与 tree 算法">
+  <style>text { font-family: 'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',system-ui,sans-serif; }</style>
+  <text x="24" y="26" font-size="14" font-weight="bold" fill="#1a1f2e">All-Reduce 耗时 vs 消息大小（双对数）：水平段看步数，斜线段看带宽</text>
+  <text x="76" y="38" font-size="10" fill="#5a6272">耗时 T（对数轴）</text>
+
+  <!-- 网格与坐标轴 -->
+  <line x1="70" y1="260" x2="830" y2="260" stroke="#c9d2e0" stroke-width="1"/>
+  <line x1="70" y1="40" x2="70" y2="260" stroke="#c9d2e0" stroke-width="1"/>
+  <line x1="260" y1="40" x2="260" y2="260" stroke="#f0f2f6" stroke-width="1"/>
+  <line x1="450" y1="40" x2="450" y2="260" stroke="#f0f2f6" stroke-width="1"/>
+  <line x1="640" y1="40" x2="640" y2="260" stroke="#f0f2f6" stroke-width="1"/>
+  <line x1="70" y1="205" x2="830" y2="205" stroke="#f0f2f6" stroke-width="1"/>
+  <line x1="70" y1="150" x2="830" y2="150" stroke="#f0f2f6" stroke-width="1"/>
+  <line x1="70" y1="95" x2="830" y2="95" stroke="#f0f2f6" stroke-width="1"/>
+  <line x1="70" y1="40" x2="830" y2="40" stroke="#f0f2f6" stroke-width="1"/>
+
+  <!-- 曲线 -->
+  <path d="M70.0,225.7 L85.8,225.7 L101.7,225.7 L117.5,225.7 L133.3,225.7 L149.2,225.7 L165.0,225.7 L180.8,225.7 L196.7,225.7 L212.5,225.7 L228.3,225.6 L244.2,225.6 L260.0,225.6 L275.8,225.5 L291.7,225.5 L307.5,225.4 L323.3,225.3 L339.2,225.1 L355.0,224.9 L370.8,224.7 L386.7,224.3 L402.5,223.8 L418.3,223.3 L434.2,222.5 L450.0,221.5 L465.8,220.2 L481.7,218.6 L497.5,216.7 L513.3,214.2 L529.2,211.4 L545.0,208.0 L560.8,204.2 L576.7,199.8 L592.5,195.0 L608.3,189.9 L624.2,184.3 L640.0,178.5 L655.8,172.5 L671.7,166.2 L687.5,159.8 L703.3,153.3 L719.2,146.7 L735.0,140.0 L750.8,133.3 L766.7,126.5 L782.5,119.7 L798.3,112.9 L814.2,106.0 L830.0,99.2"
+        fill="none" stroke="#2456c4" stroke-width="2.4"/>
+  <path d="M70.0,239.1 L85.8,239.1 L101.7,239.1 L117.5,239.1 L133.3,239.1 L149.2,239.1 L165.0,239.0 L180.8,239.0 L196.7,239.0 L212.5,239.0 L228.3,238.9 L244.2,238.9 L260.0,238.8 L275.8,238.8 L291.7,238.6 L307.5,238.5 L323.3,238.3 L339.2,238.0 L355.0,237.7 L370.8,237.2 L386.7,236.7 L402.5,235.9 L418.3,234.9 L434.2,233.7 L450.0,232.1 L465.8,230.2 L481.7,227.8 L497.5,224.9 L513.3,221.6 L529.2,217.8 L545.0,213.5 L560.8,208.7 L576.7,203.6 L592.5,198.1 L608.3,192.3 L624.2,186.2 L640.0,180.0 L655.8,173.6 L671.7,167.1 L687.5,160.5 L703.3,153.8 L719.2,147.1 L735.0,140.3 L750.8,133.5 L766.7,126.7 L782.5,119.8 L798.3,113.0 L814.2,106.1 L830.0,99.2"
+        fill="none" stroke="#2f9e63" stroke-width="2.4" stroke-dasharray="7 4"/>
+  <path d="M70.0,127.9 L85.8,127.9 L101.7,127.9 L117.5,127.9 L133.3,127.9 L149.2,127.9 L165.0,127.9 L180.8,127.9 L196.7,127.9 L212.5,127.9 L228.3,127.9 L244.2,127.9 L260.0,127.9 L275.8,127.9 L291.7,127.9 L307.5,127.9 L323.3,127.8 L339.2,127.8 L355.0,127.8 L370.8,127.7 L386.7,127.7 L402.5,127.6 L418.3,127.5 L434.2,127.3 L450.0,127.2 L465.8,126.9 L481.7,126.6 L497.5,126.1 L513.3,125.6 L529.2,124.8 L545.0,123.9 L560.8,122.6 L576.7,121.1 L592.5,119.2 L608.3,116.9 L624.2,114.1 L640.0,110.8 L655.8,107.0 L671.7,102.8 L687.5,98.0 L703.3,92.9 L719.2,87.4 L735.0,81.7 L750.8,75.7 L766.7,69.4 L782.5,63.1 L798.3,56.6 L814.2,50.0 L830.0,43.3"
+        fill="none" stroke="#e8862a" stroke-width="2.4"/>
+  <path d="M70.0,179.7 L85.8,179.7 L101.7,179.7 L117.5,179.7 L133.3,179.7 L149.2,179.7 L165.0,179.7 L180.8,179.7 L196.7,179.7 L212.5,179.6 L228.3,179.6 L244.2,179.6 L260.0,179.5 L275.8,179.4 L291.7,179.4 L307.5,179.2 L323.3,179.1 L339.2,178.8 L355.0,178.6 L370.8,178.2 L386.7,177.7 L402.5,177.0 L418.3,176.2 L434.2,175.1 L450.0,173.7 L465.8,172.0 L481.7,169.9 L497.5,167.3 L513.3,164.3 L529.2,160.7 L545.0,156.7 L560.8,152.2 L576.7,147.3 L592.5,142.0 L608.3,136.3 L624.2,130.4 L640.0,124.3 L655.8,118.0 L671.7,111.6 L687.5,105.0 L703.3,98.4 L719.2,91.7 L735.0,84.9 L750.8,78.2 L766.7,71.3 L782.5,64.5 L798.3,57.7 L814.2,50.8 L830.0,43.9"
+        fill="none" stroke="#b3261e" stroke-width="2.4" stroke-dasharray="7 4"/>
+
+  <!-- 拐点竖线 -->
+  <line x1="513" y1="215" x2="513" y2="260" stroke="#5a6272" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="519" y="252" font-size="10" fill="#5a6272">S* ≈ 5MiB</text>
+
+  <!-- 延迟地板标注 -->
+  <text x="200" y="220" font-size="10" fill="#2456c4">Ring 机内地板 21µs（14 步）</text>
+  <text x="200" y="254" font-size="10" fill="#2f9e63">Tree 机内地板 12µs（6 步）</text>
+  <text x="88" y="122" font-size="10" fill="#e8862a">Ring 跨机地板 1.26ms（126 步）</text>
+  <text x="88" y="174" font-size="10" fill="#b3261e">Tree 跨机地板 144µs（12 步）</text>
+  <text x="700" y="176" font-size="10" fill="#5a6272">斜率 = 1/B</text>
+
+  <!-- 图例 -->
+  <line x1="292" y1="52" x2="322" y2="52" stroke="#2456c4" stroke-width="2.4"/>
+  <text x="328" y="56" font-size="10" fill="#1a1f2e">Ring · 机内 8 卡（NVLink 450 GB/s）</text>
+  <line x1="292" y1="70" x2="322" y2="70" stroke="#2f9e63" stroke-width="2.4" stroke-dasharray="7 4"/>
+  <text x="328" y="74" font-size="10" fill="#1a1f2e">Tree · 机内 8 卡</text>
+  <line x1="560" y1="220" x2="590" y2="220" stroke="#b3261e" stroke-width="2.4" stroke-dasharray="7 4"/>
+  <text x="596" y="224" font-size="10" fill="#1a1f2e">Tree · 跨机 64 卡</text>
+  <line x1="560" y1="238" x2="590" y2="238" stroke="#e8862a" stroke-width="2.4"/>
+  <text x="596" y="242" font-size="10" fill="#1a1f2e">Ring · 跨机 64 卡（IB 50 GB/s）</text>
+
+  <!-- x 轴刻度 -->
+  <text x="70" y="278" font-size="10" fill="#5a6272" text-anchor="middle">1KiB</text>
+  <text x="260" y="278" font-size="10" fill="#5a6272" text-anchor="middle">32KiB</text>
+  <text x="450" y="278" font-size="10" fill="#5a6272" text-anchor="middle">1MiB</text>
+  <text x="640" y="278" font-size="10" fill="#5a6272" text-anchor="middle">32MiB</text>
+  <text x="830" y="278" font-size="10" fill="#5a6272" text-anchor="middle">1GiB</text>
+  <text x="450" y="296" font-size="11" fill="#1a1f2e" text-anchor="middle">每卡消息大小 S</text>
+  <!-- y 轴刻度 -->
+  <text x="62" y="263" font-size="10" fill="#5a6272" text-anchor="end">5µs</text>
+  <text x="62" y="208" font-size="10" fill="#5a6272" text-anchor="end">50µs</text>
+  <text x="62" y="153" font-size="10" fill="#5a6272" text-anchor="end">0.5ms</text>
+  <text x="62" y="98" font-size="10" fill="#5a6272" text-anchor="end">5ms</text>
+  <text x="62" y="43" font-size="10" fill="#5a6272" text-anchor="end">50ms</text>
+</svg>
+</div>
+<p class="cap"><b>三条结论直接从图上读出来</b>：① <b>水平段的高度 = 步数 × α</b>：机内 ring 是 \(2\times7\times1.5\,\mu s=21\,\mu s\)，跨机 64 卡 ring 是 \(2\times63\times10\,\mu s=1.26\) ms——<b>同一条 4 KiB 的小消息，跨机 ring 慢 60 倍</b>，这就是「TP 不能跨机」的量化解释。② <b>换 Tree 只压低水平段</b>（步数 \(2\log_2 N\)：8 卡 6 步、64 卡 12 步），斜线段几乎不动——因为两种算法的<b>线上量 \(W\) 相同</b>。③ <b>斜率只由带宽决定</b>：跨机曲线陡 9 倍，因为 IB 比 NVLink 慢 9 倍。参数：\(\alpha\) 机内 1.5 µs（ring 每步）/ 2 µs（tree 每步），跨机 10 µs / 12 µs；曲线按纯 α-β 模型画，未计 NCCL 的分块流水线与实测抖动。</p>
+
+<h2 id="ring">4. Ring 算法逐步走</h2>
+
+<h3>4.1 为什么要「切成 N 份转圈」</h3>
+<p>最朴素的做法是「所有人都把数据发给 r0，r0 加完再发回去」（root-based）。它有两个致命问题：r0 的出入口链路要承载 \(N\cdot S\) 的流量（其他 \(N-1\) 条链路闲着），而且 r0 要存下 \(N\) 份数据。</p>
+<p>Ring 的思路是<b>把数据切成 \(N\) 块，让 \(N\) 张卡排成一个环，每步每卡只发一块给下家</b>。这样每一步<b>所有链路同时满载</b>、没有任何热点——这就是它能达到 §3.2 下界的原因。代价是步数多：\(N-1\) 步（all-reduce 是 \(2(N-1)\) 步）。</p>
+
+<h3>4.2 分步模拟器（N = 4，每卡 S = 64 MiB → 4 个 16 MiB chunk）</h3>
+<p>点「下一步」，看 6 步里每一块数据怎么流动。<b>前 3 步是 Reduce-Scatter（边转圈边累加），后 3 步是 All-Gather（把累加完的结果转一圈发给大家）</b>——All-Reduce 就是这两段拼起来的。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 302" role="img" aria-label="Ring All-Reduce 分步模拟器：4 张卡排成环，每步各发一个 chunk，前 3 步累加后 3 步覆盖">
+  <style>text { font-family: 'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',system-ui,sans-serif; }</style>
+  <defs>
+    <marker id="simarr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+    <marker id="simarrg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c9d2e0"/>
+    </marker>
+  </defs>
+
+  <text x="24" y="26" font-size="14" font-weight="bold" fill="#1a1f2e">Ring All-Reduce 分步模拟（N=4，每卡 S=64 MiB → 4 个 16 MiB chunk）</text>
+  <text x="24" y="46" font-size="11" fill="#5a6272">每一步 4 张卡同时各发一个 chunk 给下家；箭头上方标签是本步正在传输的 chunk 编号</text>
+
+  <rect x="20" y="64" width="176" height="96" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <rect x="234" y="64" width="176" height="96" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <rect x="448" y="64" width="176" height="96" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <rect x="662" y="64" width="176" height="96" rx="8" fill="#f6f8fa" stroke="#c9d2e0"/>
+  <text x="30" y="86" font-size="12" font-weight="bold" fill="#163a86">GPU 0</text>
+  <text x="244" y="86" font-size="12" font-weight="bold" fill="#163a86">GPU 1</text>
+  <text x="458" y="86" font-size="12" font-weight="bold" fill="#163a86">GPU 2</text>
+  <text x="672" y="86" font-size="12" font-weight="bold" fill="#163a86">GPU 3</text>
+  <text x="186" y="86" font-size="10" fill="#5a6272" text-anchor="end">buf[S]</text>
+  <text x="400" y="86" font-size="10" fill="#5a6272" text-anchor="end">buf[S]</text>
+  <text x="614" y="86" font-size="10" fill="#5a6272" text-anchor="end">buf[S]</text>
+  <text x="828" y="86" font-size="10" fill="#5a6272" text-anchor="end">buf[S]</text>
+
+  <rect id="sr00" x="29"  y="96" width="38" height="52" rx="3" fill="#f6f9fe" stroke="#2456c4" stroke-width="1.2"/>
+  <rect id="sr01" x="70"  y="96" width="38" height="52" rx="3" fill="#fef9f3" stroke="#e8862a" stroke-width="1.2"/>
+  <rect id="sr02" x="111" y="96" width="38" height="52" rx="3" fill="#f4fbf7" stroke="#2f9e63" stroke-width="1.2"/>
+  <rect id="sr03" x="152" y="96" width="38" height="52" rx="3" fill="#f5f7fc" stroke="#163a86" stroke-width="1.2"/>
+  <rect id="sr10" x="243" y="96" width="38" height="52" rx="3" fill="#f6f9fe" stroke="#2456c4" stroke-width="1.2"/>
+  <rect id="sr11" x="284" y="96" width="38" height="52" rx="3" fill="#fef9f3" stroke="#e8862a" stroke-width="1.2"/>
+  <rect id="sr12" x="325" y="96" width="38" height="52" rx="3" fill="#f4fbf7" stroke="#2f9e63" stroke-width="1.2"/>
+  <rect id="sr13" x="366" y="96" width="38" height="52" rx="3" fill="#f5f7fc" stroke="#163a86" stroke-width="1.2"/>
+  <rect id="sr20" x="457" y="96" width="38" height="52" rx="3" fill="#f6f9fe" stroke="#2456c4" stroke-width="1.2"/>
+  <rect id="sr21" x="498" y="96" width="38" height="52" rx="3" fill="#fef9f3" stroke="#e8862a" stroke-width="1.2"/>
+  <rect id="sr22" x="539" y="96" width="38" height="52" rx="3" fill="#f4fbf7" stroke="#2f9e63" stroke-width="1.2"/>
+  <rect id="sr23" x="580" y="96" width="38" height="52" rx="3" fill="#f5f7fc" stroke="#163a86" stroke-width="1.2"/>
+  <rect id="sr30" x="671" y="96" width="38" height="52" rx="3" fill="#f6f9fe" stroke="#2456c4" stroke-width="1.2"/>
+  <rect id="sr31" x="712" y="96" width="38" height="52" rx="3" fill="#fef9f3" stroke="#e8862a" stroke-width="1.2"/>
+  <rect id="sr32" x="753" y="96" width="38" height="52" rx="3" fill="#f4fbf7" stroke="#2f9e63" stroke-width="1.2"/>
+  <rect id="sr33" x="794" y="96" width="38" height="52" rx="3" fill="#f5f7fc" stroke="#163a86" stroke-width="1.2"/>
+  <text id="st00" x="48"  y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st01" x="89"  y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st02" x="130" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st03" x="171" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st10" x="262" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st11" x="303" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st12" x="344" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st13" x="385" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st20" x="476" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st21" x="517" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st22" x="558" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st23" x="599" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st30" x="690" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st31" x="731" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st32" x="772" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+  <text id="st33" x="813" y="127" font-size="10" fill="#1a1f2e" text-anchor="middle">Σ1</text>
+
+  <line id="sa0" x1="198" y1="120" x2="231" y2="120" stroke="#c9d2e0" stroke-width="2" marker-end="url(#simarrg)"/>
+  <line id="sa1" x1="412" y1="120" x2="445" y2="120" stroke="#c9d2e0" stroke-width="2" marker-end="url(#simarrg)"/>
+  <line id="sa2" x1="626" y1="120" x2="659" y2="120" stroke="#c9d2e0" stroke-width="2" marker-end="url(#simarrg)"/>
+  <path id="sa3" d="M750,162 L750,186 L108,186 L108,163" fill="none" stroke="#c9d2e0" stroke-width="2" marker-end="url(#simarrg)"/>
+  <text id="sl0" x="215" y="110" font-size="10" fill="#5a6272" text-anchor="middle">—</text>
+  <text id="sl1" x="429" y="110" font-size="10" fill="#5a6272" text-anchor="middle">—</text>
+  <text id="sl2" x="643" y="110" font-size="10" fill="#5a6272" text-anchor="middle">—</text>
+  <text id="sl3" x="429" y="180" font-size="10" fill="#5a6272" text-anchor="middle">—</text>
+
+  <text id="sim-step" x="24" y="216" font-size="13" font-weight="bold" fill="#1a1f2e">步骤 0 / 6 · 初始状态</text>
+  <text id="sim-desc" x="24" y="238" font-size="11" fill="#2a3040">初始：每卡持有完整的 S（4 个 chunk），每块只有自己一份数据（Σ1）。颜色 = chunk 编号。</text>
+  <text id="sim-bytes" x="24" y="258" font-size="11" fill="#5a6272">本卡已发送 0 MiB / 目标 96 MiB · 已用 0.0 µs（α 项 0.0 + β 项 0.0）</text>
+  <text x="24" y="286" font-size="10" fill="#5a6272">颜色 = chunk 编号（c0 蓝 / c1 橙 / c2 绿 / c3 深蓝）· 标签 Σk = 已累加 k 个 rank 的数据 · 粗黑边 = Σ4 归约完成</text>
+</svg>
+</div>
+
+<div class="simctl">
+  <button id="sim-prev">‹ 上一步</button>
+  <button id="sim-next" class="pri">下一步 ›</button>
+  <button id="sim-play">自动播放</button>
+  <button id="sim-reset">重置</button>
+  <span class="hint">也可以按键盘 ← / → 翻页</span>
+</div>
+
+<h3>4.3 六步里到底发生了什么（文字版）</h3>
+<table>
+<tr><th>阶段</th><th>步 k</th><th>每张卡做什么</th><th>本步后每卡状态</th></tr>
+<tr><td rowspan="3"><b>Reduce-Scatter</b><br>（3 步 = \(N-1\)）</td>
+    <td>1</td><td>r 把 chunk \((r-0)\bmod N\) 发给 r+1；接收方<b>就地累加</b></td><td>每卡有 1 个 chunk 变成 Σ2</td></tr>
+<tr><td>2</td><td>r 把 chunk \((r-1)\bmod N\) 发给 r+1；累加</td><td>每卡有 1 个 Σ3、1 个 Σ2</td></tr>
+<tr><td>3</td><td>r 把 chunk \((r-2)\bmod N\) 发给 r+1；累加</td><td><b>每卡恰好有 1 个 Σ4（完整的和）</b>，且 4 卡的完整片互不相同</td></tr>
+<tr><td rowspan="3"><b>All-Gather</b><br>（3 步 = \(N-1\)）</td>
+    <td>4</td><td>r 把自己那个 Σ4 的 chunk 发给 r+1；接收方<b>直接覆盖</b>（不累加）</td><td>每卡有 2 个 Σ4</td></tr>
+<tr><td>5</td><td>继续转，覆盖</td><td>每卡有 3 个 Σ4</td></tr>
+<tr><td>6</td><td>继续转，覆盖</td><td><b>每卡 4 个 chunk 全是 Σ4 —— All-Reduce 完成</b></td></tr>
+</table>
+<p>把账算一遍，验证 §3.2 的下界（\(N=4\)、\(S=64\) MiB、\(B=450\) GB/s、\(\alpha=1.5\,\mu s\)）：</p>
+<table>
+<tr><th></th><th>公式</th><th>代入</th></tr>
+<tr><td>每步搬多少</td><td>\(s = S/N\)</td><td>16 MiB</td></tr>
+<tr><td>步数 \(k\)</td><td>\(2(N-1)\)</td><td>6</td></tr>
+<tr><td><b>每卡线上量 \(W\)</b></td><td>\(2(N-1)\cdot s = 2\frac{N-1}{N}S\)</td><td>\(6\times16 = \mathbf{96}\) MiB \(=1.5\,S\)</td></tr>
+<tr><td>耗时 \(T\)</td><td>\(k\alpha + W/B\)</td><td>\(9\,\mu s + 223.7\,\mu s = 232.7\,\mu s\)</td></tr>
+<tr><td>algbw</td><td>\(S/T\)</td><td>288 GB/s</td></tr>
+<tr><td>busBw</td><td>\(\text{algbw}\times2\frac{N-1}{N}\)</td><td><b>433 GB/s = 峰值的 96%</b></td></tr>
+</table>
+<div class="keypoint">
+  <b>Reduce-Scatter 结束时「每卡恰好有一个完整片」不是巧合</b>：第 \(k\) 步（\(k\) 从 1 数起）r 发出的 chunk 编号是 \((r-k+1)\bmod N\)，这个安排让「编号 \(c\) 的 chunk」在 \(N-1\) 步里依次经过每个 rank 各一次，每经过一次就多累加一份。\(N-1\) 步后它集齐了全部 \(N\) 份，此时它正停在 \(r=(c-1)\bmod N\) 这张卡上——每卡一个、不重不漏。这就是 ring 调度的全部技巧。（若把 \(k\) 从 0 数起，发送规则就写成 \((r-k)\bmod N\)，与上表第 1 行的 \((r-0)\) 一致。）
+</div>
+
+<h3>4.4 Ring 的两个隐藏前提</h3>
+<ul>
+<li><b>链路必须同构</b>。环上任何一条慢链路都会拖死整个算法（每一步都要等它）。机内 8 卡如果混了 NVLink 和 PCIe，或跨机环里有一条 100 GbE 而其余是 400 Gb IB，实测带宽会掉到最慢那条的水平。</li>
+<li><b>\(S\) 最好能被 \(N\) 整除</b>。NCCL 对不能整除的情况会切成不等长的块，尾部略慢；写框架时把张量 pad 到 \(N\) 的倍数通常能白捡几个百分点。</li>
+</ul>
+<h2 id="algo">5. Ring 不是万灵药：Tree、双二叉树、多维环、NVLS 与 one-shot</h2>
+
+<h3>5.1 Ring 的软肋：步数是 \(O(N)\)</h3>
+
+<p>把 §3.1 的 α-β 模型套到 Ring All-Reduce 上：</p>
+
+<div class="formula">
+\[ T_{\text{ring}} = \underbrace{2(N-1)}_{\text{步数}}\cdot \alpha \;+\; \underbrace{\frac{2(N-1)}{N}S}_{\text{每卡线上量}}\cdot \beta \]
+</div>
+
+<p>两项的命运完全不同。<b>带宽项几乎与 \(N\) 无关</b>（\(2(N-1)/N \to 2\)，N=8 时 1.75，N=64 时 1.97）——这是 Ring 的伟大之处。<b>但延迟项随 \(N\) 线性增长</b>：\(\alpha = 1.5\,\mu s\) 时，N=64 要 126 步 = <b>189 µs 纯等待</b>，一个字节都还没开始搬。</p>
+
+<p>decode 阶段每次 all-reduce 的消息可能只有几十 KB（batch=1、H=8192、bf16 → 16 KiB），搬完只要 0.04 µs，而 189 µs 的延迟开销是它的 <b>4700 倍</b>。这就是为什么大规模推理不能无脑用 Ring。</p>
+
+<div class="keypoint">
+<p><b>选型第一原则：看 \(\alpha\) 项和 \(\beta\) 项谁大。</b>消息大（\(S \gg S^* \approx 5\) MiB）→ 要带宽最优 → Ring / NVLS；消息小（\(S \ll S^*\)）→ 要步数最少 → Tree / one-shot。NCCL 自己就在做这个判断（<code>NCCL_ALGO</code> 的默认值由 tuning model 决定），理解它是为了在结果不对时能手动干预。</p>
+</div>
+
+<h3>5.2 三种拓扑的账本对比</h3>
+
+<div class="fig">
+<svg viewBox="0 0 880 268" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Ring、二叉树、双二叉树三种 all-reduce 拓扑对比">
+  <defs>
+    <marker id="algarr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2456c4"/>
+    </marker>
+  </defs>
+
+  <text x="155" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1f2e">A. Ring</text>
+  <text x="445" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1f2e">B. 单棵二叉树</text>
+  <text x="735" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1f2e">C. 双二叉树：两棵树各传 S/2</text>
+
+  <!-- A: ring -->
+  <circle cx="155" cy="150" r="70" fill="none" stroke="#c9d2e0" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <path d="M222.6,168 A70,70 0 0 1 216,185" fill="none" stroke="#2456c4" stroke-width="2" marker-end="url(#algarr)"/>
+  <circle cx="155" cy="80" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="204" cy="100" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="225" cy="150" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="204" cy="200" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="155" cy="220" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="106" cy="200" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="85" cy="150" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="106" cy="100" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="155" y="84" text-anchor="middle" font-size="11" fill="#163a86">0</text>
+  <text x="204" y="104" text-anchor="middle" font-size="11" fill="#163a86">1</text>
+  <text x="225" y="154" text-anchor="middle" font-size="11" fill="#163a86">2</text>
+  <text x="204" y="204" text-anchor="middle" font-size="11" fill="#163a86">3</text>
+  <text x="155" y="224" text-anchor="middle" font-size="11" fill="#163a86">4</text>
+  <text x="106" y="204" text-anchor="middle" font-size="11" fill="#163a86">5</text>
+  <text x="85" y="154" text-anchor="middle" font-size="11" fill="#163a86">6</text>
+  <text x="106" y="104" text-anchor="middle" font-size="11" fill="#163a86">7</text>
+  <text x="155" y="254" text-anchor="middle" font-size="11" fill="#5a6272">带宽最优，但步数随 N 线性增长</text>
+
+  <!-- B: single binary tree -->
+  <g stroke="#c9d2e0" stroke-width="1.6">
+    <line x1="445" y1="60" x2="395" y2="112"/>
+    <line x1="445" y1="60" x2="495" y2="112"/>
+    <line x1="395" y1="112" x2="365" y2="164"/>
+    <line x1="395" y1="112" x2="425" y2="164"/>
+    <line x1="495" y1="112" x2="465" y2="164"/>
+    <line x1="495" y1="112" x2="525" y2="164"/>
+    <line x1="365" y1="164" x2="365" y2="216"/>
+  </g>
+  <circle cx="445" cy="60" r="13" fill="#fbe3cc" stroke="#e8862a" stroke-width="3"/>
+  <circle cx="395" cy="112" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="495" cy="112" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="365" cy="164" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="425" cy="164" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="465" cy="164" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="525" cy="164" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="365" cy="216" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="445" y="64" text-anchor="middle" font-size="11" fill="#8a4d10">0</text>
+  <text x="395" y="116" text-anchor="middle" font-size="11" fill="#163a86">1</text>
+  <text x="495" y="116" text-anchor="middle" font-size="11" fill="#163a86">2</text>
+  <text x="365" y="168" text-anchor="middle" font-size="11" fill="#163a86">3</text>
+  <text x="425" y="168" text-anchor="middle" font-size="11" fill="#163a86">4</text>
+  <text x="465" y="168" text-anchor="middle" font-size="11" fill="#163a86">5</text>
+  <text x="525" y="168" text-anchor="middle" font-size="11" fill="#163a86">6</text>
+  <text x="365" y="220" text-anchor="middle" font-size="11" fill="#163a86">7</text>
+  <text x="445" y="254" text-anchor="middle" font-size="11" fill="#5a6272">深度 log₂N，每条边搬 S，根只比叶子多 1 份</text>
+
+  <!-- C: double binary tree -->
+  <text x="667" y="42" text-anchor="middle" font-size="11" fill="#2456c4">树 A（偶数 rank）</text>
+  <text x="805" y="42" text-anchor="middle" font-size="11" fill="#2f9e63">树 B（奇数 rank）</text>
+  <rect x="614" y="50" width="106" height="180" rx="10" fill="none" stroke="#2456c4" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <rect x="752" y="50" width="106" height="180" rx="10" fill="none" stroke="#2f9e63" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <g stroke="#2456c4" stroke-width="1.5" opacity="0.55">
+    <line x1="666" y1="76" x2="638" y2="140"/>
+    <line x1="666" y1="76" x2="694" y2="140"/>
+    <line x1="638" y1="140" x2="638" y2="204"/>
+  </g>
+  <g stroke="#2f9e63" stroke-width="1.5" opacity="0.55">
+    <line x1="804" y1="76" x2="776" y2="140"/>
+    <line x1="804" y1="76" x2="832" y2="140"/>
+    <line x1="776" y1="140" x2="776" y2="204"/>
+  </g>
+  <circle cx="666" cy="76" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="638" cy="140" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="694" cy="140" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <circle cx="638" cy="204" r="13" fill="#eef3fc" stroke="#2456c4" stroke-width="1.6"/>
+  <text x="666" y="80" text-anchor="middle" font-size="11" fill="#163a86">0</text>
+  <text x="638" y="144" text-anchor="middle" font-size="11" fill="#163a86">2</text>
+  <text x="694" y="144" text-anchor="middle" font-size="11" fill="#163a86">4</text>
+  <text x="638" y="208" text-anchor="middle" font-size="11" fill="#163a86">6</text>
+  <circle cx="804" cy="76" r="13" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <circle cx="776" cy="140" r="13" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <circle cx="832" cy="140" r="13" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <circle cx="776" cy="204" r="13" fill="#d9f0e2" stroke="#2f9e63" stroke-width="1.6"/>
+  <text x="804" y="80" text-anchor="middle" font-size="11" fill="#1c6340">1</text>
+  <text x="776" y="144" text-anchor="middle" font-size="11" fill="#1c6340">3</text>
+  <text x="832" y="144" text-anchor="middle" font-size="11" fill="#1c6340">5</text>
+  <text x="776" y="208" text-anchor="middle" font-size="11" fill="#1c6340">7</text>
+  <text x="735" y="254" text-anchor="middle" font-size="11" fill="#5a6272">两棵树并行，把链路吃满，根不再是瓶颈</text>
+</svg>
+</div>
+<p class="cap"><b>图 5-1</b>：三种 all-reduce 拓扑。B 的橙色粗圈节点是根——它比叶子多收 1 份数据（2 个孩子），但<b>不是</b> \(N\) 倍瓶颈；真正的 \(N\) 倍瓶颈是「星型」（所有 rank 直接发给 rank 0），那种做法只在 \(N \le 2\) 时才有人用。C 是 NCCL 跨机的默认形态：两棵边不相交的树，每棵只搬一半数据。</p>
+
+<table>
+<thead><tr><th>方案</th><th>步数（延迟项）</th><th>每卡线上量（带宽项）</th><th>什么时候赢</th></tr></thead>
+<tbody>
+<tr><td>星型 Reduce+Broadcast</td><td>2</td><td>根：\((N-1)S\)；叶：\(S\)</td><td>从不（根被打爆）</td></tr>
+<tr><td>Ring</td><td>\(2(N-1)\)</td><td>\(\frac{2(N-1)}{N}S \approx 2S\)</td><td>\(S \gg 5\) MiB，或机内 NVLink 环</td></tr>
+<tr><td><b>多维环 / 2D Torus</b><br>（= §6 的分层）</td><td>\(2(N_1-1)+2(N_2-1)\)<br>\(\approx 4\sqrt N\)（方阵）</td><td>\(\frac{2(N-1)}{N}S\)（<b>与 1D Ring 完全相同</b>）</td><td>\(N\) 大且拓扑本身分层（机内 NVLink + 机间 IB）</td></tr>
+<tr><td>单棵二叉树</td><td>\(\approx 2\log_2 N\)</td><td>\(\approx 2S\)（每条边 \(S\)）</td><td>跨机中小消息；但只用了一半链路</td></tr>
+<tr><td><b>双二叉树</b></td><td>\(\approx 2\log_2 N\)</td><td>\(\approx 2S\)（每棵 \(S/2\)）</td><td><b>跨机通用最优</b>，NCCL 2.4+ 默认</td></tr>
+<tr><td>NVLS（NVLink SHARP）</td><td>\(\approx 2\)</td><td>\(\approx S\)（reduce 在交换机里做）</td><td>Hopper/Blackwell + NVSwitch，机内</td></tr>
+<tr><td>one-shot（全连接 P2P）</td><td>1</td><td>\((N-1)S\)</td><td>\(S\) 极小（decode，几十 KB）</td></tr>
+</tbody>
+</table>
+
+<p>「单棵树只用一半链路」值得展开：在物理上是环 / 全连接的拓扑里，一棵树只有 \(N-1\) 条边，而且叶子节点的发送带宽在一轮里只被用一次。<b>双二叉树</b>（Sanders et al., 2009；NCCL 2.4 引入）把 rank 分成两组，各建一棵树，两棵树的边集<b>互不相交</b>——于是每张网卡在两个方向上都满载，拿到了 Ring 的带宽 + 树的延迟。这就是 <code>NCCL_ALGO=Tree</code> 在 64 卡以上跨机训练里比 Ring 快数倍的原因。</p>
+
+<h4>5.2.1 多维环：把 \(O(N)\) 的步数压到 \(O(\sqrt N)\)，而 \(W\) 一分不变</h4>
+
+<p>Ring 唯一的毛病是 \(k=2(N-1)\) 随 \(N\) 线性涨。如果集群本身是<b>分层</b>的（\(N=N_1\times N_2\)：\(N_2\) 张卡一个节点、共 \(N_1\) 个节点），就不必拉一个覆盖全部 \(N\) 卡的大环，而是<b>沿两个维度各做一轮 ring all-reduce</b>——这就是 2D torus，也是 §6 分层通信的抽象形式：</p>
+
+<div class="formula">
+\[
+\begin{aligned}
+W &= \underbrace{2\frac{N_2-1}{N_2}S}_{\text{维度 2：节点内环，全量 }S}
+   + \underbrace{2\frac{N_1-1}{N_1}\cdot\frac{S}{N_2}}_{\text{维度 1：节点间环，只搬 }S/N_2} \\[4pt]
+  &= 2S\left[\frac{N_2-1}{N_2} + \frac{N_1-1}{N_1N_2}\right]
+   = 2S\cdot\frac{N_1N_2-N_1+N_1-1}{N}
+   = \mathbf{2\frac{N-1}{N}S}
+\end{aligned}
+\qquad
+k = 2(N_2-1) + 2(N_1-1)
+\]
+</div>
+
+<p><b>\(W\) 化简后与 1D Ring 逐字相同</b>——分层没有减少一个字节，只是把同样的字节分到了两个维度上。而步数从 \(2(N-1)\) 降到 \(2(N_1-1)+2(N_2-1)\)；取方阵 \(N_1=N_2=\sqrt N\) 时是 \(4(\sqrt N-1)\)，即 <b>\(O(N)\to O(\sqrt N)\)</b>：</p>
+
+<table>
+<thead><tr><th>\(N\)</th><th>形状</th><th>2D torus 步数</th><th>1D ring 步数</th><th>步数比</th><th>每卡 \(W\)</th></tr></thead>
+<tbody>
+<tr><td>64</td><td>8×8</td><td>28</td><td>126</td><td>4.5×</td><td rowspan="4">两者<b>完全相同</b><br>\(2\frac{N-1}{N}S\)</td></tr>
+<tr><td>256</td><td>16×16</td><td>60</td><td>510</td><td>8.5×</td></tr>
+<tr><td>1 024</td><td>32×32</td><td>124</td><td>2 046</td><td>16.5×</td></tr>
+<tr><td>10 000</td><td>100×100</td><td>396</td><td>19 998</td><td>50.5×</td></tr>
+</tbody>
+</table>
+
+<p>代入真实数字（\(N=1024=32\times32\)、\(S=64\) MiB、节点内 NVLink 450 GB/s &amp; \(\alpha=1.5\,\mu s\)、节点间 IB 50 GB/s &amp; \(\alpha=10\,\mu s\)）：<b>2D torus ≈ 3.32 ms，flat 1D ring ≈ 23.14 ms，7.0× 加速</b>。推广到 3D（机柜内 / 机架上 / 机架间）就是 \(2(N_1-1)+2(N_2-1)+2(N_3-1)\)，\(N=10^6\) 时步数只有 \(\approx 6\times100=600\)，而 1D ring 要 200 万步——<b>这就是为什么万卡集群必须做成多维 torus，而不是拉一个大环</b>。</p>
+
+<div class="keypoint">
+<b>三种「减少步数」的手段，代价完全不同，别混为一谈：</b>
+<ul>
+<li><b>树 / 递归折半</b>：\(k: 2(N-1)\to 2\log_2 N\)，\(W\) 不变。靠<b>指数衰减的交换量</b>（§3.2.4），几何级数收敛到同一个总数。<b>免费的</b>。</li>
+<li><b>多维环</b>：\(k: 2(N-1)\to 2\sum_i(N_i-1)\)，\(W\) 不变（上面刚证）。靠<b>拓扑本来就是分层的</b>这一事实。<b>也是免费的</b>，但要求物理拓扑匹配。</li>
+<li><b>one-shot</b>：\(k: 2(N-1)\to 1\)，但 \(W: 2\frac{N-1}{N}S \to (N-1)S\)，<b>涨 \(N/2\) 倍</b>。这是唯一真正拿流量换延迟的做法，所以只在 \(S\) 极小时划算（阈值 \(S^\dagger\)，§5.4）。</li>
+</ul>
+</div>
+
+<h3>5.3 NCCL 的算法与协议：两个正交维度</h3>
+
+<p><code>NCCL_ALGO</code> 和 <code>NCCL_PROTO</code> 是可以分别设的两个环境变量，很多人以为是一个东西。</p>
+
+<table>
+<thead><tr><th><code>NCCL_ALGO</code></th><th>引入版本</th><th>机制</th><th>典型触发条件</th></tr></thead>
+<tbody>
+<tr><td><code>Ring</code></td><td>一直有</td><td>环形 RS + AG，§4 详解</td><td>大消息、机内</td></tr>
+<tr><td><code>Tree</code></td><td>2.4（2.5 起跨机默认）</td><td>双二叉树，reduce 上行 + broadcast 下行</td><td>跨机、节点数多</td></tr>
+<tr><td><code>CollnetChain</code> / <code>CollnetDirect</code></td><td>2.7 / 2.11</td><td>网络内计算（InfiniBand SHARP），交换机做求和</td><td>需要 SHARP 授权的 IB 集群</td></tr>
+<tr><td><code>NVLS</code></td><td>2.17</td><td>NVSwitch multicast + <code>multimem.ld_reduce</code> 指令，reduce 在交换机侧完成</td><td>Hopper/Blackwell + NVLink Switch</td></tr>
+<tr><td><code>NVLSTree</code></td><td>2.18</td><td>机内 NVLS + 机间 Tree 的两级组合</td><td>多机 H100/B200 集群</td></tr>
+<tr><td><code>PAT</code></td><td>2.23</td><td>Parallel Aggregated Trees，\(O(\log N)\) 步同时保持接近 Ring 的带宽</td><td>中小消息的 allreduce / allgather</td></tr>
+</tbody>
+</table>
+
+<table>
+<thead><tr><th><code>NCCL_PROTO</code></th><th>有效带宽</th><th>机制</th><th>适用</th></tr></thead>
+<tbody>
+<tr><td><code>LL</code>（Low Latency）</td><td>≈ 50%</td><td>每 8 B 数据配 8 B flag，靠 flag 做同步，<b>不需要内存屏障</b></td><td>小消息，延迟敏感</td></tr>
+<tr><td><code>LL128</code></td><td>≈ 94%</td><td>每 128 B 里 120 B 是数据、8 B 是 flag</td><td>NVLink 上的中小消息（需要链路保序）</td></tr>
+<tr><td><code>Simple</code></td><td>100%</td><td>常规 DMA + 显式同步</td><td>大消息</td></tr>
+</tbody>
+</table>
+
+<div class="infer">
+<p><code>LL</code> 的 50% 有效带宽是<b>故意</b>的：多花一倍字节换来「收到 flag 就等于数据到了」，省掉一次 fence/barrier 的往返。在小消息区（\(\alpha\) 主导）这笔买卖稳赚；到几 MB 以上就亏了，NCCL 会自动切 <code>Simple</code>。用 <code>NCCL_PROTO=LL</code> 强行锁死小消息协议去跑大 all-reduce，是常见的自残操作。</p>
+</div>
+
+<p>想知道 NCCL 实际选了什么，最省事的办法是开日志：</p>
+
+<pre><code class="language-bash">export NCCL_DEBUG=INFO
+export NCCL_DEBUG_SUBSYS=INIT,COLL      # COLL 会打印每次集合通信选的 algo/proto
+# 输出形如：
+# NCCL INFO AllReduce: Algo=1 Proto=2 time=... （1=Tree, 2=Simple；编号见 nccl.h 的 ncclFunc_t/ncclProto_t）</code></pre>
+
+<h3>5.4 decode 的救命稻草：custom all-reduce 的 one-shot / two-shot</h3>
+
+<p>推理 decode 阶段的 TP all-reduce 有个尴尬特征：<b>消息只有几十~几百 KB，但每层调 2 次、几十层，一秒调几千次</b>。Ring 的 \(2(N-1)\) 步延迟在这里是纯亏损。所以 vLLM / TensorRT-LLM / SGLang 都绕过 NCCL，自己写了基于 P2P + NVLink 全连接的 custom all-reduce kernel。</p>
+
+<table>
+<thead><tr><th>方案</th><th>做法</th><th>每卡发出字节</th><th>轮数</th><th>代价</th></tr></thead>
+<tbody>
+<tr><td><b>one-shot</b></td><td>每卡把自己的完整 buffer 写进所有对端的暂存区，然后各自本地把 \(N\) 份加起来</td><td>\((N-1)S\)</td><td>1</td><td>流量 \(\times N/2\)；需要 \(N\) 倍暂存显存</td></tr>
+<tr><td><b>two-shot</b></td><td>reduce-scatter（每卡只负责第 \(r\) 块）+ all-gather，但走全连接 P2P 而不是环</td><td>\(\frac{2(N-1)}{N}S \approx 2S\)</td><td>2</td><td>流量与 Ring 同，但步数从 \(2(N-1)\) 砍到 2</td></tr>
+<tr><td><b>NVLS multicast</b></td><td>写一次 multicast 地址，NVSwitch 硬件做归约，用 <code>multimem.ld_reduce</code> 读回</td><td>\(\approx S\)</td><td>1~2</td><td>需要 Hopper+ 与 NVLink Switch</td></tr>
+</tbody>
+</table>
+
+<p>one-shot 什么时候值得？令两者时间相等（\(B\) = 单向带宽，\(\alpha\) = 单轮同步开销）：</p>
+
+<div class="formula">
+\[ \alpha + \frac{(N-1)S}{B} \;=\; 2\alpha + \frac{2(N-1)}{N}\cdot\frac{S}{B} \quad\Longrightarrow\quad S^{\dagger} = \frac{\alpha B\, N}{(N-1)(N-2)} \]
+</div>
+
+<p>代入 \(\alpha = 1.5\,\mu s\)、\(B = 450\) GB/s（\(\alpha B = 659\) KiB）：</p>
+
+<table>
+<thead><tr><th>\(N\)</th><th>2</th><th>4</th><th>8</th><th>16</th></tr></thead>
+<tbody>
+<tr><td>\(S^{\dagger}\)（one-shot 上限）</td><td>∞（总赢）</td><td>439 KiB</td><td><b>126 KiB</b></td><td>50 KiB</td></tr>
+</tbody>
+</table>
+
+<p>对照实际负载：batch=1、H=8192、bf16 的 TP all-reduce 是 <b>16 KiB</b> → N=8 时 one-shot 明显赢；batch=32 时是 <b>512 KiB</b> → 必须 two-shot；prefill 的 chunk=4096 token 时是 <b>64 MiB</b> → 直接交给 NCCL Ring/NVLS。</p>
+
+<div class="keypoint">
+<p><b>一句话记住：one-shot 用 \(N/2\) 倍的流量，买 \(2(N-1)\) 倍的步数削减。</b>\(N\) 越大、\(S\) 越小越划算；\(N \ge 16\) 或 \(S \ge\) 几百 KB 就反过来亏。所以 custom all-reduce 通常只在 <b>TP ≤ 8 且消息小于阈值</b>时启用，超过阈值自动 fallback 回 NCCL。</p>
+</div>
+<h2 id="hier">6. 分层通信：机内 NVLink + 机间 IB 的流量账</h2>
+
+<h3>6.1 为什么必须分层：flat ring 浪费了 7/8 的网卡</h3>
+
+<p>真实集群的带宽是<b>异构</b>的：机内 NVLink 单向 450 GB/s，机间每张 400 Gb IB 网卡约 50 GB/s，差 9 倍。前面所有公式都假设「所有链路一样快」，一旦不成立，慢链路就是唯一的答案。</p>
+
+<p>考虑一个看起来最自然的方案：把 64 张卡拉成一个大环（flat ring），环在节点边界处穿过 IB。分析一下每张网卡承担多少：</p>
+
+<ul>
+<li>环上每一步，<b>每条</b>链路都同时搬 \(S/N\)。跨机链路一共 \(m=8\) 条，每条搬 \(2(N-1)\cdot \frac{S}{N} = 126\) MiB。</li>
+<li>但每个节点在这条环上只有<b>一进一出</b>两个跨机端口——也就是说 8 张 NIC 里只有 1~2 张在干活，<b>其余 6~7 张全程闲置</b>。</li>
+<li>时间由最慢链路决定：\(126\ \text{MiB} \div 50\ \text{GB/s} = \mathbf{2.64\ ms}\)，再加上 126 步 × 10 µs 的跨机延迟 ≈ 1.26 ms，合计 <b>≈ 3.9 ms</b>。</li>
+</ul>
+
+<p>分层（hierarchical / 2-level）方案的做法是：让<b>每张卡都独立跑自己的跨机通信</b>，8 张 NIC 同时开工。</p>
+
+<div class="fig">
+<svg viewBox="0 0 880 336" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="分层 all-reduce 的三段式流量路径：机内 reduce-scatter、机间 all-reduce、机内 all-gather">
+  <defs>
+    <marker id="hierarr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="14" font-size="12" font-weight="700" fill="#1a1f2e">节点 0 · g=8 卡（图中画 4 卡示意）· 机内 NVLink</text>
+  <rect x="40" y="22" width="800" height="96" rx="10" fill="#fbfbfd" stroke="#2456c4" stroke-width="1.4"/>
+  <rect x="60" y="32" width="690" height="18" rx="6" fill="#eef3fc" stroke="#2456c4" stroke-width="1"/>
+  <text x="405" y="45" text-anchor="middle" font-size="10" fill="#163a86">NVLink / NVSwitch · 450 GB/s</text>
+  <text x="770" y="45" font-size="12" font-weight="700" fill="#2456c4">①③</text>
+  <g stroke="#c9d2e0" stroke-width="1.4">
+    <line x1="135" y1="50" x2="135" y2="60"/>
+    <line x1="315" y1="50" x2="315" y2="60"/>
+    <line x1="495" y1="50" x2="495" y2="60"/>
+    <line x1="675" y1="50" x2="675" y2="60"/>
+  </g>
+  <rect x="60" y="60" width="150" height="46" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="240" y="60" width="150" height="46" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="420" y="60" width="150" height="46" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="600" y="60" width="150" height="46" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <text x="135" y="80" text-anchor="middle" font-size="12" fill="#1a1f2e">GPU 0</text>
+  <text x="315" y="80" text-anchor="middle" font-size="12" fill="#1a1f2e">GPU 1</text>
+  <text x="495" y="80" text-anchor="middle" font-size="12" fill="#1a1f2e">GPU 2</text>
+  <text x="675" y="80" text-anchor="middle" font-size="12" fill="#1a1f2e">GPU 3</text>
+  <text x="135" y="96" text-anchor="middle" font-size="10" fill="#5a6272">持有 chunk 0</text>
+  <text x="315" y="96" text-anchor="middle" font-size="10" fill="#5a6272">持有 chunk 1</text>
+  <text x="495" y="96" text-anchor="middle" font-size="10" fill="#5a6272">持有 chunk 2</text>
+  <text x="675" y="96" text-anchor="middle" font-size="10" fill="#5a6272">持有 chunk 3</text>
+
+  <g stroke="#e8862a" stroke-width="1.8">
+    <line x1="135" y1="118" x2="135" y2="150" marker-end="url(#hierarr)" marker-start="url(#hierarr)"/>
+    <line x1="315" y1="118" x2="315" y2="150" marker-end="url(#hierarr)" marker-start="url(#hierarr)"/>
+    <line x1="495" y1="118" x2="495" y2="150" marker-end="url(#hierarr)" marker-start="url(#hierarr)"/>
+    <line x1="675" y1="118" x2="675" y2="150" marker-end="url(#hierarr)" marker-start="url(#hierarr)"/>
+  </g>
+  <text x="790" y="172" font-size="12" font-weight="700" fill="#e8862a">②</text>
+
+  <rect x="100" y="150" width="680" height="34" rx="8" fill="#fbe3cc" stroke="#e8862a" stroke-width="1.4"/>
+  <text x="440" y="172" text-anchor="middle" font-size="11" fill="#8a4d10">InfiniBand 交换机 · 每卡一张 400 Gb NIC ≈ 50 GB/s</text>
+
+  <g stroke="#e8862a" stroke-width="1.8">
+    <line x1="135" y1="184" x2="135" y2="216" marker-end="url(#hierarr)" marker-start="url(#hierarr)"/>
+    <line x1="315" y1="184" x2="315" y2="216" marker-end="url(#hierarr)" marker-start="url(#hierarr)"/>
+    <line x1="495" y1="184" x2="495" y2="216" marker-end="url(#hierarr)" marker-start="url(#hierarr)"/>
+    <line x1="675" y1="184" x2="675" y2="216" marker-end="url(#hierarr)" marker-start="url(#hierarr)"/>
+  </g>
+
+  <rect x="100" y="216" width="680" height="44" rx="10" fill="#fbfbfd" stroke="#2456c4" stroke-width="1.4" stroke-dasharray="6 4"/>
+  <text x="440" y="243" text-anchor="middle" font-size="12" fill="#1a1f2e">节点 1 …… 节点 m−1（结构同节点 0，各自 8 卡）</text>
+
+  <text x="100" y="284" font-size="11" fill="#2456c4">① 机内 reduce-scatter：每卡线上 (g−1)/g·S，走 NVLink</text>
+  <text x="100" y="302" font-size="11" fill="#e8862a">② 机间 all-reduce：每卡 2(m−1)/m·(S/g)，g 张 NIC 并行</text>
+  <text x="100" y="320" font-size="11" fill="#2456c4">③ 机内 all-gather：与 ① 同量</text>
+</svg>
+</div>
+<p class="cap"><b>图 6-1</b>：三段式分层 all-reduce（\(N = m\cdot g\)，\(m\) 个节点、每节点 \(g\) 卡）。关键在于 ② 只搬 \(S/g\)，而且是<b>每张卡各走各的 NIC</b>——节点内 8 张网卡同时满载。图里画 4 卡只是为了排得下，公式按 \(g=8\) 算。</p>
+
+<h3>6.2 公式与算例</h3>
+
+<div class="formula">
+\[ W_{\text{hier}} \;=\; \underbrace{\frac{2(g-1)}{g}S}_{\text{NVLink：①+③}} \;+\; \underbrace{\frac{2(m-1)}{m}\cdot\frac{S}{g}}_{\text{IB：②}} \qquad\qquad T \approx \frac{2(g-1)}{g}\cdot\frac{S}{B_{\text{nvl}}} + \frac{2(m-1)}{m}\cdot\frac{S}{g\,B_{\text{ib}}} + \big[2(g-1)\alpha_{\text{nvl}} + 2(m-1)\alpha_{\text{ib}}\big] \]
+</div>
+
+<p>代入 \(g=8,\ m=8\ (N=64),\ S=64\ \text{MiB},\ B_{\text{nvl}}=450\ \text{GB/s},\ B_{\text{ib}}=50\ \text{GB/s},\ \alpha_{\text{nvl}}=1.5\,\mu s,\ \alpha_{\text{ib}}=10\,\mu s\)：</p>
+
+<table>
+<thead><tr><th></th><th>flat ring（N=64）</th><th>分层（g=8, m=8）</th><th>差异</th></tr></thead>
+<tbody>
+<tr><td>NVLink 每卡线上量</td><td>—（全被 IB 卡住）</td><td>\(2\cdot\frac78\cdot 64 = 112\) MiB</td><td>262 µs + 21 µs 延迟 = <b>283 µs</b></td></tr>
+<tr><td>单张 NIC 承载</td><td>\(126\) MiB</td><td>\(2\cdot\frac78\cdot 8 = 14\) MiB</td><td><b>9×</b> 少</td></tr>
+<tr><td>节点跨机总流量</td><td>\(8 \times 126 = 1008\) MiB</td><td>\(64 \times 14 = 896\) MiB</td><td>几乎相同！</td></tr>
+<tr><td>干活的 NIC 数</td><td>1~2 / 8</td><td><b>8 / 8</b></td><td>这才是全部收益来源</td></tr>
+<tr><td>IB 传输时间</td><td>2.64 ms</td><td>0.29 ms</td><td>9×</td></tr>
+<tr><td>总耗时</td><td><b>≈ 3.90 ms</b></td><td><b>≈ 0.72 ms</b></td><td><b>5.5×</b></td></tr>
+</tbody>
+</table>
+
+<div class="keypoint">
+<p><b>分层通信省的不是流量，是并发度。</b>跨机总字节数几乎一样（1008 vs 896 MiB），但 flat ring 把它们挤过 1 张网卡，分层方案把它们摊到 8 张网卡上。所以加速比的上限就是<b>每节点网卡数 \(g\)</b>（这里 5.5× 而非 8×，是因为 NVLink 那 283 µs 加回来了）。这也解释了为什么 DGX/HGX 一定配 8 张 NIC、且要求「一卡一 NIC 同 PCIe switch 亲和」。</p>
+</div>
+
+<h3>6.3 陷阱：把 ① 写成 reduce 而不是 reduce-scatter</h3>
+
+<p>一个看起来等价、实际上白干的变体：「先在机内 reduce 到 local rank 0，再让 rank 0 跨机 all-reduce，最后机内 broadcast」。</p>
+
+<table>
+<thead><tr><th></th><th>① reduce → ② 跨机 AR → ③ broadcast</th><th>① reduce-scatter → ② 跨机 AR → ③ all-gather</th></tr></thead>
+<tbody>
+<tr><td>NVLink 每卡</td><td>\(2\cdot\frac{g-1}{g}S = 112\) MiB</td><td>\(2\cdot\frac{g-1}{g}S = 112\) MiB</td></tr>
+<tr><td>跨机总量（单节点）</td><td>\(\frac{2(m-1)}{m}S = 112\) MiB，<b>走 1 张 NIC</b></td><td>\(g\cdot\frac{2(m-1)}{m}\cdot\frac{S}{g} = 112\) MiB，<b>摊到 8 张 NIC</b></td></tr>
+<tr><td>IB 耗时</td><td>2.35 ms</td><td>0.29 ms</td></tr>
+</tbody>
+</table>
+
+<p>NVLink 那一半完全一样，跨机字节也一样，<b>但前者只用一张网卡</b>——加速比全部丢失。判断一个分层实现是否正确，只看一件事：跨机阶段是不是<b>每张卡都在发</b>。</p>
+
+<div class="infer">
+<p>同样的原则贯穿 DeepSeek-V3 §3 的基础设施设计：跨机 MoE 的 all-to-all 被刻意安排成「每张 GPU 只跟远端同 rail 的 GPU 通信」，并给不同的 SM 分组以独占各自的 NIC，避免多卡抢一张网卡的 PCIe 通道。凡是「汇聚到一个代表再通信」的写法，在多网卡机器上都是反模式。</p>
+</div>
+
+<h3>6.4 Rail-optimized 网络与 PXN</h3>
+
+<p>大规模集群的物理布线通常是 <b>rail-optimized</b>：所有节点的 GPU 0 接到同一台交换机（rail 0），GPU 1 接到 rail 1……这样同 rail 通信只需一跳，跨 rail 必须上 spine，既慢又容易拥塞。</p>
+
+<p>问题来了：all-to-all（MoE 的 EP 通信）天生要跨 rail。<b>PXN（PCI × NVLink）</b> 是 NCCL 的解法：本卡要发给远端 rail \(k\) 的数据，先通过机内 NVLink 转给本地那张属于 rail \(k\) 的 GPU，再由它走 IB 一跳直达。代价是多一次机内传输（便宜，450 GB/s），收益是避开 spine 的拥塞与额外跳数。</p>
+
+<table>
+<thead><tr><th>环境变量</th><th>作用</th><th>建议</th></tr></thead>
+<tbody>
+<tr><td><code>NCCL_PXN_LEVEL</code></td><td>0=关，1=允许一跳 PXN，2=允许两跳</td><td>rail-optimized 集群跑 EP/all-to-all 时设 1~2</td></tr>
+<tr><td><code>NCCL_CROSS_NIC</code></td><td>0=强制同一张 NIC 进出，1=自动，2=允许换 NIC</td><td>默认 1；跨机 all-to-all 拥塞时试 2</td></tr>
+<tr><td><code>NCCL_NET_GDR_LEVEL</code></td><td>GPUDirect RDMA 的 PCIe 拓扑门槛</td><td>确认日志里是 <code>GDRDMA</code> 而不是走了 host memory 中转</td></tr>
+<tr><td><code>NCCL_TOPO_FILE</code></td><td>手工提供拓扑 XML</td><td>容器里 <code>lspci</code> 受限时必须给，否则 NCCL 猜错亲和</td></tr>
+</tbody>
+</table>
+
+<div class="infer">
+<p>把 \(K\) 级分层推广开：每多一层，跨该层的消息就缩小为该层组大小的倒数，代价是多 \(2(g_k-1)\) 步延迟和一次机内带宽开销。三级（GPU → 节点 → 机柜/超节点）在 GB200 NVL72 这类「机柜即一个大 NVLink 域」的机器上开始变得常见——此时 \(g\) 从 8 变成 72，跨 IB 的量直接缩到 \(S/72\)，这也是 NVL72 对 MoE 训练吸引力的核心来源。</p>
+</div>
+<h2 id="llm">7. LLM 里谁在调什么原语（含真实算例）</h2>
+
+<h3>7.1 总表：并行策略 → 原语 → 通信量</h3>
+
+<table>
+<thead><tr><th>并行</th><th>触发点</th><th>原语</th><th>消息大小 \(S\)</th><th>每卡每次线上量</th><th>频率</th><th>建议介质</th></tr></thead>
+<tbody>
+<tr><td><b>TP</b>（Megatron）</td><td>Attention 后、FFN 后</td><td>All-Reduce</td><td>\(T\cdot H\cdot b\)</td><td>\(\frac{2(\text{TP}-1)}{\text{TP}}S\)</td><td>2 次/层（前向）+ 2 次（反向）</td><td>机内 NVLink，<b>绝不跨机</b></td></tr>
+<tr><td><b>Megatron-SP</b></td><td>LayerNorm / Dropout 处</td><td>Reduce-Scatter + All-Gather</td><td>\(T\cdot H\cdot b\)</td><td>各 \(\frac{\text{TP}-1}{\text{TP}}S\)</td><td>2 次/层</td><td>机内；总量与 TP 相同，但激活显存 ÷TP</td></tr>
+<tr><td><b>DP</b> / ZeRO-1,2</td><td>反向结束</td><td>All-Reduce（梯度）</td><td>本卡梯度分片 \(G\)</td><td>\(\approx 2G\)</td><td>1 次/step（分桶）</td><td>跨机；与反向重叠</td></tr>
+<tr><td><b>ZeRO-3</b> / FSDP</td><td>前向取参、反向取参、梯度</td><td>AG + AG + RS</td><td>全模型 \(P\)</td><td>\(\approx 3P\)</td><td>每层</td><td>跨机；比 DDP 多 1.5×</td></tr>
+<tr><td><b>EP</b>（MoE）</td><td>dispatch / combine</td><td>All-to-All ×2</td><td>\(T\cdot k\cdot H\cdot b\)</td><td>\(2\left(1-\frac1{\text{EP}}\right)S\)</td><td>2 次/MoE 层</td><td>机内优先；跨机需 FP8 dispatch</td></tr>
+<tr><td><b>CP</b>（Ring-Attn）</td><td>每个 KV chunk</td><td>P2P send/recv（环）</td><td>\(\frac{S_{ctx}}{\text{CP}}\cdot d_{kv}\cdot b\)</td><td>\((\text{CP}-1)\cdot 2S_{chunk}\)</td><td>CP−1 步/层</td><td>可与计算重叠</td></tr>
+<tr><td><b>CP</b>（Ulysses）</td><td>Attention 前后</td><td>All-to-All ×2</td><td>\(S_{ctx}\cdot H\cdot b\)</td><td>\(\frac{2(\text{CP}-1)}{\text{CP}}S\)</td><td>2 次/层</td><td>机内优先；受 head 数上限约束</td></tr>
+<tr><td><b>PP</b></td><td>stage 边界</td><td>P2P send/recv</td><td>micro-batch 的 \(T\cdot H\cdot b\)</td><td>\(S\)（单向）</td><td>1 次/边界</td><td>跨机可接受（量小、次数少）</td></tr>
+</tbody>
+</table>
+
+<h3>7.2 TP：一层里那两次 All-Reduce 从哪来</h3>
+
+<div class="fig">
+<svg viewBox="0 0 880 208" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Megatron 张量并行中一层 Transformer 的两次 all-reduce 位置">
+  <defs>
+    <marker id="tparr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/>
+    </marker>
+  </defs>
+  <text x="24" y="24" font-size="13" font-weight="700" fill="#1a1f2e">Megatron-LM 张量并行：一层里的两次 All-Reduce</text>
+
+  <g stroke="#5a6272" stroke-width="1.6">
+    <line x1="104" y1="70" x2="124" y2="70" marker-end="url(#tparr)"/>
+    <line x1="274" y1="70" x2="294" y2="70" marker-end="url(#tparr)"/>
+    <line x1="424" y1="70" x2="444" y2="70" marker-end="url(#tparr)"/>
+    <line x1="584" y1="70" x2="604" y2="70" marker-end="url(#tparr)"/>
+    <line x1="734" y1="70" x2="754" y2="70" marker-end="url(#tparr)"/>
+    <line x1="104" y1="150" x2="124" y2="150" marker-end="url(#tparr)"/>
+    <line x1="274" y1="150" x2="294" y2="150" marker-end="url(#tparr)"/>
+    <line x1="424" y1="150" x2="444" y2="150" marker-end="url(#tparr)"/>
+    <line x1="584" y1="150" x2="604" y2="150" marker-end="url(#tparr)"/>
+    <line x1="734" y1="150" x2="754" y2="150" marker-end="url(#tparr)"/>
+    <polyline points="804,96 804,112 64,112 64,124" fill="none" marker-end="url(#tparr)"/>
+  </g>
+
+  <rect x="24" y="44" width="80" height="52" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="124" y="44" width="150" height="52" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="294" y="44" width="130" height="52" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="444" y="44" width="140" height="52" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="604" y="44" width="130" height="52" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-width="2.2"/>
+  <rect x="754" y="44" width="100" height="52" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <text x="64" y="74" text-anchor="middle" font-size="11" fill="#1a1f2e">输入 x</text>
+  <text x="199" y="66" text-anchor="middle" font-size="11" fill="#1a1f2e">QKV 列并行</text>
+  <text x="199" y="84" text-anchor="middle" font-size="10" fill="#5a6272">按 head 切</text>
+  <text x="359" y="66" text-anchor="middle" font-size="11" fill="#1a1f2e">Attention</text>
+  <text x="359" y="84" text-anchor="middle" font-size="10" fill="#5a6272">本卡 heads</text>
+  <text x="514" y="66" text-anchor="middle" font-size="11" fill="#1a1f2e">O 行并行</text>
+  <text x="514" y="84" text-anchor="middle" font-size="10" fill="#5a6272">按 head 合</text>
+  <text x="669" y="74" text-anchor="middle" font-size="11" font-weight="700" fill="#163a86">All-Reduce ①</text>
+  <text x="804" y="74" text-anchor="middle" font-size="11" fill="#1a1f2e">→ FFN</text>
+
+  <rect x="24" y="124" width="80" height="52" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="124" y="124" width="150" height="52" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="294" y="124" width="130" height="52" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="444" y="124" width="140" height="52" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <rect x="604" y="124" width="130" height="52" rx="8" fill="#eef3fc" stroke="#2456c4" stroke-width="2.2"/>
+  <rect x="754" y="124" width="100" height="52" rx="8" fill="#fff" stroke="#c9d2e0"/>
+  <text x="64" y="154" text-anchor="middle" font-size="11" fill="#1a1f2e">输入 y</text>
+  <text x="199" y="146" text-anchor="middle" font-size="11" fill="#1a1f2e">Gate/Up 列并行</text>
+  <text x="199" y="164" text-anchor="middle" font-size="10" fill="#5a6272">按 d_ff 切</text>
+  <text x="359" y="146" text-anchor="middle" font-size="11" fill="#1a1f2e">SwiGLU</text>
+  <text x="359" y="164" text-anchor="middle" font-size="10" fill="#5a6272">本卡分片</text>
+  <text x="514" y="146" text-anchor="middle" font-size="11" fill="#1a1f2e">Down 行并行</text>
+  <text x="514" y="164" text-anchor="middle" font-size="10" fill="#5a6272">按 d_ff 合</text>
+  <text x="669" y="154" text-anchor="middle" font-size="11" font-weight="700" fill="#163a86">All-Reduce ②</text>
+  <text x="804" y="154" text-anchor="middle" font-size="11" fill="#1a1f2e">→ 下一层</text>
+
+  <text x="24" y="196" font-size="11" fill="#5a6272">①② 各一次 All-Reduce：前向 2 次/层，反向对称再来 2 次 → 每层每卡 4 × 2(TP−1)/TP × S</text>
+</svg>
+</div>
+<p class="cap"><b>图 7-1</b>：列并行把权重按输出维切开，每张卡算出<b>部分</b>结果（不需要通信）；行并行把权重按输入维切开，每张卡算出一个<b>不完整的求和项</b>，必须 All-Reduce 才能拼回正确答案。「列并行 → 行并行」的配对是 Megatron 的核心设计，正好让每个子层只需要<b>一次</b>通信。</p>
+
+<p><b>算例 A：Llama-3-70B，TP=8，prefill chunk = 4096 token，bf16。</b></p>
+<ul>
+<li>\(S = T\cdot H\cdot b = 4096\times 8192\times 2 = \mathbf{64\ MiB}\)</li>
+<li>每次 All-Reduce 每卡线上量 \(= \frac{2\times 7}{8}\times 64 = \mathbf{112\ MiB}\)</li>
+<li>耗时 \(= 112\,\text{MiB}/450\,\text{GB/s} + 14\times1.5\,\mu s = 261 + 21 = \mathbf{282\ \mu s}\)</li>
+<li>一层 2 次 → 0.56 ms；<b>80 层前向合计 45 ms，每卡搬 17.5 GiB</b></li>
+</ul>
+<p>45 ms 是什么概念？70B 在 TP=8 上算 4096 token 前向约需 \(2\times 70.5\text{G}\times 4096 / (8\times 500\ \text{TFLOPS}) \approx 144\) ms（不算 attention 的 \(S^2\) 项）。<b>通信占前向的 31%</b>——而且这 45 ms 无法与计算重叠（All-Reduce 在关键路径上，后面的算子必须等它）。这就是 TP 只能放机内、且 TP=16 跨机会崩掉的量化理由。</p>
+
+<h3>7.3 decode：同一个 All-Reduce，完全不同的性格</h3>
+
+<p><b>算例 B：Llama-3-70B，TP=8，decode，batch=32，H=8192，bf16。</b></p>
+<ul>
+<li>\(S = 32\times 8192\times 2 = \mathbf{512\ KiB}\)（比 prefill 小 128 倍）</li>
+<li>Ring：\(14\times1.5\,\mu s + 896\,\text{KiB}/450\,\text{GB/s} = 21 + 2.1 = \mathbf{23.0\ \mu s}\) —— <b>91% 是纯延迟</b></li>
+<li>custom two-shot（全连接 P2P，2 轮）：\(2\times1.5 + 2.1 = \mathbf{5.0\ \mu s}\)</li>
+<li>one-shot：\(1\times1.5 + 3.5\,\text{MiB}/450 = \mathbf{9.7\ \mu s}\)（512 KiB 已超过 §5.4 算出的 126 KiB 上限，所以输给 two-shot）</li>
+<li>batch=1 时 \(S=16\) KiB：one-shot <b>1.8 µs</b> &lt; two-shot 3.1 µs &lt; Ring 21.1 µs —— 完全反过来</li>
+<li>每层 2 次 × 80 层 = 160 次/step：Ring <b>3.69 ms</b> vs two-shot <b>0.81 ms</b></li>
+</ul>
+
+<div class="keypoint">
+<p><b>同一个原语，prefill 是带宽问题、decode 是延迟问题。</b>prefill 的 64 MiB 消息把 21 µs 的步数开销稀释到看不见；decode 的 512 KiB 消息里，21 µs 延迟占了 91%。所以推理框架宁可自己写 kernel 绕过 NCCL——省的不是字节，是<b>步数</b>。</p>
+</div>
+
+<h3>7.4 MoE 的 All-to-All：最贵的一次通信</h3>
+
+<p><b>算例 C：Qwen3-235B-A22B，EP=8，top-k=8，H=4096，bf16，T=4096，94 个 MoE 层。</b></p>
+<ul>
+<li>dispatch 每卡线上量 \(= T\cdot k\cdot H\cdot b\cdot\left(1-\frac1{\text{EP}}\right) = 4096\times8\times4096\times2\times\frac78 = \mathbf{224\ MiB}\)</li>
+<li>combine 对称，再来 224 MiB → <b>每层 448 MiB</b></li>
+<li>机内（450 GB/s）：1.04 ms/层；<b>跨机（50 GB/s）：9.4 ms/层</b></li>
+<li>94 层前向：机内 41 GiB / 98 ms；跨机 41 GiB / <b>0.88 s</b></li>
+<li>换 FP8 dispatch：每层降到 224 MiB，跨机 0.44 s</li>
+</ul>
+
+<p>对比 §7.2 的 TP：70B 稠密模型 80 层前向通信 45 ms，而 235B MoE 光是跨机 EP 就要 <b>880 ms</b>。这就是「EP 尽量关在机内」「跨机必须上 FP8 dispatch」「DeepEP 要用 IBGDA 绕过 CPU proxy」这些工程决策的全部动机。</p>
+
+<div class="infer">
+<p>All-to-All 的 \(1-\frac1{\text{EP}}\) 因子来自「发给自己的那一份不用上网」：EP=8 时是 0.875，EP=64 时是 0.984——<b>再加大 EP 也省不下流量</b>，它只是把同样的字节摊到更多链路上。真正能减字节的只有三条路：减小 \(k\)、量化激活、或者用分组/分层 all-to-all（先在机内做一次 local dispatch 聚合，再跨机）。</p>
+</div>
+
+<h3>7.5 DP / ZeRO：梯度那一次 All-Reduce</h3>
+
+<p><b>算例 D：70.55B 参数，TP=8 机内、DP=8 跨机，bf16 梯度。</b></p>
+<ul>
+<li>每卡梯度分片 \(G = 70.55\text{G}\times 2 / 8 = \mathbf{17.6\ GB}\)</li>
+<li>DDP / ZeRO-1：\(W \approx 2G = \mathbf{35.3\ GB}\)，跨机 50 GB/s → <b>0.71 s/step</b>（ZeRO 论文的 \(2\Psi\) 是取整上界；按 §3.2 的精确 Ring 因子 \(2\frac{N-1}{N}=1.75\) 算是 30.8 GB → 0.62 s，本页计算器 preset「DP 梯度」给的就是后者）</li>
+<li>ZeRO-3 / FSDP：\(\approx 3G = \mathbf{52.9\ GB}\)（前向 AG + 反向 AG + 梯度 RS），→ 1.06 s/step</li>
+</ul>
+
+<p>0.71 s 听起来灾难，但 DP 的通信有个别的并行都没有的奢侈：<b>它可以和反向传播重叠</b>。梯度是分桶（bucket，PyTorch DDP 默认 25 MB）产生的，一个桶算完就立刻发，等到反向结束时最后几个桶也发完了。判断标准是：</p>
+
+<div class="formula">
+\[ T_{\text{comm}}^{\text{grad}} \;\le\; T_{\text{backward}} \quad\Longleftrightarrow\quad \text{通信被完全隐藏} \]
+</div>
+
+<p>反向大约是前向的 2 倍时长。如果一次 step 的前向是 1.5 s，反向 3 s，那 0.71 s 的梯度通信完全藏得住——<b>DP 的通信量最大，却通常不是瓶颈</b>。反过来 TP 的 45 ms 虽然小得多，却因为在关键路径上而完全暴露。这是理解「为什么 TP 放机内、DP 跨机」的最后一块拼图。</p>
+<h2 id="measure">8. 实测与调优：nccl-tests 怎么读、八个坑</h2>
+
+<h3>8.1 跑起来</h3>
+
+<pre><code class="language-bash">git clone https://github.com/NVIDIA/nccl-tests &amp;&amp; cd nccl-tests
+make MPI=1 MPI_HOME=/usr/lib/x86_64-linux-gnu/openmpi CUDA_HOME=/usr/local/cuda -j
+
+# 单机 8 卡：从 8 B 扫到 8 GiB，每档 ×2
+./build/all_reduce_perf -b 8 -e 8G -f 2 -g 8
+
+# 4 机 × 8 卡 = 32 卡（每进程 1 卡）
+mpirun -np 32 --hostfile hosts \
+  -x NCCL_DEBUG=INFO -x NCCL_IB_DISABLE=0 -x NCCL_SOCKET_IFNAME=eth0 \
+  ./build/all_reduce_perf -b 8 -e 8G -f 2 -g 1
+
+# 换原语只需换可执行文件名
+./build/all_gather_perf -b 8 -e 8G -f 2 -g 8
+./build/alltoall_perf  -b 8 -e 8G -f 2 -g 8      # 需较新版本，或用 -x NCCL_... 的 perf 分支</code></pre>
+
+<h3>8.2 读懂输出</h3>
+
+<pre><code class="language-text">#       size    count   type   redop   root   time   algbw   busBw  #wrong
+#        (B)  (elements)                    (us)  (GB/s)  (GB/s)
+      8388608    2097152  float     sum    -1    43.6  192.51  336.89       0
+   67108864   16777216  float     sum    -1   282.1  237.87  416.27       0
+  536870912  134217728  float     sum    -1  1958.4  274.14  479.75       0</code></pre>
+
+<table>
+<thead><tr><th>列</th><th>含义</th><th>怎么用</th></tr></thead>
+<tbody>
+<tr><td><code>size</code></td><td><b>数组总字节数</b>。对 all-gather / reduce-scatter，nccl-tests 报的是<b>输出</b>缓冲区总大小（即 \(N\) 张卡的 \(S\) 之和），不是单卡的 \(S\)</td><td>代入本文公式时先确认口径，见 §3.4 的陷阱框</td></tr>
+<tr><td><code>count</code></td><td>元素个数 = size / sizeof(type)</td><td>—</td></tr>
+<tr><td><code>time</code></td><td>单次调用耗时（µs），多次迭代取统计值</td><td>与 \(\alpha k + W\beta\) 对表</td></tr>
+<tr><td><code>algbw</code></td><td>size / time，<b>语义带宽</b></td><td>算「模型视角的有效吞吐」用它</td></tr>
+<tr><td><code>busBw</code></td><td>algbw × 校正因子，<b>等效链路带宽</b></td><td><b>判断硬件健康只用这一列</b></td></tr>
+<tr><td><code>#wrong</code></td><td>校验错误的元素数</td><td>必须全 0；非 0 说明有 rank 掉线或数据竞争</td></tr>
+</tbody>
+</table>
+
+<p>健康基线（经验区间，实测受拓扑/固件/邻居负载影响）：</p>
+
+<table>
+<thead><tr><th>场景</th><th>all_reduce busBw 大消息区</th><th>低于此值要查</th></tr></thead>
+<tbody>
+<tr><td>8×H100/H200 SXM，机内 NVLink</td><td>430 – 490 GB/s</td><td>&lt; 380</td></tr>
+<tr><td>8×A100 SXM，机内 NVLink</td><td>210 – 240 GB/s</td><td>&lt; 180</td></tr>
+<tr><td>8×L40S / 4090，机内 PCIe</td><td>20 – 50 GB/s</td><td>—（本来就没有 NVLink）</td></tr>
+<tr><td>跨机 400 Gb IB，flat ring</td><td>≈ 单卡 NIC 单向带宽 × 0.85 ≈ 42 GB/s</td><td>&lt; 35</td></tr>
+<tr><td>跨机，NVLS / Tree 生效</td><td>可显著高于单 NIC（多网卡并发）</td><td>看 <code>NCCL_ALGO</code> 日志确认</td></tr>
+</tbody>
+</table>
+
+<h3>8.3 八个坑</h3>
+
+<ol>
+<li><b>拿 algbw 去比硬件标称带宽。</b>8 卡 all-reduce 的 algbw 天生只有 busBw 的 \(1/1.75 = 57\%\)。这是算法下界（§3.2），不是故障。看到「450 GB/s 的卡只跑出 240」先去查 busBw 那一列。</li>
+
+<li><b>只测小消息就下结论。</b>\(S \le 1\) MiB 时 time 几乎是常数（延迟地板），algbw 随 size 线性上升，画出来的「带宽曲线」毫无诊断价值。必须扫到 <b>≥ 512 MiB</b> 才进入带宽主导区。</li>
+
+<li><b>GPUDirect RDMA 没生效。</b>日志里应看到 <code>NET/IB : ... GDRDMA</code>；如果是 <code>via shared memory</code> 或走了 host bounce buffer，跨机带宽直接腰斩甚至掉到 1/5。检查 <code>nvidia-peermem</code> / <code>nv_peer_mem</code> 模块是否加载。</li>
+
+<li><b><code>NCCL_SOCKET_IFNAME</code> 选错网卡。</b>日志 <code>NET/Socket : Using [0]eth0:10.0.0.5</code> 而 eth0 是 1 GbE 管理网 → 全部流量走管理网。用 <code>NCCL_SOCKET_IFNAME=^docker0,lo</code> 排除，或直接指定 IB 设备。</li>
+
+<li><b>NUMA / PCIe 亲和错配。</b>GPU 0 的 NIC 挂在 NUMA 0，而进程被调度到 NUMA 1，数据要跨 socket 的 UPI 走一趟。<code>nvidia-smi topo -m</code> 看 GPU↔NIC 是不是 <code>PIX</code>/<code>PXB</code>（同 switch）；用 <code>numactl --cpunodebind</code> 或 <code>--map-by ppr:8:socket</code> 绑核。</li>
+
+<li><b>P2P 被 ACS / IOMMU 关掉。</b><code>nvidia-smi topo -m</code> 里 GPU 之间显示 <code>PIX</code>/<code>PHB</code>/<code>SYS</code> 而不是 <code>NV12</code> 之类，或者日志出现 <code>P2P is disabled</code> → 机内退到 shared memory，带宽掉 5–10 倍。BIOS 关 ACS、开 IOMMU passthrough。</li>
+
+<li><b>残留的 <code>NCCL_ALGO</code> / <code>NCCL_PROTO</code>。</b>某次为了排查手工设了 <code>NCCL_ALGO=Ring</code> 忘了删，之后跨机训练就一直慢 3–5 倍。诊断时先 <code>env | grep NCCL</code> 清场，再逐项加回来做 A/B。</li>
+
+<li><b>用 nccl-tests 的 time 乘层数去估训练通信占比。</b>nccl-tests 是<b>空载上限</b>：没有计算抢 SM、没有别的集合通信抢带宽、没有重叠。真实训练里 DP 的梯度通信大部分被反向藏掉，而 TP 的 all-reduce 一点也藏不住。要估占比必须用 <code>torch.profiler</code> / <code>nsys</code> 抓真实时间线。</li>
+</ol>
+
+<h3>8.4 五分钟诊断流程</h3>
+
+<pre><code class="language-bash"># 1. 拓扑：GPU 之间是不是 NVLink，GPU↔NIC 亲和如何
+nvidia-smi topo -m
+
+# 2. IB 链路：State 应为 Active，Rate 应为 400（或 200）
+ibstat | grep -E "State|Rate"
+
+# 3. NCCL 到底选了什么算法/协议、走了什么网络
+NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=INIT,NET,GRAPH,TUNING \
+  ./build/all_reduce_perf -b 1M -e 1G -f 4 -g 8 2&gt;&amp;1 | \
+  grep -E "NET/|GDRDMA|P2P|Channel|Ring|Tree|NVLS|Algorithm|Connected"
+
+# 4. 扫一遍大小，只看 busBw 的大消息区
+for op in all_reduce all_gather reduce_scatter broadcast; do
+  echo "=== $op ==="; ./build/${op}_perf -b 1M -e 4G -f 4 -g 8 | tail -8
+done</code></pre>
+
+<h3>8.5 在 PyTorch 侧观测</h3>
+
+<table>
+<thead><tr><th>手段</th><th>命令 / 代码</th><th>能看到什么</th></tr></thead>
+<tbody>
+<tr><td>集合通信的正确性与形状检查</td><td><code>TORCH_DISTRIBUTED_DEBUG=DETAIL</code></td><td>各 rank 传入 shape 不一致、未使用的参数、慢 rank</td></tr>
+<tr><td>时间线</td><td><code>torch.profiler</code> + <code>schedule</code>，导出 chrome trace</td><td><code>nccl:all_reduce</code> kernel 的时长、以及它与计算 kernel 之间有没有 gap（gap = 没重叠）</td></tr>
+<tr><td>系统级时间线</td><td><code>nsys profile --trace=cuda,nvtx,mpi</code></td><td>多个通信流是否并发、IB 计数器、CPU proxy 是否成为瓶颈</td></tr>
+<tr><td>NCCL 计数器</td><td><code>ncclCommGetAsyncError</code> / NCCL 2.19+ 的 profiler plugin</td><td>每次集合通信实际选的 algo/proto、每步字节数</td></tr>
+</tbody>
+</table>
+
+<div class="infer">
+<p>诊断顺序建议：<b>先确认拓扑（<code>nvidia-smi topo -m</code>），再确认 busBw 达标，最后才去调 <code>NCCL_*</code></b>。绝大多数「NCCL 慢」的案例是拓扑层面的问题（P2P 没开、GDR 没生效、网卡选错），调环境变量的收益远小于修拓扑。反过来说，如果 busBw 已经接近基线，那就不是通信库的问题，而是<b>算法层面通信量太大</b>——该改并行策略了。</p>
+</div>
+<h2 id="calc">9. 动手算：集合通信计算器</h2>
+
+<p>把前面所有公式串起来。<b>选一个预设或直接改参数，实时看每卡线上量、步数、耗时拆分和 busBw</b>——数字与本文各表用的是同一套公式。</p>
+
+<div class="calc">
+  <div class="presetbar" id="cc-presets">
+    <button data-p="tp-prefill">TP prefill（70B, TP=8）</button>
+    <button data-p="tp-decode">TP decode（batch=32）</button>
+    <button data-p="tp-1shot">TP decode（batch=1, one-shot）</button>
+    <button data-p="ep-moe">EP dispatch（235B MoE）</button>
+    <button data-p="ulysses">Ulysses CP（32K 上下文）</button>
+    <button data-p="dp-grad">DP 梯度（70B, 跨机）</button>
+    <button data-p="hier-64">分层 AR（N=64, g=8）</button>
+  </div>
+
+  <fieldset><legend>调用</legend>
+    <div class="calc-row">
+      <span class="field"><label for="cc-op">原语</label>
+        <select id="cc-op">
+          <option value="all_reduce" selected>All-Reduce</option>
+          <option value="reduce_scatter">Reduce-Scatter</option>
+          <option value="all_gather">All-Gather</option>
+          <option value="all_to_all">All-to-All</option>
+          <option value="broadcast">Broadcast</option>
+          <option value="reduce">Reduce</option>
+          <option value="scatter">Scatter</option>
+          <option value="gather">Gather</option>
+        </select>
+      </span>
+      <span class="field"><label for="cc-alg">算法</label><select id="cc-alg"></select></span>
+      <span class="field"><label for="cc-n">N（参与卡数）</label><input id="cc-n" type="number" value="8" min="2" step="1"></span>
+      <span class="field"><label for="cc-ca">每层调用次数</label><input id="cc-ca" type="number" value="2" min="1" step="1"></span>
+      <span class="field"><label for="cc-la">层数</label><input id="cc-la" type="number" value="80" min="1" step="1"></span>
+    </div>
+  </fieldset>
+
+  <fieldset><legend>消息大小 S（二选一）</legend>
+    <div class="calc-row">
+      <span class="field"><label for="cc-s">手填 S</label><input id="cc-s" type="number" value="64" step="any"></span>
+      <span class="field"><label for="cc-su">单位</label>
+        <select id="cc-su"><option value="1">B</option><option value="1024">KiB</option><option value="1048576" selected>MiB</option><option value="1073741824">GiB</option></select>
+      </span>
+      <span class="field"><label for="cc-use">改用张量形状算</label><input id="cc-use" type="checkbox"></span>
+      <span class="field"><label for="cc-tk">T（token 数）</label><input id="cc-tk" type="number" value="4096"></span>
+      <span class="field"><label for="cc-hd">H（hidden）</label><input id="cc-hd" type="number" value="8192"></span>
+      <span class="field"><label for="cc-bpe">字节/元素</label>
+        <select id="cc-bpe"><option value="4">fp32 (4)</option><option value="2" selected>bf16/fp8×2 (2)</option><option value="1">fp8/int8 (1)</option><option value="0.5">int4 (0.5)</option></select>
+      </span>
+      <span class="field"><label for="cc-mu">乘子（top-k 等）</label><input id="cc-mu" type="number" value="1" step="any"></span>
+      <span class="field"><label for="cc-dv">除数（TP/CP 分片）</label><input id="cc-dv" type="number" value="1" step="any"></span>
+    </div>
+  </fieldset>
+
+  <fieldset><legend>链路与分层</legend>
+    <div class="calc-row">
+      <span class="field"><label for="cc-bw">单向带宽 B (GB/s)</label><input id="cc-bw" type="number" value="450"></span>
+      <span class="field"><label for="cc-al">单步延迟 α (µs)</label><input id="cc-al" type="number" value="1.5" step="any"></span>
+      <span class="field"><label for="cc-hi">启用两级分层</label><input id="cc-hi" type="checkbox"></span>
+      <span class="field"><label for="cc-g">每节点卡数 g</label><input id="cc-g" type="number" value="8" min="2" step="1"></span>
+      <span class="field"><label for="cc-bx">跨机单向带宽 (GB/s)</label><input id="cc-bx" type="number" value="50"></span>
+      <span class="field"><label for="cc-ax">跨机 α (µs)</label><input id="cc-ax" type="number" value="10" step="any"></span>
+    </div>
+  </fieldset>
+
+  <p class="cap" id="cc-hint"></p>
+  <div class="out-grid" id="cc-out"></div>
+  <p class="cap" id="cc-note"></p>
+</div>
+
+<h2 id="check">10. 自检清单与参考资料</h2>
+
+<h3>10.1 自检清单：合上页面能不能答出来</h3>
+
+<table>
+<thead><tr><th>#</th><th>问题</th><th>用什么答</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>八个原语各自的输入/输出布局是什么？All-Reduce 为什么等于 Reduce-Scatter + All-Gather？</td><td>色块图</td><td>§2</td></tr>
+<tr><td>2</td><td>「通信量」到底指哪个数？语义量 / 线上量 / 时间三者怎么换算？</td><td>三个口径表</td><td>§1.2、§3.4</td></tr>
+<tr><td>3</td><td>写出 \(T\) 的通用表达式，并说明 \(S^*\) 是怎么来的。</td><td>\(T = k\alpha + W\beta\)，\(S^* = N\alpha B\)</td><td>§3.1</td></tr>
+<tr><td>4</td><td>\(k\)（步数）数的是什么？为什么「\(N\) 张卡同时各发一次」只算 1 步，而 \(W\) 要按累计字节算？</td><td>\(k\) = 无法并行掉的串行时间深度；\(W\) = 单卡累计发出量，与并行无关</td><td>§3.1.1</td></tr>
+<tr><td>5</td><td>为什么 \(T\) 里要用 \(\max_r W(r)\) 而不是平均值 \(\overline W\)？</td><td>星型 all-reduce 的 root 是别人的 \(N\) 倍，时间由最忙那张卡决定</td><td>§3.1.1、§3.2.2</td></tr>
+<tr><td>6</td><td>为什么 All-Reduce 的每卡线上量下界是 \(\frac{2(N-1)}{N}S\)，而不是 \(S\) 或 \(2S\)？</td><td>\(n-1\) 次加法 + \(n\) 次赋值</td><td>§3.2.1</td></tr>
+<tr><td>7</td><td>「树状广播的通信量是 \(\log_2 N\cdot S\)」——对吗？</td><td>错。那只是 root 一张卡的量，全网总量仍是 \((N-1)S\)，与线性相同；树买到的是<b>步数</b></td><td>§3.2.3</td></tr>
+<tr><td>8</td><td>递归折半凭什么能在 \(\log_2 N\) 步内达到和 Ring 一样的 \(W\)？</td><td>\(\sum_{j=1}^{\log_2 N} S/2^j = (1-\frac1N)S = \frac{N-1}{N}S\)，几何级数收敛到同一总数</td><td>§3.2.4</td></tr>
+<tr><td>9</td><td>All-Gather 的 \(S\) 指输入分片还是输出总长？两种口径下 \(W\) 各是多少？</td><td>输出总长；\(W=\frac{N-1}{N}S=(N-1)s_{\text{分片}}\)，同一个数</td><td>§3.2.5、§3.3</td></tr>
+<tr><td>10</td><td>Ring All-Reduce 第 \(k\) 步（\(k\) 从 1 数），rank \(r\) 发的是哪个 chunk？为什么 \(N-1\) 步后每卡恰好一个完整片？</td><td>\((r-k+1)\bmod N\)（\(k\) 从 0 数则是 \((r-k)\bmod N\)）；完整片 \(c\) 停在 rank \((c-1)\bmod N\)</td><td>§4.2、§4.3</td></tr>
+<tr><td>11</td><td>busBw 和 algbw 差多少？NCCL 对 All-Gather 用的校正因子是什么？</td><td>\(2\frac{N-1}{N}\) / \(\frac{N-1}{N}\)</td><td>§3.4</td></tr>
+<tr><td>12</td><td>Ring 和 Tree 的 \(W\) 一样，那 Tree 到底赢在哪？多维环又赢在哪？</td><td>Tree：步数 \(2(N-1)\to2\log_2 N\)；多维环：步数 \(\to 2\sum_i(N_i-1)\approx4\sqrt N\)，\(W\) 两者都不变</td><td>§5.1、§5.2.1</td></tr>
+<tr><td>13</td><td>减少步数的三种手段里，哪一种是真的拿流量换延迟？</td><td>只有 one-shot：\(W\) 从 \(2\frac{N-1}{N}S\) 涨到 \((N-1)S\)；树和多维环的 \(W\) 都不变</td><td>§5.2.1</td></tr>
+<tr><td>14</td><td>one-shot 什么时候赢 two-shot？写出阈值公式并算 \(N=8\) 的值。</td><td>\(S^{\dagger} = \frac{\alpha B N}{(N-1)(N-2)}\)，126 KiB</td><td>§5.4</td></tr>
+<tr><td>15</td><td>分层通信省的是流量还是别的？为什么上限是 \(g\) 倍？</td><td>省的是并发度：8 张 NIC vs 1 张</td><td>§6.1、§6.2</td></tr>
+<tr><td>16</td><td>TP 的 All-Reduce 为什么必须放机内？用 70B 的数字说明。</td><td>45 ms / 144 ms = 31%，且不可重叠</td><td>§7.2</td></tr>
+<tr><td>17</td><td>同样是 TP All-Reduce，prefill 和 decode 的瓶颈各是什么？</td><td>带宽 vs 延迟（91% 是 α 项）</td><td>§7.3</td></tr>
+<tr><td>18</td><td>nccl-tests 的 busBw 只有标称的 57%，是坏了吗？</td><td>不是，\(1/1.75\) 就是算法下界</td><td>§8.3 坑 1</td></tr>
+</tbody>
+</table>
+
+<h3>10.2 一页速查</h3>
+
+<table>
+<thead><tr><th>原语</th><th>Ring 步数</th><th>每卡线上量 \(W\)</th><th>busBw 因子</th><th>Tree 步数</th></tr></thead>
+<tbody>
+<tr><td>All-Reduce</td><td>\(2(N-1)\)</td><td>\(\frac{2(N-1)}{N}S\)</td><td>\(\frac{2(N-1)}{N}\)</td><td>\(2\log_2 N\)</td></tr>
+<tr><td>Reduce-Scatter</td><td>\(N-1\)</td><td>\(\frac{N-1}{N}S\)</td><td>\(\frac{N-1}{N}\)</td><td>\(\log_2 N\)</td></tr>
+<tr><td>All-Gather</td><td>\(N-1\)</td><td>\(\frac{N-1}{N}S\)</td><td>\(\frac{N-1}{N}\)</td><td>\(\log_2 N\)</td></tr>
+<tr><td>All-to-All</td><td>\(N-1\)</td><td>\(\frac{N-1}{N}S\)</td><td>\(\frac{N-1}{N}\)</td><td>—（Bruck \(\log N\)）</td></tr>
+<tr><td>Broadcast</td><td>\(N-1\)</td><td>\(\frac{N-1}{N}S\)</td><td>1</td><td>\(\log_2 N\)</td></tr>
+<tr><td>Reduce</td><td>\(N-1\)</td><td>\(\frac{N-1}{N}S\)</td><td>1</td><td>\(\log_2 N\)</td></tr>
+<tr><td>Scatter</td><td>\(N-1\)</td><td>\(\frac{N-1}{N}S\)</td><td>1</td><td>\(\log_2 N\)</td></tr>
+<tr><td>Gather</td><td>\(N-1\)</td><td>\(\frac{N-1}{N}S\)</td><td>1</td><td>\(\log_2 N\)</td></tr>
+</tbody>
+</table>
+
+<div class="keypoint">
+<p><b>三条能带走的判断力：</b>①任何通信问题先拆成 \(k\alpha + W\beta\)，看哪一项大；②看 W 永远要看「每卡线上量」而不是「语义量」，否则会把 1.75× 的算法下界误判成故障；③在异构集群里，决定时间的不是总字节数，而是<b>最忙那条链路上的字节数</b>——所以「让更多链路同时干活」往往比「减少字节」更有效。</p>
+</div>
+
+<h3>10.3 参考资料</h3>
+<ol class="refs">
+<li><a href="https://github.com/NVIDIA/nccl-tests">NVIDIA/nccl-tests</a>，<code>doc/PERFORMANCE.md</code>——algbw / busBw 的定义、各原语的校正因子推导、以及 <code>size</code> 列的口径说明。本文 §3.2 的下界证明与 §3.4 的因子表直接取自此处。</li>
+<li><a href="https://github.com/NVIDIA/nccl">NVIDIA/nccl</a> 与 NCCL User Guide（<code>docs.nvidia.com/deeplearning/nccl</code>）——<code>NCCL_ALGO</code> / <code>NCCL_PROTO</code> / <code>NCCL_PXN_LEVEL</code> 等环境变量、支持的算法与协议清单、以及各版本的引入时间。</li>
+<li>NVIDIA 开发者博客：<i>Massively Scale Your Deep Learning Training with NCCL 2.4</i>（Sylvain Jeaugey）——双二叉树为什么能同时拿到 Ring 的带宽和树的延迟。</li>
+<li>Thakur, Rabenseifner, Gropp, <i>Optimization of Collective Communication Operations in MPICH</i>（IJHPCA 19(4), 2005）——α-β 成本模型、各原语在不同消息大小下的最优算法（含 Bruck 的 all-to-all）。</li>
+<li>Sanders, Speck, Träff, <i>Two-tree algorithms for full bandwidth broadcast/reduction and scan</i>（2009）——双二叉树的构造与带宽最优性证明。</li>
+<li><a href="https://www.mpi-forum.org/">MPI Forum</a>，MPI Standard §6（Collective Communication）——八个原语的规范语义与 <code>MPI_IN_PLACE</code> 等行为约定。</li>
+<li><a href="https://arxiv.org/abs/1909.08053">Megatron-LM</a>（TP 的列并行/行并行与每层两次 all-reduce）· <a href="https://arxiv.org/abs/2205.05198">Reducing Activation Recomputation in Large Transformer Models</a>（Megatron-SP：用 RS+AG 替换 all-reduce）。</li>
+<li><a href="https://arxiv.org/abs/1910.02054">ZeRO</a>——三级切分的通信量分析（\(2\Psi\) vs \(3\Psi\)）。</li>
+<li><a href="https://arxiv.org/abs/2310.01889">DeepSpeed-Ulysses</a>（序列↔head 换轴的两次 all-to-all）· <a href="https://arxiv.org/abs/2309.14509">Ring Attention</a>（环形传 KV 与重叠条件）。</li>
+<li><a href="https://arxiv.org/abs/2412.19437">DeepSeek-V3 Technical Report</a> §3 Infrastructures——跨机 EP 的 all-to-all、SM 与 NIC 的绑定、FP8 dispatch。本地副本：<code>paper/deepseek_v3.pdf</code>。</li>
+<li><a href="https://github.com/deepseek-ai/DeepEP">DeepEP</a>——高吞吐 / 低延迟 all-to-all kernel（NVLink + IB + IBGDA，支持 FP8 dispatch）。</li>
+<li><a href="https://pytorch.org/docs/stable/distributed.html">PyTorch Distributed 文档</a>——<code>torch.distributed</code> 各集合原语的 API、进程组与 backend 选择。</li>
+<li>本仓库相关报告：<a href="multi-gpu-attention-moe.html">多卡部署 Attention 与 MoE 零基础指南</a> · <a href="mha-prefill-decode.html">MHA prefill/decode 成本账本</a> · <a href="mla-training-inference.html">MLA 训练与推理深读</a> · <a href="../vllm/vllm-t5-distributed.html">vLLM 分布式与并行（源码级）</a>。</li>
+</ol>
+
+<footer>生成于 2026-10-29 · 零基础教学报告 · 公式由 MathJax 3.2.2 渲染，代码高亮由 highlight.js 11.9.0 提供 · 数字均按 1 GiB = 2<sup>30</sup> B、bf16 = 2 字节计算；带宽取理论峰值（实测通常为标称的 60–90%），α 取 NVLink 1.5 µs / 跨机 10 µs 的典型量级 · 事实性内容以 nccl-tests PERFORMANCE.md、NCCL 官方文档与各方法原始论文为准，推断处已用「推断」块标注</footer>
+
+</main>
+
+<script>
+(function () {
+  /* ---------- §4 Ring All-Reduce 步进模拟器（N=4，S=64 MiB） ---------- */
+  var SIG = [
+    [[1,1,1,1],[1,1,1,1],[1,1,1,1],[1,1,1,1]],
+    [[1,1,1,2],[2,1,1,1],[1,2,1,1],[1,1,2,1]],
+    [[1,1,3,2],[2,1,1,3],[3,2,1,1],[1,3,2,1]],
+    [[1,4,3,2],[2,1,4,3],[3,2,1,4],[4,3,2,1]],
+    [[4,4,3,2],[2,4,4,3],[3,2,4,4],[4,3,2,4]],
+    [[4,4,3,4],[4,4,4,3],[3,4,4,4],[4,3,4,4]],
+    [[4,4,4,4],[4,4,4,4],[4,4,4,4],[4,4,4,4]]
+  ];
+  var SEND = [[0,1,2,3],[3,0,1,2],[2,3,0,1],[1,2,3,0],[0,1,2,3],[3,0,1,2]];
+  var CC = [
+    { s:'#2456c4', f:['#f6f9fe','#e3edfb','#c6d9f5','#a3c2ee'] },
+    { s:'#e8862a', f:['#fef9f3','#fbeeda','#f6dcb6','#f0c78d'] },
+    { s:'#2f9e63', f:['#f4fbf7','#e0f4e9','#c2e9d4','#9ddcbb'] },
+    { s:'#163a86', f:['#f5f7fc','#e4e9f6','#cbd4ec','#aab8df'] }
+  ];
+  var DESC = [
+    '初始：每卡持有完整的 S（4 个 chunk），每块只有自己一份数据（Σ1）。颜色 = chunk 编号。',
+    'RS 第 1 步：r 把 chunk r 发给 r+1，接收方就地累加 → 每卡出现一个 Σ2。',
+    'RS 第 2 步：r 把 chunk (r−1) mod 4 发给 r+1 → 每卡有一个 Σ3、一个 Σ2。',
+    'RS 第 3 步：完成。每卡恰好一个 Σ4（完整的和），四卡互不相同 → 这就是 Reduce-Scatter。',
+    'AG 第 1 步：r 把自己那个 Σ4 发给 r+1，接收方直接覆盖（不累加）→ 每卡 2 个 Σ4。',
+    'AG 第 2 步：继续传递并覆盖 → 每卡 3 个 Σ4。',
+    'AG 第 3 步：全部 Σ4 —— All-Reduce 完成。共 6 步，每卡线上量 96 MiB。'
+  ];
+  var PHASE = ['初始状态','Reduce-Scatter 第 1 步','Reduce-Scatter 第 2 步','Reduce-Scatter 第 3 步',
+               'All-Gather 第 1 步','All-Gather 第 2 步','All-Gather 第 3 步'];
+  var CH = 16, BW = 450, AL = 1.5, TOTAL = 6;
+  var step = 0, timer = null;
+
+  function set(id, attr, v) { var e = document.getElementById(id); if (e) e.setAttribute(attr, v); }
+  function txt(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+
+  function render() {
+    var r, j, sig, st = SIG[step];
+    for (r = 0; r < 4; r++) {
+      for (j = 0; j < 4; j++) {
+        sig = st[r][j];
+        set('sr' + r + j, 'fill', CC[j].f[sig - 1]);
+        set('sr' + r + j, 'stroke', sig === 4 ? '#1a1f2e' : CC[j].s);
+        set('sr' + r + j, 'stroke-width', sig === 4 ? '2.6' : '1.2');
+        txt('st' + r + j, 'Σ' + sig);
+      }
+    }
+    for (r = 0; r < 4; r++) {
+      var active = step >= 1;
+      set('sa' + r, 'stroke', active ? '#2456c4' : '#c9d2e0');
+      set('sa' + r, 'stroke-width', active ? '2.6' : '2');
+      set('sa' + r, 'marker-end', active ? 'url(#simarr)' : 'url(#simarrg)');
+      txt('sl' + r, active ? 'c' + SEND[step - 1][r] : '—');
+    }
+    txt('sim-step', '步骤 ' + step + ' / ' + TOTAL + ' · ' + PHASE[step]);
+    txt('sim-desc', DESC[step]);
+    var sent = step * CH;
+    var lat = step * AL, bw = sent * 1048576 / (BW * 1e9) * 1e6;
+    txt('sim-bytes', '本卡已发送 ' + sent + ' MiB / 目标 96 MiB · 已用 ' + (lat + bw).toFixed(1) +
+      ' µs（α 项 ' + lat.toFixed(1) + ' + β 项 ' + bw.toFixed(1) + '）');
+  }
+  function go(n) { step = Math.max(0, Math.min(TOTAL, n)); render(); }
+  function stop() { if (timer) { clearInterval(timer); timer = null; txt('sim-play', '自动播放'); } }
+
+  document.getElementById('sim-next').addEventListener('click', function () { stop(); go(step + 1); });
+  document.getElementById('sim-prev').addEventListener('click', function () { stop(); go(step - 1); });
+  document.getElementById('sim-reset').addEventListener('click', function () { stop(); go(0); });
+  document.getElementById('sim-play').addEventListener('click', function () {
+    if (timer) { stop(); return; }
+    txt('sim-play', '暂停');
+    if (step >= TOTAL) go(0);
+    timer = setInterval(function () { if (step >= TOTAL) stop(); else go(step + 1); }, 1400);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight') { stop(); go(step + 1); }
+    else if (e.key === 'ArrowLeft') { stop(); go(step - 1); }
+  });
+  render();
+})();
+
+(function () {
+  /* ---------- §9 集合通信计算器 ---------- */
+  var KiB = 1024, MiB = 1048576, GiB = 1073741824;
+  var OPS = {
+    all_reduce:     { nm: 'All-Reduce',     algos: [['ring','Ring'],['tree','Tree（双二叉树）'],['oneshot','one-shot（全连接 1 轮）'],['twoshot','two-shot（全连接 2 轮）']],
+                      hint: 'S = 张量总字节。nccl-tests 的 size 列与此相同；algbw = S/t，busBw = algbw × 2(N−1)/N。' },
+    reduce_scatter: { nm: 'Reduce-Scatter', algos: [['ring','Ring'],['tree','Tree']],
+                      hint: 'S = 单卡输入数组（完整数组）字节，单卡输出 = S/N。nccl-tests 的 size 列 = S。' },
+    all_gather:     { nm: 'All-Gather',     algos: [['ring','Ring'],['tree','Tree']],
+                      hint: 'S = 输出总字节（= N × 单卡输入）。nccl-tests 的 size 列 = S，不是 S/N。' },
+    all_to_all:     { nm: 'All-to-All',     algos: [['ring','逐对串行（N−1 步）'],['direct','全连接直发（1 轮）']],
+                      hint: 'S = 单卡发送缓冲区总字节（= 接收总量）。发给自己的 1/N 不上网，故 W = (N−1)/N·S。' },
+    broadcast:      { nm: 'Broadcast',      algos: [['ring','Ring'],['tree','Tree']],
+                      hint: 'S = 张量总字节。root 是唯一数据源，busBw 因子取 1（nccl-tests 约定）。' },
+    reduce:         { nm: 'Reduce',         algos: [['ring','Ring'],['tree','Tree']],
+                      hint: 'S = 张量总字节。所有数据汇到 root，busBw 因子取 1。' },
+    scatter:        { nm: 'Scatter',        algos: [['ring','Ring']], hint: 'S = root 上的完整数组字节，每卡收到 S/N。' },
+    gather:         { nm: 'Gather',         algos: [['ring','Ring']], hint: 'S = root 上的完整数组字节，每卡发出 S/N。' }
+  };
+
+  function g(id) { return document.getElementById('cc-' + id); }
+  function num(id, d) { var e = g(id); if (!e) return d; var v = parseFloat(e.value); return isFinite(v) && v > 0 ? v : d; }
+
+  function fmtB(x) {
+    if (!isFinite(x) || x <= 0) return '0 B';
+    if (x >= GiB) return (x / GiB).toFixed(x / GiB >= 100 ? 1 : 2) + ' GiB';
+    if (x >= MiB) return (x / MiB).toFixed(x / MiB >= 100 ? 0 : 2) + ' MiB';
+    if (x >= KiB) return (x / KiB).toFixed(x / KiB >= 100 ? 0 : 2) + ' KiB';
+    return x.toFixed(0) + ' B';
+  }
+  function fmtT(us) {
+    if (!isFinite(us)) return '—';
+    if (us < 1) return (us * 1000).toFixed(0) + ' ns';
+    if (us < 1000) return us.toFixed(us < 10 ? 2 : 1) + ' µs';
+    if (us < 1e6) return (us / 1000).toFixed(us < 1e4 ? 2 : 1) + ' ms';
+    return (us / 1e6).toFixed(2) + ' s';
+  }
+  function card(k, v, s, cls) {
+    return '<div class="out-card"><div class="k">' + k + '</div><div class="v' + (cls ? ' ' + cls : '') + '">' +
+      v + '</div><div class="s">' + (s || '') + '</div></div>';
+  }
+
+  function plan(op, algo, N) {
+    var lg = Math.max(1, Math.ceil(Math.log(N) / Math.LN2));
+    if (op === 'all_to_all') {
+      return algo === 'direct'
+        ? { w: (N - 1) / N, k: 1, bus: (N - 1) / N, nm: '全连接直发' }
+        : { w: (N - 1) / N, k: N - 1, bus: (N - 1) / N, nm: '逐对串行' };
+    }
+    if (op === 'all_reduce') {
+      if (algo === 'oneshot') return { w: N - 1, k: 1, bus: N - 1, nm: 'one-shot' };
+      if (algo === 'twoshot') return { w: 2 * (N - 1) / N, k: 2, bus: 2 * (N - 1) / N, nm: 'two-shot' };
+      if (algo === 'tree') return { w: 2 * (N - 1) / N, k: 2 * lg, bus: 2 * (N - 1) / N, nm: '双二叉树' };
+      return { w: 2 * (N - 1) / N, k: 2 * (N - 1), bus: 2 * (N - 1) / N, nm: 'Ring' };
+    }
+    if (op === 'reduce_scatter' || op === 'all_gather') {
+      return algo === 'tree'
+        ? { w: 1, k: lg, bus: (N - 1) / N, nm: '树' }
+        : { w: (N - 1) / N, k: N - 1, bus: (N - 1) / N, nm: 'Ring' };
+    }
+    if (algo === 'tree') return { w: 1, k: lg, bus: 1, nm: '树' };
+    return { w: (N - 1) / N, k: N - 1, bus: 1, nm: 'Ring' };
+  }
+
+  function fillAlgos() {
+    var op = OPS[g('op').value] || OPS.all_reduce, sel = g('alg'), keep = sel.value;
+    sel.innerHTML = op.algos.map(function (a) {
+      return '<option value="' + a[0] + '">' + a[1] + '</option>';
+    }).join('');
+    if (op.algos.some(function (a) { return a[0] === keep; })) sel.value = keep;
+  }
+
+  function compute() {
+    var op = g('op').value, info = OPS[op] || OPS.all_reduce;
+    var N = Math.max(2, Math.round(num('n', 8)));
+    var p = plan(op, g('alg').value, N);
+    var B = num('bw', 450) * 1e9, A = num('al', 1.5) * 1e-6;
+    var ca = num('ca', 1), la = num('la', 1);
+
+    var S, how;
+    if (g('use').checked) {
+      S = num('tk', 4096) * num('hd', 8192) * num('bpe', 2) * num('mu', 1) / num('dv', 1);
+      how = 'T·H·b·乘子/除数 = ' + num('tk', 4096) + '×' + num('hd', 8192) + '×' + num('bpe', 2) +
+            '×' + num('mu', 1) + '/' + num('dv', 1);
+    } else {
+      S = num('s', 64) * parseFloat(g('su').value);
+      how = '手填 ' + num('s', 64) + ' ' + g('su').selectedOptions[0].text;
+    }
+
+    var W = p.w * S, k = p.k;
+    var tLat = k * A * 1e6, tBw = W / B * 1e6, T = tLat + tBw;
+    var algbw = S / (T * 1e-6) / 1e9, busbw = algbw * p.bus;
+    var Sstar = N * A * B;
+    var ratio = S / Sstar;
+    var latShare = T > 0 ? tLat / T * 100 : 0;
+    var Sdag = N > 2 ? A * B * N / ((N - 1) * (N - 2)) : Infinity;
+
+    g('hint').innerHTML = '<b>' + info.nm + ' · ' + p.nm + ' · N=' + N + '</b>　S = ' + fmtB(S) +
+      '（' + how + '）　' + info.hint;
+
+    var out = '';
+    out += card('每卡线上量 W', fmtB(W), 'W/S = ' + p.w.toFixed(3) + ' · 语义量 S = ' + fmtB(S));
+    out += card('步数 k', k, 'α 项合计 ' + fmtT(tLat) + '（α=' + (A * 1e6).toFixed(1) + ' µs）');
+    out += card('单次耗时 T', fmtT(T), 'α 项 ' + fmtT(tLat) + ' + β 项 ' + fmtT(tBw));
+    out += card(latShare > 70 ? '延迟主导（换算法有用）' : (latShare < 30 ? '带宽主导（换算法没用）' : '混合区'),
+      'α 占 ' + latShare.toFixed(0) + '%',
+      'S/S* = ' + (ratio >= 10 ? ratio.toFixed(0) : ratio.toFixed(2)) + ' · S* = NαB = ' + fmtB(Sstar),
+      latShare > 70 ? 'warnv' : (latShare < 30 ? 'okv' : ''));
+    out += card('busBw（等效链路带宽）', busbw.toFixed(1) + ' GB/s',
+      'algbw ' + algbw.toFixed(1) + ' GB/s × 因子 ' + p.bus.toFixed(3) +
+      ' · 链路标称 ' + (B / 1e9).toFixed(0) + ' GB/s（' + (busbw / (B / 1e9) * 100).toFixed(0) + '%）');
+    out += card('总通信（' + ca + '×' + la + ' = ' + (ca * la) + ' 次）', fmtB(W * ca * la),
+      '总耗时 ' + fmtT(T * ca * la) + '（不重叠时的上限）');
+
+    var notes = [];
+    var hi = g('hi').checked, gr = Math.round(num('g', 8));
+    if (hi && N > gr && N % gr === 0 && (op === 'all_reduce' || op === 'reduce_scatter' || op === 'all_gather')) {
+      var m = N / gr, Bx = num('bx', 50) * 1e9, Ax = num('ax', 10) * 1e-6;
+      var f = (op === 'all_reduce') ? 2 : 1;   // all-reduce = RS + AG，两个维度各走两遍
+      var Wn = f * (gr - 1) / gr * S, Wi = f * (m - 1) / m * (S / gr);
+      var kh = f * ((gr - 1) + (m - 1));
+      var Th = (Wn / B + f * (gr - 1) * A + Wi / Bx + f * (m - 1) * Ax) * 1e6;
+      var Bmin = Math.min(B, Bx), Amax = Math.max(A, Ax);
+      var Tf = (W / Bmin + k * Amax) * 1e6;
+      out += card('分层 vs flat（g=' + gr + ', m=' + m + '）', (Tf / Th).toFixed(2) + '× 加速',
+        'flat ' + fmtT(Tf) + '（' + k + ' 步）→ 分层 ' + fmtT(Th) + '（' + kh + ' 步）<br>NVLink ' + fmtB(Wn) + ' + IB ' + fmtB(Wi) + '/卡，W 合计与 flat 相同');
+      notes.push('分层后跨机每卡只搬 ' + fmtB(Wi) + '（flat 时单张 NIC 要扛 ' + fmtB(W) + '），' +
+        gr + ' 张 NIC 并行才是加速来源，跨机总字节几乎没变。');
+    } else if (hi) {
+      notes.push('<b class="warnv">分层未生效</b>：需要 N &gt; g 且 N 能被 g 整除，且原语为 all-reduce / reduce-scatter / all-gather。');
+    }
+
+    if (op === 'all_reduce' && g('alg').value === 'ring' && N > 8 && !hi) {
+      notes.push('N=' + N + ' 的 flat ring 在跨机时只有 1~2 张 NIC 干活，其余闲置。勾选「启用两级分层」看真实收益。');
+    }
+    if (op === 'all_reduce' && g('alg').value === 'oneshot' && S > Sdag) {
+      notes.push('<b class="warnv">one-shot 在此 S 下已输给 two-shot</b>：阈值 S† = αBN/((N−1)(N−2)) = ' + fmtB(Sdag) + '，当前 S = ' + fmtB(S) + '。');
+    }
+    if (op === 'all_reduce' && g('alg').value === 'oneshot' && S <= Sdag) {
+      notes.push('S = ' + fmtB(S) + ' 低于 one-shot 阈值 ' + fmtB(Sdag) + '，用 ' + (N - 1) + '× 流量换 1 轮延迟，划算。');
+    }
+    if (g('alg').value === 'tree' && ratio > 4) {
+      notes.push('大消息区（S = ' + (ratio >= 10 ? ratio.toFixed(0) : ratio.toFixed(1)) + '×S*）下 Tree 与 Ring 的 W 相同，Tree 的优势全在步数；此时两者耗时接近。');
+    }
+    if (latShare > 85) {
+      notes.push('<b class="warnv">α 项占 ' + latShare.toFixed(0) + '%</b>：加大 batch / 合并多次小调用（bucketing、通信融合）比换算法或加带宽都有效。');
+    }
+    if (T * ca * la > 1e5) {
+      notes.push('一次前向的通信总时长 ' + fmtT(T * ca * la) + '，若无法与计算重叠会成为主瓶颈——检查并行策略（TP 是否跨机、EP 是否跨机）。');
+    }
+    if (op === 'all_to_all' && g('alg').value === 'direct') {
+      notes.push('全连接直发把 N−1 次发送压进 1 轮，前提是物理上真的全连接（NVSwitch / 单跳 IB）；跨机 all-to-all 通常做不到，会退化成逐对串行。');
+    }
+    if (!notes.length) notes.push('配置合理。以上按理论峰值带宽计算，实测 busBw 通常为标称的 60–90%；请用 nccl-tests 校准 B 与 α 后再代入。');
+    document.getElementById('cc-out').innerHTML = out;
+    g('note').innerHTML = notes.join('<br>');
+  }
+
+  var PRESETS = {
+    'tp-prefill': { op:'all_reduce', alg:'ring', n:8, use:false, s:64, su:'1048576', bw:450, al:1.5, ca:2, la:80, hi:false },
+    'tp-decode':  { op:'all_reduce', alg:'ring', n:8, use:false, s:512, su:'1024', bw:450, al:1.5, ca:2, la:80, hi:false },
+    'tp-1shot':   { op:'all_reduce', alg:'oneshot', n:8, use:false, s:16, su:'1024', bw:450, al:1.5, ca:2, la:80, hi:false },
+    'ep-moe':     { op:'all_to_all', alg:'direct', n:8, use:true, tk:4096, hd:4096, bpe:'2', mu:8, dv:1, bw:450, al:1.5, ca:2, la:94, hi:false },
+    'ulysses':    { op:'all_to_all', alg:'direct', n:8, use:true, tk:32768, hd:8192, bpe:'2', mu:1, dv:1, bw:450, al:1.5, ca:2, la:80, hi:false },
+    'dp-grad':    { op:'all_reduce', alg:'ring', n:8, use:false, s:16.4, su:'1073741824', bw:50, al:10, ca:1, la:1, hi:false },
+    'hier-64':    { op:'all_reduce', alg:'ring', n:64, use:false, s:64, su:'1048576', bw:450, al:1.5, ca:1, la:1, hi:true, g:8, bx:50, ax:10 }
+  };
+  function applyPreset(name) {
+    var p = PRESETS[name]; if (!p) return;
+    g('op').value = p.op; fillAlgos(); g('alg').value = p.alg;
+    ['n','s','su','bw','al','ca','la','tk','hd','bpe','mu','dv','g','bx','ax'].forEach(function (k) {
+      if (p[k] !== undefined) g(k).value = String(p[k]);
+    });
+    g('use').checked = !!p.use; g('hi').checked = !!p.hi;
+    compute();
+  }
+
+  ['op','alg','n','s','su','use','tk','hd','bpe','mu','dv','bw','al','ca','la','hi','g','bx','ax'].forEach(function (id) {
+    var e = g(id); if (!e) return;
+    e.addEventListener('input', compute);
+    e.addEventListener('change', compute);
+  });
+  g('op').addEventListener('change', function () { fillAlgos(); compute(); });
+  Array.prototype.forEach.call(document.querySelectorAll('#cc-presets button'), function (b) {
+    b.addEventListener('click', function () { applyPreset(b.getAttribute('data-p')); });
+  });
+
+  fillAlgos();
+  applyPreset('tp-prefill');
+})();
+</script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -405,6 +405,22 @@ var REPORTS = [
     "group": "misc"
   },
   {
+    "slug": "misc/multi-gpu-attention-moe",
+    "title": "多卡部署 Attention 与 MoE 零基础指南：五种并行模式怎么切、每卡吃多少显存、每层传多少字节（附配置计算器）",
+    "date": "2026-10-27",
+    "paper": "DeepSeek-V3 Technical Report §3 Infrastructures（paper/deepseek_v3.pdf）· Megatron-LM / ZeRO / Ring Attention / DeepSpeed-Ulysses",
+    "repo": "https://github.com/deepseek-ai/DeepEP",
+    "group": "misc"
+  },
+  {
+    "slug": "misc/collective-communication",
+    "title": "集合通信零基础指南：八个原语怎么工作、Ring/Tree 怎么走、通信量到底怎么算（附分步模拟器与计算器）",
+    "date": "2026-10-29",
+    "paper": "nccl-tests PERFORMANCE.md（algbw/busBw 定义与下界推导）· NCCL User Guide（算法与协议清单）· MPI 集合通信语义 · Megatron-LM / ZeRO / DeepSpeed-Ulysses / Ring Attention / DeepEP",
+    "repo": "https://github.com/NVIDIA/nccl-tests",
+    "group": "misc"
+  },
+  {
     "slug": "vla/vla-t0-overview",
     "title": "具身智能与 VLA 零基础七讲 · 第 0 讲：全景图——具身智能是什么，VLA 为什么突然爆发（术语表与系列地图）",
     "date": "2026-10-21",
@@ -509,6 +525,14 @@ var TOPICS = [
     "hub": "hub/inference.html",
     "collections": [
       { "name": "vLLM 源码解析十讲", "group": "vllm" },
+      {
+        "name": "多卡并行部署",
+        "note": "先读集合通信打底，再看 Attention / MoE 具体怎么切",
+        "slugs": [
+          "misc/collective-communication",
+          "misc/multi-gpu-attention-moe"
+        ]
+      },
       {
         "name": "成本账本与计算器",
         "slugs": [
